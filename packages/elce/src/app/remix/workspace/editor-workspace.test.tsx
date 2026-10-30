@@ -11,6 +11,38 @@ import { renderEditorWorkspace } from './editor-workspace'
 import type { DraggedScenarioEntry, ResponsivePanel } from './editor-workspace-types'
 
 describe('Remix editor workspace', () => {
+  it('shows the optional summary first without changing document pages or insertion positions', async () => {
+    const { controller, mount, cleanup } = createWorkspace()
+    const initial = controller.getSnapshot().context.document
+    let rendered = mount()
+    expect(rendered.$('#elce-scenario-summary-entry')).toBeNull()
+    rendered.cleanup()
+
+    controller.send({ type: 'document.apply', command: {
+      type: 'summary.settings.update', summary: { ...initial.data.summary, showAtRoot: true },
+    } })
+    rendered = mount()
+    expect(rendered.$('#elce-scenario-entry-list')?.firstElementChild?.id).toBe('elce-scenario-summary-entry')
+    expect(rendered.$('#elce-scenario-entry-list')?.children[1]?.id).toBe('elce-scenario-entry-list-drop-0')
+    expect(rendered.$('#elce-scenario-summary-entry')?.querySelector('[draggable], .elce-delete-button')).toBeNull()
+    await rendered.act(() => (rendered.$('#elce-scenario-summary-page') as HTMLButtonElement).click())
+    rendered.cleanup()
+    rendered = mount()
+    expect(rendered.$('#elce-summary-show-at-root-label')?.textContent).toBe('Afficher comme page')
+    const checkbox = rendered.$('#elce-summary-show-at-root') as HTMLInputElement
+    expect(checkbox.checked).toBe(true)
+    await rendered.act(() => checkbox.click())
+    rendered.cleanup()
+    rendered = mount()
+    expect(rendered.$('#elce-scenario-summary-entry')).toBeNull()
+    expect(controller.getSnapshot().context.document.pages).toEqual(initial.pages)
+    expect(controller.getSnapshot().context.document.data.scenarioEntries).toEqual(initial.data.scenarioEntries)
+
+    rendered.cleanup()
+    cleanup()
+    controller.stop()
+  })
+
   it('keeps preview beside panel access commands and leaves export in the title bar', async () => {
     const onPreview = vi.fn()
     const previewError = 'Le navigateur a bloqué la fenêtre de lecture.'

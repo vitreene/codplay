@@ -1,3 +1,20 @@
+import { Eye, LockKeyhole } from 'lucide-static'
+
+/** Encodes one trusted Lucide asset as a CSS mask image. */
+function svgMaskUrl(svg: string): string {
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`
+}
+
+/** Builds a solid-eye Lucide variant while keeping its pupil open. */
+function createFilledEyeIcon(svg: string): string {
+  const eyeContour = svg.match(/<path d="([^"]+)"\s*\/>/)?.[1]
+  if (eyeContour === undefined) return svg
+  const pupil = 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z'
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" fill-rule="evenodd" d="${eyeContour} ${pupil}" /></svg>`
+}
+
+const filledEyeIcon = createFilledEyeIcon(Eye)
+
 /** Scoped CSS for the complete Elcé document projection. */
 export const ELCE_PLAYER_STYLE_SHEET = `
 .elce-player-layout {
@@ -15,6 +32,16 @@ export const ELCE_PLAYER_STYLE_SHEET = `
 
 .elce-player-menu-drawer {
   display: contents;
+}
+
+.elce-player-layout[data-menu-visible='false'] {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'title' 'content' 'navigation';
+}
+
+.elce-player-layout[data-menu-visible='false'] .elce-player-layout__menu,
+.elce-player-layout[data-menu-visible='false'] .elce-player-menu-toggle {
+  display: none;
 }
 
 .elce-player-menu-toggle,
@@ -225,7 +252,7 @@ export const ELCE_PLAYER_STYLE_SHEET = `
 
 .elce-player-menu__chapter-button[data-locked='true'],
 .elce-player-menu__page-button[data-locked='true'],
-.elce-summary__entry-button[data-locked='true'] {
+.elce-summary__entry-link[data-locked='true'] {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -233,7 +260,7 @@ export const ELCE_PLAYER_STYLE_SHEET = `
 
 .elce-player-menu__chapter-button[data-locked='true']::after,
 .elce-player-menu__page-button[data-locked='true']::after,
-.elce-summary__entry-button[data-locked='true']::after {
+.elce-summary__entry-link[data-locked='true']::after {
   content: '🔒';
   margin-inline-start: auto;
   font-size: 0.9em;
@@ -250,9 +277,24 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   display: grid;
   min-height: 4rem;
   grid-template-columns: auto minmax(4rem, 1fr) auto;
+  grid-template-areas: 'previous status next';
   align-items: center;
   gap: 0.75rem;
   padding: 0.55rem clamp(0.75rem, 2vw, 1.5rem);
+}
+
+.elce-player-navigation--with-summary {
+  grid-template-columns: auto auto minmax(4rem, 1fr) auto;
+  grid-template-areas: 'previous summary status next';
+}
+
+.elce-player-navigation--with-summary[data-summary-button-visible='false'] {
+  grid-template-columns: auto minmax(4rem, 1fr) auto;
+  grid-template-areas: 'previous status next';
+}
+
+.elce-player-navigation[data-summary-button-visible='false'] .elce-player-navigation__button--summary {
+  display: none;
 }
 
 .elce-player-navigation__button {
@@ -266,7 +308,19 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   cursor: pointer;
 }
 
+.elce-player-navigation__button--previous {
+  grid-area: previous;
+}
+
+.elce-player-navigation__button--summary {
+  grid-area: summary;
+}
+
 .elce-player-navigation__button--next {
+  grid-area: next;
+  width: fit-content;
+  flex: 0 0 auto;
+  justify-self: end;
   border-color: var(--elce-appearance-accent);
   color: var(--elce-appearance-accent-foreground);
   background: var(--elce-appearance-accent);
@@ -278,6 +332,7 @@ export const ELCE_PLAYER_STYLE_SHEET = `
 }
 
 .elce-player-navigation__status {
+  grid-area: status;
   margin: 0;
   color: var(--elce-appearance-muted);
   font-size: 0.78rem;
@@ -907,6 +962,24 @@ export const ELCE_PLAYER_STYLE_SHEET = `
     grid-template-areas: 'title' 'content' 'navigation';
   }
 
+  .elce-player-navigation--with-summary {
+    gap: 0.35rem;
+    grid-template-columns: auto auto minmax(2rem, 1fr) auto;
+    grid-template-areas: 'previous summary status next';
+    padding-inline: 0.5rem;
+  }
+
+  .elce-player-navigation--with-summary[data-summary-button-visible='false'] {
+    grid-template-columns: auto minmax(2rem, 1fr) auto;
+    grid-template-areas: 'previous status next';
+  }
+
+  .elce-player-navigation--with-summary .elce-player-navigation__button {
+    min-width: 0;
+    padding-inline: 0.45rem;
+    font-size: 0.875rem;
+  }
+
   .elce-player-menu-toggle {
     display: inline-grid;
     flex: 0 0 auto;
@@ -1062,13 +1135,6 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   background: color-mix(in srgb, var(--elce-appearance-surface) 88%, transparent);
 }
 
-.elce-summary__title {
-  margin: 0;
-  color: var(--elce-appearance-title);
-  font-size: clamp(2.115rem, 4.23vw, 3.525rem);
-  line-height: 1.2;
-}
-
 .elce-summary__description {
   max-width: 70ch;
   margin: 0;
@@ -1077,57 +1143,185 @@ export const ELCE_PLAYER_STYLE_SHEET = `
 
 .elce-summary__entries {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
   align-content: start;
-  gap: 0.75rem;
+  gap: 0.65rem;
   margin: 0;
   padding: 0;
   list-style: none;
+  list-style-position: outside;
 }
 
-.elce-summary__chapter {
+.elce-summary__chapter-row {
+  display: grid;
   min-width: 0;
+  grid-template-columns: minmax(10rem, 0.8fr) minmax(0, 1.2fr);
+  align-items: start;
+  gap: 0.5rem clamp(1rem, 3vw, 2rem);
+  list-style-position: outside;
+}
+
+.elce-summary__chapter-row--levels-only {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.elce-summary__chapter-row--standalone .elce-summary__chapter-spacer {
+  grid-column: 1;
 }
 
 .elce-summary__chapter-title {
-  margin: 0 0 0.45rem;
+  display: flex;
+  min-width: 0;
+  margin: 0;
+  align-items: center;
+  gap: 0.55rem;
   color: var(--elce-appearance-intertitle);
   font-size: 1.41rem;
   line-height: 1.2;
 }
 
+.elce-summary__chapter-title--with-status {
+  position: relative;
+  padding-inline-start: 1.65em;
+}
+
+.elce-summary__chapter-status-host {
+  display: contents;
+}
+
+.elce-summary__chapter-status {
+  display: flex;
+  position: absolute;
+  flex: 0 0 auto;
+  width: 1.1em;
+  height: 1.1em;
+  inset-inline-start: 0;
+  top: 50%;
+  margin: 0;
+  transform: translateY(-50%);
+  align-items: center;
+  justify-content: center;
+  color: var(--elce-appearance-muted);
+}
+
+.elce-summary__chapter-status[data-reading-status='unread'] {
+  display: none;
+}
+
+.elce-summary__chapter-status::before,
+.elce-summary__entry-link--chapter::before {
+  display: none;
+  width: 1.1em;
+  height: 1.1em;
+  flex: 0 0 1.1em;
+  background-color: currentColor;
+  content: '';
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+}
+
+:is(.elce-summary__chapter-status, .elce-summary__entry-link--chapter)[data-reading-status='locked']::before {
+  display: block;
+  mask-image: ${svgMaskUrl(LockKeyhole)};
+  -webkit-mask-image: ${svgMaskUrl(LockKeyhole)};
+}
+
+:is(.elce-summary__chapter-status, .elce-summary__entry-link--chapter)[data-reading-status='read']::before {
+  display: block;
+  mask-image: ${svgMaskUrl(filledEyeIcon)};
+  -webkit-mask-image: ${svgMaskUrl(filledEyeIcon)};
+}
+
+:is(.elce-summary__chapter-status, .elce-summary__entry-link--chapter)[data-reading-status='partial']::before {
+  display: block;
+  mask-image: ${svgMaskUrl(Eye)};
+  -webkit-mask-image: ${svgMaskUrl(Eye)};
+}
+
 .elce-summary__chapter-pages {
   display: grid;
-  gap: 0.4rem;
+  min-width: 0;
+  gap: 0.2rem;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.elce-summary__entry-button {
+.elce-summary__entry {
+  min-width: 0;
+  list-style: none;
+}
+
+.elce-summary__entry-link {
+  display: block;
   width: 100%;
-  min-height: 3rem;
-  border: 1px solid var(--elce-appearance-border);
-  border-radius: 0.45rem;
-  padding: 0.7rem 0.85rem;
-  color: var(--elce-appearance-surface-foreground);
-  background: var(--elce-appearance-surface);
+  box-sizing: border-box;
+  border-radius: 0.25rem;
+  padding: 0.55rem 0.7rem;
+  color: var(--elce-appearance-accent);
   text-align: left;
+  text-decoration: none;
   cursor: pointer;
 }
 
-.elce-summary__entry-button[data-active='true'] {
-  border-color: var(--elce-appearance-accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--elce-appearance-accent) 18%, transparent);
+.elce-summary__entry-link:hover {
+  background: color-mix(in srgb, var(--elce-appearance-accent) 12%, transparent);
+  text-decoration: none;
 }
 
-.elce-summary__entry-button[data-locked='true'] {
+.elce-summary__entry-link:focus-visible {
+  outline: 2px solid var(--elce-appearance-accent);
+  outline-offset: 2px;
+}
+
+.elce-summary__entry-link--chapter {
+  display: flex;
+  position: relative;
+  align-items: center;
+  gap: 0.55rem;
+  padding-inline-start: calc(0.7rem + 1.65em);
+  color: var(--elce-appearance-intertitle);
+  font-size: 1.41rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.elce-summary__entry-link--chapter::before {
+  position: absolute;
+  inset-inline-start: 0.7rem;
+  top: 50%;
+  margin: 0;
+  transform: translateY(-50%);
+}
+
+.elce-summary__entry-link[data-active='true'] {
+  background: color-mix(in srgb, var(--elce-appearance-accent) 14%, transparent);
+}
+
+.elce-summary__entry-link[data-locked='true'] {
   color: var(--elce-appearance-muted);
-  background: var(--elce-appearance-surface);
 }
 
-.elce-summary__entry-button:disabled {
+.elce-summary__entry-link--chapter[data-locked='true']::after {
+  content: none;
+}
+
+.elce-summary__entry-link[aria-disabled='true'] {
   cursor: not-allowed;
+}
+
+@media (max-width: 800px) {
+  .elce-summary__chapter-row {
+    grid-template-columns: minmax(6rem, 0.8fr) minmax(0, 1.2fr);
+    gap: 0.5rem;
+  }
+
+  .elce-summary__chapter-row.elce-summary__chapter-row--levels-only {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .elce-summary--menu {
@@ -1142,14 +1336,6 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   padding: 0;
   color: var(--elce-appearance-menu-foreground);
   background: transparent;
-}
-
-.elce-summary--menu .elce-summary__title {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
 }
 
 .elce-summary--menu .elce-summary__chapter-title {

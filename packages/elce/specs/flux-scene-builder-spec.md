@@ -166,6 +166,18 @@ l’entrée du chapitre. Les pages du catalogue ne sont jamais intégrées au
 scénario. Quand aucune page n’est placée, le builder projette une vue vide
 explicite afin que le cadre reste montable.
 
+Le réglage « Afficher le menu » porte sur sa région entière, sa colonne et son
+bouton mobile, via `data-menu-visible` sur le layout et la feuille partagée.
+Il ne change pas les slots ou les routes. Le contrat et les preuves figurent
+dans la [spécification Sommaire](./summary-profile-spec.md#collecte-et-projection-de-lecture).
+
+Quand le réglage documentaire « Afficher comme page » est actif, le graphe
+Sighty insère l’entrée de scène Sommaire avant les entrées de pages et de
+chapitres. Ses actions Précédent/Suivant relient ce point de départ aux routes
+de contenu existantes ; il ne modifie pas `scenarioEntries` ni les identifiants
+des pages métier. Le contrat, la visibilité et la navigation sont documentés
+dans la [spécification Sommaire](./summary-profile-spec.md#collecte-et-projection-de-lecture).
+
 Les régions de layout, le tiroir du menu, ses lignes et la navigation gardent
 leurs conteneurs utiles et exposent leurs cibles par commentaires CodPlay. Les
 anciens éléments vides réservés aux boutons, titres, pages et statuts ne sont

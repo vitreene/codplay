@@ -110,14 +110,14 @@ function renderSummarySettings(props: SummaryProfileSettingsProps): RemixNode {
     <fieldset id="elce-summary-navigation-options" className="elce-summary-profile-settings__subgroup">
       <legend id="elce-summary-navigation-options-title">Affichage et navigation</legend>
       <div id="elce-summary-option-toggles" className="elce-summary-profile-settings__checks">
-        {renderCheckbox('elce-summary-show-in-menu', 'Afficher dans le menu', summary.showInMenu, (value) => change({ showInMenu: value }))}
-        {renderCheckbox('elce-summary-show-at-root', 'Afficher comme destination racine', summary.showAtRoot, (value) => change({
+        {renderCheckbox('elce-summary-show-in-menu', 'Afficher le menu', summary.showInMenu, (value) => change({ showInMenu: value }))}
+        {renderCheckbox('elce-summary-show-at-root', 'Afficher comme page', summary.showAtRoot, (value) => change({
           showAtRoot: value,
           endChapterDestination: value ? summary.endChapterDestination : 'next',
         }))}
         {renderCheckbox(
           'elce-summary-permanent-access',
-          'Sommaire dans la navigation',
+          'Accès au sommaire dans la navigation',
           summary.permanentAccess,
           (value) => change({ permanentAccess: value }),
           !summary.showAtRoot,

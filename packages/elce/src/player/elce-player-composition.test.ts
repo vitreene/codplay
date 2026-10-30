@@ -85,6 +85,28 @@ describe('Elcé player composition', () => {
       .toMatch(/\.elce-flux-scrollport\s*\{[^}]*overscroll-behavior-y:\s*contain;/s)
   })
 
+  it('uses the full mobile width for chapters-only summary rows', () => {
+    expect(ELCE_PLAYER_STYLE_SHEET).toMatch(
+      /@media \(max-width: 800px\)\s*\{\s*\.elce-summary__chapter-row\s*\{[^}]*\}\s*\.elce-summary__chapter-row\.elce-summary__chapter-row--levels-only\s*\{\s*grid-template-columns:\s*minmax\(0,\s*1fr\);\s*\}/s,
+    )
+  })
+
+  it('releases the hidden summary-button grid column and keeps chapter status icons', () => {
+    expect(ELCE_PLAYER_STYLE_SHEET)
+      .toContain(".elce-player-navigation--with-summary[data-summary-button-visible='false']")
+    expect(ELCE_PLAYER_STYLE_SHEET).toContain("grid-template-areas: 'previous status next';")
+    expect(ELCE_PLAYER_STYLE_SHEET).toContain('list-style-position: outside;')
+    expect(ELCE_PLAYER_STYLE_SHEET).toMatch(/\.elce-player-navigation__button--next\s*\{[^}]*flex:\s*0 0 auto;/s)
+    expect(ELCE_PLAYER_STYLE_SHEET).toContain("[data-reading-status='locked']::before")
+    expect(ELCE_PLAYER_STYLE_SHEET).toContain("[data-reading-status='read']::before")
+    expect(ELCE_PLAYER_STYLE_SHEET).toContain("[data-reading-status='partial']::before")
+    expect(ELCE_PLAYER_STYLE_SHEET).toContain('fill-rule%3D%22evenodd%22')
+    expect(ELCE_PLAYER_STYLE_SHEET).toMatch(/\.elce-summary__chapter-title--with-status\s*\{[^}]*position:\s*relative;[^}]*padding-inline-start:\s*1\.65em;/s)
+    expect(ELCE_PLAYER_STYLE_SHEET).toMatch(/\.elce-summary__chapter-status\s*\{[^}]*position:\s*absolute;[^}]*inset-inline-start:\s*0;/s)
+    expect(ELCE_PLAYER_STYLE_SHEET).toMatch(/\.elce-summary__entry-link--chapter\s*\{[^}]*padding-inline-start:\s*calc\(0\.7rem \+ 1\.65em\);/s)
+    expect(ELCE_PLAYER_STYLE_SHEET).toMatch(/\.elce-summary__entry-link--chapter::before\s*\{[^}]*inset-inline-start:\s*0\.7rem;/s)
+  })
+
   it('reuses unchanged page scenes across organization changes and rebuilds only an edited page scene', () => {
     const initial = createInitialDocument()
     const pageCommand = createDefaultPageCommand(initial, { kind: PAGE_LOCATION.SCENARIO })
@@ -268,6 +290,67 @@ describe('Elcé player composition', () => {
     expect(stage.querySelector('.elce-summary--root')).not.toBeNull()
   })
 
+  it.each([true, false])('keeps root summary and page navigation working with menu visibility %s', async (showInMenu) => {
+    const initial = createInitialDocument()
+    const withPages = applyDocumentCommand(initial, createPageCommand({
+      pageId: 'page-b',
+      bdcId: 'section-b',
+      name: 'Second page',
+      placement: { kind: PAGE_LOCATION.SCENARIO },
+    }))
+    const documentModel = applyDocumentCommand(withPages, {
+      type: 'summary.settings.update',
+      summary: { ...withPages.data.summary, showInMenu, showAtRoot: true, pageContinuationMode: 'free' },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({ stage, document: documentModel })
+    await composition.initialize()
+
+    const layout = stage.querySelector<HTMLElement>('.elce-player-layout')!
+    expect(layout.dataset.menuVisible).toBe(String(showInMenu))
+    expect(stage.querySelectorAll('.elce-player-menu__page-button')).toHaveLength(2)
+    expect(stage.querySelector('.elce-summary--root')).not.toBeNull()
+    expect(stage.querySelector('.elce-player-navigation__status')?.textContent).toBe('Page 1 sur 3')
+    expect(stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button:not(.elce-player-navigation__button--next)')?.disabled).toBe(true)
+    expect(stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button:not(.elce-player-navigation__button--next)')?.hidden).toBe(true)
+    stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button--next')!.click()
+    await vi.waitFor(() => expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Page A'))
+    expect(stage.querySelector('.elce-player-navigation__status')?.textContent).toBe('Page 2 sur 3')
+    stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button:not(.elce-player-navigation__button--next)')!.click()
+    await vi.waitFor(() => expect(stage.querySelector('.elce-summary--root')).not.toBeNull())
+    stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button--next')!.click()
+    await vi.waitFor(() => expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Page A'))
+    stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button--next')!.click()
+    await vi.waitFor(() => expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Second page'))
+    expect(stage.querySelector('.elce-player-navigation__status')?.textContent).toBe('Page 3 sur 3')
+    expect(layout.dataset.menuVisible).toBe(String(showInMenu))
+  })
+
+  it.each([true, false])('keeps the summary return independent of endpage completion when enabled %s', async (showAtRoot) => {
+    const initial = createInitialDocument()
+    const documentModel = applyDocumentCommand(initial, {
+      type: 'summary.settings.update', summary: { ...initial.data.summary, showAtRoot },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new ElcePlayerComposition({ stage, document: documentModel, startPageId: 'page-a' })
+    await composition.initialize()
+
+    expect(stage.querySelector('.elce-summary--root')).toBeNull()
+    expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Page A')
+    expect(stage.querySelector('.elce-player-navigation__status')?.textContent).toBe(showAtRoot ? 'Page 2 sur 2' : 'Page 1 sur 1')
+    const previous = stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button:not(.elce-player-navigation__button--next)')!
+    expect(previous.disabled).toBe(!showAtRoot)
+    expect(previous.hidden).toBe(!showAtRoot)
+    if (showAtRoot) {
+      previous.click()
+      await vi.waitFor(() => expect(stage.querySelector('.elce-summary--root')).not.toBeNull())
+      stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button--next')!.click()
+      await vi.waitFor(() => expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Page A'))
+    }
+  })
+
   it('routes the active page to the root summary from its menu link', async () => {
     const initial = createInitialDocument()
     const documentModel = applyDocumentCommand(initial, {
@@ -404,11 +487,60 @@ describe('Elcé player composition', () => {
     await preview.initialize()
 
     expect(stage.querySelector('.elce-summary--root')).not.toBeNull()
-    const chapterEntry = stage.querySelector<HTMLButtonElement>('.elce-summary__entry-button[data-page-id="page-b"]')
+    expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Sommaire')
+    expect(stage.querySelector('.elce-summary__title')).toBeNull()
+    const chapterEntry = stage.querySelector<HTMLAnchorElement>('.elce-summary__entry-link--chapter[data-page-id="page-b"]')
     expect(chapterEntry?.textContent).toBe('Chapitre 2')
     expect(chapterEntry?.getAttribute('data-locked')).toBe('true')
     expect(chapterEntry?.getAttribute('aria-label')).toBe('Chapitre 2, verrouillé')
-    expect(chapterEntry?.disabled).toBe(true)
+    expect(chapterEntry?.getAttribute('aria-disabled')).toBe('true')
+    expect(chapterEntry?.getAttribute('data-reading-status')).toBe('locked')
+    expect(chapterEntry?.getAttribute('aria-label')).toBe('Chapitre 2, verrouillé')
+    expect(stage.querySelectorAll('.elce-summary__entry-link--chapter').length).toBeGreaterThan(0)
+    expect(stage.querySelectorAll('.elce-summary__entry-link--page')).toHaveLength(0)
+    expect(stage.querySelectorAll('.elce-player-menu__chapter-button').length).toBeGreaterThan(0)
+    expect(stage.querySelectorAll('.elce-player-menu__page-button')).toHaveLength(0)
+  })
+
+  it.each([
+    { finishedPageIds: [], status: 'unread', label: 'Non lu' },
+    { finishedPageIds: ['page-a'], status: 'partial', label: 'Lu partiellement' },
+    { finishedPageIds: ['page-a', 'page-b'], status: 'read', label: 'Lu' },
+  ])('shows the $status icon for chapter progress', async ({ finishedPageIds, status, label }) => {
+    let documentModel = createInitialDocument()
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'chapter.create', chapterId: 'chapter-progress', name: 'Chapitre progression',
+    })
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'page.move', pageId: 'page-a', placement: { kind: PAGE_LOCATION.CHAPTER, chapterId: 'chapter-progress' },
+    })
+    documentModel = applyDocumentCommand(documentModel, createPageCommand({
+      pageId: 'page-b', bdcId: 'section-b', name: 'Page B',
+      placement: { kind: PAGE_LOCATION.CHAPTER, chapterId: 'chapter-progress' },
+    }))
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'summary.settings.update',
+      summary: { ...documentModel.data.summary, displayMode: 'pages', showAtRoot: true },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    const preview = createPlayerPreviewComposition(stage, {
+      documentModel,
+      selectedPageId: null,
+      mediaSources: {},
+      testState: { ...INITIAL_PROJECT_TEST_STATE, finishedPageIds },
+    })
+    if (preview === null) throw new Error('La composition de prévisualisation est absente.')
+    composition = preview
+
+    await preview.initialize()
+
+    const icon = stage.querySelector<HTMLElement>('.elce-summary__chapter-status')
+    expect(icon?.dataset.readingStatus).toBe(status)
+    expect(icon?.getAttribute('aria-label')).toBe(label)
+    const title = stage.querySelector('.elce-summary__chapter-title--with-status')
+    expect(title?.textContent).toBe('Chapitre progression')
+    expect(title?.contains(icon ?? null)).toBe(true)
   })
 
   it('plays the default Question BDC of a page created in an Evaluation chapter', async () => {

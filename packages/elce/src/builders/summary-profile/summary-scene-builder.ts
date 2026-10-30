@@ -4,6 +4,7 @@ import type { ElceResolvedPlayerSettings } from '../../domain/editor-settings/ed
 import type { ElceDocument } from '../../domain/document/document-model'
 
 export type SummaryPresentation = 'menu' | 'root'
+export type SummaryChapterReadingStatus = 'locked' | 'read' | 'partial' | 'unread'
 
 /** Builds an Elcé-owned CodPlay scene for either presentation of the same summary. */
 export function buildSummaryScene(
@@ -15,7 +16,26 @@ export function buildSummaryScene(
   const summary = document.data.summary
   const prefix = `${document.id}:summary:${presentation}`
   const entries = buildSummaryEntries(document)
-  const entryMarkup = createEntryListMarkup(document, prefix, entries, presentation)
+  const rootGroups = presentation === 'root' ? createRootSummaryGroups(document, entries) : []
+  const entryMarkup = presentation === 'root'
+    ? createRootEntryListMarkup(prefix, rootGroups, summary.displayMode === 'pages')
+    : createEntryListMarkup(document, prefix, entries)
+  const entryPersos = presentation === 'root'
+    ? rootGroups.flatMap((group) => [
+      ...(group.chapterEntry === undefined ? [] : [createEntryPerso(prefix, group.chapterEntry, 'root')]),
+      ...group.pages.map((entry) => createEntryPerso(prefix, entry, 'root')),
+    ])
+    : entries.map((entry) => createEntryPerso(prefix, entry, 'menu'))
+  const chapterStatusPersos = presentation === 'root'
+    ? rootGroups
+      .filter((group) => group.chapterTitle !== null && group.chapterEntry === undefined)
+      .map((group) => createChapterStatusPerso(prefix, group.id))
+    : []
+  const chapterStatusEvents = presentation === 'root'
+    ? rootGroups
+      .filter((group) => group.chapterTitle !== null)
+      .flatMap((group) => chapterStatusEventsFor(group.id))
+    : []
   const menuPersos = presentation === 'menu'
     ? createMenuDrawerPersos(
       document.id,
@@ -23,7 +43,7 @@ export function buildSummaryScene(
       summary.description,
       summary.showAtRoot,
       entries.map((entry) => entry.pageId),
-      summary.showInMenu ? entryMarkup : '',
+      entryMarkup,
       drawerMotion,
     )
     : []
@@ -36,6 +56,7 @@ export function buildSummaryScene(
       ELCE_EVENTS.MENU_DRAWER_CLOSE,
       ELCE_EVENTS.MENU_SUMMARY,
       ...entries.map((entry) => `${ELCE_EVENTS.PRESENTATION_MENU_PAGE_PREFIX}${entry.pageId}`),
+      ...chapterStatusEvents,
       ...entries.map((entry) => menuEvent(entry.pageId)),
     ])].map((eventName) => ({ on: eventName })),
     persos: [
@@ -45,12 +66,13 @@ export function buildSummaryScene(
         initial: {
           move: '@root',
           className: presentation === 'root' ? 'elce-summary elce-summary--root' : 'elce-player-menu-scene',
-          markup: createSummaryMarkup(prefix, summary.title, summary.description, entryMarkup, presentation),
+          markup: createSummaryMarkup(prefix, summary.description, entryMarkup, presentation),
         },
         ...(presentation === 'menu' ? { actions: { [ELCE_EVENTS.PRESENTATION_MENU]: {} } } : {}),
       },
       ...menuPersos,
-      ...entries.map((entry) => createEntryPerso(prefix, entry, presentation)),
+      ...chapterStatusPersos,
+      ...entryPersos,
       ...(presentation === 'root' && summary.backgroundMediaId !== null && mediaSources[summary.backgroundMediaId] !== undefined
         ? [createBackgroundImage(prefix, mediaSources[summary.backgroundMediaId]!)]
         : []),
@@ -67,17 +89,20 @@ export type SummaryEntry = Readonly<{
   readonly parentChapterId: string | null
 }>
 
-/** Builds menu entries from the same retained chapter and page projection. */
+type SummaryRootGroup = Readonly<{
+  readonly id: string
+  readonly chapterTitle: string | null
+  readonly chapterEntry?: SummaryEntry
+  readonly pages: readonly SummaryEntry[]
+}>
+
+/** Builds entries shared by both summary presentations for the selected display mode. */
 export function buildSummaryEntries(document: ElceDocument): readonly SummaryEntry[] {
   const pages = new Map(document.pages.map((page) => [page.id, page]))
   const entries: SummaryEntry[] = []
   if (document.data.summary.displayMode === 'chapters') {
     for (const entry of document.data.scenarioEntries) {
-      if (entry.kind === 'page') {
-        const page = pages.get(entry.pageId)
-        if (page !== undefined) entries.push({ id: page.id, title: page.name, pageId: page.id, kind: 'page', parentChapterId: null })
-        continue
-      }
+      if (entry.kind !== 'chapter') continue
       const chapter = document.chapters.find((candidate) => candidate.id === entry.chapterId)
       const pageId = chapter?.pageIds[0]
       if (chapter !== undefined && pageId !== undefined) entries.push({ id: chapter.id, title: chapter.name, pageId, kind: 'chapter', parentChapterId: null })
@@ -101,10 +126,45 @@ export function buildSummaryEntries(document: ElceDocument): readonly SummaryEnt
   return entries
 }
 
-/** Writes the semantic summary frame and stable button hosts. */
+/** Groups root summary links into chapter and page columns using the display option. */
+function createRootSummaryGroups(
+  document: ElceDocument,
+  entries: readonly SummaryEntry[],
+): readonly SummaryRootGroup[] {
+  const showPageTitles = document.data.summary.displayMode === 'pages'
+  const pageEntries = new Map(entries.filter((entry) => entry.kind === 'page').map((entry) => [entry.pageId, entry]))
+  const chapterEntries = new Map(entries.filter((entry) => entry.kind === 'chapter').map((entry) => [entry.id, entry]))
+  const groups: SummaryRootGroup[] = []
+
+  for (const scenarioEntry of document.data.scenarioEntries) {
+    if (scenarioEntry.kind === 'page') {
+      const page = pageEntries.get(scenarioEntry.pageId)
+      if (showPageTitles && page !== undefined) groups.push({ id: page.id, chapterTitle: null, pages: [page] })
+      continue
+    }
+
+    const chapter = document.chapters.find((candidate) => candidate.id === scenarioEntry.chapterId)
+    if (chapter === undefined) continue
+    const pages = chapter.pageIds.flatMap((pageId) => {
+      const page = pageEntries.get(pageId)
+      return page?.parentChapterId === chapter.id ? [page] : []
+    })
+    const chapterEntry = chapterEntries.get(chapter.id)
+    if (chapterEntry === undefined && pages.length === 0) continue
+    groups.push({
+      id: chapter.id,
+      chapterTitle: chapter.name,
+      ...(chapterEntry === undefined ? {} : { chapterEntry }),
+      pages: showPageTitles ? pages : [],
+    })
+  }
+
+  return groups
+}
+
+/** Writes the semantic summary frame and stable entry hosts. */
 function createSummaryMarkup(
   prefix: string,
-  title: string,
   description: string,
   entries: string,
   presentation: SummaryPresentation,
@@ -118,7 +178,6 @@ function createSummaryMarkup(
   return `<main id="${prefix}-root" class="elce-summary elce-summary--root" aria-label="Sommaire du document">
     <div id="${prefix}-background-host" class="elce-summary__background-host"><!-- data-part="${prefix}:background" --></div>
     <div id="${prefix}-content" class="elce-summary__content">
-      <h1 id="${prefix}-title" class="elce-summary__title">${escapeHtmlText(title)}</h1>
       ${descriptionMarkup}
       <ol id="${prefix}-entries" class="elce-summary__entries">${entries}</ol>
     </div>
@@ -250,7 +309,7 @@ function menuEvent(pageId: string): string {
   return `${ELCE_EVENTS.MENU_PREFIX}${pageId}`
 }
 
-/** Creates one explicitly identified list row and CodPlay button target. */
+/** Creates one explicitly identified list row and CodPlay entry target. */
 function createEntryMarkup(prefix: string, entry: SummaryEntry, presentation: SummaryPresentation): string {
   const rowId = `${prefix}-row-${entry.id}`
   const partId = `${prefix}:entry:${entry.id}`
@@ -260,33 +319,114 @@ function createEntryMarkup(prefix: string, entry: SummaryEntry, presentation: Su
   return `<li id="${rowId}" class="${className}" data-chapter-id="${entry.parentChapterId ?? ''}"><!-- data-part="${partId}" --></li>`
 }
 
-/** Groups retained pages under their retained chapter while preserving root order. */
+/** Writes root summary rows with separate chapter and page title columns. */
+function createRootEntryListMarkup(
+  prefix: string,
+  groups: readonly SummaryRootGroup[],
+  showPageTitles: boolean,
+): string {
+  return groups.map((group) => {
+    const chapterMarkup = group.chapterTitle === null
+      ? `<span id="${prefix}-chapter-spacer-${group.id}" class="elce-summary__chapter-spacer" aria-hidden="true"></span>`
+      : group.chapterEntry === undefined
+        ? `<h2 id="${prefix}-chapter-heading-${group.id}" class="elce-summary__chapter-title elce-summary__chapter-title--with-status">${createChapterStatusHostMarkup(prefix, group.id)}${escapeHtmlText(group.chapterTitle)}</h2>`
+        : `<h2 id="${prefix}-chapter-heading-${group.id}" class="elce-summary__chapter-title"><!-- data-part="${prefix}:entry:${group.chapterEntry.id}" --></h2>`
+    const pagesMarkup = showPageTitles && group.pages.length > 0
+      ? `<ol id="${prefix}-chapter-pages-${group.id}" class="elce-summary__chapter-pages">${group.pages.map((entry) => createEntryMarkup(prefix, entry, 'root')).join('')}</ol>`
+      : ''
+    const rowClassName = [
+      'elce-summary__chapter-row',
+      group.chapterTitle === null ? 'elce-summary__chapter-row--standalone' : '',
+      showPageTitles ? '' : 'elce-summary__chapter-row--levels-only',
+    ].filter(Boolean).join(' ')
+    return `<li id="${prefix}-chapter-row-${group.id}" class="${rowClassName}">${chapterMarkup}${pagesMarkup}</li>`
+  }).join('')
+}
+
+/** Creates the status icon mount point beside a static chapter heading. */
+function createChapterStatusHostMarkup(prefix: string, chapterId: string): string {
+  return `<span id="${prefix}-chapter-status-host-${chapterId}" class="elce-summary__chapter-status-host"><!-- data-part="${prefix}:chapter-status:${chapterId}" --></span>`
+}
+
+/** Creates the chapter status icon whose label and state follow reader progress. */
+function createChapterStatusPerso(prefix: string, chapterId: string): PersoDoc<string> {
+  return {
+    id: `${prefix}-chapter-status-${chapterId}`,
+    type: 'tag',
+    initial: {
+      tag: 'span',
+      content: '',
+      className: 'elce-summary__chapter-status',
+      attr: { 'data-reading-status': 'unread', role: 'img', 'aria-label': 'Non lu' },
+      move: { target: `${prefix}:chapter-status:${chapterId}` },
+    },
+    actions: createChapterStatusActions(chapterId),
+  }
+}
+
+/** Maps every chapter reading state to a stable private presentation event. */
+function chapterStatusEventsFor(chapterId: string): readonly string[] {
+  return (['locked', 'read', 'partial', 'unread'] as const)
+    .map((status) => summaryChapterStatusEvent(chapterId, status))
+}
+
+/** Formats the private event used to update one chapter's visible state. */
+export function summaryChapterStatusEvent(chapterId: string, status: SummaryChapterReadingStatus): string {
+  return `${ELCE_EVENTS.PRESENTATION_CHAPTER_STATUS_PREFIX}${chapterId}:${status}`
+}
+
+/** Keeps chapter state actions on the existing presentation event circuit. */
+function createChapterStatusActions(
+  chapterId: string,
+  chapterTitle?: string,
+  pageId?: string,
+): NonNullable<PersoDoc<string>['actions']> {
+  const label = (status: string): string => chapterTitle === undefined ? status : `${chapterTitle}, ${status.toLocaleLowerCase('fr-FR')}`
+  const attrs = (status: SummaryChapterReadingStatus) => ({
+    ...(pageId === undefined ? {} : {
+      href: '#',
+      'data-page-id': pageId,
+      'data-active': 'false',
+      'data-locked': String(status === 'locked'),
+      'aria-disabled': String(status === 'locked'),
+    }),
+    'data-reading-status': status,
+    'aria-label': label(status === 'locked' ? 'Verrouillé' : status === 'read' ? 'Lu' : status === 'partial' ? 'Lu partiellement' : 'Non lu'),
+  })
+  return {
+    [summaryChapterStatusEvent(chapterId, 'locked')]: { attr: attrs('locked') },
+    [summaryChapterStatusEvent(chapterId, 'read')]: { attr: attrs('read') },
+    [summaryChapterStatusEvent(chapterId, 'partial')]: { attr: attrs('partial') },
+    [summaryChapterStatusEvent(chapterId, 'unread')]: { attr: attrs('unread') },
+  }
+}
+
+/** Groups menu page buttons under their retained chapter while preserving scenario order. */
 function createEntryListMarkup(
   document: ElceDocument,
   prefix: string,
   entries: readonly SummaryEntry[],
-  presentation: SummaryPresentation,
 ): string {
   if (document.data.summary.displayMode === 'chapters') {
-    return entries.map((entry) => createEntryMarkup(prefix, entry, presentation)).join('')
+    return entries.map((entry) => createEntryMarkup(prefix, entry, 'menu')).join('')
   }
   const pagesById = new Map(document.pages.map((page) => [page.id, page]))
   return document.data.scenarioEntries.map((scenarioEntry) => {
     if (scenarioEntry.kind === 'page') {
       const entry = entries.find((candidate) => candidate.id === scenarioEntry.pageId)
-      return entry === undefined ? '' : createEntryMarkup(prefix, entry, presentation)
+      return entry === undefined ? '' : createEntryMarkup(prefix, entry, 'menu')
     }
     const chapter = document.chapters.find((candidate) => candidate.id === scenarioEntry.chapterId)
     if (chapter === undefined) return ''
     const chapterPages = chapter.pageIds.flatMap((pageId) => {
       if (!pagesById.has(pageId)) return []
       const entry = entries.find((candidate) => candidate.id === pageId)
-      return entry === undefined ? [] : [createEntryMarkup(prefix, entry, presentation)]
+      return entry === undefined ? [] : [createEntryMarkup(prefix, entry, 'menu')]
     }).join('')
     if (chapterPages.length === 0) return ''
-    const listClass = presentation === 'root' ? 'elce-summary__chapter-pages' : 'elce-player-menu__pages'
-    const groupClass = presentation === 'root' ? 'elce-summary__chapter' : 'elce-player-menu__group'
-    const titleClass = presentation === 'root' ? 'elce-summary__chapter-title' : 'elce-player-menu__group-title'
+    const listClass = 'elce-player-menu__pages'
+    const groupClass = 'elce-player-menu__group'
+    const titleClass = 'elce-player-menu__group-title'
     return `<li id="${prefix}-chapter-${chapter.id}" class="${groupClass}">
       <h2 id="${prefix}-chapter-heading-${chapter.id}" class="${titleClass}">${escapeHtmlText(chapter.name)}</h2>
       <ol id="${prefix}-chapter-pages-${chapter.id}" class="${listClass}">${chapterPages}</ol>
@@ -294,26 +434,51 @@ function createEntryListMarkup(
   }).join('')
 }
 
-/** Creates the button that routes through the existing Sighty menu event. */
+/** Creates a root summary link or a menu button on the existing Sighty page event. */
 function createEntryPerso(prefix: string, entry: SummaryEntry, presentation: SummaryPresentation): PersoDoc<string> {
+  const rootLink = presentation === 'root'
   const chapter = entry.kind === 'chapter'
-  const className = presentation === 'root'
-    ? `elce-summary__entry-button elce-summary__entry-button--${entry.kind}`
+  const className = rootLink
+    ? `elce-summary__entry-link elce-summary__entry-link--${entry.kind}`
     : chapter ? 'elce-player-menu__chapter-button' : 'elce-player-menu__page-button'
   const stateEvent = `${ELCE_EVENTS.PRESENTATION_MENU_PAGE_PREFIX}${entry.pageId}`
   return {
-    id: `${prefix}-button-${entry.id}`,
+    id: `${prefix}-${rootLink ? 'link' : 'button'}-${entry.id}`,
     type: 'tag',
     initial: {
-      tag: 'button',
+      tag: rootLink ? 'a' : 'button',
       content: entry.title,
       className,
-      attr: { type: 'button', 'data-page-id': entry.pageId, 'data-locked': 'false', 'data-active': 'false', 'aria-label': entry.title },
+      attr: rootLink
+        ? {
+          href: '#',
+          'data-page-id': entry.pageId,
+          'data-locked': 'false',
+          'data-active': 'false',
+          ...(entry.kind === 'chapter' ? { 'data-reading-status': 'unread' } : {}),
+          'aria-disabled': 'false',
+          'aria-label': entry.title,
+        }
+        : { type: 'button', 'data-page-id': entry.pageId, 'data-locked': 'false', 'data-active': 'false', 'aria-disabled': 'false', 'aria-label': entry.title },
       move: { target: `${prefix}:entry:${entry.id}` },
     },
-    emit: { click: { event: { name: `${ELCE_EVENTS.MENU_PREFIX}${entry.pageId}`, visibility: 'public' } } },
+    emit: {
+      click: {
+        ...(rootLink ? { preventDefault: true } : {}),
+        event: { name: `${ELCE_EVENTS.MENU_PREFIX}${entry.pageId}`, visibility: 'public' },
+      },
+    },
     actions: {
-      [stateEvent]: { attr: { 'data-active': 'false', 'data-locked': 'false', disabled: false, 'aria-label': entry.title } },
+      [stateEvent]: {
+        attr: {
+          'data-active': 'false',
+          'data-locked': 'false',
+          'aria-disabled': 'false',
+          'aria-label': entry.title,
+          ...(rootLink ? {} : { disabled: false }),
+        },
+      },
+      ...(rootLink && chapter ? createChapterStatusActions(entry.id, entry.title, entry.pageId) : {}),
     },
   }
 }

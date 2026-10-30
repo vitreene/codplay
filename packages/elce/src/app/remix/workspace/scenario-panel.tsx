@@ -129,6 +129,18 @@ function renderScenarioEntryList(props: ScenarioPanelProps, entries: readonly Sc
     id="elce-scenario-entry-list"
     className="elce-outline-list"
   >
+    {view.documentModel.data.summary.showAtRoot ? <li id="elce-scenario-summary-entry">
+      <button
+        id="elce-scenario-summary-page"
+        type="button"
+        className="elce-page-button"
+        aria-pressed={workspace.summarySettingsOpen}
+        mix={on<HTMLButtonElement, 'click'>('click', () => workspace.onSetSummarySettingsOpen(true))}
+      >
+        {renderLucideIcon(SUMMARY_PROFILE_ACCESS_ICON, 'elce-scenario-summary-page-icon')}
+        <span id="elce-scenario-summary-page-title">{view.documentModel.data.summary.title}</span>
+      </button>
+    </li> : null}
     {children}
   </ul>
 }

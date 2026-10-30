@@ -10,6 +10,58 @@ import type { ProfileDefinition, ProfileProperty } from '../../../domain/summary
 import { renderSummaryProfileSettings } from './summary-profile-settings'
 
 describe('Sommaire et profils auteur', () => {
+  it('enregistre le mode d’entrées sélectionné', async () => {
+    const controller = createActor(controllerMachine, { input: {} })
+    controller.start()
+    controller.send({ type: 'editor.access.activate' })
+    const actions = new EditorActionsFacade(controller)
+    const rendered = render(renderSummaryProfileSettings({
+      document: controller.getSnapshot().context.document,
+      mediaSources: {},
+      actions,
+      error: null,
+      onClose: () => undefined,
+      onError: () => undefined,
+    }))
+
+    const displayMode = rendered.$('#elce-summary-display-mode') as HTMLSelectElement
+    await rendered.act(() => {
+      displayMode.value = 'chapters'
+      displayMode.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(controller.getSnapshot().context.document.data.summary.displayMode).toBe('chapters')
+
+    rendered.cleanup()
+    controller.stop()
+  })
+
+  it('nomme le réglage « Afficher le menu » et conserve son historique documentaire', async () => {
+    const controller = createActor(controllerMachine, { input: {} })
+    controller.start()
+    controller.send({ type: 'editor.access.activate' })
+    const actions = new EditorActionsFacade(controller)
+    const summary = controller.getSnapshot().context.document.data.summary
+    const rendered = render(renderSummaryProfileSettings({
+      document: controller.getSnapshot().context.document,
+      mediaSources: {},
+      actions,
+      error: null,
+      onClose: () => undefined,
+      onError: () => undefined,
+    }))
+
+    expect(rendered.$('#elce-summary-show-in-menu-label')?.textContent).toBe('Afficher le menu')
+    const checkbox = rendered.$('#elce-summary-show-in-menu') as HTMLInputElement
+    expect(checkbox.checked).toBe(true)
+    await rendered.act(() => checkbox.click())
+    expect(controller.getSnapshot().context.document.data.summary).toEqual({ ...summary, showInMenu: false })
+    controller.send({ type: 'history.undo' })
+    expect(controller.getSnapshot().context.document.data.summary).toEqual(summary)
+
+    rendered.cleanup()
+    controller.stop()
+  })
+
   it('ne garde que les réglages du Sommaire si le flag Profil est désactivé', async () => {
     const controller = createActor(controllerMachine, { input: {} })
     controller.start()
@@ -149,42 +201,45 @@ describe('Sommaire et profils auteur', () => {
     controller.stop()
   })
 
-  it('désactive « Sommaire dans la navigation » tant que la page Sommaire racine est désactivée', () => {
-    const controller = createActor(controllerMachine, { input: {} })
-    controller.start()
-    controller.send({ type: 'editor.access.activate' })
-    const actions = new EditorActionsFacade(controller)
-    const initial = controller.getSnapshot().context.document
-    actions.updateSummarySettings({ ...initial.data.summary, permanentAccess: true })
-    let document = controller.getSnapshot().context.document
-    let rendered = render(renderSummaryProfileSettings({
-      document,
-      mediaSources: {},
-      actions,
-      error: null,
-      onClose: () => undefined,
-      onError: () => undefined,
-    }))
-    const disabledControl = rendered.$('#elce-summary-permanent-access') as HTMLInputElement
-    expect(disabledControl.disabled).toBe(true)
-    expect(disabledControl.checked).toBe(true)
+  it(
+    'désactive « Accès au sommaire dans la navigation » tant que la page Sommaire est désactivée',
+    () => {
+      const controller = createActor(controllerMachine, { input: {} })
+      controller.start()
+      controller.send({ type: 'editor.access.activate' })
+      const actions = new EditorActionsFacade(controller)
+      const initial = controller.getSnapshot().context.document
+      actions.updateSummarySettings({ ...initial.data.summary, permanentAccess: true })
+      let document = controller.getSnapshot().context.document
+      let rendered = render(renderSummaryProfileSettings({
+        document,
+        mediaSources: {},
+        actions,
+        error: null,
+        onClose: () => undefined,
+        onError: () => undefined,
+      }))
+      const disabledControl = rendered.$('#elce-summary-permanent-access') as HTMLInputElement
+      expect(disabledControl.disabled).toBe(true)
+      expect(disabledControl.checked).toBe(true)
 
-    rendered.cleanup()
-    actions.updateSummarySettings({ ...document.data.summary, showAtRoot: true })
-    document = controller.getSnapshot().context.document
-    rendered = render(renderSummaryProfileSettings({
-      document,
-      mediaSources: {},
-      actions,
-      error: null,
-      onClose: () => undefined,
-      onError: () => undefined,
-    }))
-    expect((rendered.$('#elce-summary-permanent-access') as HTMLInputElement).disabled).toBe(false)
+      rendered.cleanup()
+      actions.updateSummarySettings({ ...document.data.summary, showAtRoot: true })
+      document = controller.getSnapshot().context.document
+      rendered = render(renderSummaryProfileSettings({
+        document,
+        mediaSources: {},
+        actions,
+        error: null,
+        onClose: () => undefined,
+        onError: () => undefined,
+      }))
+      expect((rendered.$('#elce-summary-permanent-access') as HTMLInputElement).disabled).toBe(false)
 
-    rendered.cleanup()
-    controller.stop()
-  })
+      rendered.cleanup()
+      controller.stop()
+    },
+  )
 
   it('propose la fin de page par défaut et enregistre le mode libre', async () => {
     const controller = createActor(controllerMachine, { input: {} })
@@ -703,7 +758,9 @@ describe('Sommaire et profils auteur', () => {
     const layout = rendered.$('#elce-profile-constraint-layout') as HTMLElement
     const editor = rendered.$('#elce-constraints-editor') as HTMLFieldSetElement
     const form = rendered.$('#elce-profile-constraints-form') as HTMLFormElement
-    expect(rendered.$('#elce-summary-permanent-access-label')?.textContent).toBe('Sommaire dans la navigation')
+    expect(
+      rendered.$('#elce-summary-permanent-access-label')?.textContent,
+    ).toBe('Accès au sommaire dans la navigation')
     expect(layout.classList.contains('elce-profile-constraint-layout')).toBe(true)
     expect(Array.from(layout.children, (child) => (child as HTMLElement).id)).toEqual([
       'elce-profile-constraint-target-panel',

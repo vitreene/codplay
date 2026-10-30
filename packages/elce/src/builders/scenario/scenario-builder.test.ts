@@ -470,7 +470,8 @@ describe('Elcé scenario builder', () => {
 
     expect(getMarkup(menuScene)).toContain('Parcours auteur')
     expect(getMarkup(menuScene)).toContain('Choisissez une page.')
-    expect(getMarkup(rootScene)).toContain('Parcours auteur')
+    expect(getMarkup(rootScene)).not.toContain('Parcours auteur')
+    expect(getMarkup(rootScene)).not.toContain('elce-summary__title')
     expect(getMarkup(rootScene)).toContain('Choisissez une page.')
 
     const menuPersos = menuScene !== undefined && 'stories' in menuScene
@@ -880,11 +881,12 @@ describe('Elcé scenario builder', () => {
     await refreshPresentationAction(context)
 
     /** Reads one button's disabled state from the emitted presentation update. */
-    const attributes = (name: string): Readonly<{ disabled: boolean }> => {
+    const attributes = (name: string): Readonly<{ disabled: boolean; hidden: boolean }> => {
       const event = sent.find((entry) => entry.event.name === name)?.event
-      return (event?.data as { attr: Readonly<{ disabled: boolean }> }).attr
+      return (event?.data as { attr: Readonly<{ disabled: boolean; hidden: boolean }> }).attr
     }
     expect(attributes(ELCE_EVENTS.PRESENTATION_NAVIGATION_PREVIOUS).disabled).toBe(false)
+    expect(attributes(ELCE_EVENTS.PRESENTATION_NAVIGATION_PREVIOUS).hidden).toBe(false)
     expect(attributes(ELCE_EVENTS.PRESENTATION_NAVIGATION_NEXT).disabled).toBe(true)
     expect(canExit).toHaveBeenCalledOnce()
     expect(canExit).toHaveBeenCalledWith(
@@ -899,6 +901,7 @@ describe('Elcé scenario builder', () => {
     await refreshPresentationAction(context)
 
     expect(attributes(ELCE_EVENTS.PRESENTATION_NAVIGATION_PREVIOUS).disabled).toBe(false)
+    expect(attributes(ELCE_EVENTS.PRESENTATION_NAVIGATION_PREVIOUS).hidden).toBe(false)
     expect(attributes(ELCE_EVENTS.PRESENTATION_NAVIGATION_NEXT).disabled).toBe(true)
 
     readerContext[ELCE_SCORM_CHAPTER_SCO_IDENTIFIERS_CONTEXT_KEY] = {
@@ -909,6 +912,7 @@ describe('Elcé scenario builder', () => {
     await refreshPresentationAction(context)
 
     expect(attributes(ELCE_EVENTS.PRESENTATION_NAVIGATION_PREVIOUS).disabled).toBe(false)
+    expect(attributes(ELCE_EVENTS.PRESENTATION_NAVIGATION_PREVIOUS).hidden).toBe(false)
     expect(attributes(ELCE_EVENTS.PRESENTATION_NAVIGATION_NEXT).disabled).toBe(false)
   })
 

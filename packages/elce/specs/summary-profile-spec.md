@@ -9,11 +9,10 @@ l’auteur pourra relire séparément.
 
 `ElceDocument` v5 porte un seul objet `data.summary` et une définition
 `data.profile`. Le Sommaire conserve son titre, sa description, son média de
-fond, ses options d’affichage dans le menu et à la racine, son niveau de liste,
-le mode d’accès aux pages `endpage | free` (`endpage` par défaut), l’accès
-permanent et la destination de fin de chapitre. Ses deux présentations
-utilisent les mêmes entrées retenues, le titre et la description. La racine est
-une destination dédiée, hors de la séquence précédent/suivant.
+fond, ses réglages d’affichage du menu et de la page de Sommaire, son niveau de
+liste, le mode d’accès aux pages `endpage | free` (`endpage` par défaut),
+l’accès permanent et la destination de fin de chapitre. Ses deux présentations
+utilisent les mêmes entrées retenues, le titre et la description.
 
 Le profil sépare les propriétés des champs réellement demandés au lecteur. Une
 propriété porte un identifiant stable, un nom interne, un libellé, un type
@@ -56,6 +55,40 @@ Tiptap.
 
 ## Collecte et projection de lecture
 
+`summary.showInMenu`, édité par la case « Afficher le menu », commande le
+panneau entier à gauche du contenu. Désactivé, il masque ce panneau et retire
+sa colonne du layout : le contenu utilise toute la largeur disponible. À
+800 px et en dessous, le bouton d’ouverture et le tiroir sont également
+masqués. Réactivé, le menu présente à nouveau toutes ses entrées. Le réglage
+ne modifie ni les pages ni leurs règles d’accès, et reste indépendant de
+« Afficher comme page ».
+
+`summary.showAtRoot`, présenté par la case « Afficher comme page », place le
+Sommaire avant les pages de contenu dans le parcours du lecteur. C’est la page
+1 ; « Suivant » ouvre la première page de contenu, et « Précédent » depuis
+celle-ci revient au Sommaire sans exiger que cette page soit terminée. Le
+compteur inclut le Sommaire. Quand ce réglage est désactivé, le parcours
+commence sur la première page de contenu et celle-ci n’a pas de page
+précédente. Une page éditée choisie expressément au démarrage reste la page de
+départ de cette session.
+
+Dans le scénario de l’éditeur, le réglage ajoute une entrée fixe « Sommaire »
+au-dessus des pages et chapitres. L’entrée ouvre les réglages du Sommaire ; elle
+ne crée pas de page métier et ne change pas l’ordre enregistré des contenus.
+La décocher retire cette entrée. L’accès au Sommaire depuis le menu reste
+gouverné par « Accès au sommaire dans la navigation » : le lien reste
+accessible pendant une page inachevée quand ce réglage est activé ; sinon, il
+devient accessible après la fin de la page. La case est désactivée tant que
+« Afficher comme page » est décochée. Si « Après un chapitre » est réglé sur
+« Revenir au Sommaire », la fin du chapitre revient à cette page lorsqu’elle est
+activée.
+
+Le builder déclare ce choix par `data-menu-visible` sur le layout. La feuille
+partagée du lecteur règle la visibilité et la grille ; le montage Sighty, les
+routes et le circuit de navigation restent identiques. Le menu conserve ses
+entrées, même lorsqu’il est masqué. Ce scénario et cette feuille sont communs
+à la preview et à l’export.
+
 La page Profil est une scène Formulaire séparée du BDC Question. Elle collecte
 plusieurs valeurs sur la même page, affiche les erreurs de validation ensemble
 et n’émet ni correction ni score. Les champs texte, nombre, choix unique et
@@ -78,10 +111,33 @@ le document auteur. Les ancres pointant vers des enfants masqués sont retirées
 de la projection. Désactiver le profil pour le test auteur désactive les
 contraintes de profil et de lecture.
 
-Le Sommaire en mode `chapters` affiche les chapitres et garde les pages
-autonomes de la racine ; un chapitre ouvre sa première page retenue. Le mode
-`pages` affiche les pages dans l’ordre mixte racine/chapitres. Les prérequis
-non satisfaits gardent le contenu visible mais verrouillé. Une règle de
+Le mode `chapters` affiche uniquement les chapitres dans les deux présentations
+du Sommaire ; les pages autonomes de la racine et les titres de page sont
+masqués. Une entrée de chapitre ouvre sa première page retenue. Le mode `pages`
+affiche les titres de page dans l’ordre racine/chapitres. Sur la page Sommaire,
+les titres de chapitre occupent la première colonne et les titres de page la
+seconde. À 800 px ou moins, `chapters` garde une seule colonne et chaque titre
+de chapitre utilise toute la largeur disponible, sans colonne vide. Le titre du
+Sommaire apparaît une seule fois dans l’en-tête global du lecteur ; le contenu
+de la page ne le répète pas.
+
+L’état de lecture des chapitres est projeté à gauche de leur titre, hors du flux
+du texte (`list-style-position: outside`), dans une gouttière située à l’intérieur
+de la zone visible du contenu afin que le padding ne coupe pas l’icône en colonne
+étroite. Il réutilise `finishedPages` et les gardes d’accès existantes : un
+chapitre inaccessible affiche un cadenas ; toutes ses pages retenues terminées
+affichent un œil plein ; une partie seulement terminée affiche un œil contour ;
+aucun état de lecture ne masque l’icône. Le cadenas prévaut sur la progression.
+Le nom accessible du lien annonce aussi l’état. Aucun état parallèle n’est
+stocké.
+
+Dans la barre de navigation, un bouton désactivé « Précédent » est masqué. Sur
+la page Sommaire, il n’y a donc ni bouton Précédent ni raccourci « Sommaire » ;
+« Suivant » ouvre la première page et garde sa largeur normale. Les zones de
+grille restent affectées explicitement lorsque le raccourci Sommaire est masqué,
+sur ordinateur comme sur petit écran.
+
+Les prérequis non satisfaits gardent le contenu visible mais verrouillé. Une règle de
 Visibilité configurée en `lock` garde aussi sa cible visible, affiche le cadenas
 et refuse la route tant que ses conditions échouent. Le retour permanent au
 Sommaire ne valide pas la progression de la page courante.
@@ -94,6 +150,21 @@ restent verrouillées jusqu’à ce que le parcours requis pour leur résultat s
 terminé ; le seuil d’évaluation reste appliqué.
 Si le lecteur reçoit une page de départ verrouillée, il ouvre le Sommaire racine
 quand celui-ci est activé ; sinon il démarre sur la première page accessible.
+La composition lecteur vérifie que `chapters` n’émet que des entrées de chapitre
+dans la page racine et le menu, et que le changement du sélecteur enregistre le
+mode choisi. Les tests de composition vérifient les quatre états de progression,
+le lien de chapitre verrouillé, l’absence de titre répété et la navigation. La
+preview réelle sur le document Nutrition & Santé confirme les huit chapitres
+sans titres de page, l’œil contour du chapitre partiel, le titre unique,
+l’absence des deux boutons sans destination, la largeur normale de « Suivant »
+et, à 390 px, une seule colonne de 318 px sans dépassement horizontal. La même
+preview confirme que l’icône reste entièrement dans la zone visible (x=47–72 px
+dans un viewport de 390 px). Un test de composition couvre aussi les placements
+des icônes dans les titres statiques et les liens.
+Les tests sont dans [la composition lecteur](../src/player/elce-player-composition.test.ts),
+[le scénario lecteur](../src/builders/scenario/scenario-builder.test.ts) et
+[les réglages du Sommaire](../src/app/remix/workspace/summary-profile-settings.test.tsx).
+
 Les routes vers le Sommaire racine et la scène de transition Profil ciblent
 l’entrée de scène sous le slot contenu, pas le conteneur qui déclare ce slot.
 
@@ -117,8 +188,9 @@ champ ne duplique cette action.
 Le bouton « Sommaire » de l’arborescence ouvre les réglages du Sommaire et du
 profil. Il partage l’icône Lucide List avec le bouton « Test auteur » de la
 popup, qui ouvre les réglages du profil et de la progression du test.
-La case « Sommaire dans la navigation » est désactivée tant que la case
-« Afficher comme destination racine » n’est pas cochée.
+La case « Accès au sommaire dans la navigation » est désactivée tant que la
+case « Afficher comme page » n’est pas cochée. Dans le menu de lecture, elle
+indique si le lien Sommaire est accessible avant la fin de la page courante.
 
 Le contrôle « Image de fond » partage l’interface média du Quiz : sélection ou
 dépôt d’un fichier image, dépôt d’une image du catalogue, aperçu et retrait.
@@ -231,11 +303,14 @@ dernière valeur serveur et interdit à la fenêtre périmée de l’écraser.
 - [`editor-workspace.test.tsx`](../src/app/remix/workspace/editor-workspace.test.tsx)
   et [`project-application.test.tsx`](../src/app/remix/project-application.test.tsx)
   couvrent l’onglet Profil contextuel, l’insertion dans un champ simple et sa
-  disparition quand le contexte actif est quitté. Ces tests vérifient aussi le
-  titre « Contenus » et l’accès « Sommaire » avec son icône.
+  disparition quand le contexte actif est quitté. Ils vérifient aussi le titre
+  « Contenus », l’accès « Sommaire » avec son icône et, dans le scénario,
+  l’entrée fixe qui ouvre les réglages du Sommaire.
 - [`summary-profile-settings.test.tsx`](../src/app/remix/workspace/summary-profile-settings.test.tsx)
-  couvre l’arbre hiérarchique, l’absence de commandes et de BDC dans cette
-  zone, la sélection de toutes les pages par le chapitre, la sélection directe
+  vérifie le libellé « Afficher le menu », sa commande documentaire et son
+  annulation dans l’historique. Il couvre l’arbre hiérarchique, l’absence de
+  commandes et de BDC dans cette zone, la sélection de toutes les pages par le
+  chapitre, la sélection directe
   de pages sans cocher la cible chapitre, l’exception locale même dans un
   chapitre à une page, l’enregistrement au chapitre et aux pages, l’héritage
   par les nouvelles pages, la présence des contrôles désactivés sans cible et
@@ -246,9 +321,9 @@ dernière valeur serveur et interdit à la fenêtre périmée de l’écraser.
   la suppression d’une condition, le connecteur ET/OU, le remplacement de la
   liste héritée et son rétablissement quand toutes les conditions locales sont
   supprimées, ainsi que l’effet Masquer/Verrouiller et la sélection exclusive
-  Précédent ou multichapitre, que
-  « Sommaire dans la navigation » dépend de la présentation racine et que le
-  sélecteur de fond partage le contrôle média du Quiz. Le mode d’accès à la
+  Précédent ou multichapitre, que « Accès au sommaire dans la navigation »
+  dépend de la présentation racine et que le sélecteur de fond partage le
+  contrôle média du Quiz. Le mode d’accès à la
   suite démarre sur `endpage` et enregistre `free`. Avec le flag d’édition du
   profil désactivé, il vérifie que seuls les réglages du Sommaire restent et
   que les propriétés et règles du document sont conservées.
@@ -275,11 +350,36 @@ dernière valeur serveur et interdit à la fenêtre périmée de l’écraser.
 - [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
   exerce dans la composition réelle Sighty/CodPlay le changement de champ, le
   refus d’un formulaire incomplet, la soumission valide, la réouverture sur le
-  Sommaire racine et le lien du menu vers ce Sommaire. Il vérifie aussi que les
-  pages et chapitres verrouillés restent visibles, portent un cadenas accessible
-  et ne peuvent pas être ouverts. En mode `free`, le test de composition garde
+  Sommaire et le lien du menu vers ce Sommaire. Avec la page Sommaire activée et
+  désactivée, il vérifie l’ordre de lecture, le compteur, Suivant, Précédent
+  avant la fin de la première page, et le parcours standard sans Sommaire. Il
+  vérifie aussi que les pages et chapitres verrouillés restent visibles,
+  portent un cadenas accessible
+  et ne peuvent pas être ouverts. Avec le menu activé comme désactivé, il
+  vérifie le choix porté par le layout, le maintien des entrées, l’ouverture
+  d’une page depuis le Sommaire racine puis la navigation vers la suivante.
+  En mode `free`, le test de composition garde
   le BDC Résultat d’Évaluation inaccessible tant que les réponses requises
   manquent.
+
+Validation du menu le 30 octobre 2026 : 79 tests ciblés réussis, puis la suite
+Elcé complète (76 fichiers, 526 tests), le typecheck, le build et
+`git diff --check` passent. Brave utilise un projet autonome sur une instance
+isolée : le menu activé réserve 272 px à gauche à 1280 px ; désactivé, sa
+région est en `display: none` et le contenu commence à 0 px. À 390 px, le menu
+et son bouton sont masqués et le contenu utilise les 390 px. Un chargement
+depuis l’API conserve le choix désactivé et présente le Sommaire racine ; ses
+entrées ouvrent Page A et « Suivant » ouvre la seconde page. Réactiver le
+réglage rétablit le bouton mobile, l’ouverture du tiroir et ses routes, puis
+la colonne sur ordinateur. L’avertissement de focus sous `aria-hidden` à la
+fermeture du tiroir reste celui déjà suivi dans le plan de construction.
+
+Validation de « Afficher comme page » le 30 octobre 2026 : les quatre fichiers
+ciblés réussissent (87 tests), puis la suite Elcé complète réussit (76 fichiers,
+529 tests), avec le typecheck, le build et `git diff --check`. La composition
+réelle vérifie le parcours et les compteurs avec et sans Sommaire, y compris le
+retour avant la fin de la page ; Brave vérifie la première entrée fixe du
+scénario et le parcours lecteur.
 
 Validation automatisée le 15 octobre 2026 : 51 fichiers et 374 tests réussis
 dans l’exécution complète, avec le test SQLite exécuté avec l’accès à la boucle

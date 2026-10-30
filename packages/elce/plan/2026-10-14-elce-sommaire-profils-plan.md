@@ -34,6 +34,73 @@ d’utilisateurs restent différées. Le détail fonctionnel accepté reste dans
 
 ## Décisions acceptées et formats internes retenus
 
+### Présentation de la page Sommaire — accepté le 30 octobre 2026, En cours
+
+- Pour le Sommaire racine du lecteur : présenter les entrées en liens sans
+  soulignement, avec une surbrillance au survol et les couleurs sémantiques du
+  document.
+- Aligner les titres de chapitre dans la première colonne et les titres de
+  page dans la seconde. Respecter « Niveaux seuls » / « Pages et niveaux » :
+  « Niveaux seuls » affiche uniquement les chapitres dans le Sommaire, y compris
+  dans le menu latéral ; les pages autonomes sont masquées. « Pages et niveaux »
+  affiche les pages sous leur chapitre ou à la racine.
+- Le réglage « Niveaux seuls » était visible dans l’éditeur, mais le document
+  transmis au lecteur portait encore `displayMode: pages`. Après réapplication
+  du changement, le document synchronisé portait `chapters` et la preview réelle
+  affichait huit titres de chapitre et aucun titre de page.
+- La page Sommaire n’affiche le titre que dans l’en-tête global du lecteur. Son
+  contenu ne répète pas ce titre. Les chapitres portent à gauche une icône de
+  progression : cadenas si l’accès au chapitre est bloqué, œil plein quand
+  toutes ses pages retenues sont terminées, œil contour quand au moins une mais
+  pas toutes le sont ; sans page terminée, aucune icône de progression.
+- Les icônes utilisent l’état existant `finishedPages` et les gardes d’accès
+  existantes. Elles restent à l’extérieur du flux du texte (`list-style-position:
+  outside`). Aucun état de lecture parallèle n’est ajouté.
+- Les tests ciblés vérifient le changement du sélecteur et l’absence de liens de
+  page dans la racine et le menu, les quatre états de progression et le titre
+  unique. La preview réelle confirme l’œil contour du chapitre partiel, le titre
+  unique et l’alignement extérieur de l’icône. La spécification a été mise à jour.
+  La validation visuelle des deux colonnes, du survol et de la palette en mode
+  `pages` reste à faire.
+- À 800 px et moins, le style générique mobile réappliquait deux colonnes aux
+  rangées `chapters`, malgré leur classe une colonne. Une règle plus spécifique
+  conserve désormais une colonne pleine largeur. Le test ciblé passe ; Brave
+  confirme à 390 px que les rangées et leurs titres mesurent 318 px et que la
+  page ne déborde pas horizontalement. La validation du rendu `pages` reste
+  ouverte.
+- En colonne étroite, la marge négative de l’icône la plaçait hors de la zone
+  visible du contenu. Les liens de chapitre réservent maintenant une gouttière
+  interne à l’icône positionnée hors du flux du texte ; les titres statiques
+  utilisent le même placement. À 390 px, Brave confirme l’icône entièrement
+  visible dans la zone de défilement et aucun débordement. Les 58 tests ciblés
+  passent, dont le cas du titre statique.
+
+### Bouton Sommaire dans la barre de navigation — accepté le 30 octobre 2026, En cours
+
+- Ajouter le bouton « Sommaire » à côté de Précédent/Suivant. C’est un raccourci
+  supplémentaire ; l’action Sommaire existante du menu reste disponible.
+- Afficher le bouton uniquement quand « Afficher comme page » et « Accès au
+  sommaire dans la navigation » sont cochés. Le second réglage reste désactivé
+  si le premier ne l’est pas. Lorsqu’il est coché, le bouton interrompt la page
+  en cours et ouvre le Sommaire, même si la page n’est pas terminée. Lorsqu’il
+  est décoché, l’accès existant du menu conserve sa garde de fin de page.
+- Implémentation ajoutée dans le builder de navigation : le bouton émet
+  l’événement Sommaire existant et le layout le masque hors d’une page de
+  contenu. Le lecteur masque aussi Précédent lorsqu’il est désactivé. Des zones
+  de grille explicites gardent Suivant à sa largeur normale quand le bouton
+  Sommaire est masqué.
+- Les 71 tests ciblés des builders de scénario et de composition, le typecheck
+  et la preview réelle passent. Sur la page Sommaire, Brave confirme qu’il ne
+  reste que Suivant, à 104 px dans la fenêtre testée ; Précédent et Sommaire
+  sont absents de l’arbre accessible. Le module reste En cours pour les autres
+  validations visuelles listées plus haut.
+- Sur la page Sommaire, masquer aussi « Précédent » lorsqu’il n’a aucune
+  destination. Quand le bouton Sommaire est masqué, la grille libère sa colonne
+  afin que « Suivant » conserve sa largeur de bouton.
+- Réutiliser le routage Sommaire et sa garde existants. Valider la présentation
+  et le clic dans la composition lecteur et le vrai lecteur, puis transférer le
+  contrat vérifié à la [spécification Sommaire](../specs/summary-profile-spec.md#collecte-et-projection-de-lecture).
+
 1. **Document existant. Décision acceptée :** aucune compatibilité legacy en
    phase de construction. Passer en v5 sans migration depuis v4 ; si nécessaire,
    réinitialiser la base de test et recréer le document. Le lecteur n’accepte
@@ -72,7 +139,7 @@ d’utilisateurs restent différées. Le détail fonctionnel accepté reste dans
    chapitres nommés doivent être terminés. Dans l’éditeur, `-` signifie ignorer
    et retire le prérequis. Seuls les chapitres cibles cochés reçoivent la règle.
 6. **Sommaire.** Le document contient un unique objet `summary` : titre,
-   description, média de fond optionnel, affichage dans le menu, affichage à la
+   description, média de fond optionnel, affichage du menu, affichage à la
    racine, mode `chapters | pages`, accès permanent et destination de fin
    `next | summary`.
 7. **Étiquettes.** Une référence dans le texte est un nœud inline Tiptap avec
@@ -157,14 +224,14 @@ construction.
      contrôle média du Quiz ; il accepte les images, leur dépôt, leur aperçu,
      leur retrait et les références d’image du catalogue. L’import suit la file
      média existante. Validé par les tests ciblés, le typecheck et le build.
-   - Renommer « Accès permanent au Sommaire » en « Sommaire dans la
-     navigation » et désactiver cette case tant que « Afficher comme
-     destination racine » est décochée.
-   - **Nouvelle décision demandée, non appliquée :** cocher « Afficher comme
-     destination racine » doit ajouter « Sommaire » à la racine du scénario.
-     Définir avant réalisation si cette entrée rejoint la séquence
-     Précédent/Suivant ; le contrat vérifié actuel garde le Sommaire hors de
-     cette séquence.
+   - **Décision acceptée, bouton nav en cours :** « Accès au sommaire dans la
+     navigation » affiche le raccourci Sommaire dans la barre de navigation ;
+     ce raccourci interrompt la page en cours et ouvre le Sommaire. La case
+     dépend de « Afficher comme page ». Le lien du menu conserve sa garde de fin
+     de page quand cette option est décochée.
+   - **Décision acceptée et appliquée :** « Afficher comme page » place le
+     Sommaire en première page du parcours et rejoint la séquence
+     Précédent/Suivant ; le contrat et les preuves sont dans la spécification.
    - **Décision acceptée et appliquée :** le bouton global « Enregistrer »
      soumet aussi les deux familles de contraintes ; les autres réglages sont
      déjà appliqués par les commandes documentaires existantes. Il fonctionne
@@ -291,15 +358,28 @@ construction.
    - Accepter texte, nombre, choix simple/multiple, erreurs, défauts, absence,
      validation unique et admission Sighty.
 
-5. **Sommaire lecteur — intégré ; validation visuelle navigateur en attente.**
+5. **Sommaire lecteur — intégré ; affichage du menu vérifié sur ordinateur et
+   mobile le 30 octobre ; page de Sommaire en tête du scénario et de la lecture,
+   navigation retour/départ vérifiées le 30 octobre. Les autres parcours
+   navigateur restent ouverts.**
+   - Correction « Afficher le menu » terminée : 79 tests ciblés, 526 tests
+     Elcé, typecheck, build et Brave passent. Contrat et preuves transférés à
+     la [spécification Sommaire](../specs/summary-profile-spec.md#collecte-et-projection-de-lecture).
+   - « Afficher comme page » : 87 tests ciblés, la suite Elcé complète
+     (76 fichiers, 529 tests), typecheck, build et `git diff --check` passent.
+     La composition réelle vérifie l’entrée fixe d’édition, le début Sommaire →
+     première page, le compteur, Précédent/Suivant avant la fin de page et le
+     parcours standard quand la case est désactivée. Brave confirme page 1/3,
+     page 2/3, puis retour à 1/3.
    - Le composant externe est monté dans le `slot` persistent ; les tests
      vérifient le montage, les entrées, le lien du menu et la route vers la scène
      racine dans le slot contenu.
-   - Alimenter menu et racine depuis la même projection et les mêmes décisions
-     d’accès. La racine est une destination dédiée, hors précédent/suivant.
+   - Alimenter le menu et la page Sommaire depuis la même projection et les
+     mêmes décisions d’accès. Quand elle est activée, elle précède les pages
+     dans la lecture et la séquence Précédent/Suivant.
    - Afficher une liste défilante en colonnes sur une page, sans pagination.
-     En « niveaux seuls », garder les pages autonomes ; un chapitre ouvre sa
-     première page retenue si elle est accessible.
+     En « niveaux seuls », afficher uniquement les chapitres ; un chapitre ouvre
+     sa première page retenue si elle est accessible.
    - Accepter retour de chapitre, accès permanent, entrées masquées/verrouillées,
      commandes clavier, focus, longues listes, tailles de viewport et destruction
      sans écouteurs résiduels. Le retour de fin de chapitre vers le Sommaire

@@ -62,7 +62,9 @@ sur l'écoute HTTP en environnement restreint ; les 16 tests SQLite et les
 16 tests JSON passent ensuite avec accès aux ports locaux (32/32).
 Sauvegarde des données et copie SQLite cohérente :
 `/var/folders/zn/1p16lqb960q77_y8cn3m851r0000gn/T/codplay-before-develop-merges-pn1ni5k_`.
-Point de retour : `backup/develop-before-integration-2026-10-29`.
+Commit de retour : `f87de99b32e6887ef3749309e0ebe5373e2971a0` (la branche
+`backup/develop-before-integration-2026-10-29` a été supprimée à la demande
+de l'utilisateur le 30 octobre 2026).
 
 Décision acceptée pendant l'intégration : les deux déclarations vidéo
 `master: false` des démos `replace-carousel/main.ts` et
@@ -132,7 +134,10 @@ souci, en laissant le choix interne à l'implémentation. Statut : En cours.
 Résultat Git : `elce-remix` fusionnée par `eada06ad`, puis
 `codplay-replace` par `c40191e4`. `develop` rejoint ensuite ce résultat par
 avance rapide. Le correctif JSON `f87de99b` et les deux têtes sources restent
-dans son ascendance. Le point de retour et la branche d'intégration sont
-conservés. Les preuves des comportements corrigés sont dans les spécifications
+dans son ascendance. La branche d'intégration est conservée ; les branches
+`elce-remix` (locale et distante), `backup/*` locales et le worktree temporaire
+`codplay-develop-json` ont été supprimés à la demande de l'utilisateur le
+30 octobre 2026. Leurs commits restent dans l'ascendance de `develop`.
+Les preuves des comportements corrigés sont dans les spécifications
 de matérialisation, replace-text et Remix ; seules l'acceptation globale et
 les cinq anomalies FLIP préexistantes restent ouvertes ici.

@@ -53,8 +53,8 @@ import {
   validateProfileValues,
 } from '../../domain/summary-profile/profile-rules'
 import { buildProfileFormScene } from '../summary-profile/profile-form-scene-builder'
-import { buildSummaryEntries, buildSummaryScene } from '../summary-profile/summary-scene-builder'
-import type { SummaryEntry } from '../summary-profile/summary-scene-builder'
+import { buildSummaryEntries, buildSummaryScene, summaryChapterStatusEvent } from '../summary-profile/summary-scene-builder'
+import type { SummaryChapterReadingStatus, SummaryEntry } from '../summary-profile/summary-scene-builder'
 import type { ElceSceneKey, ElceSlotName } from './scenario-builder-types'
 import { scenarioContextFromTestState } from './scenario-context'
 import { ElceEditorSettingsResolver } from '../../domain/editor-settings/editor-settings-resolver'
@@ -65,9 +65,11 @@ type ElcePresentation = Readonly<{
   readonly title: string
   readonly menuClassPatch: Readonly<{ add: string; remove: string }>
   readonly menuPageStates: readonly Readonly<{ id: string; title: string; active: boolean; allowed: boolean }>[]
-  readonly previousAttributes: Readonly<{ type: 'button'; disabled: boolean }>
+  readonly previousAttributes: Readonly<{ type: 'button'; disabled: boolean; hidden: boolean }>
+  readonly summaryButtonVisible: boolean
   readonly nextAttributes: Readonly<{ type: 'button'; disabled: boolean }>
   readonly navigationStatus: string
+  readonly chapterStatuses: readonly Readonly<{ chapterId: string; status: SummaryChapterReadingStatus }>[]
 }>
 
 type ElceProgressContext = Readonly<{
@@ -171,7 +173,9 @@ export function buildScenario(
     ),
     [ELCE_SCENARIO.PROFILE_COMPLETE_SCENE]: createProfileCompleteScene(document.id),
     [ELCE_SCENARIO.TITLE_SCENE]: createTitleScene(),
-    [ELCE_SCENARIO.NAVIGATION_SCENE]: createNavigationScene(),
+    [ELCE_SCENARIO.NAVIGATION_SCENE]: createNavigationScene(
+      document.data.summary.showAtRoot && document.data.summary.permanentAccess,
+    ),
     [`scene-${ELCE_SCENARIO.EMPTY_PAGE}`]: createEmptyPageScene(document.id),
     ...scenes,
   }
@@ -297,7 +301,7 @@ function scenarioPageIds(document: ElceDocument): readonly string[] {
   return document.scenarioPageIds
 }
 
-/** Builds the page graph plus the independent summary and profile destinations. */
+/** Builds the page graph with its optional opening summary and profile collection. */
 function createScenarioViews(
   document: ElceDocument,
   firstPageId: string,
@@ -306,20 +310,29 @@ function createScenarioViews(
 ): SightyViewGraph<ElceSceneKey, ElceSlotName> {
   const pageIds = scenarioPageIds(document)
   const pagePaths = createPagePaths(document, pageIds)
-  const views: Record<string, SightyGraphView<ElceSceneKey, ElceSlotName>> = Object.fromEntries(
+  const views: Record<string, SightyGraphView<ElceSceneKey, ElceSlotName>> = {}
+  if (document.data.summary.showAtRoot) {
+    views[ELCE_SCENARIO.SUMMARY_ENTRY_VIEW] = {
+      view: { slots: { [ELCE_SCENARIO.CONTENT_SLOT]: createPersistentSceneSlot(ELCE_SCENARIO.SUMMARY_SCENE, ELCE_SCENARIO.CONTENT_SLOT) } },
+      actions: {
+        ...navigationBlockActions(),
+        ...(pageIds[0] === undefined ? {} : {
+          [ELCE_EVENTS.NAVIGATION_NEXT]: {
+            go: { path: pagePathFromTable(pagePaths, pageIds[0]) },
+            action: ELCE_SCENARIO_HANDLERS.REFRESH_EVALUATION_RESULT,
+          },
+        }),
+      },
+    }
+  }
+  Object.assign(views, Object.fromEntries(
     document.data.scenarioEntries.flatMap((entry) => scenarioEntryView(document, entry, firstPageId, pageIds)),
-  )
+  ))
   const collectProfile = shouldCollectProfile(document.data.profile.fieldPropertyIds, options.testState ?? INITIAL_PROJECT_TEST_STATE)
   const firstPagePath = pagePathFromTable(pagePaths, firstPageId)
   if (pageIds.length === 0) {
     views[ELCE_SCENARIO.EMPTY_ENTRY_VIEW] = {
       view: { slots: { [ELCE_SCENARIO.CONTENT_SLOT]: createPageViews(document, [], firstPageId, pageIds) } },
-      actions: navigationBlockActions(),
-    }
-  }
-  if (document.data.summary.showAtRoot) {
-    views[ELCE_SCENARIO.SUMMARY_ENTRY_VIEW] = {
-      view: { slots: { [ELCE_SCENARIO.CONTENT_SLOT]: createPersistentSceneSlot(ELCE_SCENARIO.SUMMARY_SCENE, ELCE_SCENARIO.CONTENT_SLOT) } },
       actions: navigationBlockActions(),
     }
   }
@@ -466,14 +479,18 @@ function createPageViews(
   return { start, views: entries }
 }
 
-/** Computes explicit page routes so summary destinations stay outside page order. */
+/** Computes page routes including the optional opening summary and chapter returns. */
 function createPageNavigationActions(
   document: ElceDocument,
   pageId: string,
   pageIds: readonly string[],
 ): Readonly<Record<string, SightyViewAction<ElceSceneKey, ElceSlotName>>> {
   const index = pageIds.indexOf(pageId)
-  const previousPageId = index > 0 ? pageIds[index - 1] : undefined
+  const previousPath = index > 0
+    ? pagePath(document, pageIds[index - 1]!)
+    : index === 0 && document.data.summary.showAtRoot
+      ? contentScenePath(ELCE_SCENARIO.SUMMARY_ENTRY_VIEW)
+      : undefined
   const nextPageId = index >= 0 ? pageIds[index + 1] : undefined
   const page = document.pages.find((candidate) => candidate.id === pageId)
   const chapter = page?.chapterId === null || page?.chapterId === undefined
@@ -492,8 +509,8 @@ function createPageNavigationActions(
       go: { path: nextPath },
       action: ELCE_SCENARIO_HANDLERS.REFRESH_EVALUATION_RESULT,
     },
-    [ELCE_EVENTS.NAVIGATION_PREVIOUS]: previousPageId === undefined ? {} : {
-      go: { path: pagePath(document, previousPageId) },
+    [ELCE_EVENTS.NAVIGATION_PREVIOUS]: previousPath === undefined ? {} : {
+      go: { path: previousPath },
       action: ELCE_SCENARIO_HANDLERS.REFRESH_EVALUATION_RESULT,
     },
   }
@@ -1102,9 +1119,17 @@ async function refreshPresentation(context: SightyActionContext<ElceSceneKey, El
           'data-page-id': page.id,
           'data-active': String(page.active),
           'data-locked': String(!page.allowed),
+          'aria-disabled': String(!page.allowed),
           'aria-label': page.allowed ? page.title : `${page.title}, verrouillé`,
-          disabled: !page.allowed,
+          ...(sceneKey === ELCE_SCENARIO.SUMMARY_MENU_SCENE ? { disabled: !page.allowed } : {}),
         } },
+      }, { scope: 'story', storyId: 'main' })
+    }
+  }
+  if (activeSceneKeys.has(ELCE_SCENARIO.SUMMARY_SCENE)) {
+    for (const chapter of presentation.chapterStatuses) {
+      await context.send(ELCE_SCENARIO.SUMMARY_SCENE, {
+        name: summaryChapterStatusEvent(chapter.chapterId, chapter.status),
       }, { scope: 'story', storyId: 'main' })
     }
   }
@@ -1114,7 +1139,10 @@ async function refreshPresentation(context: SightyActionContext<ElceSceneKey, El
   }, { scope: 'story', storyId: 'main' })
   await context.send(ELCE_SCENARIO.NAVIGATION_SCENE, {
     name: ELCE_EVENTS.PRESENTATION_NAVIGATION_STATUS,
-    data: { content: presentation.navigationStatus },
+    data: {
+      content: presentation.navigationStatus,
+      attr: { 'data-summary-button-visible': String(presentation.summaryButtonVisible) },
+    },
   }, { scope: 'story', storyId: 'main' })
   await context.send(ELCE_SCENARIO.NAVIGATION_SCENE, {
     name: ELCE_EVENTS.PRESENTATION_NAVIGATION_NEXT,
@@ -1135,15 +1163,17 @@ async function createPresentation(
   const presentationPageIds = scormChapter?.pageIds ?? runtime.pageIds
   const activeContentSelection = scenarioState.current.find((selection) => selection.slotName === ELCE_SCENARIO.CONTENT_SLOT)
   const activeSceneKey = activeContentSelection?.sceneKey ?? scenarioState.active?.sceneKey
+  const hasSummaryPage = scormChapter === undefined && runtime.summary.showAtRoot
+  const isSummaryPage = hasSummaryPage && activeSceneKey === ELCE_SCENARIO.SUMMARY_SCENE
   const activePageId = pageIdFromSceneKey(activeSceneKey)
   const pageIndex = activePageId === undefined ? -1 : presentationPageIds.indexOf(activePageId)
   const page = activePageId === undefined ? undefined : presentationPageIds[pageIndex]
-  const nextPageId = pageIndex < 0 ? undefined : presentationPageIds[pageIndex + 1]
+  const nextPageId = isSummaryPage ? presentationPageIds[0] : pageIndex < 0 ? undefined : presentationPageIds[pageIndex + 1]
   const activePage = activePageId === undefined ? undefined : runtime.pages[activePageId]
   const activeChapter = activePage?.chapterId === null || activePage?.chapterId === undefined
     ? undefined
     : runtime.chapters[activePage.chapterId]
-  const nextDestination = scormChapter === undefined && activeChapter?.pageIds.at(-1) === activePageId
+  const nextDestination = scormChapter === undefined && activeChapter !== undefined && activeChapter.pageIds.at(-1) === activePageId
     && runtime.summary.endChapterDestination === 'summary'
     && runtime.summary.showAtRoot
     ? { path: `${ELCE_SCENARIO.ROOT_VIEW}/${ELCE_SCENARIO.SUMMARY_ENTRY_VIEW}` }
@@ -1158,12 +1188,12 @@ async function createPresentation(
     && hasScormChapterSco(readerContext, previousScormChapter)
   const nextScormChapterAllowed = nextScormChapter !== undefined
     && hasScormChapterSco(readerContext, nextScormChapter)
-  const previousPageAllowed = pageIndex > 0
-  const nextExitAllowed = page === undefined
-    ? false
-    : await scenarioState.canExit(
+  const previousPageAllowed = pageIndex > 0 || hasSummaryPage && pageIndex === 0
+  const nextExitAllowed = isSummaryPage
+    ? true
+    : page === undefined ? false : await scenarioState.canExit(
         { path: pagePathFromTable(runtime.pagePaths, page) },
-      { name: ELCE_EVENTS.NAVIGATION_NEXT, sourceSceneKey: ELCE_SCENARIO.NAVIGATION_SCENE },
+        { name: ELCE_EVENTS.NAVIGATION_NEXT, sourceSceneKey: ELCE_SCENARIO.NAVIGATION_SCENE },
       )
   const nextDestinationAllowed = nextDestination === undefined
     ? nextScormChapterAllowed
@@ -1180,6 +1210,12 @@ async function createPresentation(
     scenarioState,
     scormChapter?.id,
   )
+  const chapterStatuses = getChapterReadingStatuses(
+    runtime,
+    readerContext,
+    menu.states,
+  )
+  const previousAllowed = previousPageAllowed || previousScormChapterAllowed
   return {
     title: activeSceneKey === ELCE_SCENARIO.SUMMARY_SCENE
       ? runtime.summary.title
@@ -1188,15 +1224,48 @@ async function createPresentation(
         : page === undefined || page === ELCE_SCENARIO.EMPTY_PAGE ? 'Aucune page' : runtime.pageNames[page] ?? page,
     menuClassPatch: menu.patch,
     menuPageStates: menu.states,
-    previousAttributes: {
-      type: 'button',
-      disabled: !previousPageAllowed && !previousScormChapterAllowed,
-    },
+    previousAttributes: { type: 'button', disabled: !previousAllowed, hidden: !previousAllowed },
     nextAttributes: { type: 'button', disabled: !nextExitAllowed || !nextDestinationAllowed },
-    navigationStatus: pageIndex < 0 || page === ELCE_SCENARIO.EMPTY_PAGE
-      ? ''
-      : `Page ${pageIndex + 1} sur ${presentationPageIds.length}`,
+    summaryButtonVisible: hasSummaryPage
+      && runtime.summary.permanentAccess
+      && page !== undefined
+      && page !== ELCE_SCENARIO.EMPTY_PAGE
+      && !isSummaryPage,
+    navigationStatus: isSummaryPage
+      ? `Page 1 sur ${presentationPageIds.length + 1}`
+      : pageIndex < 0 || page === ELCE_SCENARIO.EMPTY_PAGE
+        ? ''
+        : `Page ${pageIndex + 1 + Number(hasSummaryPage)} sur ${presentationPageIds.length + Number(hasSummaryPage)}`,
+    chapterStatuses,
   }
+}
+
+/** Derives chapter icons from existing access checks and completed-page progress. */
+function getChapterReadingStatuses(
+  runtime: ElceRuntimeData,
+  readerContext: Readonly<Record<string, unknown>>,
+  menuStates: readonly Readonly<{ id: string; allowed: boolean }>[],
+): readonly Readonly<{ chapterId: string; status: SummaryChapterReadingStatus }>[] {
+  const profileEnabled = readerContext.profileEnabled !== false
+  const profileValues = readProfileValues(readerContext.profileValues)
+  const accessByPageId = new Map(menuStates.map((state) => [state.id, state.allowed]))
+  return runtime.chapterIds.flatMap((chapterId) => {
+    const chapter = runtime.chapters[chapterId]
+    const pageIds = chapter?.pageIds.filter((pageId) => runtime.pageIds.includes(pageId)) ?? []
+    if (chapter === undefined || pageIds.length === 0) return []
+
+    const finishedCount = pageIds.filter((pageId) => isPageComplete(pageId, readerContext, runtime.questionBdcByPage)).length
+    const chapterVisible = !profileEnabled || runtimeChapterVisibilityAllowsAccess(runtime, chapterId, profileValues)
+    const firstPageAllowed = accessByPageId.get(pageIds[0]!) !== false
+    const status: SummaryChapterReadingStatus = !chapterVisible || !firstPageAllowed
+      ? 'locked'
+      : finishedCount === pageIds.length
+        ? 'read'
+        : finishedCount > 0
+          ? 'partial'
+          : 'unread'
+    return [{ chapterId, status }]
+  })
 }
 
 /** Computes menu classes using the same access guard as the content slot. */
@@ -1498,6 +1567,7 @@ function createLayoutScene(document: ElceDocument): SceneDoc<string> {
             initial: {
               move: '@root',
               className: `elce-player-layout ${layoutAppearanceClass}`,
+              attr: { 'data-menu-visible': String(document.data.summary.showInMenu) },
               markup: `<main id="${documentId}-layout-root" class="elce-player-layout ${layoutAppearanceClass}">
                 <aside id="${documentId}-menu-region" class="elce-player-layout__menu" aria-label="Menu du document"><!-- data-part="${menuPartId}" --></aside>
                 <header id="${documentId}-title-region" class="elce-player-layout__title" aria-label="Page courante">
@@ -1583,8 +1653,25 @@ function createTitleScene(): SceneDoc<string> {
   }
 }
 
-/** Builds the navigation scene with comment anchors for previous, status, and next. */
-function createNavigationScene(): SceneDoc<string> {
+/** Builds the navigation scene and its optional direct summary button. */
+function createNavigationScene(showSummaryButton: boolean): SceneDoc<string> {
+  const navigationClassName = showSummaryButton
+    ? 'elce-player-navigation elce-player-navigation--with-summary'
+    : 'elce-player-navigation'
+  const summaryAnchor = showSummaryButton ? '<!-- data-part="elce:navigation:summary" -->' : ''
+  const summaryButton: readonly PersoDoc<string>[] = showSummaryButton ? [{
+    id: 'elce-navigation-summary',
+    type: 'tag',
+    initial: {
+      tag: 'button',
+      content: 'Sommaire',
+      attr: { type: 'button' },
+      className: 'elce-player-navigation__button elce-player-navigation__button--summary',
+      move: { target: 'elce:navigation:summary' },
+    },
+    emit: { click: { event: { name: ELCE_EVENTS.MENU_SUMMARY, visibility: 'public' } } },
+    actions: {},
+  }] : []
   return {
     id: `${ELCE_SCENARIO.NAVIGATION_SCENE}-document`,
     stories: {
@@ -1602,14 +1689,16 @@ function createNavigationScene(): SceneDoc<string> {
             type: 'layout',
             initial: {
               move: '@root',
-              className: 'elce-player-navigation',
-              markup: `<div id="elce-navigation-controls-root" class="elce-player-navigation">
+              className: navigationClassName,
+              attr: { 'data-summary-button-visible': 'false' },
+              markup: `<div id="elce-navigation-controls-root" class="${navigationClassName}" data-summary-button-visible="false">
                 <!-- data-part="elce:navigation:previous" -->
+                ${summaryAnchor}
                 <!-- data-part="elce:navigation:status" -->
                 <!-- data-part="elce:navigation:next" -->
               </div>`,
             },
-            actions: {},
+            actions: { [ELCE_EVENTS.PRESENTATION_NAVIGATION_STATUS]: {} },
           },
           {
             id: 'elce-navigation-previous',
@@ -1617,13 +1706,14 @@ function createNavigationScene(): SceneDoc<string> {
             initial: {
               tag: 'button',
               content: 'Précédent',
-              attr: { type: 'button', disabled: true },
-              className: 'elce-player-navigation__button',
+              attr: { type: 'button', disabled: true, hidden: true },
+              className: 'elce-player-navigation__button elce-player-navigation__button--previous',
               move: { target: 'elce:navigation:previous' },
             },
             emit: { click: { event: { name: ELCE_EVENTS.NAVIGATION_PREVIOUS, visibility: 'public' } } },
             actions: { [ELCE_EVENTS.PRESENTATION_NAVIGATION_PREVIOUS]: {} },
           },
+          ...summaryButton,
           {
             id: 'elce-navigation-status',
             type: 'tag',

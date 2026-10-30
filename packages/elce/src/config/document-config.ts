@@ -394,6 +394,7 @@ export const ELCE_EVENTS = {
   PRESENTATION_REFRESH: 'elce:presentation:refresh',
   PRESENTATION_MENU: 'elce:presentation:menu',
   PRESENTATION_MENU_PAGE_PREFIX: 'elce:presentation:menu-page:',
+  PRESENTATION_CHAPTER_STATUS_PREFIX: 'elce:presentation:chapter-status:',
   PRESENTATION_TITLE: 'elce:presentation:title',
   PRESENTATION_NAVIGATION_PREVIOUS: 'elce:presentation:navigation-previous',
   PRESENTATION_NAVIGATION_NEXT: 'elce:presentation:navigation-next',
