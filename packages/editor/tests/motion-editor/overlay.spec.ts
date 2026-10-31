@@ -434,6 +434,24 @@ describe('motion overlay', () => {
     overlay.destroy()
   })
 
+  it('drops obsolete keyframe identities when reusable ghost parts leave the projection', () => {
+    const store = createMotionGeometryStore()
+    const overlay = mountMotionOverlay(host, { onDrop: () => null }, store)
+    const ghosts: MotionOverlayGhost[] = [
+      { id: 'first', keyframeId: 'first-kf', geometry: segment.sourceGeometry, chainDistance: 0 },
+      { id: 'last', keyframeId: 'last-kf', geometry: segment.targetGeometry, chainDistance: 0 },
+    ]
+    store.publish({ selection: null, segments: [{ ...segment,
+      sourceKeyframeId: 'first-kf', targetKeyframeId: 'last-kf',
+    }], ghosts, initialGhost: null })
+    expect(host.querySelector('[data-motion-ghost="target"]')?.getAttribute('data-motion-keyframe-id')).toBe('last-kf')
+    store.publish({ selection: null, segments: [], ghosts: [], initialGhost: null })
+    expect(host.querySelectorAll('[data-motion-keyframe-id]')).toHaveLength(0)
+    store.publish({ selection: null, segments: [], ghosts: [ghosts[1]!], initialGhost: null })
+    expect(host.querySelectorAll('[data-motion-keyframe-id="last-kf"]')).toHaveLength(1)
+    overlay.destroy()
+  })
+
   it('hides the endpoint ghost occupied by the live pose', () => {
     const roles: string[] = []
     const overlay = createMotionOverlay(host, {

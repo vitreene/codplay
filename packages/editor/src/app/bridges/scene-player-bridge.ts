@@ -2,10 +2,60 @@ import type { Actor } from 'xstate'
 import { CodPlay } from 'codplay'
 import type { CodPlayInstance } from 'codplay'
 import { buildSceneDocV2 } from '../../builder-v2'
+import type { StyleDefaultCapture, StyleDefaultRequest } from '../../builder-v2/types'
+import { EDITOR_ENGINE_OPTIONS } from '../../item-presentation/engine-options'
 import type { EditorScene } from '../commands/types'
 import type { controllerMachine } from '../controller/controller-machine'
 import type { BridgeHandle } from './types'
 import type { EditorCoordinationBridge } from './editor-coordination-bridge'
+
+/** Seeks the staged native instance to each requested item pose and captures its CSS defaults. */
+async function measureInitialStyleDefaults(
+  instance: CodPlayInstance,
+  root: HTMLElement,
+  requests: readonly StyleDefaultRequest[],
+  preRollMs: number,
+  isCurrentRevision: () => boolean,
+): Promise<Map<string, StyleDefaultCapture> | null> {
+  const requestsByTime = new Map<number, StyleDefaultRequest[]>()
+  for (const request of requests) {
+    const atTime = requestsByTime.get(request.initialTimeMs) ?? []
+    atTime.push(request)
+    requestsByTime.set(request.initialTimeMs, atTime)
+  }
+
+  const defaultsByItem = new Map<string, StyleDefaultCapture>()
+  for (const [timeMs, itemsAtTime] of requestsByTime) {
+    await instance.telco.seek(timeMs + preRollMs)
+    if (!isCurrentRevision()) return null
+
+    for (const request of itemsAtTime) {
+      const node = [...root.querySelectorAll<HTMLElement>('[data-editor-visual-for]')]
+        .find((candidate) => candidate.dataset.editorVisualFor === request.itemId)
+      if (node === undefined) continue
+      const cqwWidthPx = measureCqwWidthPx(node)
+      const computed = node.ownerDocument.defaultView!.getComputedStyle(node)
+      const values = Object.fromEntries(request.properties.flatMap((property) => {
+        const value = computed.getPropertyValue(property).trim()
+        return value === '' ? [] : [[property, value]]
+      }))
+      if (Object.keys(values).length > 0) defaultsByItem.set(request.itemId, { values, cqwWidthPx })
+    }
+  }
+  return defaultsByItem
+}
+
+/** Measures one cqw in the item's computed container without changing the item cascade. */
+function measureCqwWidthPx(item: HTMLElement): number | null {
+  const parent = item.parentElement
+  if (parent === null) return null
+  const reference = item.ownerDocument.createElement('span')
+  reference.style.cssText = 'all:initial;display:block;position:absolute;visibility:hidden;pointer-events:none;width:1cqw;height:0'
+  parent.append(reference)
+  const width = reference.getBoundingClientRect().width
+  reference.remove()
+  return Number.isFinite(width) && width > 0 ? width : null
+}
 
 /** Mounts the editor scene through one V2 CodPlay owner and one active instance. */
 export function createScenePlayerBridge(
@@ -13,7 +63,7 @@ export function createScenePlayerBridge(
   machine: Actor<typeof controllerMachine>,
   coordination: EditorCoordinationBridge,
 ): BridgeHandle {
-  const codplay = new CodPlay({ pauseOnDocumentHidden: false })
+  const codplay = new CodPlay({ engine: EDITOR_ENGINE_OPTIONS, pauseOnDocumentHidden: false })
   let activeInstance: CodPlayInstance | null = null
   let activeRoot: HTMLElement | null = null
   let activeResourceUrls: string[] = []
@@ -63,14 +113,14 @@ export function createScenePlayerBridge(
   /** Builds, preloads, stages, and atomically publishes one V2 editor instance. */
   async function rebuild(scene: EditorScene): Promise<void> {
     const revision = ++rebuildRevision
-    const result = buildSceneDocV2(scene)
-    if (!result.ok) {
-      console.error('[scenePlayer bridge] V2 scene build failed', result.diagnostics)
+    const initialResult = buildSceneDocV2(scene)
+    if (!initialResult.ok) {
+      console.error('[scenePlayer bridge] V2 scene build failed', initialResult.diagnostics)
       return
     }
 
-    const { sceneDoc, styleSheet, rootGrid, preRollMs, durationMs } = result
-    const compiled = codplay.build({ scene: sceneDoc })
+    let result = initialResult
+    let compiled = codplay.build({ scene: result.sceneDoc })
     if (!compiled.ok) {
       console.error('[scenePlayer bridge] V2 compilation failed', compiled.diagnostics)
       return
@@ -94,13 +144,93 @@ export function createScenePlayerBridge(
 
     const previousStyleSheet = activeStyleSheet
     try {
-      setStyleSheet(styleSheet)
+      setStyleSheet(result.styleSheet)
     } catch (error) {
       console.error('[scenePlayer bridge] V2 stylesheet installation failed', error)
       restoreStyleSheet(previousStyleSheet)
       releaseResourceUrls(stagedResourceUrls)
       return
     }
+
+    let styleDefaultsByItem: ReadonlyMap<string, StyleDefaultCapture> = new Map()
+    if (result.styleDefaultRequests.length > 0) {
+      const probeRoot = document.createElement('div')
+      probeRoot.className = 'editor-v2-instance-root'
+      probeRoot.style.width = '100%'
+      probeRoot.style.height = '100%'
+      probeRoot.style.position = 'absolute'
+      probeRoot.style.inset = '0'
+      probeRoot.style.opacity = '0'
+      probeRoot.style.pointerEvents = 'none'
+      probeRoot.setAttribute('aria-hidden', 'true')
+      mountTarget.append(probeRoot)
+
+      let probeInstance: CodPlayInstance | null = null
+      try {
+        probeInstance = codplay.instances.create({
+          instanceId: `${scene.id}-${revision}-style-default-probe`,
+          compiledScene: compiled.compiledScene,
+          functions: compiled.functions,
+          root: probeRoot,
+        })
+      } catch (error) {
+        discardStagedInstance(null, probeRoot)
+        if (revision === rebuildRevision) restoreStyleSheet(previousStyleSheet)
+        releaseResourceUrls(stagedResourceUrls)
+        console.error('[scenePlayer bridge] V2 style-default probe creation failed', error)
+        return
+      }
+
+      let measuredDefaults: Map<string, StyleDefaultCapture> | null
+      try {
+        measuredDefaults = await measureInitialStyleDefaults(
+          probeInstance,
+          probeRoot,
+          result.styleDefaultRequests,
+          result.preRollMs,
+          () => revision === rebuildRevision,
+        )
+      } catch (error) {
+        discardStagedInstance(probeInstance, probeRoot)
+        if (revision === rebuildRevision) restoreStyleSheet(previousStyleSheet)
+        releaseResourceUrls(stagedResourceUrls)
+        console.error('[scenePlayer bridge] V2 style-default probe failed', error)
+        return
+      }
+      discardStagedInstance(probeInstance, probeRoot)
+      if (measuredDefaults === null) {
+        releaseResourceUrls(stagedResourceUrls)
+        return
+      }
+
+      const measuredResult = buildSceneDocV2(scene, measuredDefaults)
+      if (!measuredResult.ok) {
+        if (revision === rebuildRevision) restoreStyleSheet(previousStyleSheet)
+        releaseResourceUrls(stagedResourceUrls)
+        console.error('[scenePlayer bridge] V2 scene build with measured defaults failed', measuredResult.diagnostics)
+        return
+      }
+      const measuredCompiled = codplay.build({ scene: measuredResult.sceneDoc })
+      if (!measuredCompiled.ok) {
+        if (revision === rebuildRevision) restoreStyleSheet(previousStyleSheet)
+        releaseResourceUrls(stagedResourceUrls)
+        console.error('[scenePlayer bridge] V2 compilation with measured defaults failed', measuredCompiled.diagnostics)
+        return
+      }
+      result = measuredResult
+      compiled = measuredCompiled
+      styleDefaultsByItem = measuredDefaults
+      if (result.styleDefaultRequests.length > 0) {
+        console.warn('[scenePlayer bridge] CSS defaults could not be measured for every tween endpoint', result.styleDefaultRequests)
+      }
+    }
+
+    if (revision !== rebuildRevision) {
+      releaseResourceUrls(stagedResourceUrls)
+      return
+    }
+
+    const { styleSheet, rootGrid, preRollMs, durationMs } = result
 
     const stagedRoot = document.createElement('div')
     stagedRoot.className = 'editor-v2-instance-root'
@@ -140,6 +270,7 @@ export function createScenePlayerBridge(
     activeScene = scene
     activePreRollMs = preRollMs
     mountTarget.style.aspectRatio = `${rootGrid.cols} / ${rootGrid.rows}`
+    coordination.bindStyleDefaults(scene, styleDefaultsByItem)
     coordination.bindPlayer(nextInstance, preRollMs, durationMs)
     // A seek still attached to the discarded instance cannot hand off the new binding; the
     // rebuild's final seek below is authoritative for this instance.

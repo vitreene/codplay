@@ -85,6 +85,20 @@ function destinationOnlyStyleScene() {
   }
 }
 
+/** Adds a radius only at KF2 while an app class supplies its native initial default. */
+function destinationOnlyRadiusScene() {
+  const base = scene()
+  return {
+    ...base,
+    id: 'destination-only-radius',
+    decors: {
+      ...base.decors,
+      first: { ...base.decors.first!, classes: 'editor-radius-default' },
+      second: { ...base.decors.second!, style: { ...base.decors.second!.style, 'border-radius': '8cqw' } },
+    },
+  }
+}
+
 /** Two-lane scene emitted by the editor's Test position + couleur demo. */
 function positionColorScene() {
   return {
@@ -162,6 +176,7 @@ describe('V2 editor position seek integration', () => {
     actor = undefined
     root = undefined
     frames.clear()
+    document.head.querySelectorAll('[data-style-default-test]').forEach((element) => element.remove())
   })
 
   it('plays, seeks back, plays again, then seeks again without freezing the scene', async () => {
@@ -203,7 +218,7 @@ describe('V2 editor position seek integration', () => {
       const node = root.querySelector<HTMLElement>('[data-item-id="story-main:item"]')
       expect(node).toBe(initialNode)
       expect(coordination.transport.getProgress()?.timelineMs).toBe(1000)
-      expect(node?.style.transform).toContain('translate(')
+      expect(getComputedStyle(node!).transform).toContain('translate(')
 
       coordination.transport.pause()
       await waitTurns()
@@ -218,7 +233,7 @@ describe('V2 editor position seek integration', () => {
       await waitTurns()
       expect(root.querySelector<HTMLElement>('[data-item-id="story-main:item"]')).toBe(initialNode)
       expect(coordination.transport.getProgress()?.timelineMs).toBe(500)
-      expect(node?.style.transform).toContain('translate(')
+      expect(getComputedStyle(node!).transform).toContain('translate(')
 
       coordination.transport.play()
       await waitTurns()
@@ -233,13 +248,13 @@ describe('V2 editor position seek integration', () => {
       const afterResume = coordination.transport.getProgress()?.timelineMs
       expect(afterResume).toBe(1500)
       expect(root.querySelector<HTMLElement>('[data-item-id="story-main:item"]')).toBe(initialNode)
-      const resumedTransform = root.querySelector<HTMLElement>('[data-item-id="story-main:item"]')?.style.transform
+      const resumedTransform = getComputedStyle(root.querySelector<HTMLElement>('[data-item-id="story-main:item"]')!).transform
 
       actor.send({ type: 'SEEK', timelineMs: 250 })
       await waitTurns()
       expect(root.querySelector<HTMLElement>('[data-item-id="story-main:item"]')).toBe(initialNode)
       expect(coordination.transport.getProgress()?.timelineMs).toBe(250)
-      expect(root.querySelector<HTMLElement>('[data-item-id="story-main:item"]')?.style.transform).toContain('translate(')
+      expect(getComputedStyle(root.querySelector<HTMLElement>('[data-item-id="story-main:item"]')!).transform).toContain('translate(')
 
       coordination.transport.play()
       await waitTurns()
@@ -254,7 +269,7 @@ describe('V2 editor position seek integration', () => {
       // position by 1,000 ms.
       expect(coordination.transport.getProgress()?.timelineMs).toBe(1250)
       expect(root.querySelector<HTMLElement>('[data-item-id="story-main:item"]')).toBe(initialNode)
-      expect(root.querySelector<HTMLElement>('[data-item-id="story-main:item"]')?.style.transform).not.toBe(resumedTransform)
+      expect(getComputedStyle(root.querySelector<HTMLElement>('[data-item-id="story-main:item"]')!).transform).not.toBe(resumedTransform)
     } finally {
       Date.now = originalNow
       globalThis.requestAnimationFrame = originalRaf
@@ -359,7 +374,7 @@ describe('V2 editor position seek integration', () => {
     }
   })
 
-  it('re-presents the terminal frame after natural playback before restoring the CS', async () => {
+  it('preserves the terminal motion frame without a compensating seek before restoring the CS', async () => {
     const originalNow = Date.now
     const originalRaf = globalThis.requestAnimationFrame
     const originalCancelRaf = globalThis.cancelAnimationFrame
@@ -414,7 +429,7 @@ describe('V2 editor position seek integration', () => {
       ;[...frames.values()][0]?.()
       await waitTurns(32)
       const itemNode = sceneRoot.querySelector<HTMLElement>('[data-item-id="story-main:item"]')!
-      const lastLiveTransform = itemNode.style.transform
+      const lastLiveTransform = itemNode.querySelector<HTMLStyleElement>('style')!.style.transform
       now = 5_100
       ;[...frames.values()][0]?.()
       await waitTurns(96)
@@ -423,11 +438,10 @@ describe('V2 editor position seek integration', () => {
       expect(coordination.transport.getProgress()?.timelineMs).toBe(5_000)
       const pauseIndex = commands.map((command) => command.type).lastIndexOf('pause')
       expect(pauseIndex).toBeGreaterThanOrEqual(0)
-      expect(commands[pauseIndex + 1]).toEqual({ type: 'seek', timelineMs: 4_998 })
-      expect(commands[pauseIndex + 2]).toEqual({ type: 'seek', timelineMs: 5_000 })
+      expect(commands.slice(pauseIndex + 1)).toEqual([])
       expect(coordination.presentation.get()?.timeMs).toBe(5_000)
       const terminalItemTransform = itemNode.style.transform
-      expect(terminalItemTransform).not.toBe(lastLiveTransform)
+      expect(itemNode.querySelector<HTMLStyleElement>('style')!.style.transform).not.toBe(lastLiveTransform)
       const selectionFrame = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')!
       expect(selectionFrame.style.display).not.toBe('none')
       const terminalPose = coordination.presentation.get()?.items.find(({ itemId }) => itemId === 'story-main:item')?.pose
@@ -442,6 +456,8 @@ describe('V2 editor position seek integration', () => {
       expect(selectionRotation).toBeCloseTo(terminalRotation, 3)
 
       expect((await coordination.execute({ type: 'seek', timelineMs: 4_200 })).ok).toBe(true)
+      expect((await coordination.execute({ type: 'seek', timelineMs: 5_000 })).ok).toBe(true)
+      expect(itemNode.style.transform).toBe(terminalItemTransform)
       expect((await coordination.execute({ type: 'seek', timelineMs: 5_000 })).ok).toBe(true)
       expect(itemNode.style.transform).toBe(terminalItemTransform)
 
@@ -615,6 +631,38 @@ describe('V2 editor position seek integration', () => {
     expect(coordination.transport.getState()?.status).toBe('playing')
   })
 
+  it('measures a destination-only CSS default once at the initial pose, then presents the ACE tween', async () => {
+    const appStyle = document.createElement('style')
+    appStyle.dataset.styleDefaultTest = ''
+    appStyle.textContent = '.editor-radius-default { border-radius: 0px !important; }'
+    document.head.append(appStyle)
+
+    actor = createActor(controllerMachine)
+    actor.start()
+    const loadedScene = destinationOnlyRadiusScene()
+    actor.send({ type: 'SCENE_LOADED', scene: loadedScene })
+    coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
+    root = document.createElement('div')
+    root.style.width = '800px'
+    Object.defineProperty(root, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }),
+    })
+    document.body.append(root)
+    sceneBridge = createScenePlayerBridge(root, actor, coordination)
+    await waitTurns(40)
+
+    actor.send({ type: 'SEEK', timelineMs: 2_500 })
+    await waitTurns(32)
+
+    const state = coordination.snapshot.get()?.states.find((entry) => entry.target.persoId === 'item')?.state
+    expect(state?.style).toMatchObject({ 'border-radius': '4cqw' })
+    expect(root.querySelector<HTMLElement>('[data-editor-visual-for="item"]')?.style.borderRadius).toBe('4cqw')
+    expect(loadedScene.decors.first?.style).not.toHaveProperty('border-radius')
+    expect(loadedScene.decors.second?.style?.['border-radius']).toBe('8cqw')
+    expect(actor.getSnapshot().context.scene?.decors.first?.style).not.toHaveProperty('border-radius')
+  })
+
   it('plays after a keyframe commit followed by rewind and Play', async () => {
     const originalNow = Date.now
     const originalRaf = globalThis.requestAnimationFrame
@@ -753,7 +801,7 @@ describe('V2 editor position seek integration', () => {
       await waitTurns(24)
       expect(actor.getSnapshot().value).toBe('playing')
       expect(coordination.transport.getState()?.status).toBe('playing')
-      const initialTransform = sceneRoot.querySelector<HTMLElement>('[data-item-id="story-main:item"]')?.style.transform
+      const initialTransform = getComputedStyle(sceneRoot.querySelector<HTMLElement>('[data-item-id="story-main:item"]')!).transform
 
       // The insertion is intentionally before the destination, so advancing beyond its author
       // time also verifies that Play continues through the newly created segment.
@@ -767,7 +815,7 @@ describe('V2 editor position seek integration', () => {
       now = 3_000
       ;[...frames.values()][0]?.()
       await waitTurns(24)
-      expect(sceneRoot.querySelector<HTMLElement>('[data-item-id="story-main:item"]')?.style.transform).not.toBe(initialTransform)
+      expect(getComputedStyle(sceneRoot.querySelector<HTMLElement>('[data-item-id="story-main:item"]')!).transform).not.toBe(initialTransform)
     } finally {
       Date.now = originalNow
       globalThis.requestAnimationFrame = originalRaf
@@ -919,8 +967,9 @@ describe('V2 editor position seek integration', () => {
     // The jsdom fixture has no layout box for the staged instance root, so the runtime's
     // numeric-length scale falls back to 1 here. The important invariant is that authored cqw
     // geometry reaches the item instead of the root card's full-surface stretch.
-    expect(itemNode?.style.width).toBe('60px')
-    expect(itemNode?.style.height).toBe('18px')
+    expect(itemNode!.querySelector<HTMLStyleElement>('style')!.style.width).toContain('60cqw + max(')
+    expect(sceneRoot.querySelector<HTMLElement>('[data-editor-visual-for]')?.style.width).toBe('60px')
+    expect(itemNode!.querySelector<HTMLStyleElement>('style')!.style.height).toContain('18cqw + max(')
 
     const selectionFrame = sceneRoot.querySelector<HTMLElement>('[data-selection-frame]')
     expect(selectionFrame?.style.display).not.toBe('none')
@@ -981,7 +1030,7 @@ describe('V2 editor position seek integration', () => {
       await waitTurns(32)
       expect(actor.getSnapshot().value).toBe('playing')
       expect(coordination.transport.getState()?.status).toBe('playing')
-      const initialTransform = sceneRoot.querySelector<HTMLElement>('[data-item-id="story-main:item-a"]')?.style.transform
+      const initialTransform = getComputedStyle(sceneRoot.querySelector<HTMLElement>('[data-item-id="story-main:item-a"]')!).transform
       // The insertion is intentionally before the destination, so advancing beyond its author
       // time also verifies that Play continues through the newly created segment.
       now = 100
@@ -994,7 +1043,7 @@ describe('V2 editor position seek integration', () => {
       now = 3_000
       ;[...frames.values()][0]?.()
       await waitTurns(32)
-      expect(sceneRoot.querySelector<HTMLElement>('[data-item-id="story-main:item-a"]')?.style.transform).not.toBe(initialTransform)
+      expect(getComputedStyle(sceneRoot.querySelector<HTMLElement>('[data-item-id="story-main:item-a"]')!).transform).not.toBe(initialTransform)
     } finally {
       Date.now = originalNow
       globalThis.requestAnimationFrame = originalRaf

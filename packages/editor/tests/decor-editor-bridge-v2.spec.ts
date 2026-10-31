@@ -178,6 +178,19 @@ describe('decor-editor bridge V2', () => {
     expect(patch).toEqual({ style: { color: 'rgba(255, 0, 0, 1)', opacity: '0.5', 'future-property': 'future-value' } })
   })
 
+  it('keeps the private frame placement out of captured authored Decor', () => {
+    const snapshot = snapshotFor({ opacity: 0.5 })
+    const withPlacement = {
+      ...snapshot,
+      states: snapshot.states.map((entry) => ({ ...entry, state: {
+        ...entry.state, editorFrameClassName: 'generated-placement', futureModule: { enabled: true },
+      } })),
+    }
+    expect(resolveTemporaryPatch(withPlacement, 'item-1')).toEqual({
+      style: { opacity: '0.5' }, futureModule: { enabled: true },
+    })
+  })
+
   it('ignore une autre cible dans le snapshot', () => {
     expect(resolveTemporaryPatch(snapshotFor({ color: 'red' }), 'other-item')).toEqual({})
   })

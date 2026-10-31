@@ -1,3 +1,4 @@
+import { EDITOR_ENGINE_OPTIONS } from '../../src/item-presentation/engine-options'
 import { describe, expect, it } from 'vitest'
 import { parseColor } from 'ace'
 import { CodPlay } from 'codplay'
@@ -42,6 +43,37 @@ function fixtureScene(): EditorScene {
 }
 
 describe('buildSceneDocV2 — current native editor increment', () => {
+  it('rejects easing forms unavailable to ACE before producing a partial scene', () => {
+    const scene = fixtureScene()
+    scene.items[0]!.keyframes[1]!.transitionIn = {
+      kind: 'interpolated',
+      durationMs: 1000,
+      easing: { kind: 'cubic-bezier', p1x: 0.25, p1y: 0.1, p2x: 0.25, p2y: 1 },
+    }
+
+    expect(buildSceneDocV2(scene)).toMatchObject({
+      ok: false,
+      diagnostics: [{
+        code: 'EDITOR_V2_EASING_UNSUPPORTED',
+        level: 'error',
+        context: { itemId: 'item-1', keyframeId: 'kf-b', ease: 'cubic-bezier(0.25,0.1,0.25,1)' },
+      }],
+    })
+  })
+
+  it('keeps accepted easing aliases consumable by the real CodPlay builder', () => {
+    const owner = new CodPlay({ engine: EDITOR_ENGINE_OPTIONS })
+    for (const easing of ['linear', 'ease-in', 'ease-out', 'ease-in-out'] as const) {
+      const scene = fixtureScene()
+      scene.items[0]!.keyframes[1]!.transitionIn = { kind: 'interpolated', durationMs: 1000, easing }
+      const built = buildSceneDocV2(scene)
+      expect(built.ok).toBe(true)
+      if (!built.ok) continue
+      expect(owner.build({ scene: built.sceneDoc }).ok).toBe(true)
+    }
+    owner.destroy()
+  })
+
   it('produces V2 list/tag persos with target placement and no V1 shape', () => {
     const result = buildSceneDocV2(fixtureScene())
     expect(result.ok).toBe(true)
@@ -250,7 +282,7 @@ describe('buildSceneDocV2 — current native editor increment', () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
 
-    const codplay = new CodPlay()
+    const codplay = new CodPlay({ engine: EDITOR_ENGINE_OPTIONS })
     const compiled = codplay.build({ scene: result.sceneDoc })
     expect(compiled.ok).toBe(true)
     if (!compiled.ok) return
@@ -327,7 +359,7 @@ describe('buildSceneDocV2 — current native editor increment', () => {
     expect(result.styleSheet).toContain('.ac-grid-liste-1x1-list{display:grid;')
     expect(result.rootGrid).toEqual({ rows: 9, cols: 16 })
 
-    const codplay = new CodPlay()
+    const codplay = new CodPlay({ engine: EDITOR_ENGINE_OPTIONS })
     const compiled = codplay.build({ scene: result.sceneDoc })
     expect(compiled.ok).toBe(true)
     codplay.destroy()
@@ -418,13 +450,13 @@ describe('buildSceneDocV2 — current native editor increment', () => {
       'background-color': '#ff0000',
       'line-height': '1.2',
       'object-fit': 'contain',
-      '--editor-fill': 'calc(10px + var(--gap))',
+      '--editor-fill': 'calc(10cqw + var(--gap))',
     }
     scene.decors['text-decor-b']!.style = {
       'background-color': '#00ff00',
       'line-height': '1.4',
       'object-fit': 'cover',
-      '--editor-fill': 'calc(20px + var(--gap))',
+      '--editor-fill': 'calc(20cqw + var(--gap))',
     }
 
     const result = buildSceneDocV2(scene)
@@ -440,7 +472,7 @@ describe('buildSceneDocV2 — current native editor increment', () => {
     expect(item.actions['item-1-decor-kf-kf-b']?.style).not.toHaveProperty('object-fit')
     expect(item.actions['item-1-decor-kf-kf-b']?.style).toMatchObject({
       'line-height': { from: '1.2', to: '1.4' },
-      '--editor-fill': { from: 'calc(10px + var(--gap))', to: 'calc(20px + var(--gap))' },
+      '--editor-fill': { from: 'calc(10cqw + var(--gap))', to: 'calc(20cqw + var(--gap))' },
     })
   })
 
@@ -604,7 +636,7 @@ describe('buildSceneDocV2 — current native editor increment', () => {
     expect(video.initial).toMatchObject({ tag: 'video', src: '/assets/clip.mp4', sync: 'master' })
     expect(video.initial).not.toHaveProperty('master')
 
-    const codplay = new CodPlay()
+    const codplay = new CodPlay({ engine: EDITOR_ENGINE_OPTIONS })
     const compiled = codplay.build({ scene: result.sceneDoc })
     expect(compiled.ok).toBe(true)
     if (!compiled.ok) return

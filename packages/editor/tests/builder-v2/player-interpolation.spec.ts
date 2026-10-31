@@ -1,5 +1,7 @@
 /** @vitest-environment jsdom */
 
+import { EDITOR_ENGINE_OPTIONS } from '../../src/item-presentation/engine-options'
+
 import { afterEach, describe, expect, it } from 'vitest'
 import { CodPlay } from 'codplay'
 import { parseColor } from 'ace'
@@ -50,6 +52,20 @@ function interpolationScene(): EditorScene {
   }
 }
 
+/** Gives only the destination keyframe a radius, leaving the CSS source to be measured. */
+function destinationOnlyRadiusScene(): EditorScene {
+  const base = interpolationScene()
+  return {
+    ...base,
+    id: `${base.id}-destination-only-radius`,
+    decors: {
+      ...base.decors,
+      first: { ...base.decors.first!, style: { 'background-color': '#ff0000' } },
+      second: { ...base.decors.second!, style: { 'background-color': '#0000ff', 'border-radius': '8cqw' } },
+    },
+  }
+}
+
 /** Builds a scene whose first/last keyframes are the item's visibility boundaries. */
 function visibilityBoundaryScene(firstTimeMs: number, lastTimeMs: number): EditorScene {
   const scene = interpolationScene()
@@ -77,7 +93,7 @@ describe('editor V2 player interpolation', () => {
   })
 
   it('keeps color and geometry in one logical snapshot and presents both in HTML', async () => {
-    codplay = new CodPlay({ pauseOnDocumentHidden: false })
+    codplay = new CodPlay({ engine: EDITOR_ENGINE_OPTIONS, pauseOnDocumentHidden: false })
     const built = buildSceneDocV2(interpolationScene())
     expect(built.ok).toBe(true)
     if (!built.ok) return
@@ -112,14 +128,82 @@ describe('editor V2 player interpolation', () => {
 
     const item = root.querySelector<HTMLElement>('[data-item-id="story-main:item"]')
     expect(item).not.toBeNull()
-    expect(item?.style.transform).toBe('translate(160px, 120px) rotate(7.5deg)')
-    expect(item?.style.width).toBe('240px')
-    expect(item?.style.height).toBe('136px')
-    expect(item?.style.backgroundColor).toBe(`rgb(${parseColor('#800080').coords.map((value) => Math.round(value * 255)).join(', ')})`)
+    expect(getComputedStyle(item!).transform).toBe('translate(20cqw, 15cqw) rotate(7.5deg)')
+    expect(getComputedStyle(item!).width).toBe('30cqw')
+    expect(getComputedStyle(item!).height).toBe('17cqw')
+    expect(root.querySelector<HTMLElement>('[data-editor-visual-for="item"]')?.style.backgroundColor).toBe(`rgb(${parseColor('#800080').coords.map((value) => Math.round(value * 255)).join(', ')})`)
+  })
+
+  it('interpolates a destination-only radius from one measured CSS default through the same ACE action', async () => {
+    codplay = new CodPlay({ engine: EDITOR_ENGINE_OPTIONS, pauseOnDocumentHidden: false })
+    const scene = destinationOnlyRadiusScene()
+    const unresolved = buildSceneDocV2(scene)
+    expect(unresolved.ok).toBe(true)
+    if (!unresolved.ok) return
+    expect(unresolved.styleDefaultRequests).toEqual([{
+      itemId: 'item',
+      initialTimeMs: 0,
+      properties: ['border-radius'],
+    }])
+
+    const measuredDefaults = new Map([['item', {
+      values: { 'border-radius': '0px' },
+      cqwWidthPx: null,
+    }]])
+    const built = buildSceneDocV2(scene, measuredDefaults)
+    expect(built.ok).toBe(true)
+    if (!built.ok) return
+    expect(built.styleDefaultRequests).toEqual([])
+
+    const itemDoc = built.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos.find((perso) => perso.id === 'item')!
+    expect(itemDoc.actions['item-decor-kf-second-kf']?.style?.['border-radius']).toEqual({
+      from: '0cqw',
+      to: '8cqw',
+      duration: 1_000,
+      ease: 'inOut',
+    })
+    expect(scene.decors.first?.style).not.toHaveProperty('border-radius')
+    expect(scene.decors.second?.style?.['border-radius']).toBe('8cqw')
+
+    const authoredSourceScene: EditorScene = {
+      ...scene,
+      decors: {
+        ...scene.decors,
+        first: { ...scene.decors.first!, style: { ...scene.decors.first!.style, 'border-radius': '2cqw' } },
+      },
+    }
+    const authoredSourceBuild = buildSceneDocV2(authoredSourceScene, measuredDefaults)
+    expect(authoredSourceBuild.ok).toBe(true)
+    if (!authoredSourceBuild.ok) return
+    expect(authoredSourceBuild.styleDefaultRequests).toEqual([])
+    expect(authoredSourceBuild.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos.find((perso) => perso.id === 'item')!
+      .actions['item-decor-kf-second-kf']?.style?.['border-radius']).toMatchObject({ from: '2cqw', to: '8cqw' })
+
+    const root = document.createElement('div')
+    Object.defineProperty(root, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: 800, height: 450, x: 0, y: 0, top: 0, left: 0, right: 800, bottom: 450 }),
+    })
+    document.body.append(root)
+    const compiled = codplay.build({ scene: built.sceneDoc })
+    expect(compiled.ok).toBe(true)
+    if (!compiled.ok) return
+    const instance = codplay.instances.create({
+      instanceId: 'editor-v2-player-destination-only-radius',
+      compiledScene: compiled.compiledScene,
+      functions: compiled.functions,
+      root,
+      mountTargets: [{ id: 'root-host', kind: 'root', storyId: EDITOR_V2_STORY_ID }],
+    })
+
+    await instance.telco.seek(500 + built.preRollMs)
+    const style = instance.snapshot.get()?.states.find((entry) => entry.target.persoId === 'item')?.state.style as Record<string, unknown> | undefined
+    expect(style?.['border-radius']).toBe('4cqw')
+    expect(root.querySelector<HTMLElement>('[data-editor-visual-for="item"]')?.style.borderRadius).toBe('4cqw')
   })
 
   it('interpolates a destination-only numeric rotation from the identity angle', async () => {
-    codplay = new CodPlay({ pauseOnDocumentHidden: false })
+    codplay = new CodPlay({ engine: EDITOR_ENGINE_OPTIONS, pauseOnDocumentHidden: false })
     const scene = interpolationScene()
     scene.decors.first!.offset = { translate: { x: 10, y: 5 }, width: 20, height: 12 }
     scene.decors.second!.offset = { translate: { x: 30, y: 25 }, width: 40, height: 22, rotate: 41 }
@@ -152,11 +236,11 @@ describe('editor V2 player interpolation', () => {
     expect(style?.rotate).toBeCloseTo(20.5)
 
     const item = root.querySelector<HTMLElement>('[data-item-id="story-main:item"]')
-    expect(item?.style.transform).toContain('rotate(20.5deg)')
+    expect(getComputedStyle(item!).transform).toContain('rotate(20.5deg)')
   })
 
   it('keeps the content-box anchor fixed while border-width itself interpolates', async () => {
-    codplay = new CodPlay({ pauseOnDocumentHidden: false })
+    codplay = new CodPlay({ engine: EDITOR_ENGINE_OPTIONS, pauseOnDocumentHidden: false })
     const source = interpolationScene()
     source.decors.first!.offset = { translate: { x: 20, y: 15 }, width: 30, height: 20 }
     source.decors.first!.style = { 'border-width': '0.6cqw', 'border-style': 'solid' }
@@ -167,13 +251,8 @@ describe('editor V2 player interpolation', () => {
     if (!built.ok) return
 
     const itemDoc = built.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos.find((perso) => perso.id === 'item')!
-    expect(itemDoc.initial).toMatchObject({ style: { x: 19.4, y: 14.4 } })
-    expect(itemDoc.actions['item-kf-second-kf']).toMatchObject({
-      style: {
-        x: { from: 19.4, to: 15 },
-        y: { from: 14.4, to: 10 },
-      },
-    })
+    expect(itemDoc.initial).toMatchObject({ style: { x: 20, y: 15 } })
+    expect(itemDoc.actions['item-kf-second-kf']).toBeUndefined()
     expect(itemDoc.actions['item-decor-kf-second-kf']).toMatchObject({
       style: { 'border-width': { from: '0.6cqw', to: '5cqw' } },
     })
@@ -198,21 +277,21 @@ describe('editor V2 player interpolation', () => {
     await instance.telco.seek(500 + built.preRollMs)
     const snapshotStyle = instance.snapshot.get()?.states
       .find((entry) => entry.target.persoId === 'item')?.state.style as Record<string, unknown> | undefined
-    expect(snapshotStyle?.x).toMatchObject({ kind: 'length', value: 17.2 })
-    expect(snapshotStyle?.y).toMatchObject({ kind: 'length', value: 12.2 })
+    expect(snapshotStyle?.x).toMatchObject({ kind: 'length', value: 20 })
+    expect(snapshotStyle?.y).toMatchObject({ kind: 'length', value: 15 })
     expect(Number.parseFloat(String(snapshotStyle?.['border-width']))).toBeCloseTo(2.8)
 
     const item = root.querySelector<HTMLElement>('[data-item-id="story-main:item"]')!
-    expect(item.style.transform).toBe('translate(137.6px, 97.6px)')
-    expect(item.style.borderWidth).toBe('2.8000000000000003cqw')
-    // 137.6px layout origin + 22.4px border inset = 160px = 20cqw.
-    const layoutX = item.style.transform.match(/^translate\(([-\d.]+)px/)?.[1]
-    expect(layoutX).toBeDefined()
-    expect(Number.parseFloat(layoutX!) + (2.8 / 100) * 800).toBeCloseTo(160)
+    // jsdom retains the responsive CSS expression. The browser fixture validates its pixels.
+    expect(getComputedStyle(item).transform).toContain('translate(calc(20cqw - max(')
+    const visual = root.querySelector<HTMLElement>('[data-editor-visual-for="item"]')!
+    expect(visual.style.borderWidth).toBe('2.8000000000000003cqw')
+    expect(visual.style.width).toBe('240px')
+
   })
 
   it('interpole aussi l’origine de rotation structurée dans la même action', async () => {
-    codplay = new CodPlay({ pauseOnDocumentHidden: false })
+    codplay = new CodPlay({ engine: EDITOR_ENGINE_OPTIONS, pauseOnDocumentHidden: false })
     const source = interpolationScene()
     source.decors.first!.offset!.rotationOrigin = { fx: 0.25, fy: 0.25 }
     source.decors.second!.offset!.rotationOrigin = { fx: 0.75, fy: 0.75 }
@@ -244,11 +323,11 @@ describe('editor V2 player interpolation', () => {
     expect(style?.['transform-origin']).toBe('50% 50%')
 
     const item = root.querySelector<HTMLElement>('[data-item-id="story-main:item"]')
-    expect(item?.style.transformOrigin).toBe('50% 50%')
+    expect(getComputedStyle(item!).transformOrigin).toBe('50% 50%')
   })
 
   it('materializes a destination-only style property without failing instance creation', async () => {
-    codplay = new CodPlay({ pauseOnDocumentHidden: false })
+    codplay = new CodPlay({ engine: EDITOR_ENGINE_OPTIONS, pauseOnDocumentHidden: false })
     const source = interpolationScene()
     source.decors.second!.style = { color: '#ff0000' }
     const built = buildSceneDocV2(source)
@@ -282,7 +361,7 @@ describe('editor V2 player interpolation', () => {
   })
 
   it('attache la visibilité au premier/dernier kf et déplace la transition d’entrée avec le premier kf', async () => {
-    codplay = new CodPlay({ pauseOnDocumentHidden: false })
+    codplay = new CodPlay({ engine: EDITOR_ENGINE_OPTIONS, pauseOnDocumentHidden: false })
 
     const buildRuntime = (scene: EditorScene, instanceId: string) => {
       const built = buildSceneDocV2(scene)

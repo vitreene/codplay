@@ -15,6 +15,7 @@ import {
   midpoint,
   normalizeAngleDegrees,
   presentationBorderBoxPoseToContentFrame,
+  presentationItemPoseToContentFrame,
   presentationPoseToSelectionFrame,
   resolveMotionGeometryPose,
   sameFramePose,
@@ -276,6 +277,20 @@ describe('motion-editor geometry', () => {
     expect(hostFrame.width).toBe(40)
     expect(hostFrame.height).toBe(20)
     expect(frameVisualCenter(hostFrame)).toMatchObject({ x: 85, y: 126 })
+  })
+
+  it('keeps current content dimensions independent of the motion frame dimensions', () => {
+    const pose = {
+      origin: { x: 100, y: 80 }, matrix: { a: 0, b: 2, c: -1, d: 0 },
+      localWidth: 100, localHeight: 80,
+    }
+    const insets = { left: 3, top: 5, right: 7, bottom: 11 }
+    const frame = presentationItemPoseToContentFrame(pose, 40, 20, { fx: 0.5, fy: 0.5 }, insets)
+    expect(frame).toMatchObject({ width: 40, height: 20, x: 43, y: 166 })
+    expect(frameVisualCenter(frame)).toEqual({ x: 63, y: 176 })
+    const resized = presentationItemPoseToContentFrame(pose, 60, 12, { fx: 0, fy: 0 }, insets)
+    expect(resized).toMatchObject({ width: 60, height: 12 })
+    expect(frameVisualCenter(resized)).toEqual({ x: 63, y: 176 })
   })
 
   it('keeps a straight segment implicit and creates a normalized SVG arc for a moved midpoint', () => {

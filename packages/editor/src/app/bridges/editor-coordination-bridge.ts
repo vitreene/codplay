@@ -7,6 +7,8 @@ import type {
 } from 'codplay'
 import type { SequenceEditorController } from '../../sequence-editor/controller'
 import type { DecorPatch } from '../../decor-editor/types'
+import type { StyleDefaultCapture } from '../../builder-v2/types'
+import type { EditorScene } from '../commands/types'
 import type { controllerMachine } from '../controller/controller-machine'
 import {
   EditorPlayerCommandFacade,
@@ -88,6 +90,8 @@ export class EditorCoordinationBridge {
   private readonly decorPreviewCandidates = new Map<string, Map<number, EditorDecorPreviewCandidate>>()
   private sequence: SequenceReconciliationPort | null = null
   private sceneHost: HTMLElement | null = null
+  private styleDefaultScene: EditorScene | null = null
+  private styleDefaultsByItem: ReadonlyMap<string, StyleDefaultCapture> = new Map()
   private readonly sceneHostListeners = new Set<EditorSceneHostListener>()
   private readonly playbackReconciledListeners = new Set<EditorPlaybackReconciledListener>()
   private readonly machine: Actor<typeof controllerMachine>
@@ -151,6 +155,21 @@ export class EditorCoordinationBridge {
     return this.sceneHost
   }
 
+  /** Publishes the transient CSS defaults used by the current compiled scene's ACE tweens. */
+  bindStyleDefaults(
+    scene: EditorScene,
+    defaultsByItem: ReadonlyMap<string, StyleDefaultCapture>,
+  ): void {
+    this.styleDefaultScene = scene
+    this.styleDefaultsByItem = defaultsByItem
+  }
+
+  /** Reads measured tween endpoints only for the exact scene revision that produced them. */
+  getStyleDefaults(scene: EditorScene, itemId: string): StyleDefaultCapture | undefined {
+    if (this.styleDefaultScene !== scene) return undefined
+    return this.styleDefaultsByItem.get(itemId)
+  }
+
   /** Subscribes to scene-host lifecycle changes and immediately reports the current host. */
   onSceneHostChange(listener: EditorSceneHostListener): () => void {
     this.sceneHostListeners.add(listener)
@@ -199,32 +218,12 @@ export class EditorCoordinationBridge {
     void this.execute({ type: 'pause' }).then((result) => {
       if (!result.ok) return
       const timelineMs = this.clampPauseTimeline(result.progress.timelineMs)
-      const scene = this.machine.getSnapshot().context.scene
-      const sceneDurationMs = scene?.meta.durationMs
-      const hasAuthoredPath = scene !== null && Object.values(scene.decors).some((decor) =>
-        typeof decor.path === 'string' && decor.path.trim() !== '')
-      const mustRePresentTerminalFrame = hasAuthoredPath
-        && sceneDurationMs !== undefined
-        && sceneDurationMs > 0
-        && timelineMs >= sceneDurationMs
-      if (timelineMs === result.progress.timelineMs && !mustRePresentTerminalFrame) {
+      if (timelineMs === result.progress.timelineMs) {
         this.finishPause(timelineMs)
         return
       }
-
-      // A natural pause can leave the last live path pose materialized. Seeking the same terminal
-      // time is a no-op for that DOM presentation, so cross a distinct nearby author time before
-      // presenting the exact boundary. A virtual capsule outro is clamped and needs only one seek.
-      const preTerminalTimeMs = mustRePresentTerminalFrame
-        ? Math.max(0, timelineMs - Math.min(2, sceneDurationMs))
-        : timelineMs
-      void this.execute({ type: 'seek', timelineMs: preTerminalTimeMs }).then((seekResult) => {
-        if (mustRePresentTerminalFrame) {
-          void this.execute({ type: 'seek', timelineMs }).then((terminalResult) => {
-            this.finishPause(terminalResult.ok ? terminalResult.progress.timelineMs : timelineMs)
-          })
-          return
-        }
+      // A virtual capsule outro can extend past author time; use the existing seek once to clamp it.
+      void this.execute({ type: 'seek', timelineMs }).then((seekResult) => {
         this.finishPause(seekResult.ok ? seekResult.progress.timelineMs : timelineMs)
       })
     })
@@ -267,6 +266,8 @@ export class EditorCoordinationBridge {
     this.clearAllDecorPreviews()
     this.sequence = null
     this.sceneHost = null
+    this.styleDefaultScene = null
+    this.styleDefaultsByItem = new Map()
     this.sceneHostListeners.clear()
     this.playbackReconciledListeners.clear()
   }

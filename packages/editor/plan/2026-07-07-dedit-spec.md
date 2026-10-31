@@ -599,6 +599,10 @@ en lecture seule.
   état logique interpolé exposé par `snapshot.get()` après `seekApplied`.
   La frontière snapshot → décor parcourt les propriétés présentes sans
   whitelist ; le DOM et le style calculé ne sont pas des sources de lecture.
+- Cette règle concerne l'état courant de palette. Le builder peut mesurer une
+  seule fois le style CSS natif à la pose initiale pour fournir à ACE un endpoint
+  source absent ; cette capture transitoire n'alimente jamais la base présentée
+  à dedit. Voir le [contrat d'interpolation des styles](../specs/decor-style-interpolation-spec.md).
 - Le bridge conserve séparément cette base et une map des modifications
   utilisateur indexée par item, temps auteur et chemin de propriété. Chaque
   entrée conserve la valeur de base et la valeur posée. Dedit continue

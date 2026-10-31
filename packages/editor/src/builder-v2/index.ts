@@ -12,6 +12,7 @@ export {
   resolveKeyframeClassName,
   resolveKeyframeDecorStyle,
   resolveKeyframePoseStyle,
+  resolveStyleDefaultsForTarget,
   resolveKeyframeStyle,
   resolveRootClassName,
   resolveRootStyle,
@@ -22,6 +23,8 @@ export {
   type BuildSceneV2Failure,
   type BuildSceneV2Result,
   type BuildSceneV2Success,
+  type StyleDefaultCapture,
+  type StyleDefaultRequest,
   type BuilderDiagnostic,
   type BuilderDiagnosticLevel,
 } from './types'

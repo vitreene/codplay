@@ -129,9 +129,12 @@ function rotateNeedle(frame: HTMLElement, tip: HTMLElement, degrees: number, onP
   tip.dispatchEvent(pointerEvent('pointerup', end.x, end.y))
 }
 
-/** Reads the heading from a CSS rotate function or the matrix written by the motion player. */
+/** Reads the authored preview angle in jsdom; browser fixtures check the composed physical pose. */
 function readTransformRotationDegrees(element: HTMLElement): number {
-  const transform = element.style.transform || getComputedStyle(element).transform
+  const anchor = element.querySelector<HTMLElement>('[data-editor-visual-for]')?.parentElement
+  const transform = anchor?.style.transform.includes('matrix(')
+    ? anchor.style.transform
+    : getComputedStyle(element).transform
   const rotation = transform.match(/rotate\(([-\d.]+)deg\)/)?.[1]
   if (rotation !== undefined) return Number.parseFloat(rotation)
   const cssRotate = element.style.rotate.match(/([-\d.]+)deg/)
@@ -206,7 +209,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     actor.send({ type: 'SEEK', timelineMs: 2_500 })
     await waitTurns()
 
-    const item = sceneRoot.querySelector<HTMLElement>('[data-item-id="story-main:item"]')
+    const item = sceneRoot.querySelector<HTMLElement>('[data-editor-visual-for="item"]')
     expect(item).not.toBeNull()
     const colorInput = decorPanel.querySelector<HTMLInputElement>('input[type="color"]')
     expect(colorInput).not.toBeNull()
@@ -283,6 +286,59 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     expect(actor.getSnapshot().context.scene?.decors.last?.orientToPath).toBe(true)
   })
 
+  it('keeps route endpoints independent of previously visited keyframes', async () => {
+    originalResizeObserver = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class {
+      observe(): void {}
+      disconnect(): void {}
+    } as unknown as typeof ResizeObserver
+    actor = createActor(controllerMachine)
+    actor.start()
+    const documentScene = tangentScene()
+    actor.send({ type: 'SCENE_LOADED', scene: documentScene })
+    coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
+    const sceneRoot = document.createElement('div')
+    sceneRoot.style.width = '100px'
+    Object.defineProperty(sceneRoot, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: 100, height: 100, top: 0, left: 0, right: 100, bottom: 100 }),
+    })
+    const decorPanel = document.createElement('div')
+    document.body.append(sceneRoot, decorPanel)
+    sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    await waitTurns(24)
+
+    /** Reads persistent route geometry while excluding the moving selected frame. */
+    const routeGeometry = () => ({
+      paths: [...sceneRoot.querySelectorAll('[data-motion-path]')].map((path) => path.getAttribute('d')),
+      ghosts: [...sceneRoot.querySelectorAll<HTMLElement>('[data-motion-keyframe-id]')]
+        .map((ghost) => ({
+          keyframeId: ghost.dataset.motionKeyframeId,
+          left: ghost.style.left,
+          top: ghost.style.top,
+          width: ghost.style.width,
+          height: ghost.style.height,
+          transform: ghost.style.transform,
+        }))
+        .sort((left, right) => String(left.keyframeId).localeCompare(String(right.keyframeId))),
+    })
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item'] })
+    actor.send({ type: 'SEEK', timelineMs: 2_500 })
+    await waitTurns(24)
+    const beforeVisits = routeGeometry()
+    for (const [keyframeId, timeMs] of [['last-kf', 5_000], ['first-kf', 0]] as const) {
+      actor.send({ type: 'SELECT_ITEM', itemIds: ['item'], keyframeId })
+      actor.send({ type: 'SEEK', timelineMs: timeMs })
+      await waitTurns(24)
+    }
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item'] })
+    actor.send({ type: 'SEEK', timelineMs: 2_500 })
+    await waitTurns(24)
+    expect(routeGeometry()).toEqual(beforeVisits)
+    expect(actor.getSnapshot().context.scene).toBe(documentScene)
+  })
+
   it('keeps needle rotation in the author offset and projects tangent endpoint ghosts', async () => {
     originalResizeObserver = globalThis.ResizeObserver
     globalThis.ResizeObserver = class {
@@ -335,8 +391,8 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const readOverlayFrame = readFrameValue
     const targetDocumentFrame: SelectionFrameValue = { x: 50, y: 50, width: 20, height: 20, rotate: 0 }
     const testInsets = { top: 0.6, right: 0.6, bottom: 0.6, left: 0.6 }
-    const sourcePresentedFrame = readFrameValue(sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')!)
-    const sourcePathAnchor = motionPathAnchorForFrame(sourcePresentedFrame, testInsets)
+    const sourceDocumentFrame: SelectionFrameValue = { x: 10, y: 10, width: 20, height: 20, rotate: 0 }
+    const sourcePathAnchor = motionPathAnchorForFrame(sourceDocumentFrame, testInsets)
     const targetPathAnchor = motionPathAnchorForFrame(targetDocumentFrame, testInsets)
     const sourceTangent = motionPathTangentAngle(
       'M 0 0 A 0.7 0.7 0 0 1 1 0',
@@ -360,7 +416,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     expect(readFrameRotation(targetGhost)).toBe(readFrameRotation(sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')!))
     expect(readFrameRotation(sourceGhost)).toBeCloseTo(sourceTangent, 5)
     const projectedSourceGhost = frameWithTangentAtPathAnchor(
-      sourcePresentedFrame,
+      sourceDocumentFrame,
       sourcePathAnchor,
       sourceTangent,
       testInsets,
@@ -557,7 +613,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
       ?.classList.contains('dedit-field__control--modified')).toBe(true)
     expect(actor.getSnapshot().context.scene).toBe(documentScene)
 
-    const liveItem = sceneRoot.querySelector<HTMLElement>('[data-item-id="story-main:item"]')!
+    const liveItem = sceneRoot.querySelector<HTMLElement>('[data-editor-visual-for="item"]')!
     expect(liveItem.style.getPropertyValue('border-width')).toBe('5cqw')
     expect(liveItem.style.getPropertyValue('border-style')).toBe('solid')
     // Increasing the border changes only the border-box origin/size; the content-box anchor stays
@@ -576,7 +632,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     expect(created?.channel).toBe('decor')
     expect(committedScene.decors[created!.decorId]?.style?.['border-width']).toBe('5cqw')
 
-    const committedItemNode = sceneRoot.querySelector<HTMLElement>('[data-item-id="story-main:item"]')
+    const committedItemNode = sceneRoot.querySelector<HTMLElement>('[data-editor-visual-for="item"]')
     expect(committedItemNode?.style.getPropertyValue('border-width')).not.toBe('')
     expect(committedItemNode?.style.getPropertyValue('border-style')).toBe('solid')
   })
@@ -629,7 +685,10 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
 
     actor = createActor(controllerMachine)
     actor.start()
-    actor.send({ type: 'SCENE_LOADED', scene: positionTestScene('2cqw', '2cqw') })
+    const documentScene = positionTestScene('2cqw', '2cqw')
+    documentScene.decors.first.offset.height = 15
+    documentScene.decors.last.offset.height = 15
+    actor.send({ type: 'SCENE_LOADED', scene: documentScene })
     coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
 
     const sceneRoot = document.createElement('div')
@@ -651,8 +710,8 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const pose = {
       origin: { x: 520, y: 280 },
       matrix: { a: 0.8, b: 0.6, c: -0.6, d: 0.8 },
-      localWidth: 160,
-      localHeight: 120,
+      localWidth: 192,
+      localHeight: 152,
     }
     const presentationPort = coordination.presentation as unknown as {
       get: () => EditorPlayerPresentationFrame | null
@@ -826,7 +885,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
 
     await waitTurns(24)
     const itemNode = sceneRoot.querySelector<HTMLElement>('[data-item-id="story-main:item"]')!
-    expect(itemNode.style.transform).toContain('rotate(90deg)')
+    expect(getComputedStyle(itemNode).transform).toContain('rotate(90deg)')
     expect(frame!.style.transformOrigin).toBe('50% 50%')
 
     // The pivot drag is previewed in the same frame channel and updates the origin without a
@@ -839,7 +898,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     pivot!.dispatchEvent(pointerEvent('pointerup', 400, 240))
     await waitTurns(24)
     const pivotedItemNode = sceneRoot.querySelector<HTMLElement>('[data-item-id="story-main:item"]')!
-    expect(pivotedItemNode.style.transformOrigin).toBe('0% 0%')
+    expect(getComputedStyle(pivotedItemNode).transformOrigin).toBe('0% 0%')
     expect(coordination.decorPreview.getAt('item', 2_500)).toBeNull()
     const middleAfterPivot = actor.getSnapshot().context.scene!.items[0]!.keyframes.find(
       (keyframe) => keyframe.timeMs === 2_500,
@@ -868,8 +927,8 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     await waitTurns(24)
     const exactItemNode = sceneRoot.querySelector<HTMLElement>('[data-item-id="story-main:item"]')!
     expect(exactFrame.style.transformOrigin).toBe('0% 0%')
-    expect(exactItemNode.style.transform).toContain('rotate(90deg)')
-    expect(exactItemNode.style.transformOrigin).toBe('0% 0%')
+    expect(getComputedStyle(exactItemNode).transform).toContain('rotate(90deg)')
+    expect(getComputedStyle(exactItemNode).transformOrigin).toBe('0% 0%')
 
     actor.send({ type: 'CLEAR_SELECTION' })
     await waitTurns(24)
@@ -1027,11 +1086,11 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     expect(sceneRoot.querySelector<HTMLElement>('[data-motion-ghost="source"]')?.style.display).toBe('')
     expect(sceneRoot.querySelector<HTMLElement>('[data-motion-ghost="target"]')?.style.display).toBe('')
     expect(Number.parseFloat(frameBeforeSeek?.style.left ?? 'NaN')).toBeCloseTo(
-      420 + Math.cos(Math.PI / 6) * 40 - Math.sin(Math.PI / 6) * 40 - 40,
+      420 + Math.cos(Math.PI / 6) * 40 - Math.sin(Math.PI / 6) * 40 - 80,
       6,
     )
     expect(Number.parseFloat(frameBeforeSeek?.style.top ?? 'NaN')).toBeCloseTo(
-      300 + Math.sin(Math.PI / 6) * 40 + Math.cos(Math.PI / 6) * 40 - 40,
+      300 + Math.sin(Math.PI / 6) * 40 + Math.cos(Math.PI / 6) * 40 - 80,
       6,
     )
     const selectionRotation = Number.parseFloat(frameBeforeSeek?.style.transform.match(/rotate\(([-\d.]+)deg\)/)?.[1] ?? 'NaN')
@@ -1658,8 +1717,8 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const runtimeMotion = coordination.presentation.get()?.items.find((item) => item.itemId === 'story-main:item')
     const itemNode = sceneRoot.querySelector<HTMLElement>('[data-item-id="story-main:item"]')!
     expect(runtimeMotion).toMatchObject({ progress: 1, representation: 'source' })
-    expect(itemNode.style.transform).toContain('translate(60px, 60px)')
-    expect(itemNode.style.transform).toContain('rotate(90deg)')
+    expect(getComputedStyle(itemNode).transform).toContain('translate(60cqw, 60cqw)')
+    expect(getComputedStyle(itemNode).transform).toContain('rotate(90deg)')
     // jsdom leaves CSS transform functions uncomputed; CodPlay's pose capture consumes the
     // browser-computed matrix, so exact selection-frame coordinates are covered in browser checks.
     // The selected middle→last segment is the only editable path. The preceding first→middle

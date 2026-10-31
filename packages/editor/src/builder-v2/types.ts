@@ -17,6 +17,19 @@ export type BuilderDiagnostic = Readonly<{
   context?: Readonly<Record<string, unknown>>
 }>
 
+/** CSS style endpoints that the browser bridge must measure at one item's initial pose. */
+export type StyleDefaultRequest = Readonly<{
+  itemId: string
+  initialTimeMs: number
+  properties: readonly string[]
+}>
+
+/** Browser-computed values kept transiently with the local cqw conversion at capture time. */
+export type StyleDefaultCapture = Readonly<{
+  values: Readonly<Record<string, unknown>>
+  cqwWidthPx: number | null
+}>
+
 /** Successful output of the current native V2 editor-builder increment. */
 export type BuildSceneV2Success = Readonly<{
   ok: true
@@ -27,6 +40,8 @@ export type BuildSceneV2Success = Readonly<{
   styleSheet: string
   /** Resolved scene-root grid used by the editor host for its aspect ratio. */
   rootGrid: Readonly<{ rows: number; cols: number }>
+  /** Missing source values that need one transient native CSS measurement before publication. */
+  styleDefaultRequests: readonly StyleDefaultRequest[]
   /** Reserved for bridge-owned preload entries; content URLs are also derived by CodPlay.build(). */
   preloadManifest: CompiledResourceManifest
   diagnostics: readonly BuilderDiagnostic[]

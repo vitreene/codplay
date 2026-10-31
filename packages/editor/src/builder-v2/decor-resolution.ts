@@ -2,70 +2,15 @@ import type { Decor, EditorScene, Item, Keyframe } from '../app/commands/types'
 import { resolveKeyframeChannel } from '../app/commands/types'
 import { parseColor, prepareTween, resolveTween, type InterpolationValue } from 'ace'
 import { resolveKeyframeTransition } from './keyframe-transition'
-import { contentBoxLayoutDisplacement } from '../motion-editor/content-box'
-import { resolveBorderInsetLengths, type BorderLength } from '../motion-editor/border-insets'
+import type { StyleDefaultCapture } from './types'
 
 /** Resolves one Decor into the style record consumed by the V2 tag component. */
 export function resolveDecorStyle(decor: Decor | undefined): Record<string, unknown> {
   const decorStyle = resolveDecorChannelStyle(decor)
   return {
     ...decorStyle,
-    ...resolveContentAnchoredPoseStyle(resolvePoseChannelStyle(decor), decorStyle),
+    ...resolvePoseChannelStyle(decor),
   }
-}
-
-/** Projects structured pose translations so the authored x/y coordinates anchor the content-box. */
-export function resolveContentAnchoredPoseStyle(
-  poseStyle: Record<string, unknown>,
-  decorStyle: Record<string, unknown>,
-): Record<string, unknown> {
-  const x = finiteStyleNumber(poseStyle.x)
-  const y = finiteStyleNumber(poseStyle.y)
-  if (x === undefined && y === undefined) return poseStyle
-
-  const border = resolveBorderInsetLengths(decorStyle)
-  if (isZeroBorder(border)) return poseStyle
-
-  const width = finiteStyleNumber(poseStyle.width)
-  const height = finiteStyleNumber(poseStyle.height)
-  const frame = {
-    x: x ?? 0,
-    y: y ?? 0,
-    width: width ?? 0,
-    height: height ?? 0,
-    rotate: finiteStyleNumber(poseStyle.rotate) ?? 0,
-    scaleX: finiteStyleNumber(poseStyle.scaleX) ?? 1,
-    scaleY: finiteStyleNumber(poseStyle.scaleY) ?? 1,
-    rotationOrigin: parseStyleRotationOrigin(poseStyle['transform-origin']),
-  }
-
-  // The common CSS case is axis-aligned. It can be represented with a CSS calc even when a
-  // border is authored in px, while a rotated/scaled frame needs the same affine displacement
-  // as the editor overlay and therefore requires one common logical unit.
-  const displacement = canUseLogicalAffine(border) && width !== undefined && height !== undefined
-    ? contentBoxLayoutDisplacement(frame, {
-      top: border.top.value,
-      right: border.right.value,
-      bottom: border.bottom.value,
-      left: border.left.value,
-    })
-    : isAxisAligned(frame)
-      ? null
-      : undefined
-  if (displacement === undefined) return poseStyle
-
-  const result = { ...poseStyle }
-  if (x !== undefined) {
-    result.x = displacement === null
-      ? subtractBorderLength(x, border.left)
-      : x - displacement.x
-  }
-  if (y !== undefined) {
-    result.y = displacement === null
-      ? subtractBorderLength(y, border.top)
-      : y - displacement.y
-  }
-  return result
 }
 
 /** Resolves the open decoration payload without projecting the current pose payload. */
@@ -129,17 +74,27 @@ export function sortDecorationKeyframes(scene: EditorScene, item: Item): Keyfram
   })
 }
 
-/** Uses the same decoration chain, transition window and ACE tweens as the built scene. */
-export function resolveDecorationStyleAtTime(scene: EditorScene, item: Item, timeMs: number): Record<string, unknown> {
+/** Uses the built ACE tween and its transient initial CSS defaults for one endpoint projection. */
+export function resolveDecorationStyleAtTime(
+  scene: EditorScene,
+  item: Item,
+  timeMs: number,
+  styleDefaults?: StyleDefaultCapture,
+): Record<string, unknown> {
   const keyframes = sortDecorationKeyframes(scene, item)
   const targetIndex = keyframes.findIndex((keyframe) => keyframe.timeMs > timeMs)
-  if (targetIndex === 0) return resolveDecorChannelStyle(scene.decors[item.initialDecorId])
+  if (targetIndex === 0) {
+    return { ...styleDefaults?.values, ...resolveDecorChannelStyle(scene.decors[item.initialDecorId]) }
+  }
   const source = targetIndex < 0 ? keyframes.at(-1) : keyframes[targetIndex - 1]
-  if (source === undefined) return resolveDecorChannelStyle(scene.decors[item.initialDecorId])
-  const fromStyle = resolveKeyframeDecorStyle(scene, item, source)
+  if (source === undefined) {
+    return { ...styleDefaults?.values, ...resolveDecorChannelStyle(scene.decors[item.initialDecorId]) }
+  }
+  const sourceStyle = resolveKeyframeDecorStyle(scene, item, source)
   const target = keyframes[targetIndex]
-  if (target === undefined) return fromStyle
+  if (target === undefined) return { ...styleDefaults?.values, ...sourceStyle }
   const toStyle = resolveKeyframeDecorStyle(scene, item, target)
+  const fromStyle = resolveStyleDefaultsForTarget(sourceStyle, toStyle, styleDefaults)
   const { durationMs, startAtMs, ease } = resolveKeyframeTransition(source, target)
   return Object.entries(computeStyleDiff(fromStyle, toStyle)).reduce((resolved, [property, value]) => {
     if (durationMs <= 0 || !isInterpolableStylePair(fromStyle[property], value)) return resolved
@@ -151,6 +106,24 @@ export function resolveDecorationStyleAtTime(scene: EditorScene, item: Item, tim
     })
     return { ...resolved, [property]: resolveTween(tween, timeMs - startAtMs) }
   }, fromStyle)
+}
+
+/** Fills only destination fields missing from the authored cascade with measured initial CSS. */
+export function resolveStyleDefaultsForTarget(
+  sourceStyle: Record<string, unknown>,
+  targetStyle: Record<string, unknown>,
+  capture?: StyleDefaultCapture,
+): Record<string, unknown> {
+  const fromStyle = { ...sourceStyle }
+  if (capture === undefined) return fromStyle
+  for (const [property, destination] of Object.entries(targetStyle)) {
+    if (fromStyle[property] !== undefined) continue
+    const measured = capture.values[property]
+    if (measured === undefined) continue
+    const value = normalizeMeasuredStyleDefault(measured, destination, capture.cqwWidthPx)
+    if (value !== undefined) fromStyle[property] = value
+  }
+  return fromStyle
 }
 
 /** Resolves pose values through pose-channel keyframes while ignoring decoration-only points. */
@@ -165,10 +138,7 @@ export function resolveKeyframePoseStyle(
       (style, decor) => ({ ...style, ...resolvePoseChannelStyle(decor) }),
       {},
     )
-  return resolveContentAnchoredPoseStyle(
-    poseStyle,
-    resolveDecorationStyleAtTime(scene, item, keyframe.timeMs),
-  )
+  return poseStyle
 }
 
 /** Returns the initial decor followed by authored layers through the requested keyframe. */
@@ -195,56 +165,6 @@ function resolveLayerKeyframe(item: Item, keyframe: Keyframe, layerIndex: number
 /** Resolves the item's initial decor when no keyframe exists yet. */
 export function resolveInitialStyle(scene: EditorScene, item: Item): Record<string, unknown> {
   return resolveDecorStyle(scene.decors[item.initialDecorId])
-}
-
-/** Reads one finite numeric pose value without interpreting open CSS values. */
-function finiteStyleNumber(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
-}
-
-/** Parses the builder's percentage transform-origin representation. */
-function parseStyleRotationOrigin(value: unknown): { fx: number; fy: number } | undefined {
-  if (typeof value !== 'string') return undefined
-  const parts = value.trim().split(/\s+/).filter(Boolean)
-  if (parts.length < 2) return undefined
-  const parse = (part: string): number | undefined => {
-    if (part === 'center') return 0.5
-    if (!part.endsWith('%')) return undefined
-    const value = Number.parseFloat(part.slice(0, -1))
-    return Number.isFinite(value) ? Math.min(1, Math.max(0, value / 100)) : undefined
-  }
-  const fx = parse(parts[0]!)
-  const fy = parse(parts[1]!)
-  return fx === undefined || fy === undefined ? undefined : { fx, fy }
-}
-
-/** Reports whether the four effective borders can share the logical cqw affine unit. */
-function canUseLogicalAffine(border: ReturnType<typeof resolveBorderInsetLengths>): boolean {
-  return [border.top, border.right, border.bottom, border.left]
-    .every((length) => length.value === 0 || length.unit === 'cqw')
-}
-
-/** Reports whether no authored border contributes to the content-box displacement. */
-function isZeroBorder(border: ReturnType<typeof resolveBorderInsetLengths>): boolean {
-  return [border.top, border.right, border.bottom, border.left].every((length) => length.value === 0)
-}
-
-/** Reports whether a frame needs only an axis-aligned left/top correction. */
-function isAxisAligned(frame: {
-  rotate: number
-  scaleX: number
-  scaleY: number
-}): boolean {
-  return Math.abs(frame.rotate) <= 1e-8
-    && Math.abs(frame.scaleX - 1) <= 1e-8
-    && Math.abs(frame.scaleY - 1) <= 1e-8
-}
-
-/** Subtracts one border length from a logical cqw coordinate without converting through the DOM. */
-function subtractBorderLength(value: number, border: BorderLength): number | string {
-  if (border.value === 0) return value
-  if (border.unit === 'cqw') return value - border.value
-  return `calc(${value}cqw - ${border.value}px)`
 }
 
 /** Resolves the static class value at one keyframe without treating classes as interpolable data. */
@@ -331,7 +251,42 @@ export function isInterpolableStylePair(from: unknown, to: unknown): boolean {
   if (sourceColor || destinationColor) return sourceColor && destinationColor
   const sourceNumbers = extractNumericParts(from).length
   const destinationNumbers = extractNumericParts(to).length
-  return sourceNumbers > 0 && sourceNumbers === destinationNumbers
+  if (sourceNumbers === 0 || sourceNumbers !== destinationNumbers) return false
+  try {
+    prepareTween({
+      from: from as InterpolationValue,
+      to: to as InterpolationValue,
+      duration: 1,
+      ease: 'linear',
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Converts measured physical lengths only when the authored destination uses logical cqw. */
+function normalizeMeasuredStyleDefault(
+  measured: unknown,
+  destination: unknown,
+  cqwWidthPx: number | null,
+): unknown {
+  if (typeof measured !== 'string' || typeof destination !== 'string' || !/(?:^|[^a-z])cqw\b/i.test(destination)) {
+    return measured
+  }
+  const pixelLength = /([+-]?(?:\d+\.?\d*|\.\d+))px\b/gi
+  let unresolvedNonZero = false
+  const normalized = measured.replace(pixelLength, (_match, numeric: string) => {
+    const value = Number(numeric)
+    if (cqwWidthPx === null || cqwWidthPx <= 0) {
+      if (value === 0) return '0cqw'
+      unresolvedNonZero = true
+      return _match
+    }
+    const cqw = Math.round((value / cqwWidthPx) * 1e6) / 1e6
+    return `${cqw}cqw`
+  })
+  return unresolvedNonZero ? undefined : normalized
 }
 
 /** Recognizes colors through the existing ACE parser, without a CSS property list. */

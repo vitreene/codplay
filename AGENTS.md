@@ -8,6 +8,9 @@
   Compilation owns compaction and optimization of generated output; preserve
   source semantics and references instead of making developers maintain the
   compact representation by hand.
+- In Editor, authored lengths, palette controls, and persisted data use cqw.
+  Keep physical pixel measurements confined to transient DOM projection;
+  never convert or save authoring values in pixels.
 - Apply KISS and DRY: prefer the simplest implementation that satisfies the established contract, reuse existing logic, and avoid speculative abstractions, wrappers, and duplicated circuits.
 - Use English for function names and variable names.
 - Use kebab-case for file names.
@@ -34,6 +37,14 @@
 - V2 demos are instruments for advancing CodPlay, not local demo products. They exercise the real project contracts, expose missing or incorrect core behavior, and provide the concrete acceptance path for fixing it. When a demo fails, first investigate and correct the applicable CodPlay contract or runtime; a demo-local change is allowed only to express the authored scenario or to make the fixture observe the agreed behavior, never to hide, compensate for, or replace a missing core capability.
 - A demo failure is therefore project evidence, not an isolated presentation problem. Any proposed demo-local correction must state which CodPlay contract it validates, why the runtime is not the responsible boundary, and how the real runtime path remains exercised.
 - CodPlay core capabilities are approaching v1. Adding to or modifying `packages/codplay` core requires explicit user authorization and must always be the consequence of an agreed plan. No opportunistic or speculative core patches.
+- CodPlay is a shared library used by several projects. Never change its core
+  to accommodate Editor-specific circumstances or another caller's local
+  implementation choices. A core correction must address a genuine usage bug,
+  reproduced independently of the local workaround and assessed against the
+  shared contract and other projects' usage. A local symptom or a missing
+  convenience for an integration is not sufficient justification. The existing
+  explicit-authorization and agreed-plan gates still apply; identifying such
+  a bug does not itself authorize a core change.
 - Additional instructions may be added later and should be followed.
 
 ## Hard implementation gates

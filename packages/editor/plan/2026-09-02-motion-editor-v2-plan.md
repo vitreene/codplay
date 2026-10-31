@@ -8,6 +8,18 @@ sequence-editor (P3-C), sans refonte générale.
 
 ## 1. Autorité et documents
 
+**Corrections structurelles du 30 octobre — appliquées, acceptation native ouverte.**
+Le [plan ciblé](./2026-10-30-editor-motion-responsibility-fix-plan.md) conserve
+la porte rAF Safari. Les contrats vérifiés sont dans les
+spécifications [easing](../specs/motion-easing-spec.md),
+[présentation d’item](../specs/item-presentation-spec.md) et
+[orientation](../specs/path-tangent-orientation-spec.md). Un item garde un seul
+perso ; le composant Editor possède la conversion contenu/cadre, les endpoints
+ne dépendent plus de leurs visites et la coordination n’utilise plus de détour
+terminal de 2 ms. Aucun fichier CodPlay modifié. Le risque de phase overlay est
+dépriorisé par l’utilisateur ; la refonte générale builder reste `A relire`.
+P2/P4/P6 conservent les portes de validation qui ne sont pas encore fermées.
+
 - Les contrats V2/ed2 sont normatifs ; les versions V1, leurs API et leurs
   circuits ne le sont pas.
 - [Modèle ed2](./app/2026-07-11-ed2-document-model.md)
@@ -150,16 +162,15 @@ chaque chaîne reste ordonnée et continue dans son propre domaine.
 
 ### 2.3.1 Projection du CS sur le content-box
 
-Le CS, les ghosts et les chemins utilisent le `content-box` exposé par la pose
-runtime : la bordure n'entre ni dans `width/height` ni dans le calcul des
-dimensions du tracé. Le bridge projette l'inset physique gauche/haut dans la
-matrice affine pour placer l'origine du contenu. Les `offset.x/y` restent dans
-ce repère content-box ; le builder dérive la translation border-box nécessaire
-au runtime et le bridge restaure ce repère lors de la lecture d'un snapshot.
-Les variantes ouvertes `border`,
-`border-width`, `border-style` et leurs déclarations physiques sont résolues
-par un adaptateur pur de l'éditeur ; le core CodPlay et la carte ouverte de
-`Decor` ne sont pas modifiés.
+Les offsets auteur et les dimensions de contenu restent en cqw. Le document
+ne conserve pas les mesures du navigateur. Le composant item possède la
+conversion vers son cadre motion ; le builder et le bridge conservent un seul
+état logique par item. La sélection utilise la pose publiée et les dimensions
+de contenu du snapshot courant ; les endpoints viennent du document et du
+geste courant. Le contrat vérifié est dans les spécifications
+[présentation](../specs/item-presentation-spec.md) et
+[orientation](../specs/path-tangent-orientation-spec.md). L’utilisateur confirme que données auteur, palette et sauvegarde restent
+en cqw ; la projection DOM conserve seule ses mesures physiques.
 
 ### 2.3 Transition de position
 
@@ -319,7 +330,11 @@ change les KFs autres que celui visé.
 - `instance.snapshot.get()` est la source de vérité pour les valeurs logiques du décor
   qu'il expose ; `instance.presentation.get()` reste réservé à la pose numérique du CS
   lorsque cette pose est fournie par le canal de présentation. Le DOM, la couleur
-  calculée du nœud et l'apparence de la palette ne sont pas des sources de lecture.
+  calculée du nœud et l'apparence de la palette ne sont pas des sources de lecture de
+  l'état courant. Une mesure CSS ponctuelle à la pose initiale est permise uniquement
+  pendant la compilation pour matérialiser un endpoint source absent d'un tween CSS ;
+  cette valeur transitoire ne devient ni un état auteur ni une source de palette.
+  Voir le [contrat d'interpolation des styles](../specs/decor-style-interpolation-spec.md).
 - La frontière runtime → `DecorPatch` doit être ouverte : elle parcourt et transporte
   les propriétés réellement présentes dans l'état résolu ou dans un patch, sans
   whitelist de chemins connue à l'avance. Elle conserve le chemin canonique attendu
@@ -366,10 +381,10 @@ change les KFs autres que celui visé.
   du nouveau KF exactement comme toute autre valeur non modifiée et continuent de suivre
   leur règle documentaire propre. Si elles sont explicitement modifiées, leur capture
   suit leur canal documentaire dédié.
-- Si le snapshot V2 ne contient pas réellement la propriété interpolée nécessaire,
-  l'implémentation s'arrête à cette frontière et ouvre une correction CodPlay séparée
-  soumise à autorisation explicite. Aucun repli DOM, `getComputedStyle` ou lecteur de
-  trajectoire parallèle ne peut masquer ce manque dans l'éditeur.
+- Si le snapshot V2 ne contient pas réellement la propriété interpolée nécessaire à
+  l'interface courante, l'implémentation s'arrête à cette frontière et ouvre une correction
+  CodPlay séparée soumise à autorisation explicite. La mesure CSS ponctuelle décrite plus
+  haut ne reconstitue jamais cet état courant et n'ajoute aucun lecteur temporel parallèle.
 
 Ordre d'exécution de la tranche P2-D :
 
@@ -380,8 +395,10 @@ Ordre d'exécution de la tranche P2-D :
    palette.
 2. Fixer dans le bridge une seule projection snapshot → décor temporaire, synchronisée
    après `seekApplied`, avec un garde-fou sur le temps présenté. Réutiliser la conversion
-   existante des valeurs structurées pour chaque type de propriété interpolable et
-   compléter les propriétés absentes par la cascade documentée, sans lire le DOM.
+   existante des valeurs structurées pour chaque propriété interpolée. Pour la compilation,
+   garder la cascade auteur/app prioritaire puis mesurer une seule fois les propriétés sources
+   absentes sur l'objet natif à sa pose initiale ; cette mesure n'alimente pas la projection
+   courante de la palette.
 3. Réattacher `dedit` avec l'état interpolé complet, puis conserver séparément dans le
    bridge la base d'affichage et le registre générique des modifications utilisateur.
    Afficher immédiatement un outline sur chaque valeur touchée à partir de ce registre.
@@ -423,7 +440,7 @@ Ordre d'exécution de la tranche P2-D :
 | P0 — Contrat | Fixe | Contrat validé pour cette tranche : vie capsule, KF au playhead, mise à jour du décor et transition unique. La validation native reste une porte distincte. |
 | P1 — Domaine pur | Fixe | Résolveurs purs et testables de vie réelle/virtuelle, alignement exact/entre KFs et fenêtre bornée ajoutés et utilisés par la projection des bornes de timeline ; le branchement de la fenêtre sur la projection/runtime reste réservé à P4. Aucun DOM, player ou document mutable. |
 | P2 — Adaptateur CS | En cours | Un geste exact met à jour le décor du KF au même temps ; un geste entre KFs matérialise au playhead, puis réédite ce KF sans doublon. Pendant ce geste intermédiaire, l’overlay prévisualise déjà la coupure `A → C → B` qui sera commitée. Toute propriété du décor reste capturable ; overlay et ghosts restent hors document. Le rendu des ghosts et leur interactivité existent, mais l’utilisateur constate que leurs poses projetées sont fausses : cette projection n’est pas acceptée comme terminée. Voir P2-F. La validation native et les cas encore hors tranche maintiennent P2 ouvert. |
-| P2-F — Correction des ghosts | En cours | Reproduire aux KFs auteur, diagnostiquer l’écart dans le circuit existant `DecorEditorBridge` → `MotionEditorOverlay`, corriger ce circuit et vérifier pose, ciblage et stabilité par tests d’intégration et Safari MCP. Porte : chaque ghost correspond à son KF auteur ; au KF, objet et CS coïncident avec lui ; les ghosts restent ancrés pendant l’interpolation et leurs clics atteignent le bon KF. Aucun changement documentaire lors de Play/Seek/Stop/resize. |
+| P2-F — Correction des ghosts | En cours | Reproduire aux KFs auteur, diagnostiquer l’écart dans le circuit existant `DecorEditorBridge` → `MotionEditorOverlay`, corriger ce circuit et vérifier pose, ciblage et stabilité par tests d’intégration et Safari MCP. Le nettoyage des identifiants de KF sur les parts DOM réutilisées hors projection est appliqué et vérifié ; les portes restantes restent la validation native complète de P6. Porte : chaque ghost correspond à son KF auteur ; au KF, objet et CS coïncident avec lui ; les ghosts restent ancrés pendant l’interpolation et leurs clics atteignent le bon KF. Aucun changement documentaire lors de Play/Seek/Stop/resize. |
 | P2-D — Interface décor au temps interpolé | En cours | Implémentation et tests réalisés : snapshot réellement présenté après `seekApplied`, projection ouverte vers `DecorPatch`, base complète séparée du registre générique, outline immédiat et matérialisation d’un KF sparse. L’action de retrait reste une évolution d’interface non imposée dans cette tranche. Porte restante : validation native complète des gestes et clôture P2 ; aucun changement core implicite. |
 | P2-E — Deux canaux timeline pose/décor | En cours | Contrat implémenté dans le modèle, les commandes, le builder, le bridge, la machine et le rendu : lecture legacy sans `channel` comme `pose`, écritures nouvelles explicites, chaîne spatiale limitée aux KFs `pose`, chaîne décor alimentée par les KFs `decor` et les KFs `pose` qui portent du décor, promotion sans doublon et rendu d’une seule ligne avec séparation uniquement lorsque les deux canaux existent. Un KF de pose créé ou promu par mouvement capture la pose affine complète ; le patch décor reste sparse et ouvert aux propriétés futures. Tests ciblés et suite éditeur verts ; validation native Safari reste la porte de clôture. |
 | P3-A — Audit SE existant | Fixe | Audit statique terminé : capsule racine et capsules explicites, 0/1/2 KFs réels, bornes virtuelles, affichage, matérialisation et absence d’écriture lors de Play/Seek/resize sont distingués. |

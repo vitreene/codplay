@@ -47,7 +47,11 @@ function scene(): EditorScene {
       'test-source': {
         id: 'test-source', offset: { translate: { x: 10, y: 10 }, width: 20, height: 12, rotate: 0 },
         // Use the palette's canonical oklch author vocabulary for both color endpoints.
-        style: { 'border-width': '0.6cqw', 'border-style': 'solid', 'border-color': 'oklch(0.8 0.1 190)', 'background-color': 'oklch(0.4 0.1 230)', 'font-size': '2cqw' },
+        style: {
+          'border-width': '0.6cqw', 'border-style': 'solid', 'border-color': 'oklch(0.8 0.1 190)',
+          'background-color': 'oklch(0.4 0.1 230)', 'font-size': '2cqw',
+          'text-align': 'center', display: 'flex', 'align-items': 'center', 'justify-content': 'center',
+        },
       },
       'test-border': {
         id: 'test-border', style: { 'border-width': '2cqw', 'border-style': 'solid' },
@@ -420,6 +424,30 @@ export function editBorder(value: number) {
   return editStyleControl('style.border-width', String(value))
 }
 
+/** Checks a radius authored only at KF2 against the initial CSS default through the real player. */
+export async function editRadiusAtKeyframe(value: number) {
+  await resetFixture()
+  await selectTime(2_500)
+  const edit = await editStyleControl('style.border-radius', String(value))
+  const savedScene = actor.getSnapshot().context.scene!
+  const targetKeyframe = savedScene.items[0]!.keyframes.find((keyframe) => keyframe.timeMs === 2_500)!
+  const savedRadius = savedScene.decors[targetKeyframe.decorId]?.style?.['border-radius']
+  if (savedRadius !== `${value * 0.25}cqw`) throw new Error(`Radius author value was ${String(savedRadius)}`)
+  if (savedScene.decors['test-source']?.style?.['border-radius'] !== undefined) {
+    throw new Error('Measured initial radius was written into the source decor')
+  }
+
+  await selectTime(1_250)
+  const current = readFixture()
+  const itemState = current.snapshot?.states.find((entry) => entry.target.persoId === 'test-item')?.state
+  const interpolatedRadius = (itemState?.style as Record<string, unknown> | undefined)?.['border-radius']
+  const visual = sceneHost.querySelector<HTMLElement>('[data-editor-visual-for="test-item"]')
+  if (interpolatedRadius !== '4cqw' || visual?.style.borderRadius !== '4cqw') {
+    throw new Error(`Radius did not interpolate from the measured CSS default: ${JSON.stringify({ interpolatedRadius, rendered: visual?.style.borderRadius })}`)
+  }
+  return { edit, interpolatedRadius, rendered: visual?.style.borderRadius, savedRadius, sourceRadius: savedScene.decors['test-source']?.style?.['border-radius'] }
+}
+
 /** Changes only color, so the integration can prove the spatial chain was not split. */
 export function editColor(value: string) {
   return editStyleControl('style.background-color', value)
@@ -521,8 +549,8 @@ export async function runRegressionChecks(section: 'all' | 'editing' | 'playback
   await selectTime(2500)
   await checkGesture('needle between KFs with scale and pivot', () => rotateItem(20))
   const inserted = readFixture().document!
-  if (inserted.items[0]!.keyframes.length !== 3 || Object.values(inserted.decors).filter((decor) => decor.path !== undefined).length !== 2) {
-    throw new Error('Pose insertion must produce exactly two authored arcs and one new KF')
+  if (inserted.items[0]!.keyframes.length !== 4 || Object.values(inserted.decors).filter((decor) => decor.path !== undefined).length !== 3) {
+    throw new Error('Promoting the decoration KF must split the first arc while preserving the later pose KF')
   }
   await selectTime(0)
   await checkGesture('source needle', () => rotateItem(45))
@@ -549,7 +577,7 @@ export async function runRegressionChecks(section: 'all' | 'editing' | 'playback
   const beforeColor = readFixture()
   const changedColor = await editColor('#cc4400')
   results.push(verifyPose('color preview', changedColor.preview), verifyPose('color commit', changedColor.committed))
-  if (changedColor.committed.document!.items[0]!.keyframes.filter((keyframe) => keyframe.channel === 'pose').length !== 2
+  if (changedColor.committed.document!.items[0]!.keyframes.filter((keyframe) => keyframe.channel === 'pose').length !== 3
     || changedColor.committed.document!.decors['test-target']!.path !== beforeColor.document!.decors['test-target']!.path) {
     throw new Error('A decoration-only KF must leave the pose chain and authored path intact')
   }

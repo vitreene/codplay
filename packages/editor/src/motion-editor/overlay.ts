@@ -529,6 +529,8 @@ export function createMotionOverlay(
       if (usedElements.has(element)) continue
       element.style.display = 'none'
       element.style.pointerEvents = 'none'
+      delete element.dataset.motionKeyframeId
+      delete element.dataset.motionGhostDistance
     }
     for (const [id, element] of keyframeGhosts) {
       if (usedDynamicKeys.has(id)) continue

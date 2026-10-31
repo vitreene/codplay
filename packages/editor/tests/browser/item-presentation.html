@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="fr" id="item-test-document">
+  <head id="item-test-head">
+    <meta charset="UTF-8" />
+    <title>Editor item presentation integration</title>
+  </head>
+  <body id="item-test-body" style="margin:0">
+    <main id="item-test-layout">
+      <div id="item-test-scene" style="position:relative;width:800px;height:450px;container-type:inline-size"></div>
+      <output id="item-test-result"></output>
+    </main>
+    <script type="module">
+      import * as fixture from './item-presentation-fixture.ts'
+      document.getElementById('item-test-layout').testApi = fixture
+    </script>
+  </body>
+</html>

@@ -1,5 +1,7 @@
 /** @vitest-environment jsdom */
 
+import { EDITOR_ENGINE_OPTIONS } from '../../src/item-presentation/engine-options'
+
 import { afterEach, describe, expect, it } from 'vitest'
 import { CodPlay } from 'codplay'
 import { buildSceneDocV2, EDITOR_V2_STORY_ID } from '../../src/builder-v2'
@@ -69,17 +71,13 @@ describe('editor V2 motion path adapter', () => {
       },
     })
     expect(moveAction.style).toEqual(expect.objectContaining({ x: expect.any(Object), y: expect.any(Object) }))
-    expect(perso.type).toBe('list')
+    expect(perso.type).toBe('tag')
     expect(perso.initial?.move).toEqual({ target: `${EDITOR_V2_STORY_ID}__root` })
-    const visual = result.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos.find((candidate) => (
-      candidate.initial?.attr?.['data-editor-visual-for'] === 'item'
-    ))!
-    expect(visual.type).toBe('tag')
-    expect(visual.initial?.move).toEqual({ target: 'item' })
+    expect(result.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos).toHaveLength(2)
   })
 
   it('keeps a border decor keyframe from overriding an overlapping pose path', async () => {
-    codplay = new CodPlay({ pauseOnDocumentHidden: false })
+    codplay = new CodPlay({ engine: EDITOR_ENGINE_OPTIONS, pauseOnDocumentHidden: false })
     const scene = pathScene()
     scene.decors.first!.style = { 'border-width': '0cqw', 'border-style': 'solid' }
     scene.decors.border = { id: 'border', style: { 'border-width': '6cqw', 'border-style': 'solid' } }
@@ -101,10 +99,7 @@ describe('editor V2 motion path adapter', () => {
     expect(built.ok).toBe(true)
     if (!built.ok) return
     const perso = built.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos.find((candidate) => candidate.id === 'item')!
-    const visual = built.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos.find((candidate) => (
-      candidate.initial?.attr?.['data-editor-visual-for'] === 'item'
-    ))!
-    const borderAction = visual.actions!['item-decor-kf-border-kf'] as Record<string, unknown>
+    const borderAction = perso.actions!['item-decor-kf-border-kf'] as Record<string, unknown>
     expect(borderAction.style).toMatchObject({ 'border-width': expect.any(Object) })
     expect(borderAction.style).not.toHaveProperty('x')
     expect(borderAction.style).not.toHaveProperty('y')
@@ -161,7 +156,7 @@ describe('editor V2 motion path adapter', () => {
   })
 
   it('passes the prepared path through the CodPlay V2 player at seek time', async () => {
-    codplay = new CodPlay({ pauseOnDocumentHidden: false })
+    codplay = new CodPlay({ engine: EDITOR_ENGINE_OPTIONS, pauseOnDocumentHidden: false })
     const built = buildSceneDocV2(pathScene())
     expect(built.ok).toBe(true)
     if (!built.ok) return
@@ -205,7 +200,7 @@ describe('editor V2 motion path adapter', () => {
   })
 
   it('keeps the path tangent pose at and after the target keyframe in the real player', async () => {
-    codplay = new CodPlay({ pauseOnDocumentHidden: false })
+    codplay = new CodPlay({ engine: EDITOR_ENGINE_OPTIONS, pauseOnDocumentHidden: false })
     const scene = pathScene()
     scene.meta.durationMs = 2_000
     scene.decors.first!.offset = { ...scene.decors.first!.offset, rotate: 0 }
@@ -245,7 +240,7 @@ describe('editor V2 motion path adapter', () => {
   })
 
   it('keeps the prepared path active when Play starts from the initial seek boundary', async () => {
-    codplay = new CodPlay({ pauseOnDocumentHidden: false })
+    codplay = new CodPlay({ engine: EDITOR_ENGINE_OPTIONS, pauseOnDocumentHidden: false })
     const built = buildSceneDocV2(pathScene())
     expect(built.ok).toBe(true)
     if (!built.ok) return

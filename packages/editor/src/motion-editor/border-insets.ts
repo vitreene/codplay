@@ -95,6 +95,49 @@ export function resolveBorderInsetLengths(
   }
 }
 
+/** Keeps border and padding separate so only the border receives CSS pixel snapping. */
+export function resolveContentInsetLengths(style: Readonly<Record<string, unknown>> | undefined) {
+  const border = resolveBorderInsetLengths(style)
+  const padding: Array<BorderLength | undefined> = [undefined, undefined, undefined, undefined]
+  applyQuad(padding, parseQuad(style?.padding, parseLength))
+  return Object.fromEntries(BORDER_SIDE_NAMES.map((side, index) => [side, {
+    border: border[side],
+    padding: parseLength(style?.[`padding-${side}`]) ?? padding[index] ?? ZERO_BORDER_LENGTH,
+  }])) as Record<typeof BORDER_SIDE_NAMES[number], Readonly<{ border: BorderLength; padding: BorderLength }>>
+}
+
+/** Applies CSS Values' border-width snapping while preserving zero and positive hairlines. */
+function snapBorderWidthPx(value: number, pixelRatio: number): number {
+  return value === 0 ? 0 : Math.max(1, Math.floor(value * pixelRatio)) / pixelRatio
+}
+
+/** Converts the same effective content insets used by the component into scene pixels. */
+export function resolveContentInsetsPx(
+  style: Readonly<Record<string, unknown>> | undefined,
+  rootWidthPx: number,
+  pixelRatio = 1,
+): ContentBoxInsetsPx {
+  const lengths = resolveContentInsetLengths(style)
+  return Object.fromEntries(BORDER_SIDE_NAMES.map((side) => [side,
+    snapBorderWidthPx(borderLengthToPx(lengths[side].border, rootWidthPx), pixelRatio)
+      + borderLengthToPx(lengths[side].padding, rootWidthPx),
+  ])) as Record<typeof BORDER_SIDE_NAMES[number], number>
+}
+
+/** Emits responsive CSS with the same device-pixel border rounding as the numeric projection. */
+export function resolveContentInsetStyles(style: Readonly<Record<string, unknown>>, pixelRatio: number) {
+  const lengths = resolveContentInsetLengths(style)
+  return Object.fromEntries(BORDER_SIDE_NAMES.map((side) => {
+    const { border, padding } = lengths[side]
+    const borderCss = border.value === 0 ? '0px'
+      : border.unit === 'px' ? `${snapBorderWidthPx(border.value, pixelRatio)}px`
+        : `max(${1 / pixelRatio}px, round(down, ${border.value}cqw, ${1 / pixelRatio}px))`
+    const paddingCss = padding.value === 0 ? '0px' : `${padding.value}${padding.unit}`
+    return [side, borderCss === '0px' ? paddingCss
+      : paddingCss === '0px' ? borderCss : `calc(${borderCss} + ${paddingCss})`]
+  })) as Record<typeof BORDER_SIDE_NAMES[number], string>
+}
+
 /** Parses one border shorthand into its optional width and style components. */
 function parseBorderShorthand(value: unknown): { width?: BorderLength; style?: string } | undefined {
   if (typeof value !== 'string') return undefined

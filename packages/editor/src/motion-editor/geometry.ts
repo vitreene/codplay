@@ -180,6 +180,20 @@ export function presentationBorderBoxPoseToContentFrame(
   })
 }
 
+/** Projects the native content centred inside a motion frame whose size may follow another clock. */
+export function presentationItemPoseToContentFrame(
+  pose: CodPlayPresentationPose,
+  width: number,
+  height: number,
+  rotationOrigin: SelectionFrameValue['rotationOrigin'],
+  insets: ContentBoxInsetsPx,
+): SelectionFrameValue {
+  return selectionFrameFromPresentedPose(pose, width, height, rotationOrigin, {
+    x: pose.localWidth / 2 - (insets.right - insets.left) / 2,
+    y: pose.localHeight / 2 - (insets.bottom - insets.top) / 2,
+  })
+}
+
 /** Builds an affine Selection Frame while preserving the chosen local box centre. */
 function selectionFrameFromPresentedPose(
   pose: CodPlayPresentationPose,

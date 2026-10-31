@@ -1,21 +1,22 @@
 /** @vitest-environment jsdom */
 
+import { EDITOR_ENGINE_OPTIONS } from '../../src/item-presentation/engine-options'
+
 import { afterEach, describe, expect, it } from 'vitest'
 import { CodPlay } from 'codplay'
 import { buildSceneDocV2, EDITOR_V2_STORY_ID } from '../../src/builder-v2'
-import { motionVisualPersoId } from '../../src/builder-v2/motion-visual-id'
 import { resolveCurrentPatch } from '../../src/app/bridges/decor-editor-bridge'
 import type { Content, Decor, EditorScene } from '../../src/app/commands/types'
 
 const SOURCE_STYLE: Record<string, string> = {
   'background-color': '#ff0000',
-  border: '1px solid #ff0000',
+  border: '1cqw solid #ff0000',
   'border-color': '#ff0000',
-  'border-width': '1px',
-  'border-radius': '2px',
-  padding: '4px',
+  'border-width': '1cqw',
+  'border-radius': '2cqw',
+  padding: '4cqw',
   'font-family': 'Arial',
-  'font-size': '12px',
+  'font-size': '1.5cqw',
   'font-weight': '400',
   'font-style': 'normal',
   'text-align': 'left',
@@ -26,13 +27,13 @@ const SOURCE_STYLE: Record<string, string> = {
 
 const TARGET_STYLE: Record<string, string> = {
   'background-color': '#0000ff',
-  border: '4px dashed #0000ff',
+  border: '4cqw dashed #0000ff',
   'border-color': '#0000ff',
-  'border-width': '4px',
-  'border-radius': '8px',
-  padding: '12px',
+  'border-width': '4cqw',
+  'border-radius': '8cqw',
+  padding: '12cqw',
   'font-family': 'Georgia',
-  'font-size': '24px',
+  'font-size': '3cqw',
   'font-weight': '700',
   'font-style': 'italic',
   'text-align': 'right',
@@ -57,7 +58,7 @@ function stressScene(): EditorScene {
       scale: { x: 1, y: 1 },
       rotationOrigin: { fx: 0.25, fy: 0.25 },
     },
-    custom: 'filter: blur(0px); --custom-source: source;',
+    custom: 'filter: blur(0cqw); --custom-source: source;',
   }
   const target: Decor = {
     id: 'stress-target',
@@ -74,7 +75,7 @@ function stressScene(): EditorScene {
       scale: { x: 1.2, y: 0.8 },
       rotationOrigin: { fx: 0.75, fy: 0.75 },
     },
-    custom: 'filter: blur(4px); --custom-source: target;',
+    custom: 'filter: blur(4cqw); --custom-source: target;',
     zoneId: 'stress-zone',
     path: 'M 0 0 A 0.65 0.65 0 0 1 1 0',
   }
@@ -127,27 +128,11 @@ function stressScene(): EditorScene {
 /** Returns the logical state of one compiled runtime item. */
 function itemState(
   instance: { snapshot: { get: () => { states: readonly { target: { persoId: string }; state: Readonly<Record<string, unknown>> }[] } | null } },
-  visualPersoId: string,
 ): Readonly<Record<string, unknown>> {
   const states = instance.snapshot.get()?.states
   const item = states?.find((entry) => entry.target.persoId === 'stress-item')?.state
-  const visual = states?.find((entry) => entry.target.persoId === visualPersoId)?.state
-  if (item === undefined || visual === undefined) throw new Error('The stress item is absent from the CodPlay snapshot.')
-  const itemStyle = item.style
-  const visualStyle = visual.style
-  return {
-    ...visual,
-    ...item,
-    style: {
-      ...(itemStyle !== null && typeof itemStyle === 'object' && !Array.isArray(itemStyle)
-        ? itemStyle as Record<string, unknown>
-        : {}),
-      ...(visualStyle !== null && typeof visualStyle === 'object' && !Array.isArray(visualStyle)
-        ? visualStyle as Record<string, unknown>
-        : {}),
-    },
-    className: visual.className,
-  }
+  if (item === undefined) throw new Error('The stress item is absent from the CodPlay snapshot.')
+  return item
 }
 
 describe('editor V2 Decor property stress path', () => {
@@ -160,7 +145,7 @@ describe('editor V2 Decor property stress path', () => {
   })
 
   it('keeps every authored CSS property in the compiled action and CodPlay state', async () => {
-    codplay = new CodPlay({ pauseOnDocumentHidden: false })
+    codplay = new CodPlay({ engine: EDITOR_ENGINE_OPTIONS, pauseOnDocumentHidden: false })
     const built = buildSceneDocV2(stressScene())
     expect(built.ok).toBe(true)
     if (!built.ok) return
@@ -170,12 +155,9 @@ describe('editor V2 Decor property stress path', () => {
 
     const persos = built.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos
     const perso = persos.find((candidate) => candidate.id === 'stress-item')!
-    const visualPersoId = motionVisualPersoId('stress-item', new Set([
-      'stress-item', 'stress-root', `${EDITOR_V2_STORY_ID}__root`,
-    ]))
-    const visualPerso = persos.find((candidate) => candidate.id === visualPersoId)!
+    expect(persos).toHaveLength(2)
     const actionStyleProperties = new Set(
-      [...Object.values(perso.actions ?? {}), ...Object.values(visualPerso.actions ?? {})].flatMap((action) => (
+      Object.values(perso.actions ?? {}).flatMap((action) => (
         action && typeof action === 'object' && 'style' in action && action.style && typeof action.style === 'object'
           ? Object.keys(action.style)
           : []
@@ -187,6 +169,8 @@ describe('editor V2 Decor property stress path', () => {
     expect(actionStyleProperties).toContain('--future-decor-token')
     expect(actionStyleProperties).toContain('filter')
     expect(actionStyleProperties).toContain('--custom-source')
+    expect(perso.actions['stress-item-decor-kf-stress-target-kf']?.style?.['border-radius'])
+      .toMatchObject({ from: '2cqw', to: '8cqw' })
 
     const root = document.createElement('div')
     document.body.append(root)
@@ -202,7 +186,8 @@ describe('editor V2 Decor property stress path', () => {
     })
 
     await instance.telco.seek(500 + built.preRollMs)
-    const midpointStyle = itemState(instance, visualPersoId).style as Record<string, unknown>
+    const midpointStyle = itemState(instance).style as Record<string, unknown>
+    expect(midpointStyle['border-radius']).toBe('5cqw')
     expect(midpointStyle).toHaveProperty('border')
     expect(midpointStyle).toHaveProperty('border-color')
     expect(midpointStyle).toHaveProperty('font-family')
@@ -210,7 +195,7 @@ describe('editor V2 Decor property stress path', () => {
     expect(midpointStyle).toHaveProperty('filter')
 
     await instance.telco.seek(1_000 + built.preRollMs)
-    const destinationState = itemState(instance, visualPersoId)
+    const destinationState = itemState(instance)
     const destinationStyle = destinationState.style as Record<string, unknown>
     for (const property of [...STRESS_STYLE_PROPERTIES, '--future-decor-token', 'filter', '--custom-source']) {
       expect(destinationStyle, `missing CodPlay style property ${property}`).toHaveProperty(property)
@@ -233,7 +218,7 @@ describe('editor V2 Decor property stress path', () => {
     // boundary visible instead of treating the absence as a successful projection.
     expect(perso.initial).not.toHaveProperty('zone')
 
-    expect(visualPerso.actions['stress-item-decor-kf-stress-target-kf-classes']).toEqual({
+    expect(perso.actions['stress-item-decor-kf-stress-target-kf-classes']).toEqual({
       className: { add: 'stress-target', remove: 'stress-source' },
     })
     expect(destinationState.className).toContain('stress-target')
@@ -244,11 +229,11 @@ describe('editor V2 Decor property stress path', () => {
   it('transporte les propriétés Decor connues et futures par structure au bridge', () => {
     const decor = {
       id: 'future-decor',
-      style: { border: '2px solid red' },
+      style: { border: '2cqw solid red' },
       classes: [],
       offset: { translate: { x: 1, y: 2 } },
       zoneId: null,
-      custom: 'filter: blur(2px);',
+      custom: 'filter: blur(2cqw);',
       path: 'M 0 0 L 1 1',
       futureModule: { enabled: true, values: { border: 'future' } },
     }
@@ -256,10 +241,10 @@ describe('editor V2 Decor property stress path', () => {
     const patch = resolveCurrentPatch(decor, content, stressScene()) as Record<string, unknown>
 
     expect(patch).toMatchObject({
-      style: { border: '2px solid red' },
+      style: { border: '2cqw solid red' },
       classes: [],
       offset: { translate: { x: 1, y: 2 } },
-      custom: 'filter: blur(2px);',
+      custom: 'filter: blur(2cqw);',
       path: 'M 0 0 L 1 1',
       text: 'future',
       futureModule: { enabled: true, values: { border: 'future' } },

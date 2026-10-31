@@ -18,13 +18,12 @@ import { TransitionTiming } from '@codplay/scene-factory/transition-timing'
 import type { CapsuleDistributionOutput } from '@codplay/scene-factory/capsule-distribution'
 import type { CapsuleKind } from '@codplay/scene-factory/capsule-preset'
 import type { Move, PersoDoc, SceneDoc } from 'codplay'
-import { prepareSvgPath } from 'ace'
+import { parseEase, prepareSvgPath } from 'ace'
 import { resolveKeyframeChannel } from '../app/commands/types'
 import type { CapsuleDef, EditorScene, Item, Keyframe, Transition } from '../app/commands/types'
 import { resolveKeyframeTransition } from './keyframe-transition'
-import { motionVisualPersoId } from './motion-visual-id'
+import { normalizeMotionEasing } from '../motion-editor/easing'
 import { OFFSET_STYLE_PROPERTIES } from '../decor-editor/units'
-import { resolveBorderInsetLengths } from '../motion-editor/border-insets'
 import {
   computeStyleDiff,
   hasZoneAssignment,
@@ -32,6 +31,7 @@ import {
   resolveInitialClassName,
   resolveInitialStyle,
   resolveKeyframeDecorStyle,
+  resolveStyleDefaultsForTarget,
   resolveKeyframeClassName,
   resolveKeyframePoseStyle,
   resolveKeyframeStyle,
@@ -44,11 +44,16 @@ import {
   EDITOR_V2_STORY_ID,
   type BuildSceneV2Failure,
   type BuildSceneV2Result,
+  type StyleDefaultCapture,
+  type StyleDefaultRequest,
   type BuilderDiagnostic,
 } from './types'
 
 /** Builds the native V2 SceneDoc for the currently supported editor scene slice. */
-export function buildSceneDocV2(scene: EditorScene): BuildSceneV2Result {
+export function buildSceneDocV2(
+  scene: EditorScene,
+  styleDefaultsByItem: ReadonlyMap<string, StyleDefaultCapture> = new Map(),
+): BuildSceneV2Result {
   const diagnostics = validateSceneInput(scene)
   if (diagnostics.some((diagnostic) => diagnostic.level === 'error')) {
     return failure(diagnostics)
@@ -87,8 +92,8 @@ export function buildSceneDocV2(scene: EditorScene): BuildSceneV2Result {
 
   const rootPerso: PersoDoc<'list'> = buildRootPerso(scene, rootResolution.rootArtifact.className)
   const persos: Array<V2Perso> = [rootPerso]
-  const reservedPersoIds = new Set([EDITOR_V2_ROOT_PERSO_ID, ...scene.items.map((item) => item.id)])
   const eventimes: Array<{ name: string; startAt: number }> = []
+  const styleDefaultRequests: StyleDefaultRequest[] = []
   const styleSheets: string[] = [rootResolution.styleSheet]
   type WorkItem = Readonly<{
     items: Item[]
@@ -121,7 +126,9 @@ export function buildSceneDocV2(scene: EditorScene): BuildSceneV2Result {
       }
 
       const leaf = buildLeafPerso(
-        scene, item, current.parentPersoId, childArtifact, preRollMs, diagnostics, reservedPersoIds,
+        scene, item, current.parentPersoId, childArtifact, preRollMs, diagnostics,
+        styleDefaultsByItem.get(item.id),
+        styleDefaultRequests,
       )
       persos.push(...leaf.persos)
       eventimes.push(...leaf.eventimes)
@@ -150,6 +157,7 @@ export function buildSceneDocV2(scene: EditorScene): BuildSceneV2Result {
     preRollMs,
     styleSheet: styleSheets.filter((styleSheet) => styleSheet.trim() !== '').join('\n'),
     rootGrid: rootResolution.grid,
+    styleDefaultRequests,
     // The browser bridge sends styleSheet to codplay.preload.css.set(). Content URLs are derived
     // by CodPlay.build(), so no URL is invented at this pure builder boundary.
     preloadManifest: { entries: [] },
@@ -234,6 +242,18 @@ function validateItemInput(
       }
       if (transition?.kind === 'named' && transition.name !== '--' && DEFAULT_AUTO_CAPSULE_EVENT_DEFINITIONS[transition.name] === undefined) {
         diagnostics.push(error('EDITOR_V2_TRANSITION_NOT_FOUND', `Named transition '${transition.name}' is not in the capsule-automation catalog.`, { itemId: item.id, keyframeId: keyframe.id, transition: transition.name }))
+      }
+      if (transition?.kind === 'interpolated') {
+        const ease = normalizeMotionEasing(transition.easing)
+        try {
+          parseEase(ease)
+        } catch (cause) {
+          diagnostics.push(error(
+            'EDITOR_V2_EASING_UNSUPPORTED',
+            cause instanceof Error ? cause.message : `Easing '${ease}' is not supported by ACE.`,
+            { itemId: item.id, keyframeId: keyframe.id, ease },
+          ))
+        }
       }
     }
   }
@@ -572,7 +592,8 @@ function buildLeafPerso(
   childArtifact: AutoCapsuleChildElementArtifact,
   preRollMs: number,
   diagnostics: BuilderDiagnostic[],
-  reservedPersoIds: Set<string>,
+  styleDefaults: StyleDefaultCapture | undefined,
+  styleDefaultRequests: StyleDefaultRequest[],
 ): Readonly<{ persos: V2Perso[]; eventimes: Array<{ name: string; startAt: number }> }> {
   const content = item.contentId === null ? undefined : scene.contents[item.contentId]
   const keyframes = sortPoseKeyframes(item)
@@ -593,8 +614,9 @@ function buildLeafPerso(
     keyframes,
     preRollMs,
     diagnostics,
-    childArtifact.className,
     initialClassName,
+    styleDefaults,
+    styleDefaultRequests,
   )
   const actions: Record<string, { style?: Record<string, unknown>; className?: ClassNameAction; move?: Move }> = { ...transition.actions }
   for (const action of decorActions) {
@@ -608,60 +630,15 @@ function buildLeafPerso(
   const common = {
     move: { target: parentPersoId },
     attr: { 'data-item-id': `${EDITOR_V2_STORY_ID}:${item.id}` },
-    ...(childArtifact.className === '' && initialClassName === undefined
-      ? {}
-      : { className: [childArtifact.className, initialClassName].filter(Boolean).join(' ') }),
+    editorFrameClassName: childArtifact.className,
+    ...(initialClassName === undefined ? {} : { className: initialClassName }),
     ...(Object.keys(initial).length > 0 ? { style: initial } : {}),
   }
 
-  const hasMotionPath = keyframes.slice(1).some((keyframe) => {
-    const path = scene.decors[keyframe.decorId]?.path
-    return typeof path === 'string' && path.trim() !== ''
-  })
-  if (!hasMotionPath) return { persos: [buildLeafElement(scene, item, content, common, actions)], eventimes }
-
-  const visualPersoId = motionVisualPersoId(item.id, reservedPersoIds)
-  reservedPersoIds.add(visualPersoId)
-  const initialVisualStyle = omitMotionPoseStyle(initial)
-  const initialHostStyle = {
-    display: 'grid',
-    gridTemplateColumns: 'max-content',
-    gridTemplateRows: 'max-content',
-    justifyItems: 'start',
-    alignItems: 'start',
-    width: 'max-content',
-    height: 'max-content',
-    overflow: 'visible',
-    ...pickMotionPoseStyle(initial),
-  }
-  const { hostActions, visualActions } = splitMotionHostActions(item.id, actions)
-  const visualPerso = buildLeafElement(scene, item, content, {
-    move: { target: item.id },
-    attr: { 'data-editor-visual-for': item.id },
-    ...(initialClassName === undefined ? {} : { className: initialClassName }),
-    ...(Object.keys(initialVisualStyle).length === 0 ? {} : { style: initialVisualStyle }),
-  }, visualActions, visualPersoId)
-  const motionHost: PersoDoc<'list'> = {
-    id: item.id,
-    name: item.id,
-    type: 'list',
-    initial: {
-      move: { target: parentPersoId },
-      tag: 'div',
-      attr: { 'data-item-id': `${EDITOR_V2_STORY_ID}:${item.id}` },
-      ...(childArtifact.className === '' ? {} : { className: childArtifact.className }),
-      style: initialHostStyle,
-    },
-    actions: hostActions,
-  }
-
-  return {
-    persos: [motionHost, visualPerso],
-    eventimes,
-  }
+  return { persos: [buildLeafElement(scene, item, content, common, actions)], eventimes }
 }
 
-/** Builds one concrete leaf component before optionally placing it in a geometry host. */
+/** Builds one native leaf profile with its complete state and stable runtime identity. */
 function buildLeafElement(
   scene: EditorScene,
   item: Item,
@@ -671,6 +648,7 @@ function buildLeafElement(
     attr: Record<string, string>
     className?: string
     style?: Record<string, unknown>
+    editorFrameClassName: string
   },
   actions: Record<string, { style?: Record<string, unknown>; className?: ClassNameAction; move?: Move }>,
   persoId = item.id,
@@ -687,99 +665,7 @@ function buildLeafElement(
   return { id: persoId, name: item.id, type: 'tag', initial: { ...common, tag: 'div', ...(text === undefined ? {} : { content: text }) }, actions }
 }
 
-/** Keeps CSS geometry on the visual child while the host owns the path's affine pose. */
-function splitMotionHostActions(
-  itemId: string,
-  actions: Record<string, { style?: Record<string, unknown>; className?: ClassNameAction; move?: Move }>,
-): Readonly<{
-  hostActions: Record<string, { style?: Record<string, unknown>; className?: ClassNameAction; move?: Move }>
-  visualActions: Record<string, { style?: Record<string, unknown>; className?: ClassNameAction; move?: Move }>
-}> {
-  const hostActions: Record<string, { style?: Record<string, unknown>; className?: ClassNameAction; move?: Move }> = {}
-  const visualActions: Record<string, { style?: Record<string, unknown>; className?: ClassNameAction; move?: Move }> = {}
-  for (const [name, action] of Object.entries(actions)) {
-    if (name.startsWith(`${itemId}-decor-kf-`) || name.endsWith('-classes')) {
-      const style = action.style ?? {}
-      const hostStyle = pickMotionTranslationStyle(style)
-      const visualStyle = omitMotionTranslationStyle(style)
-      if (Object.keys(hostStyle).length > 0) hostActions[name] = { style: hostStyle }
-      if (Object.keys(visualStyle).length > 0 || action.className !== undefined) {
-        visualActions[name] = {
-          ...(Object.keys(visualStyle).length === 0 ? {} : { style: visualStyle }),
-          ...(action.className === undefined ? {} : { className: action.className }),
-        }
-      }
-      continue
-    }
-
-    const style = action.style ?? {}
-    const hostStyle = action.move === undefined
-      ? pickMotionPoseStyle(style)
-      : omitMotionSizeStyle(pickMotionPoseStyle(style))
-    const visualStyle = {
-      ...pickMotionSizeStyle(style),
-      ...omitMotionPoseStyle(style),
-    }
-    if (Object.keys(hostStyle).length > 0 || action.move !== undefined) {
-      hostActions[name] = {
-        ...(Object.keys(hostStyle).length === 0 ? {} : { style: hostStyle }),
-        ...(action.move === undefined ? {} : { move: action.move }),
-      }
-    }
-    if (Object.keys(visualStyle).length > 0) visualActions[name] = { style: visualStyle }
-  }
-  return { hostActions, visualActions }
-}
-
-/** Selects the affine fields that define a motion host pose. */
-function pickMotionPoseStyle(style: Record<string, unknown>): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(style).filter(([property]) => (
-    property === 'x' || property === 'y' || property === 'rotate'
-    || property === 'scaleX' || property === 'scaleY' || property === 'transform-origin'
-  )))
-}
-
-/** Selects the dimensions that belong to the visual element inside a motion host. */
-function pickMotionSizeStyle(style: Record<string, unknown>): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(style).filter(([property]) => property === 'width' || property === 'height'))
-}
-
-/** Selects only host translation fields used by border projection actions. */
-function pickMotionTranslationStyle(style: Record<string, unknown>): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(style).filter(([property]) => property === 'x' || property === 'y'))
-}
-
-/** Removes pose-only fields from the visual element's initial CSS style. */
-function omitMotionPoseStyle(style: Record<string, unknown>): Record<string, unknown> {
-  const result = { ...style }
-  for (const property of ['x', 'y', 'rotate', 'scaleX', 'scaleY', 'transform-origin']) delete result[property]
-  return result
-}
-
-/** Removes host translation fields from a decor action applied to its visual child. */
-function omitMotionTranslationStyle(style: Record<string, unknown>): Record<string, unknown> {
-  const result = { ...style }
-  delete result.x
-  delete result.y
-  return result
-}
-
-/** Removes the dimensions handled by the visual child from an affine host action. */
-function omitMotionSizeStyle(style: Record<string, unknown>): Record<string, unknown> {
-  const result = { ...style }
-  delete result.width
-  delete result.height
-  return result
-}
-
-/**
- * Builds decor actions between every adjacent keyframe pair.
- *
- * A property present at the destination but absent from the resolved source has no authored
- * interpolation endpoint. It therefore becomes a direct style patch at the destination KF, with
- * one pose-only exception: numeric rotation uses its documented `0°` identity as an explicit start.
- * No `{to: ...}` tween without a materialized `from` is emitted.
- */
+/** Builds decor actions between every adjacent keyframe pair through the single ACE style action. */
 function buildInterpolationActions(
   scene: EditorScene,
   item: Item,
@@ -787,10 +673,12 @@ function buildInterpolationActions(
   poseKeyframes: Keyframe[],
   preRollMs: number,
   diagnostics: BuilderDiagnostic[],
-  generatedClassName: string,
   initialClassName: string | undefined,
+  styleDefaults: StyleDefaultCapture | undefined,
+  styleDefaultRequests: StyleDefaultRequest[],
 ): DecorAction[] {
   const actions: DecorAction[] = []
+  const missingStyleDefaultProperties = new Set<string>()
   const poseSegments = poseKeyframes.slice(1).map((destination, index) => {
     const source = poseKeyframes[index]!
     const fromStyle = resolveKeyframePoseStyle(scene, item, source)
@@ -812,34 +700,10 @@ function buildInterpolationActions(
     const destination = decorationKeyframes[index]!
     const sourceDecorStyle = resolveKeyframeDecorStyle(scene, item, source)
     const targetDecorStyle = resolveKeyframeDecorStyle(scene, item, destination)
-    const borderChanged = !sameBorderInsetLengths(
-      resolveBorderInsetLengths(sourceDecorStyle),
-      resolveBorderInsetLengths(targetDecorStyle),
-    )
-    const sourceAnchorStyle = borderChanged
-      ? poseAnchorStyle(resolveKeyframePoseStyle(scene, item, source))
-      : {}
-    const targetAnchorStyle = borderChanged
-      ? poseAnchorStyle(resolveKeyframePoseStyle(scene, item, destination))
-      : {}
-    const overlappingPoseSegments = poseSegments.filter((segment) => (
-      source.timeMs < segment.destination.timeMs
-      && segment.source.timeMs < destination.timeMs
-    ))
-    const borderAnchorDiff = borderChanged
-      ? computeStyleDiff(sourceAnchorStyle, targetAnchorStyle)
-      : {}
-    if (overlappingPoseSegments.some((segment) => segment.hasMotionPath || segment.diff.x !== undefined)) {
-      delete borderAnchorDiff.x
-    }
-    if (overlappingPoseSegments.some((segment) => segment.hasMotionPath || segment.diff.y !== undefined)) {
-      delete borderAnchorDiff.y
-    }
-    const fromStyle = { ...sourceDecorStyle, ...sourceAnchorStyle }
-    const diff = {
-      ...computeStyleDiff(sourceDecorStyle, targetDecorStyle),
-      ...borderAnchorDiff,
-    }
+    const fromStyle = resolveStyleDefaultsForTarget(sourceDecorStyle, targetDecorStyle, styleDefaults)
+    const missingDefaults = Object.keys(targetDecorStyle).filter((property) => fromStyle[property] === undefined)
+    missingDefaults.forEach((property) => missingStyleDefaultProperties.add(property))
+    const diff = computeStyleDiff(fromStyle, targetDecorStyle)
     const { durationMs, ease, startAtMs } = resolveKeyframeTransition(source, destination)
     const startAt = startAtMs + preRollMs
     const style = buildStyleTransition(fromStyle, diff, durationMs, ease)
@@ -853,11 +717,18 @@ function buildInterpolationActions(
     const className = buildClassNameTransition(
       index === 1 ? initialClassName : resolveKeyframeClassName(scene, item, source),
       resolveKeyframeClassName(scene, item, destination),
-      generatedClassName,
     )
     if (className !== undefined) {
       actions.push({ name: `${actionName}-classes`, className, startAt: destination.timeMs + preRollMs })
     }
+  }
+
+  if (missingStyleDefaultProperties.size > 0) {
+    styleDefaultRequests.push({
+      itemId: item.id,
+      initialTimeMs: poseKeyframes[0]?.timeMs ?? 0,
+      properties: [...missingStyleDefaultProperties].sort(),
+    })
   }
 
   for (const { source, destination, fromStyle, toStyle, diff, path, hasMotionPath } of poseSegments) {
@@ -916,37 +787,13 @@ function buildInterpolationActions(
   return actions
 }
 
-/** Keeps only derived x/y channels needed to animate the content-box anchor. */
-function poseAnchorStyle(style: Record<string, unknown>): Record<string, unknown> {
-  const anchor: Record<string, unknown> = {}
-  if (style.x !== undefined) anchor.x = style.x
-  if (style.y !== undefined) anchor.y = style.y
-  return anchor
-}
-
-/** Compares resolved border lengths without converting logical units through a viewport. */
-function sameBorderInsetLengths(
-  source: ReturnType<typeof resolveBorderInsetLengths>,
-  destination: ReturnType<typeof resolveBorderInsetLengths>,
-): boolean {
-  return source.top.value === destination.top.value
-    && source.top.unit === destination.top.unit
-    && source.right.value === destination.right.value
-    && source.right.unit === destination.right.unit
-    && source.bottom.value === destination.bottom.value
-    && source.bottom.unit === destination.bottom.unit
-    && source.left.value === destination.left.value
-    && source.left.unit === destination.left.unit
-}
-
-/** Builds the discrete class delta while preserving capsule-generated classes. */
+/** Builds the visual class delta independently of the frame placement classes. */
 function buildClassNameTransition(
   fromDecorClassName: string | undefined,
   toDecorClassName: string | undefined,
-  generatedClassName: string,
 ): ClassNameAction | undefined {
-  const from = classTokens(combineClassNames(generatedClassName, fromDecorClassName))
-  const to = classTokens(combineClassNames(generatedClassName, toDecorClassName))
+  const from = classTokens(fromDecorClassName)
+  const to = classTokens(toDecorClassName)
   const remove = [...from].filter((token) => !to.has(token)).join(' ')
   const add = [...to].filter((token) => !from.has(token)).join(' ')
   if (remove === '' && add === '') return undefined
@@ -954,12 +801,6 @@ function buildClassNameTransition(
     ...(add === '' ? {} : { add }),
     ...(remove === '' ? {} : { remove }),
   }
-}
-
-/** Combines authored and generated classes without introducing an empty class value. */
-function combineClassNames(...values: Array<string | undefined>): string | undefined {
-  const result = values.filter((value): value is string => value !== undefined && value.trim() !== '').join(' ')
-  return result === '' ? undefined : result
 }
 
 /** Splits one complete class string into stable tokens for a discrete delta. */
