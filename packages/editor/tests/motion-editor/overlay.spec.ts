@@ -103,7 +103,6 @@ describe('motion overlay', () => {
 
   it('keeps the path control hidden until a scene selection supplies a segment', () => {
     const overlay = createMotionOverlay(host, {
-      onDrop: () => null,
       onActivateRole: () => undefined,
       onPathActivate: () => undefined,
       onPathChange: () => undefined,
@@ -117,7 +116,6 @@ describe('motion overlay', () => {
   it('shows an icon-only tangent toggle only for an explicit active path', () => {
     const changes: boolean[] = []
     const overlay = createMotionOverlay(host, {
-      onDrop: () => null,
       onActivateRole: () => undefined,
       onPathActivate: () => undefined,
       onPathChange: () => undefined,
@@ -127,6 +125,8 @@ describe('motion overlay', () => {
     expect(button.style.display).toBe('none')
     expect(button.hasAttribute('data-editor-overlay')).toBe(true)
     expect(button.getAttribute('aria-label')).toBe('Aligner sur la tangente')
+    expect(button.parentElement).toBe(host)
+    expect(button.style.zIndex).toBe('1102')
     expect(button.textContent).toBe('')
     expect(button.querySelector('#editor-motion-path-tangent-icon')).not.toBeNull()
     overlay.setSegment({ ...segment, path: 'M 0 0 A 0.5 0.5 0 0 1 1 0' })
@@ -144,71 +144,70 @@ describe('motion overlay', () => {
     overlay.destroy()
   })
 
-  it('uses one full-frame movement surface without a central or border split', () => {
+  it('keeps the trajectory control above the Selection Frame movement surface', () => {
     const overlay = createMotionOverlay(host, {
-      onDrop: () => null,
+      onActivateRole: () => undefined,
+      onPathActivate: () => undefined,
+      onPathChange: () => undefined,
+    })
+    overlay.setSegment(segment)
+    const control = host.querySelector<HTMLElement>('[data-motion-path-control]')!
+
+    expect(control.parentElement).toBe(host)
+    expect(control.style.pointerEvents).toBe('auto')
+    expect(control.style.zIndex).toBe('1101')
+    overlay.destroy()
+    expect(host.querySelector('[data-motion-path-control]')).toBeNull()
+  })
+
+  it('leaves item movement to the Selection Frame and mounts no second movement surface', () => {
+    const overlay = createMotionOverlay(host, {
       onActivateRole: () => undefined,
       onPathActivate: () => undefined,
       onPathChange: () => undefined,
     })
     overlay.setSelection(frame, true)
 
-    const moveZones = host.querySelectorAll<HTMLElement>('[data-motion-move-zone]')
-    expect(moveZones).toHaveLength(1)
-    expect(moveZones[0]?.style.clipPath).toBe('none')
+    expect(host.querySelector('[data-motion-move-zone]')).toBeNull()
+    expect(host.querySelector('[data-motion-central]')).toBeNull()
     expect(host.querySelector('[data-motion-border]')).toBeNull()
-    expect(moveZones[0]?.style.left).toBe(`${frame.x}px`)
-    expect(moveZones[0]?.style.width).toBe(`${frame.width}px`)
     overlay.destroy()
   })
 
-  it('previews a temporary middle keyframe as the two route segments that will be committed', () => {
-    const drops: Array<{ sourceFrame: SelectionFrameValue; targetFrame: SelectionFrameValue }> = []
+  it('previews a temporary waypoint split from the Selection Frame pose projection', () => {
     const overlay = createMotionOverlay(host, {
-      onDrop: (drop) => {
-        drops.push(drop)
-        return null
-      },
       onActivateRole: () => undefined,
       onPathActivate: () => undefined,
       onPathChange: () => undefined,
     })
     const temporaryPose = { ...frame, x: 120, y: 80 }
-    const temporarySegment: MotionOverlaySegment = {
+    const temporarySegment = segmentFixture({
       ...segment,
       sourceKeyframeId: 'source-kf',
       targetKeyframeId: 'target-kf',
       role: 'source',
       isTemporary: true,
-    }
+      posePreview: true,
+      sourceFrame: frame,
+      targetFrame: segment.targetGeometry.frame,
+      selectionGeometry: resolveMotionGeometryPose(temporaryPose),
+    })
     overlay.setSegments([temporarySegment])
     overlay.setSelection(temporaryPose, true)
-
-    const moveZone = host.querySelector<HTMLElement>('[data-motion-move-zone]')!
-    expect(moveZone.style.left).toBe(`${temporaryPose.x}px`)
-    expect(moveZone.style.top).toBe(`${temporaryPose.y}px`)
-    expect(moveZone.style.zIndex).toBe('5')
-    moveZone.dispatchEvent(pointerEvent('pointerdown', temporaryPose.x, temporaryPose.y))
-    moveZone.dispatchEvent(pointerEvent('pointermove', temporaryPose.x + 20, temporaryPose.y + 10))
 
     const paths = [...host.querySelectorAll<SVGPathElement>('[data-motion-path]')]
     expect(paths).toHaveLength(2)
     const activePath = host.querySelector<SVGPathElement>('[data-motion-path-active]')!
     const inactivePath = host.querySelector<SVGPathElement>('[data-motion-path-inactive]')!
-    expect(activePath.getAttribute('d')).toBe('M 70 60 L 190 120')
-    expect(inactivePath.getAttribute('d')).toBe('M 190 120 L 270 150')
+    expect(activePath.getAttribute('d')).toBe('M 70 60 L 170 110')
+    expect(inactivePath.getAttribute('d')).toBe('M 170 110 L 270 150')
     expect(activePath.style.opacity).toBe('1')
     expect(inactivePath.style.opacity).toBe('0.15')
-
-    moveZone.dispatchEvent(pointerEvent('pointerup', temporaryPose.x + 20, temporaryPose.y + 10))
-    expect(drops).toHaveLength(1)
-    expect(drops[0]?.sourceFrame).toEqual(temporaryPose)
     overlay.destroy()
   })
 
   it('splits an existing curve into two arcs in the temporary waypoint preview', () => {
     const overlay = createMotionOverlay(host, {
-      onDrop: () => null,
       onActivateRole: () => undefined,
       onPathActivate: () => undefined,
       onPathChange: () => undefined,
@@ -219,6 +218,7 @@ describe('motion overlay', () => {
     const authoredControl = { x: 170, y: 20 }
     const authoredPath = createMotionArcPath(sourceCenter, authoredControl, targetCenter)
     expect(authoredPath).toBeDefined()
+    const temporaryPose = { ...frame, x: 120, y: 80 }
     overlay.setSegments([segmentFixture({
       sourceKeyframeId: 'source-kf',
       targetKeyframeId: 'target-kf',
@@ -227,13 +227,11 @@ describe('motion overlay', () => {
       control: authoredControl,
       path: authoredPath,
       isTemporary: true,
+      posePreview: true,
+      selectionGeometry: resolveMotionGeometryPose(temporaryPose),
+      splitProgress: 0.5,
     })])
-    const temporaryPose = { ...frame, x: 120, y: 80 }
     overlay.setSelection(temporaryPose, true)
-
-    const moveZone = host.querySelector<HTMLElement>('[data-motion-move-zone]')!
-    moveZone.dispatchEvent(pointerEvent('pointerdown', temporaryPose.x, temporaryPose.y))
-    moveZone.dispatchEvent(pointerEvent('pointermove', temporaryPose.x + 20, temporaryPose.y + 10))
 
     expect(host.querySelector<SVGPathElement>('[data-motion-path-active]')?.getAttribute('d')).toContain('A')
     expect(host.querySelector<SVGPathElement>('[data-motion-path-inactive]')?.getAttribute('d')).toContain('A')
@@ -243,7 +241,6 @@ describe('motion overlay', () => {
   it('moves the median control and the visible path during the drag, before release', () => {
     const changes: Array<{ control: { x: number; y: number }; path?: string }> = []
     const overlay = createMotionOverlay(host, {
-      onDrop: () => null,
       onActivateRole: () => undefined,
       onPathActivate: () => undefined,
       onPathChange: (change) => changes.push(change),
@@ -288,7 +285,6 @@ describe('motion overlay', () => {
       path: pathValue,
     }
     const overlay = createMotionOverlay(host, {
-      onDrop: () => null,
       onActivateRole: () => undefined,
       onPathActivate: () => undefined,
       onPathChange: (change) => changes.push(change),
@@ -316,7 +312,7 @@ describe('motion overlay', () => {
     overlay.destroy()
   })
 
-  it('shares bordered affine geometry between the path, its ghosts and the movement surface', () => {
+  it('shares bordered affine geometry between the path and its ghosts', () => {
     const borderedFrame: SelectionFrameValue = {
       x: 100,
       y: 80,
@@ -352,7 +348,6 @@ describe('motion overlay', () => {
       path: pathValue,
     }
     const overlay = createMotionOverlay(host, {
-      onDrop: () => null,
       onActivateRole: () => undefined,
       onPathActivate: () => undefined,
       onPathChange: () => undefined,
@@ -363,12 +358,6 @@ describe('motion overlay', () => {
       { id: 'bordered-source', keyframeId: 'bordered-source', geometry: borderedGeometry, chainDistance: 0 },
       { id: 'bordered-target', keyframeId: 'bordered-target', geometry: targetGeometry, chainDistance: 0 },
     ])
-
-    const moveZone = host.querySelector<HTMLElement>('[data-motion-move-zone]')!
-    expect(moveZone.style.left).toBe(`${currentGeometry.borderFrame.x}px`)
-    expect(moveZone.style.top).toBe(`${currentGeometry.borderFrame.y}px`)
-    expect(moveZone.style.width).toBe(`${currentGeometry.borderFrame.width}px`)
-    expect(moveZone.style.height).toBe(`${currentGeometry.borderFrame.height}px`)
 
     const sourceGhost = host.querySelector<HTMLElement>('[data-motion-ghost="source"]')!
     expect(sourceGhost.style.left).toBe(`${borderedGeometry.borderFrame.x}px`)
@@ -383,7 +372,6 @@ describe('motion overlay', () => {
   it('keeps both distinct endpoint ghosts visible and delegates endpoint clicks', () => {
     const roles: string[] = []
     const overlay = createMotionOverlay(host, {
-      onDrop: () => null,
       onActivateRole: (role) => roles.push(role),
       onPathActivate: () => undefined,
       onPathChange: () => undefined,
@@ -408,7 +396,6 @@ describe('motion overlay', () => {
     const roles: string[] = []
     const keyframes: string[] = []
     const overlay = createMotionOverlay(host, {
-      onDrop: () => null,
       onActivateRole: (role) => roles.push(role),
       onActivateKeyframe: (keyframeId) => keyframes.push(keyframeId),
       onPathActivate: () => undefined,
@@ -436,7 +423,11 @@ describe('motion overlay', () => {
 
   it('drops obsolete keyframe identities when reusable ghost parts leave the projection', () => {
     const store = createMotionGeometryStore()
-    const overlay = mountMotionOverlay(host, { onDrop: () => null }, store)
+    const overlay = mountMotionOverlay(host, {
+      onActivateRole: () => undefined,
+      onPathActivate: () => undefined,
+      onPathChange: () => undefined,
+    }, store)
     const ghosts: MotionOverlayGhost[] = [
       { id: 'first', keyframeId: 'first-kf', geometry: segment.sourceGeometry, chainDistance: 0 },
       { id: 'last', keyframeId: 'last-kf', geometry: segment.targetGeometry, chainDistance: 0 },
@@ -455,7 +446,6 @@ describe('motion overlay', () => {
   it('hides the endpoint ghost occupied by the live pose', () => {
     const roles: string[] = []
     const overlay = createMotionOverlay(host, {
-      onDrop: () => null,
       onActivateRole: (role) => roles.push(role),
       onPathActivate: () => undefined,
       onPathChange: () => undefined,
@@ -484,7 +474,6 @@ describe('motion overlay', () => {
 
   it('matches equivalent endpoint headings across the -180/180 degree boundary', () => {
     const overlay = createMotionOverlay(host, {
-      onDrop: () => null,
       onActivateRole: () => undefined,
       onPathActivate: () => undefined,
       onPathChange: () => undefined,
@@ -506,7 +495,6 @@ describe('motion overlay', () => {
 
   it('renders inactive paths as translucent, non-interactive artefacts without extra medians', () => {
     const overlay = createMotionOverlay(host, {
-      onDrop: () => null,
       onActivateRole: () => undefined,
       onPathActivate: () => undefined,
       onPathChange: () => undefined,
@@ -546,7 +534,6 @@ describe('motion overlay', () => {
   it('renders every item keyframe ghost with a chain-distance colour and click target', () => {
     const activated: string[] = []
     const overlay = createMotionOverlay(host, {
-      onDrop: () => null,
       onActivateRole: () => undefined,
       onActivateKeyframe: (keyframeId) => activated.push(keyframeId),
       onPathActivate: () => undefined,
@@ -596,7 +583,6 @@ describe('motion overlay', () => {
   it('keeps the first pose as a route-level ghost without duplicating the active source', () => {
     let initialActivations = 0
     const overlay = createMotionOverlay(host, {
-      onDrop: () => null,
       onActivateRole: () => undefined,
       onActivateInitial: () => { initialActivations += 1 },
       onPathActivate: () => undefined,

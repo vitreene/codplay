@@ -1,7 +1,7 @@
 # Dedit — moteur de panneaux de palette : plan de conception
 
 > Le raccordement au player et au cadre décrit par les anciens plans est
-> remplacé par le plan V2 actif [`2026-09-01-editor-v2-organization-plan.md`](./2026-09-01-editor-v2-organization-plan.md).
+> remplacé par la [spécification d’intégration V2](../specs/editor-v2-integration-spec.md).
 > Ce document ne doit pas être relu comme une instruction de créer un pont V1;
 > il conserve uniquement le plan du moteur de panneaux et de son rendu.
 

@@ -241,16 +241,19 @@ describe('marker tracks / markers', () => {
   it('addMarker / moveMarker (propagates to attached keyframes) / removeMarker (detaches)', () => {
     const s0 = scene([item('t1', { keyframes: [{ id: 'kf-1', timeMs: 0, decorId: 'd1', markerId: 'm1' }] })])
     s0.markerTracks['mt1'] = { id: 'mt1', label: 'x', visible: true, markers: [{ id: 'm1', timeMs: 0, label: 'M1' }] }
+    s0.contents.voice = { id: 'voice', type: 'media', cues: [{ id: 'cue-1', timeMs: 250, text: 'Mot' }] }
 
     let s = commands.moveMarker(s0, { markerId: 'm1', timeMs: 500 })
     expect(s.markerTracks['mt1']!.markers[0]!.timeMs).toBe(500)
     expect(s.items[0]!.keyframes[0]!.timeMs).toBe(500)
+    expect(s.contents.voice?.cues).toEqual([{ id: 'cue-1', timeMs: 250, text: 'Mot' }])
 
     s = commands.removeMarker(s, { markerId: 'm1' })
     expect(s.markerTracks['mt1']!.markers).toHaveLength(0)
     expect(s.items[0]!.keyframes[0]!.markerId).toBeUndefined()
     expect(s.items[0]!.keyframes[0]!).not.toHaveProperty('markerId')
     expect(s.items[0]!.keyframes[0]!.timeMs).toBe(500)
+    expect(s.contents.voice?.cues).toEqual([{ id: 'cue-1', timeMs: 250, text: 'Mot' }])
   })
 })
 

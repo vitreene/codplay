@@ -15,7 +15,7 @@ CodPlay possède la résolution et la présentation du mouvement ; le bridge
 adapte les intentions et les coordonnées ; les overlays présentent les artefacts.
 `snapshot.get()` exclut la preview et `presentation.get()` fournit la pose numérique.
 
-Sources relues : [organisation V2](../2026-09-01-editor-v2-organization-plan.md),
+Sources relues : [intégration Editor V2](../../specs/editor-v2-integration-spec.md),
 [orientation](../../specs/path-tangent-orientation-spec.md), plans mouvement et
 [builder Decor](../2026-09-04-decor-builder-projection-plan.md), contrats de
 [façade](../../../codplay/specs/facade-v2-spec.md),

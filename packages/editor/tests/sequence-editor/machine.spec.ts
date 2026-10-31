@@ -59,6 +59,48 @@ function baseScene(items: Item[] = []): EditorScene {
 }
 
 describe('sequenceEditorMachine — keyframes émettent des commandes, ne mutent plus scene localement', () => {
+  it('snaps keyframes to fixed source cues and movable author markers without storing a cue attachment', () => {
+    const scene = baseScene([elementItem('t1', {
+      keyframes: [{ id: 'kf-origin', timeMs: 1000, decorId: 'decor-init' }],
+    })])
+    scene.contents.voice = {
+      id: 'voice',
+      type: 'media',
+      cues: [{ id: 'cue-word', timeMs: 1250, text: 'bonjour' }],
+    }
+    scene.markerTracks['mt1'] = {
+      id: 'mt1',
+      label: 'Repères',
+      visible: true,
+      markers: [{ id: 'marker-1', timeMs: 2000, label: 'Pause' }],
+    }
+    const actor = actorWithScene(scene)
+    const batches = collectCommands(actor)
+    const { snapGrid } = actor.getSnapshot().context
+
+    expect(snapGrid).toEqual([
+      { timeMs: 1000, kind: 'keyframe', sourceId: 'kf-origin' },
+      { timeMs: 1250, kind: 'cue-start', sourceId: 'cue-word' },
+      { timeMs: 2000, kind: 'marker', sourceId: 'marker-1' },
+    ])
+    expect(applySnapToMs(1240, snapGrid, 10)).toBe(1250)
+    expect(applySnapToMs(1990, snapGrid, 10)).toBe(2000)
+
+    actor.send({ type: 'DRAG.START_KEYFRAME', trackId: 't1', keyframeId: 'kf-origin' })
+    actor.send({ type: 'DRAG.MOVE', pointerMs: 1240 })
+    expect(actor.getSnapshot().context.interaction).toMatchObject({ kind: 'dragging-keyframe', currentMs: 1250 })
+    actor.send({ type: 'DRAG.END' })
+
+    expect(batches[0]).toEqual([{
+      name: 'moveKeyframe',
+      args: { itemId: 't1', keyframeId: 'kf-origin', timeMs: 1250 },
+    }])
+    expect(batches[0]?.[0]).not.toHaveProperty('args.markerId')
+    expect(actor.getSnapshot().context.scene.contents.voice?.cues).toEqual([
+      { id: 'cue-word', timeMs: 1250, text: 'bonjour' },
+    ])
+  })
+
   it('KEYFRAME.ADD hérite le décor initial au premier KF, avec le timeMs snappé/clampé, sans toucher scene', () => {
     const actor = actorWithScene(baseScene([elementItem('t1')]))
     const batches = collectCommands(actor)

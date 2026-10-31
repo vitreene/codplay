@@ -1,12 +1,11 @@
 # Éditeur — persistance SQLite locale
 
-**Statut : En cours.** Cadrage accepté le 28 octobre 2026. Étapes 1 à 5
-réalisées. Round-trip automatisé, parcours navigateur SQLite, typecheck et
-build validés. L’étape 6 reste ouverte pour appliquer le comportement convenu
-cues/marqueurs. La suite complète garde un échec de présentation déjà suivi
-dans le plan Remix/historique. La
-[spécification vérifiée](./2026-10-28-editor-sqlite-persistence-spec.md)
-décrit le stockage actuellement livré.
+**Statut : Terminé et vérifié (2026-10-31).** Les six étapes sont réalisées.
+Le round-trip SQLite, le parcours navigateur, les cues fixes de leur source,
+le snap commun cues/marqueurs, les tests, le typecheck et le build sont vérifiés.
+La [spécification](./2026-10-28-editor-sqlite-persistence-spec.md) décrit le
+stockage livré ; le contrat temporel est dans la
+[spécification Sequence Editor V2](../specs/sequence-editor-v2-cues-markers-spec.md).
 Ce chantier remplace le stockage provisoire `localStorage` après sauvegarde du
 modèle auteur courant. Il reste séparé de la reconstruction Remix et ne modifie
 aucun fichier de `packages/codplay`.
@@ -86,7 +85,7 @@ validée par le modèle Editeur au chargement et au commit.
 | 3. Ajouter le dépôt de documents | `sqlite-editor-scene-persistence.ts` | Chargement complet et sauvegarde transactionnelle ; la révision attendue empêche d’écraser une version plus récente. | Réalisée ; round-trip et conflit testés. |
 | 4. Ajouter le serveur local | API, `editor-http-server.ts`, script Editor et proxy Vite | Routes catalogue/chargement/sauvegarde et démarrage local. Le stockage de fichiers et les routes d’import/lecture média suivent avec le chantier import, sur le circuit Elcé. | Réalisée ; parcours local vérifié. |
 | 5. Remplacer le provisoire | `browser-entry.tsx`, routeur, layout/menu et façade de persistance | L’application charge et sauvegarde via SQLite et le cache XState ; l’adaptateur `localStorage` et sa clé sont retirés, sans migration. | Réalisée ; Undo/Redo et rechargement vérifiés. |
-| 6. Valider et documenter | tests existants, build/typecheck, specs Editor | Round-trip exact des scènes, capsules, zones référencées par décor, contenus, KFs et historique ; aucun changement CodPlay. Documenter seulement les comportements vérifiés. | Persistance vérifiée ; comportement cues/marqueurs convenu mais à appliquer dans le chantier auteur/timeline. La suite globale garde l’échec suivi au plan Remix. |
+| 6. Valider et documenter | tests existants, build/typecheck, specs Editor | Round-trip exact des scènes, capsules, zones référencées par décor, contenus, KFs et historique ; aucun changement CodPlay. Documenter seulement les comportements vérifiés. | Réalisée le 31 octobre : suite Editor 533/533, typecheck/build et round-trip vérifiés. La timeline partage le snap ; la cue reste fixe avec sa source, le marqueur auteur reste mobile et seul lui porte l’attache persistante `markerId`. Voir la [specification temporelle V2](../specs/sequence-editor-v2-cues-markers-spec.md). |
 
 ## Critères d’acceptation
 
@@ -113,15 +112,15 @@ validée par le modèle Editeur au chargement et au commit.
   `EditorScene.rootCapsule` et `Content.mediaId`. L’assignation de zone reste
   portée par `Decor.zoneId`; les spans restent dans la zone. Le round-trip
   modèle/SQLite est couvert par `tests/app/persistence/sqlite-editor-scene-persistence.spec.ts`.
-- `MarkerTrack` et `Cue` restent sous leurs propriétaires actuels ; les
-  timestamps des sources ne sont pas copiés dans une projection de marqueurs.
-  La décision utilisateur les traite comme le même mécanisme de repérage et
-  d’ancrage ; le dépôt conserve leurs payloads actuels sans créer de seconde
-  représentation. Le document-modèle existant décrit encore des rôles distincts
-  et devra être réconcilié quand le comportement commun sera implémenté.
+- `MarkerTrack` et `Cue` gardent leurs propriétaires et structures distincts.
+  Les deux types alimentent le même snap grid ; la cue est un point fixe issu
+  du `Content`, tandis que le marqueur peut être déplacé et entraîner les KFs
+  qui lui sont attachés. Les tests du chemin de drag et de `moveMarker` couvrent
+  cette distinction dans la [spécification temporelle V2](../specs/sequence-editor-v2-cues-markers-spec.md).
 - Le catalogue média est partagé par la collection de scènes locale ; les
   octets FileStorage, l’API d’import/lecture et la résolution d’URL stable sont
   dans le chantier import suivant. Il n’existe pas encore de modèle `Project`.
 
-Le plan reste `En cours` jusqu’à la réconciliation du contrat cues/marqueurs
-avec la spécification du modèle et la validation complète du chantier.
+Le stockage de fichiers et la résolution des médias restent au chantier
+d’import suivant, comme défini dans la spécification ; ils ne font pas partie
+de cette tranche de persistance documentaire.

@@ -1,7 +1,7 @@
 # Plan (esquisse) — Refonte de l'interface dedit en shadcn
 
 > Ce plan ne porte que le rendu visuel. Pour l'intégration player/cadre, il est
-> supersédé par [`../2026-09-01-editor-v2-organization-plan.md`](../2026-09-01-editor-v2-organization-plan.md) :
+> supersédé par la [spécification d’intégration V2](../../specs/editor-v2-integration-spec.md) :
 > l'entrée `selection-frame/v2` est déjà raccordée par `decor-editor-bridge`.
 > Le point « Pont position » ci-dessous n'est donc plus une action à réaliser.
 

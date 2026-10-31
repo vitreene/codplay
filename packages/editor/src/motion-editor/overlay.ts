@@ -9,7 +9,6 @@ import {
   motionPathPointAtProgress,
   sameFramePose,
   splitMotionPath,
-  translateFrame,
   type MotionGeometryPose,
   type MotionPoint,
 } from './geometry'
@@ -55,19 +54,12 @@ export type MotionOverlayGhost = Readonly<{
   isInitial?: boolean
 }>
 
-export type MotionDrop = Readonly<{
-  sourceFrame: SelectionFrameValue
-  targetFrame: SelectionFrameValue
-}>
-
 export type MotionPathChange = Readonly<{
   control: MotionPoint
   path?: string
 }>
 
 export interface MotionOverlayCallbacks {
-  /** Called when the single movement-surface gesture is released with a meaningful displacement. */
-  onDrop: (drop: MotionDrop) => MotionOverlaySegment | null
   /** Called when the user clicks one of the two persisted pose ghosts. */
   onActivateRole: (role: MotionOverlayRole) => void
   /** Called when the user clicks a persisted ghost outside the active segment. */
@@ -80,8 +72,6 @@ export interface MotionOverlayCallbacks {
   onPathChange: (change: MotionPathChange) => void
   /** Called when the selected incoming path's orientation option changes. */
   onPathOrientationChange?: (enabled: boolean) => void
-  /** Called when Escape cancels an unreleased movement-surface trace. */
-  onDrawCancel?: () => void
 }
 
 export interface MotionOverlayHandle {
@@ -91,14 +81,7 @@ export interface MotionOverlayHandle {
   destroy: () => void
 }
 
-type DragState = Readonly<{
-  kind: 'move' | 'control'
-  pointerId: number
-  startClientX: number
-  startClientY: number
-  baseFrame?: SelectionFrameValue
-  baseGeometry?: MotionGeometryPose
-}>
+type DragState = Readonly<{ pointerId: number }>
 
 /** Mounts one reusable, document-agnostic motion overlay into a scene host. */
 export function createMotionOverlay(
@@ -136,23 +119,6 @@ export function createMotionOverlay(
   const initialGhost = createGhost(doc, 'initial')
   root.append(sourceGhost, targetGhost, initialGhost)
 
-  const moveZone = doc.createElement('div')
-  // Keep the historical selector as a compatibility marker only. This is one full-frame movement
-  // surface; it is not a central-vs-border split and no second border zone is mounted.
-  moveZone.dataset.motionMoveZone = ''
-  moveZone.dataset.motionCentral = ''
-  moveZone.style.position = 'absolute'
-  moveZone.style.boxSizing = 'border-box'
-  moveZone.style.pointerEvents = 'auto'
-  moveZone.style.touchAction = 'none'
-  moveZone.style.cursor = 'grab'
-  moveZone.style.background = 'transparent'
-  moveZone.style.border = '1px solid transparent'
-  // The former 12px central routing remains dormant: the movement surface covers the whole pose.
-  moveZone.style.clipPath = 'none'
-  moveZone.style.zIndex = '1'
-  root.appendChild(moveZone)
-
   const control = doc.createElement('button')
   control.type = 'button'
   control.dataset.motionPathControl = ''
@@ -168,8 +134,9 @@ export function createMotionOverlay(
   control.style.background = '#111827'
   control.style.pointerEvents = 'auto'
   control.style.cursor = 'crosshair'
-  control.style.zIndex = '4'
-  root.appendChild(control)
+  // These controls sit above the Selection Frame so its body can own movement without masking
+  // the trajectory-specific editing affordances at an interpolated pose.
+  control.style.zIndex = '1101'
 
   const orientationButton = doc.createElement('button')
   orientationButton.id = 'editor-motion-path-orientation'
@@ -179,7 +146,7 @@ export function createMotionOverlay(
   orientationButton.setAttribute('aria-pressed', 'false')
   orientationButton.style.position = 'absolute'
   orientationButton.style.display = 'none'
-  orientationButton.style.zIndex = '1051'
+  orientationButton.style.zIndex = '1102'
   orientationButton.style.transform = 'translate(-50%, 0)'
   orientationButton.style.boxSizing = 'border-box'
   orientationButton.style.width = '28px'
@@ -210,22 +177,18 @@ export function createMotionOverlay(
   tangentIcon.append(tangentCurve, tangentLine)
   orientationButton.appendChild(tangentIcon)
 
-  host.append(root, orientationButton)
+  host.append(root, control, orientationButton)
 
   let selectionGeometry: MotionGeometryPose | null = null
-  let selectionEnabled = false
   let segment: MotionOverlaySegment | null = null
   let segments: MotionOverlaySegment[] = []
   let ghosts: MotionOverlayGhost[] = []
   let initialFrame: SelectionFrameValue | null = null
   const inactivePaths = new Map<string, SVGPathElement>()
   const keyframeGhosts = new Map<string, HTMLElement>()
-  let drawing = false
   let suspended = false
   let drag: DragState | null = null
-  let moveGesture: GestureSessionHandle | null = null
   let controlGesture: GestureSessionHandle | null = null
-  let draftTargetFrame: SelectionFrameValue | null = null
   let draftControl: MotionPoint | null = null
 
   /** Keeps the orientation button from activating path selection or scene gestures. */
@@ -252,21 +215,6 @@ export function createMotionOverlay(
     return { x: event.clientX - bounds.left, y: event.clientY - bounds.top }
   }
 
-  /** Returns the frame that owns the movement surface. */
-  function activeFrame(): SelectionFrameValue | null {
-    // Once a segment exists, the currently active pose can be either endpoint. During a second
-    // movement drag the source is the pose captured by this gesture, not necessarily the segment's
-    // original source. Keeping that distinction here makes repeated intra-capsule moves compose
-    // without silently drawing from the first keyframe again.
-    if (drawing) return drag?.baseFrame ?? selectionGeometry?.frame ?? segment?.sourceGeometry.frame ?? null
-    // The bridge owns the displayed item/CS pose. Every gesture starts from that same frame,
-    // including at a real endpoint; authored segment geometry is only a missing-selection fallback.
-    if (selectionGeometry !== null) return selectionGeometry.frame
-    if (segment?.role === 'source') return segment.sourceGeometry.frame
-    if (segment?.role === 'target') return segment.targetGeometry.frame
-    return null
-  }
-
   /** Resolves the runtime anchor center for one segment endpoint. */
   function sourcePathAnchorFor(segment: MotionOverlaySegment): MotionPoint {
     return segment.sourceGeometry.pathAnchor
@@ -275,22 +223,6 @@ export function createMotionOverlay(
   /** Resolves the runtime anchor center for one segment endpoint. */
   function targetPathAnchorFor(segment: MotionOverlaySegment): MotionPoint {
     return segment.targetGeometry.pathAnchor
-  }
-
-  /** Translates the shared content and border geometry alongside a movement preview. */
-  function draftGeometryFor(frame: SelectionFrameValue): MotionGeometryPose | null {
-    const baseFrame = drag?.baseFrame
-    const baseGeometry = drag?.baseGeometry ?? selectionGeometry
-    if (baseGeometry === null || baseGeometry === undefined) return null
-    if (baseFrame === undefined) return baseGeometry
-    const dx = frame.x - baseFrame.x
-    const dy = frame.y - baseFrame.y
-    return {
-      ...baseGeometry,
-      frame,
-      borderFrame: { ...baseGeometry.borderFrame, x: baseGeometry.borderFrame.x + dx, y: baseGeometry.borderFrame.y + dy },
-      pathAnchor: { x: baseGeometry.pathAnchor.x + dx, y: baseGeometry.pathAnchor.y + dy },
-    }
   }
 
   /** Applies one frame pose to an overlay element without inspecting a player DOM node. */
@@ -303,43 +235,15 @@ export function createMotionOverlay(
     element.style.transform = `rotate(${frame.rotate ?? 0}deg) scale(${frame.scaleX ?? 1}, ${frame.scaleY ?? 1})`
   }
 
-  /** Renders the one full-frame movement surface over the active pose. */
-  function renderMoveZone(): void {
-    const activeGeometry = drawing
-      ? drag?.baseGeometry ?? selectionGeometry
-      : selectionGeometry
-        ?? (segment?.role === 'source' ? segment.sourceGeometry : segment?.targetGeometry)
-    if (activeGeometry === null || activeGeometry === undefined || !selectionEnabled || suspended) {
-      moveZone.style.display = 'none'
-      return
-    }
-    const frame = activeGeometry.borderFrame
-    moveZone.style.display = ''
-    moveZone.style.left = `${frame.x}px`
-    moveZone.style.top = `${frame.y}px`
-    moveZone.style.width = `${Math.max(0, frame.width)}px`
-    moveZone.style.height = `${Math.max(0, frame.height)}px`
-    moveZone.style.padding = '0'
-    moveZone.style.transformOrigin = `${(frame.rotationOrigin?.fx ?? 0.5) * 100}% ${(frame.rotationOrigin?.fy ?? 0.5) * 100}%`
-    moveZone.style.transform = `rotate(${frame.rotate ?? 0}deg) scale(${frame.scaleX ?? 1}, ${frame.scaleY ?? 1})`
-    // At an interpolated pose the trajectory median can coincide with the visible item. The
-    // movement surface must win that hit-test so a drag creates the middle KF; the path control
-    // remains mounted and keeps its normal priority on real KF poses.
-    moveZone.style.zIndex = segment?.isTemporary === true ? '5' : '1'
-    moveZone.style.cursor = drawing ? 'grabbing' : 'grab'
-  }
-
   /** Returns the route that will exist after a temporary middle-of-segment drop is committed. */
   function renderSegments(): MotionOverlaySegment[] {
-    const waypointFrame = drawing ? draftTargetFrame : segment?.posePreview ? selectionGeometry?.frame ?? null : null
+    const waypointFrame = segment?.posePreview ? selectionGeometry?.frame ?? null : null
     if (waypointFrame === null || segment?.isTemporary !== true) return segments
     const activeIndex = segments.findIndex((candidate) => candidate.active !== false)
     if (activeIndex < 0) return segments
 
     const sourceCenter = sourcePathAnchorFor(segment)
-    const draftGeometry = drawing
-      ? draftGeometryFor(waypointFrame)
-      : segment.selectionGeometry ?? selectionGeometry
+    const draftGeometry = segment.selectionGeometry ?? selectionGeometry
     if (draftGeometry === null || draftGeometry === undefined) return segments
     const draftCenter = draftGeometry.pathAnchor
     const targetCenter = targetPathAnchorFor(segment)
@@ -476,7 +380,7 @@ export function createMotionOverlay(
         ? motionGhostOpacity(ghost.chainDistance, kind === 'initial')
         : '1'
       element.style.pointerEvents = isCurrentPose ? 'none' : 'auto'
-      element.style.display = drawing || isCurrentPose || overlapsActive ? 'none' : ''
+      element.style.display = isCurrentPose || overlapsActive ? 'none' : ''
     }
 
     // The public overlay API still accepts a single segment for isolated callers and older tests.
@@ -503,8 +407,8 @@ export function createMotionOverlay(
       targetGhost.style.zIndex = '3'
       sourceGhost.style.pointerEvents = sourceIsCurrentPose ? 'none' : 'auto'
       targetGhost.style.pointerEvents = targetIsCurrentPose ? 'none' : 'auto'
-      sourceGhost.style.display = drawing || sourceIsCurrentPose ? 'none' : ''
-      targetGhost.style.display = drawing || targetIsCurrentPose ? 'none' : ''
+      sourceGhost.style.display = sourceIsCurrentPose ? 'none' : ''
+      targetGhost.style.display = targetIsCurrentPose ? 'none' : ''
       usedElements.add(sourceGhost)
       usedElements.add(targetGhost)
     }
@@ -521,7 +425,7 @@ export function createMotionOverlay(
       initialGhost.style.zIndex = '2'
       initialGhost.style.opacity = initialOverlapsActive ? '1' : motionGhostOpacity(1, true)
       initialGhost.style.pointerEvents = initialIsCurrentPose ? 'none' : 'auto'
-      initialGhost.style.display = drawing || initialOverlapsActive || initialIsCurrentPose ? 'none' : ''
+      initialGhost.style.display = initialOverlapsActive || initialIsCurrentPose ? 'none' : ''
       usedElements.add(initialGhost)
     }
 
@@ -547,60 +451,43 @@ export function createMotionOverlay(
     renderInactivePaths(renderedSegments)
 
     const activeRenderedSegment = renderedSegments.find((candidate) => candidate.active !== false)
-    const splitPreview = (drawing || segment?.posePreview === true) && segment?.isTemporary === true && activeRenderedSegment !== undefined
+    const splitPreview = segment?.posePreview === true && segment.isTemporary === true && activeRenderedSegment !== undefined
     const sourceFrame = splitPreview
       ? activeRenderedSegment.sourceGeometry.frame
-      : drawing
-        ? drag?.baseFrame ?? selectionGeometry?.frame ?? segment?.sourceGeometry.frame ?? null
-        : segment?.sourceGeometry.frame ?? selectionGeometry?.frame
+      : segment?.sourceGeometry.frame ?? selectionGeometry?.frame
     const targetFrame = splitPreview
       ? activeRenderedSegment.targetGeometry.frame
-      : drawing ? draftTargetFrame : segment?.targetGeometry.frame
+      : segment?.targetGeometry.frame
     renderGhosts()
     if (sourceFrame === null || targetFrame === null || targetFrame === undefined) {
       path.style.display = 'none'
       control.style.display = 'none'
-      renderMoveZone()
       return
     }
 
-    if (segment === null && !drawing) {
+    if (segment === null) {
       path.style.display = 'none'
       control.style.display = 'none'
-      renderMoveZone()
       return
     }
-    const draftGeometry = drawing ? draftGeometryFor(targetFrame) : selectionGeometry
-    const draftAnchor = draftGeometry?.pathAnchor ?? null
+    const previewGeometry = splitPreview ? activeRenderedSegment.targetGeometry : selectionGeometry
+    const previewAnchor = previewGeometry?.pathAnchor ?? null
     const source = splitPreview && activeRenderedSegment !== undefined
       ? sourcePathAnchorFor(activeRenderedSegment)
-      : drawing && segment !== null && segment.role === 'source'
-        ? draftAnchor
-        : segment === null
-          ? selectionGeometry?.pathAnchor ?? null
-          : sourcePathAnchorFor(segment)
+      : sourcePathAnchorFor(segment)
     const target = splitPreview && activeRenderedSegment !== undefined
       ? targetPathAnchorFor(activeRenderedSegment)
-      : drawing && segment !== null && segment.role === 'source'
-        ? targetPathAnchorFor(segment)
-        : drawing
-          ? draftAnchor
-          : segment === null
-            ? draftAnchor
-            : targetPathAnchorFor(segment)
-    if (source === null || target === null) {
+      : targetPathAnchorFor(segment)
+    if (source === null || target === null || (splitPreview && previewAnchor === null)) {
       path.style.display = 'none'
       control.style.display = 'none'
-      renderMoveZone()
       return
     }
     const authoredControlPoint = splitPreview
       ? activeRenderedSegment.control
-      : drawing
-        ? draftControl ?? midpoint(source, target)
-      : drag?.kind === 'control' && draftControl !== null
+      : drag !== null && draftControl !== null
         ? draftControl
-        : segment?.control ?? midpoint(source, target)
+        : segment.control ?? midpoint(source, target)
     const displayControlPoint = motionPathPointAtProgress(source, authoredControlPoint, target, 0.5)
     const displayPath = createDisplayArcPath(source, authoredControlPoint, target)
       ?? `M ${formatCoordinate(source.x)} ${formatCoordinate(source.y)} L ${formatCoordinate(target.x)} ${formatCoordinate(target.y)}`
@@ -609,13 +496,13 @@ export function createMotionOverlay(
     path.setAttribute('d', displayPath)
     path.dataset.motionPathActive = ''
     path.style.opacity = '1'
-    control.style.display = drawing || segment !== null ? '' : 'none'
+    control.style.display = ''
     // The visible median is a path marker, not the raw authoring handle. It therefore remains on
     // the canonical curve at 50% traversal even when the three-point circle's authoring point is
     // not itself the arc midpoint.
     control.style.left = `${displayControlPoint.x - 6}px`
     control.style.top = `${displayControlPoint.y - 6}px`
-    if (!suspended && !drawing && segment?.path !== undefined) {
+    if (!suspended && segment.path !== undefined) {
       const aligned = segment.orientToPath === true
       orientationButton.setAttribute('aria-pressed', String(aligned))
       orientationButton.style.color = aligned ? '#fbbf24' : '#e5e7eb'
@@ -625,115 +512,38 @@ export function createMotionOverlay(
       orientationButton.style.left = `${displayControlPoint.x}px`
       orientationButton.style.top = `${displayControlPoint.y + 13}px`
     }
-    moveZone.style.display = drawing || selectionEnabled ? '' : 'none'
-    renderMoveZone()
   }
 
-  /** Begins either the movement trace or the path-control edit. */
-  function beginDrag(kind: DragState['kind'], event: PointerEvent): DragState | null {
+  /** Begins a path-control edit without taking ownership of item movement. */
+  function beginControlDrag(event: PointerEvent): DragState | null {
     if (suspended) return null
-    if (kind === 'move') {
-      const frame = activeFrame()
-      if (!selectionEnabled || frame === null) return null
-      event.preventDefault()
-      event.stopPropagation()
-      const geometry = segment === null
-        ? selectionGeometry
-        : segment.role === 'source'
-          ? segment.sourceGeometry
-          : segment.role === 'target'
-            ? segment.targetGeometry
-            : selectionGeometry
-      if (geometry === null || geometry === undefined) return null
-      drawing = true
-      draftTargetFrame = frame
-      draftControl = midpoint(geometry.pathAnchor, geometry.pathAnchor)
-      const baseGeometry = segment?.isTemporary === true
-        ? segment.selectionGeometry ?? selectionGeometry
-        : segment?.role === 'source'
-          ? segment.sourceGeometry
-          : segment?.role === 'target'
-            ? segment.targetGeometry
-            : selectionGeometry ?? undefined
-      const next = {
-        kind,
-        pointerId: event.pointerId,
-        startClientX: event.clientX,
-        startClientY: event.clientY,
-        baseFrame: frame,
-        ...(baseGeometry === undefined || baseGeometry === null ? {} : { baseGeometry }),
-      }
-      drag = next
-      render()
-      return next
-    }
     if (segment === null) return null
     event.preventDefault()
     event.stopPropagation()
-    const next = { kind, pointerId: event.pointerId, startClientX: event.clientX, startClientY: event.clientY }
+    const next = { pointerId: event.pointerId }
     drag = next
     return next
   }
 
-  /** Updates an in-memory trace; no document or player mutation occurs here. */
+  /** Updates the path-control candidate without touching the selected item pose. */
   function moveDrag(event: PointerEvent, session: DragState): void {
     if (drag !== session || session.pointerId !== event.pointerId) return
-    if (session.kind === 'move') {
-      const base = session.baseFrame
-      if (base === undefined) return
-      const dx = event.clientX - drag.startClientX
-      const dy = event.clientY - drag.startClientY
-      draftTargetFrame = translateFrame(base, dx, dy)
-      const movingGeometry = draftGeometryFor(draftTargetFrame)
-      if (movingGeometry === null) return
-      const stationaryAnchor = segment?.role === 'source'
-        ? segment.targetGeometry.pathAnchor
-        : segment?.sourceGeometry.pathAnchor
-      if (stationaryAnchor !== undefined) draftControl = midpoint(stationaryAnchor, movingGeometry.pathAnchor)
-      render()
-      return
-    }
     const point = localPoint(event)
     draftControl = point
     render()
   }
 
-  /** Completes one trace, delegating persistence to the bridge only after pointer release. */
+  /** Commits one path-control edit or discards it on pointer cancellation. */
   function endDrag(current: DragState, apply: boolean, event: PointerEvent | null): void {
     if (drag !== current) return
     drag = null
-    if (current.kind === 'control') {
-      if (apply && segment !== null && draftControl !== null) {
-        const source = sourcePathAnchorFor(segment)
-        const target = targetPathAnchorFor(segment)
-        const pathValue = createMotionArcPath(source, draftControl, target)
-        callbacks.onPathChange({ control: draftControl, ...(pathValue === undefined ? {} : { path: pathValue }) })
-      }
-      draftControl = null
-      render()
-      return
+    if (apply && segment !== null && draftControl !== null && event !== null) {
+      const source = sourcePathAnchorFor(segment)
+      const target = targetPathAnchorFor(segment)
+      const pathValue = createMotionArcPath(source, draftControl, target)
+      callbacks.onPathChange({ control: draftControl, ...(pathValue === undefined ? {} : { path: pathValue }) })
     }
-    const base = current.baseFrame
-    const target = draftTargetFrame
-    drawing = false
-    draftTargetFrame = null
     draftControl = null
-    if (!apply || base === undefined || target === null || event === null
-      || Math.hypot(event.clientX - current.startClientX, event.clientY - current.startClientY) < 3) {
-      callbacks.onDrawCancel?.()
-      render()
-      return
-    }
-    const created = callbacks.onDrop({ sourceFrame: base, targetFrame: target })
-    if (created === null) {
-      callbacks.onDrawCancel?.()
-      render()
-      return
-    }
-    segment = created
-    const activeSegment = { ...created, active: true }
-    segment = activeSegment
-    segments = [activeSegment, ...segments.filter((candidate) => candidate.active === false)]
     render()
   }
 
@@ -790,22 +600,8 @@ export function createMotionOverlay(
     if (keyframeId !== undefined) callbacks.onActivateKeyframe?.(keyframeId)
   }
   const onDoubleClick = (event: MouseEvent): void => resetControl(event)
-  const onKeyDown = (event: KeyboardEvent): void => {
-    if (event.key !== 'Escape' || !drawing) return
-    event.preventDefault()
-    // This Escape belongs to the in-flight trace. Prevent the app-level Escape shortcut from
-    // clearing the selection after the trace has been cancelled.
-    event.stopImmediatePropagation()
-    moveGesture?.abort()
-  }
-
-  moveGesture = bindGestureSession<DragState>(moveZone, {
-    onStart: (event) => beginDrag('move', event),
-    onMove: moveDrag,
-    onEnd: endDrag,
-  })
   controlGesture = bindGestureSession<DragState>(control, {
-    onStart: (event) => beginDrag('control', event),
+    onStart: beginControlDrag,
     onMove: moveDrag,
     onEnd: endDrag,
   })
@@ -816,10 +612,8 @@ export function createMotionOverlay(
   sourceGhost.addEventListener('click', onSourceClick)
   targetGhost.addEventListener('click', onTargetClick)
   initialGhost.addEventListener('click', onInitialClick)
-  doc.addEventListener('keydown', onKeyDown, { capture: true })
   const unsubscribeGeometry = geometry.subscribe((projection: MotionGeometryProjection) => {
     selectionGeometry = projection.selection?.geometry ?? null
-    selectionEnabled = projection.selection?.enabled ?? false
     ghosts = [...projection.ghosts]
     initialFrame = projection.initialGhost
     const activeIndex = projection.segments.findIndex((candidate) => candidate.active !== false)
@@ -838,9 +632,7 @@ export function createMotionOverlay(
     },
     destroy(): void {
       unsubscribeGeometry()
-      moveGesture?.unbind()
       controlGesture?.unbind()
-      moveGesture = null
       controlGesture = null
       control.removeEventListener('dblclick', onDoubleClick)
       orientationButton.removeEventListener('click', onOrientationClick)
@@ -849,9 +641,9 @@ export function createMotionOverlay(
       sourceGhost.removeEventListener('click', onSourceClick)
       targetGhost.removeEventListener('click', onTargetClick)
       initialGhost.removeEventListener('click', onInitialClick)
-      doc.removeEventListener('keydown', onKeyDown, { capture: true })
       clearInactivePaths()
       root.remove()
+      control.remove()
       orientationButton.remove()
     },
   }

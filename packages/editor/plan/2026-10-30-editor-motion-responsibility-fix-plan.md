@@ -1,6 +1,6 @@
 # Correction des responsabilités mouvement
 
-**Statut : En cours — correctifs appliqués et vérifiés ; acceptation rAF naturelle reste ouverte. Aucun fichier CodPlay modifié.**
+**Statut : Fini — correctifs ciblés et acceptation navigateur complétés le 31 octobre 2026. Aucun fichier CodPlay modifié.**
 
 **Unités — portée confirmée par l’utilisateur.** Données auteur, palette et
 sauvegarde restent en cqw. Les mesures physiques restent à la frontière DOM ;
@@ -33,7 +33,7 @@ aucune valeur auteur n’est convertie ou persistée en pixels.
 | --- | --- | --- |
 | `motion-editor/easing.ts`, validation builder | Parseur ACE unique et diagnostic avant scène partielle | Appliqué ; [contrat](../specs/motion-easing-spec.md) |
 | `builder-v2`, `item-presentation`, `scene-player-bridge.ts` | Un perso natif par item ; conversion commune, aucune translation issue du décor | Appliqué ; [contrat et preuves](../specs/item-presentation-spec.md) |
-| `decor-editor-bridge.ts`, géométrie et insets | Un état/patch, pas de fusion ni de cache d’endpoints alimenté par sélection ; dimensions de contenu du snapshot | Appliqué ; [orientation](../specs/path-tangent-orientation-spec.md) |
+| `decor-editor-bridge.ts`, géométrie et insets | Un état/patch, pas de fusion ni de cache d’endpoints alimenté par sélection ; dimensions de contenu du snapshot ; réinitialiser le segment dérivé au chargement d’un document | Appliqué ; [orientation](../specs/path-tangent-orientation-spec.md) |
 | `editor-coordination-bridge.ts` | Retrait du détour `durée − 2 ms` ; fin adoptée par le transport existant | Appliqué ; tests et horloge publique navigateur |
 | `motion-editor/overlay.ts` | Retirer l’identité KF des parts de ghost réutilisables absentes de la projection courante ; éviter une adresse périmée après reload/changement de segment | Appliqué ; régression ciblée verte |
 | `builder-v2`, `scene-player-bridge.ts`, coordination | Pour un endpoint CSS absent, garder la cascade auteur/app prioritaire, sinon mesurer une fois le style calculé de l’objet natif à sa pose initiale et réutiliser cette valeur dans le tween ACE générique | Appliqué ; [contrat et preuves](../specs/decor-style-interpolation-spec.md) |
@@ -51,17 +51,19 @@ aucune valeur auteur n’est convertie ou persistée en pixels.
    à 0,59 px, y compris pour le ghost courant.
 
 
-## Acceptation restante
+## Acceptation rAF Safari — validée le 31 octobre
 
-1. **Play rAF naturel Safari.** Rejouer la fixture des ponts Editor de 0 à 5 s,
-   pause, Seek terminal répété, Stop et replay dans un onglet visible. Le dernier
-   essai retourne `document.hidden === true`, temps 0, puis timeout. L’horloge
-   publique `engine.advance` vérifie le player et le présentateur réels, mais
-   ne clôt pas cette porte. Aucun autre navigateur/app ni visibilité simulée.
+Dans Safari Technology Preview visible, le fixture réel des ponts Editor
+[`tangent-editing.html`](../tests/browser/tangent-editing.html) a été joué de
+0 à 5 s avec l’horloge rAF naturelle (`document.hidden === false`). Play/Pause
+arrête la tête à 384 ms ; elle reste stable après 500 ms. Deux Seek au terminal
+conservent la même pose et le même style de cadre ; Stop répété revient à 0 ;
+le replay naturel atteint de nouveau 5 s. L’écart item/CS maximal observé est
+0,207. Le fixture n’utilise pas la persistance SQLite.
 
-## Preuves au 30 octobre
+## Preuves consolidées au 31 octobre
 
-- Editor : **48 fichiers, 519 tests**, typecheck et build réussis ; avertissement
+- Editor : **49 fichiers, 527 tests**, typecheck et build réussis ; avertissement
   de taille du bundle conservé. `git diff -- packages/codplay` est vide.
 - CodPlay, suites ciblées existantes : **8 fichiers, 100 tests** réussis
   (composants, matérialisation, motion, média et parent/enfant/reparent).
@@ -74,12 +76,25 @@ aucune valeur auteur n’est convertie ou persistée en pixels.
   `engine.advance` ; Safari rapporte `document.hidden === true`.
 - Safari, ponts Editor : rotation/pivot/resize/bordure/déplacement/insertion,
   couleur, Undo/Redo, rechargement JSON et Stop répété ; item/CS et ghosts courants < 0,59 px à
-  1328 × 775, 1100 × 780 et 1024 × 775. Insertion tournée : raccord 0,188°,
-  item/CS 0,397 px. Ces fixtures n’écrivent pas dans SQLite.
+  1328 × 775, 1100 × 780 et 1024 × 775. Après rééquilibrage des rayons ACE,
+  la scène initiale garde un raccord de 0,1074° et l’insertion tournée de 20°
+  un raccord de 0,0681°, 0,0681° et 0,0701° aux trois viewports. Play rAF
+  traverse le KF à chaque taille, page visible. Ces fixtures n’écrivent pas
+  dans SQLite.
 - Après retrait des identifiants périmés, Safari valide les parcours `editing`
   (17 contrôles) et `decor` (4 contrôles) dans le fixture des ponts Editor ; les
   ghosts exposés correspondent à la projection courante et l’écart item/CS
   maximal mesuré est 0,584 px.
+- Safari, promotion après chargement : un KF décor est promu en pose, puis un
+  document avec les mêmes IDs est chargé et la promotion est répétée. Le bridge
+  repart du path du nouveau document ; preview et commit restent à moins de
+  0,02 unité CSS d’écart.
+- Safari, ghosts : chaque ghost des trois KFs pose de la fixture est vérifié à
+  son temps auteur contre l’item présenté ; l’écart maximal est inférieur à
+  0,21 unité CSS.
+- Le bloc texte `Tangent test` de ce fixture reçoit aussi le centrage horizontal
+  et vertical du décor initial ; Safari confirme ses styles calculés (`center`,
+  `flex`, `center`, `center`) après rechargement et pendant le replay.
 - La fixture de ponts comptait encore deux KFs pose dans ses assertions après
   l’ajout d’une troisième pose et d’un KF décor indépendant. Ses comptages sont
   alignés sur la scène réellement construite ; les seuils géométriques restent
@@ -112,7 +127,7 @@ seek à `1 250 ms` : décor cible `8cqw`, décor source absent, snapshot et styl
 natif `4cqw`. Le contrat complet et ses limites sont dans la
 [spécification d'interpolation](../specs/decor-style-interpolation-spec.md).
 
-Au 31 octobre, la suite Editor passe à **48 fichiers, 521 tests** ; typecheck,
+Au 31 octobre, la suite Editor passe à **49 fichiers, 525 tests** ; typecheck,
 build Vite et `git diff --check` passent. La console Safari ne rapporte aucune
 erreur ou alerte pendant le parcours. La mesure physique reste à la frontière
 DOM et n'entre pas dans les données auteur, la palette ou la sauvegarde.

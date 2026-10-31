@@ -122,6 +122,35 @@ describe('editor V2 motion path adapter', () => {
       root,
       mountTargets: [{ id: 'root-host', kind: 'root', storyId: EDITOR_V2_STORY_ID }],
     })
+    const readMotionFrame = () => instance.presentation.get()?.items.find((entry) => entry.itemId === 'story-main:item')
+    /** Resolves the presented visual centre from ACE's affine pose. */
+    const centerOf = (pose: NonNullable<ReturnType<typeof readMotionFrame>>['pose']) => ({
+      x: pose.origin.x + (pose.matrix.a * pose.localWidth + pose.matrix.c * pose.localHeight) / 2,
+      y: pose.origin.y + (pose.matrix.b * pose.localWidth + pose.matrix.d * pose.localHeight) / 2,
+    })
+
+    await instance.telco.seek(built.preRollMs)
+    const sourceFrame = readMotionFrame()
+    expect(sourceFrame).toBeDefined()
+    if (sourceFrame === undefined) return
+    const sourceCenter = centerOf(sourceFrame.pose)
+    await instance.telco.seek(500 + built.preRollMs)
+    const middleFrame = readMotionFrame()
+    expect(middleFrame).toBeDefined()
+    if (middleFrame === undefined) return
+    const middleCenter = centerOf(middleFrame.pose)
+    await instance.telco.seek(1_000 + built.preRollMs)
+    const targetFrame = readMotionFrame()
+    expect(targetFrame).toBeDefined()
+    if (targetFrame === undefined) return
+    const targetCenter = centerOf(targetFrame.pose)
+    const chordCenter = {
+      x: (sourceCenter.x + targetCenter.x) / 2,
+      y: (sourceCenter.y + targetCenter.y) / 2,
+    }
+
+    expect(Math.hypot(middleCenter.x - chordCenter.x, middleCenter.y - chordCenter.y)).toBeGreaterThan(1)
+
     await instance.telco.seek(999 + built.preRollMs)
     const beforeMiddle = instance.presentation.get()?.items.find((entry) => entry.itemId === 'story-main:item')
     await instance.telco.seek(1_000 + built.preRollMs)

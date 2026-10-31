@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="fr" id="block-test-document">
+  <head id="block-test-head">
+    <meta charset="UTF-8" />
+    <title>Block creation integration</title>
+    <style>
+      #block-test-body { margin:0;background:#111827;color:#f8fafc;font:14px system-ui,sans-serif; }
+      #block-test-page { max-width:72.5rem;margin:0 auto;padding:1rem; }
+      #block-test-controls { display:flex;flex-wrap:wrap;gap:0.5rem;margin:0.75rem 0; }
+      #block-test-controls button { padding:0.5rem 0.75rem; }
+      #block-test-status { display:block;min-height:2em;margin:0.5rem 0;font:0.75rem ui-monospace,monospace; }
+      #block-test-layout { display:grid;grid-template-columns:minmax(0,1fr) 17.5rem;gap:0.5rem; }
+      #block-test-scene { width:100%;aspect-ratio:16/9;overflow:hidden; }
+      #block-test-palette { min-width:0;overflow:auto; }
+      #block-test-palette .dedit-palette { position:static;width:auto;margin:0.5rem; }
+      #block-test-timeline { grid-column:1 / -1;height:13.75rem;min-width:0;overflow:hidden; }
+    </style>
+  </head>
+  <body id="block-test-body">
+    <main id="block-test-page">
+      <header id="block-test-header">
+        <h1 id="block-test-title">Validation du tracé de bloc</h1>
+        <p id="block-test-instructions">Choisir le mode, démarrer le tracé, puis faire glisser sur la scène. Cette fixture conserve le document en mémoire.</p>
+      </header>
+      <section id="block-test-controls" aria-label="Commandes de validation">
+        <button id="block-test-mode-transform" type="button">Mode libre</button>
+        <button id="block-test-mode-grid" type="button">Mode grille</button>
+        <button id="block-test-start" type="button">Démarrer le tracé</button>
+        <button id="block-test-cancel" type="button">Annuler le tracé</button>
+        <button id="block-test-undo" type="button">Annuler le bloc</button>
+        <button id="block-test-redo" type="button">Rétablir le bloc</button>
+      </section>
+      <output id="block-test-status" aria-live="polite">Initialisation…</output>
+      <section id="block-test-layout">
+        <section id="block-test-scene" aria-label="Scène de création"></section>
+        <aside id="block-test-palette" aria-label="Décor du bloc"></aside>
+        <section id="block-test-timeline" aria-label="Timeline"></section>
+      </section>
+    </main>
+    <script type="module">
+      import * as fixture from './block-creation-fixture.ts'
+      document.getElementById('block-test-page').testApi = fixture
+      await fixture.mountFixture()
+    </script>
+  </body>
+</html>

@@ -1,6 +1,6 @@
 # Plan V2 — éditeur de mouvement
 
-**Statut : En cours — P0, P1, P3-C, P4 et P5 implémentés ; P4 doit encore être réaligné sur la forme auteur `move` relue ; P2 mouvement/ghosts avancé, correction des ghosts P2-F ouverte, P2-D et P2-E en cours, P6 en validation partielle**
+**Statut : En cours — P0, P1, P3-C, P4, P5, P2-D et P2-E implémentés et vérifiés ; correction des ghosts P2-F ouverte, P6 en validation partielle**
 **Cible :** `ed2` avec la façade CodPlay V2
 **Périmètre :** déplacement d’un item à l’intérieur de sa capsule parente, sans
 reparentage ; cette tranche ouvre aussi la mise en cohérence ciblée du
@@ -58,6 +58,13 @@ Le CS porte un seul geste d’édition. La séparation centrale/bord de 12 px
 est neutralisée pour cette version ; le module est conservé, dormant et
 réutilisable.
 
+**Décision acceptée — déplacement sur KF réel.** Le body du Selection Frame
+porte le déplacement et son preview de l’item via `snapshot.set`, au premier
+comme au dernier KF. L’overlay de mouvement reste propriétaire des chemins,
+ghosts et du contrôle de courbe ; il ne déplace pas l’item et ne monte pas une
+seconde surface de déplacement. Le déplacement intermédiaire conserve la
+preview des deux segments via la projection du Selection Frame.
+
 | Contexte du playhead | Opération documentaire |
 | --- | --- |
 | Sur un KF réel, y compris le dernier | Mettre à jour le canal correspondant de ce KF au même `timeMs` (copy-on-write si nécessaire). Une édition de décor enrichit un KF `pose` existant ; un geste de pose promeut un KF `decor` existant. Ne pas créer ni remplacer de KF. |
@@ -82,7 +89,7 @@ Le geste peut partir d’une pose temporaire ou interpolée : `isTemporary` n’
 pas un verrou de lecture. La capture devient persistante lors de la création du
 KF ou du commit de la mise à jour de son décor.
 
-### 2.2.1 Deux canaux temporels pour un item (P2-E — En cours)
+### 2.2.1 Deux canaux temporels pour un item (P2-E — Fixe)
 
 Un item peut porter deux canaux de keyframes, sans devenir une interface à la
 After Effects où chaque propriété aurait sa propre piste :
@@ -264,6 +271,32 @@ atteignent le KF associé et le chemin actif rejoint les centres visuels de ses
 deux poses adjacentes. Les résultats restent stables après reload, Seek, Play,
 Stop et resize.
 
+**Contrôle Safari du 31 octobre — défaut non reproduit.** Après rechargement à
+froid, la scène persistée `Nouvelle scène` passe les seeks à 0, 2,4, 2,988,
+4,4 et 5 s ; les ghosts restent ancrés entre les KFs, les clics ciblent 2,988
+et 5 s, Play naturel puis Stop restituent les poses, et le resize 1328→1100→1328
+reprojette la même chaîne. La révision SQLite reste 46. `Scène de travail` ne
+fournit pas de reproduction valide : ses deux KFs de pose à 0 s font échouer la
+création du player ACE (`duration doit etre un nombre strictement positif`).
+Aucun défaut de géométrie n’étant reproduit sur la scène valide, aucune
+correction Editor n’est appliquée. P2-F reste `En cours` jusqu’à reproduction
+sur une scène valide qui expose l’écart signalé.
+
+**Reprise partielle du 31 octobre — absence d’écriture à requalifier.** Une
+nouvelle série de seeks sur `Nouvelle scène` confirme les poses des ghosts à
+0, 2,988, 4 et 5 s ; leurs transformations inline restent ancrées entre les
+KFs, et les clics vérifiés rejoignent les KFs intermédiaire et final. Le
+`transform: none` calculé par Safari pour le ghost masqué à 0 s est un effet de
+`display: none` : sa transformation inline `76,695°` correspond au cadre
+actif. En revanche, la révision est passée de 46 à 50 avec quatre `PUT` pendant
+la séquence. Safari n’a pas fourni leurs corps ; le GET final montre encore
+les quatre KFs d’origine et les valeurs auteur relevées au départ, mais la
+porte d’absence d’écriture n’est pas validée pour cette reprise. Ne pas
+attribuer ces écritures à un seek ou au clic d’un ghost sans preuve. L’onglet
+étant masqué, Play naturel n’a pas été rejoué. Aucun correctif géométrique
+n’est justifié par ces mesures ; isoler l’origine des écritures avant de
+clôturer P2-F.
+
 ### 2.4.2 Rotation auteur et pose tangentielle pendant les gestes (En cours)
 
 **Reprise du 30 octobre — acceptée :** corriger ensemble les écarts ghost/bordure,
@@ -319,7 +352,23 @@ tangente. Un ghost d’endpoint orienté présente la même rotation que cet end
 runtime, et un ghost courant coïncide avec l’item et se masque. Aucun parcours ne
 change les KFs autres que celui visé.
 
-### 2.5 Cohérence du décor interpolé et édition au playhead (P2-D — En cours)
+**Amélioration du raccord tangent demandée le 31 octobre — Fixée.** La
+fixture garde `width/height: 20/12 cqw` sans tween de dimensions ; la variation
+de l’encombrement visuel vient de la bordure déclarée (`0,6 → 2 → 2,75 cqw`)
+et de la rotation tangentielle. Le changement améliore le raccord demandé dans
+`motion-editor/geometry.ts` en sélectionnant d’abord les rayons quantifiés qui
+réduisent l’écart de tangente parmi les couples qui gardent chaque tangente
+d’extrémité à moins de `1°` ; le tracé échantillonné reste à moins de `1,25`
+unité de projection. La même préparation ACE reste l’unique référence ; aucun
+changement CodPlay.
+
+**Acceptation vérifiée :** 19 tests de géométrie et 527 tests Editor, typecheck
+et build passent. Safari valide la route initiale à `0,1074°` et une insertion
+réelle tournée de 20° à `0,0681°`, `0,0681°` et `0,0701°` sur les trois
+viewports ; le Play rAF naturel traverse le KF page visible. La spécification
+de tangente est alignée. Aucun code CodPlay n’a changé.
+
+### 2.5 Cohérence du décor interpolé et édition au playhead (P2-D — Fixe)
 
 - Après un `Seek`, l'interface `dedit` doit refléter le même état logique que l'item
   présenté au temps auteur courant, pour toute valeur de `Decor` que l'état résolu
@@ -440,13 +489,14 @@ Ordre d'exécution de la tranche P2-D :
 | P0 — Contrat | Fixe | Contrat validé pour cette tranche : vie capsule, KF au playhead, mise à jour du décor et transition unique. La validation native reste une porte distincte. |
 | P1 — Domaine pur | Fixe | Résolveurs purs et testables de vie réelle/virtuelle, alignement exact/entre KFs et fenêtre bornée ajoutés et utilisés par la projection des bornes de timeline ; le branchement de la fenêtre sur la projection/runtime reste réservé à P4. Aucun DOM, player ou document mutable. |
 | P2 — Adaptateur CS | En cours | Un geste exact met à jour le décor du KF au même temps ; un geste entre KFs matérialise au playhead, puis réédite ce KF sans doublon. Pendant ce geste intermédiaire, l’overlay prévisualise déjà la coupure `A → C → B` qui sera commitée. Toute propriété du décor reste capturable ; overlay et ghosts restent hors document. Le rendu des ghosts et leur interactivité existent, mais l’utilisateur constate que leurs poses projetées sont fausses : cette projection n’est pas acceptée comme terminée. Voir P2-F. La validation native et les cas encore hors tranche maintiennent P2 ouvert. |
-| P2-F — Correction des ghosts | En cours | Reproduire aux KFs auteur, diagnostiquer l’écart dans le circuit existant `DecorEditorBridge` → `MotionEditorOverlay`, corriger ce circuit et vérifier pose, ciblage et stabilité par tests d’intégration et Safari MCP. Le nettoyage des identifiants de KF sur les parts DOM réutilisées hors projection est appliqué et vérifié ; les portes restantes restent la validation native complète de P6. Porte : chaque ghost correspond à son KF auteur ; au KF, objet et CS coïncident avec lui ; les ghosts restent ancrés pendant l’interpolation et leurs clics atteignent le bon KF. Aucun changement documentaire lors de Play/Seek/Stop/resize. |
-| P2-D — Interface décor au temps interpolé | En cours | Implémentation et tests réalisés : snapshot réellement présenté après `seekApplied`, projection ouverte vers `DecorPatch`, base complète séparée du registre générique, outline immédiat et matérialisation d’un KF sparse. L’action de retrait reste une évolution d’interface non imposée dans cette tranche. Porte restante : validation native complète des gestes et clôture P2 ; aucun changement core implicite. |
-| P2-E — Deux canaux timeline pose/décor | En cours | Contrat implémenté dans le modèle, les commandes, le builder, le bridge, la machine et le rendu : lecture legacy sans `channel` comme `pose`, écritures nouvelles explicites, chaîne spatiale limitée aux KFs `pose`, chaîne décor alimentée par les KFs `decor` et les KFs `pose` qui portent du décor, promotion sans doublon et rendu d’une seule ligne avec séparation uniquement lorsque les deux canaux existent. Un KF de pose créé ou promu par mouvement capture la pose affine complète ; le patch décor reste sparse et ouvert aux propriétés futures. Tests ciblés et suite éditeur verts ; validation native Safari reste la porte de clôture. |
+| P2-F — Correction des ghosts | En cours | Le défaut géométrique n’est pas reproduit sur `Nouvelle scène` : les seeks à 0, 2,988, 4 et 5 s gardent les ghosts ancrés ; le `transform: none` lu à 0 s venait du ghost masqué, dont la transformation inline correspond au cadre actif. Le contrôle initial à la révision 46 a vérifié Play/Stop/resize. Une reprise partielle ultérieure a enregistré 4 `PUT` et atteint la révision 50 ; leurs corps sont inaccessibles et la porte d’absence d’écriture n’est pas validée pour cette reprise. `Scène de travail` reste invalide (deux KFs pose à 0 s, création ACE refusée). Aucun correctif de géométrie n’est justifié ; isoler les écritures et attendre une reproduction valide de l’écart signalé. Le nettoyage des identifiants de KF reste appliqué et testé. |
+| P2-G — Déplacement des KFs extrêmes | Fixe | Le déplacement et le preview passent par le body du Selection Frame et son `snapshot.set`; `MotionEditorOverlay` ne monte plus de surface de mouvement. Les tests vérifient premier/dernier KF, même KF au commit, promotion intermédiaire, Escape et point de contrôle. Safari MCP vérifie le déplacement effectif au premier/dernier KF (écart preview item/CS < 0,006 unité CSS, 4 KFs après commit), ainsi que le ciblage du contrôle de courbe et du bouton tangente à 1,5 s et l’édition du path. La suite Editor (49 fichiers, 526 tests), le typecheck, le build et `git diff --check` passent. Le parcours composite `runRegressionChecks('editing')` a expiré après 30 s dans un onglet `document.hidden === true`; les appels ciblés ont fourni l’acceptation événementielle, sans revendiquer une lecture rAF naturelle. |
+| P2-D — Interface décor au temps interpolé | Fixe | Implémentation et tests réalisés : snapshot réellement présenté après `seekApplied`, projection ouverte vers `DecorPatch`, base complète séparée du registre générique, outline immédiat et matérialisation d’un KF sparse. Safari vérifie l’édition de `border-radius` absent à la source et son interpolation après Seek retour, ainsi qu’un KF décor sparse à 1 500 ms sans couper le path pose. La matrice native complète et la suite Editor passent ; l’action de retrait reste une évolution d’interface non imposée dans cette tranche. |
+| P2-E — Deux canaux timeline pose/décor | Fixe | Contrat implémenté dans le modèle, les commandes, le builder, le bridge, la machine et le rendu : lecture legacy sans `channel` comme `pose`, écritures nouvelles explicites, chaîne spatiale limitée aux KFs `pose`, chaîne décor alimentée par les KFs `decor` et les KFs `pose` qui portent du décor, promotion sans doublon et rendu d’une seule ligne avec séparation uniquement lorsque les deux canaux existent. Safari vérifie les losanges des deux canaux, l’édition sparse sans changement de trajectoire, la promotion pose et la réinitialisation du path actif au chargement d’un document qui réutilise les mêmes IDs. La suite Editor et la matrice native passent. |
 | P3-A — Audit SE existant | Fixe | Audit statique terminé : capsule racine et capsules explicites, 0/1/2 KFs réels, bornes virtuelles, affichage, matérialisation et absence d’écriture lors de Play/Seek/resize sont distingués. |
 | P3-B — Contrat SE | Fixe | Contrat validé après l’audit statique : valeurs spéciales, KF réel d’apparition + sortie virtuelle, transition unique, point facultatif et plateau. |
 | P3-C — Implémentation SE | Fixe | Les champs optionnels absents sont omis lors de la création d’un KF et retirés lors de l’effacement du nom, d’une transition ou d’un marqueur. Les tests de commandes et le test `RUN_COMMAND → TempEditorScenePersistence` passent (25 tests ciblés) ; le contrôle strict des valeurs JSON reste inchangé. La validation native reste P6. |
-| P4 — Builder/runtime | En cours | Compilation vers le graphe CodPlay V2 existant, `Decor.path` cible préparé par ACE et `PresentationFrame` commune à Play/Seek. Une rotation numérique cible sans valeur source explicite interpole depuis l'identité `0°`, sans densifier le décor auteur ; le test d'intégration vérifie le snapshot et le rendu à mi-transition. Le builder émet `reparent` et ne sérialise ni `traversal` ni `pathAnchor` ; CodPlay applique les defaults internes `arc-length`/`center`. Aucun `{to}` sans `from`, aucun `Move` structurel. Safari à `3,1 s` confirme l'item et le CS à `28,07°`, puis `41°` au KF2. **Point à reprendre avant clôture :** la scène persistée révèle une concurrence entre la compensation `x/y` de bordure et `move.path`. La suppression conditionnelle ajoutée au Builder reste une piste, pas un contrat : établir son raccord à la projection géométrique partagée et valider la transaction ainsi que son replay Undo/Redo. |
+| P4 — Builder/runtime | Fixe | ACE garde `move.path` comme propriétaire de la trajectoire. Les tweens `x/y` du même événement décrivent les endpoints auteur capturés ; ils ne sérialisent aucune compensation de bordure. La bordure suit son action `decor` et la projection bordée reste dans le composant Editor. Les tests combinent une bordure active pendant un path, la frame runtime hors de la corde, et le replay du path/endpoints après commit, Undo et Redo. Safari sur `Nouvelle scène`, révision 46 : seeks à 1,5 s, 2,7 s et 2,988 s gardent item et CS centrés à moins de 0,1 unité CSS ; la révision ne change pas. Aucun patch CodPlay ni suppression des endpoints `x/y`. |
 | P5 — Persistance | Fixe | Copy-on-write du décor cible, sérialisation, suppression/réordonnancement, capsules imbriquées et diagnostics de données invalides vérifiés. La validation native reste P6. |
 | P6 — Validation native | En cours | Sur Safari MCP, après rechargement de `localhost:5174`, la scène SQLite est restaurée à la révision `16` et l’éditeur est visible (`document.hidden === false`). Play avance la tête et l’objet après chargement à froid. Au Seek à `2,2 s`, l’objet suit la courbe : sa pose `(225,93 ; 115,76)` diffère de la corde `(237,50 ; 117,78)` ; le détour `2,2 → 4,2 → 2,2 s` restitue la même matrice. Stop après lecture ramène l’UI à `0` et l’objet à sa pose initiale, sans changer la révision SQLite. Un fixture temporaire à trois KFs, avec les ponts Scene et Decor réels, place objet et CS à `(480, 480)` avec rotation `90°` au dernier KF. Le saut de `24,37 px` signalé précédemment a été corrigé avant ces vérifications et ne réapparaît pas. La validation native du drag/double-clic reste ouverte car le relais MCP ne les expose pas ; le décalage de `0,46 px` entre les coins du content-box et du CS reste à qualifier. |
 
@@ -497,12 +547,15 @@ la projection géométrique des ghosts, ni l’arborescence, ni la persistance.
 Voir la [spécification dédiée](../specs/path-tangent-orientation-spec.md) et
 les [preuves](notes/2026-10-29-editor-path-playback-analysis.md).
 
-**P4 — base typographique responsive (En cours).** Le décor initial des items
-texte reçoit `font-size: 3cqw`, valeur déjà employée par le preset « Étiquette ».
-Les scènes chargées dont cette valeur manque la matérialisent dans `initialDecor`
-avant le build, afin que les keyframes interpolent dans l’unité responsive du
-projet sans reprendre la taille héritée en pixels de l’hôte. La vérification du
-cas de la scène utilisateur reste à faire.
+**P4 — base typographique responsive (Fixe).** Le décor initial des items texte
+reçoit `font-size: 3cqw`, valeur déjà employée par le preset « Étiquette ».
+`EditorActionsFacade.loadScene` matérialise le défaut dans `initialDecor` si les
+valeurs `style` et `custom` sont absentes, avant le build. Le test de commande
+vérifie cette normalisation et la conservation des tailles explicites ; Safari
+sur le clone de la base utilisateur trouve déjà `3cqw` dans les scènes stockées,
+puis la fixture legacy vérifie `3cqw → 8cqw` et le snapshot intermédiaire à
+`6,28cqw` au playhead de 4 s. Le défaut reste dans le décor initial et passe par
+le tween ACE existant.
 
 **P6 — fin de lecture avec bordure (En cours).** Le défaut est reproduit dans
 Safari par capture/réapplication de la pose finale : la capture actuelle décale
@@ -715,10 +768,10 @@ passent. Les gates globales de P6 restent ouvertes.
   aux propriétés futures et la séparation entre la valeur du champ et le fond visuel
   `dedit-palette--temporary`. Le registre générique des propriétés modifiées pilote
   dès cette tranche l'outline ; une action future de retrait pourra supprimer une
-  entrée et restaurer la base interpolée sans changer le contrat. Les tests purs,
-  l'intégration V2 et le build passent ; la tranche reste `En cours` jusqu'à la
-  validation native complète et la clôture P2. Aucun contrat core n'est modifié
-  sans preuve et autorisation explicite.
+  entrée et restaurer la base interpolée sans changer le contrat. Tests purs, intégration V2,
+  Safari natif, suite Editor, typecheck et build passent depuis la vérification du 31 octobre.
+  P2-D est `Fixe` ; le plan P2 reste `En cours` pour P2-F et P6. Aucun contrat core n'est
+  modifié sans preuve et autorisation explicite.
 - Correctif de couverture Decor au 2026-09-04 : le stress-test temporaire traverse le chemin
   `Decor → buildSceneDocV2 → CodPlay.build() → snapshot` pour les propriétés CSS ouvertes,
   y compris `border` et des clés futures, ainsi que `classes`, `offset`, `custom` et `path`.
@@ -772,9 +825,9 @@ passent. Les gates globales de P6 restent ouvertes.
   affiché une seule fois dans la zone basse. Un KF `decor` est affiché dans la
   zone haute lorsque les deux canaux existent, sans distinction de losange ou
   de couleur. Le modèle, le builder, le bridge, la machine et le rendu sont
-  maintenant alignés, et les tests de non-régression couvrent ce contrat ;
-  P2-E reste `En cours` uniquement jusqu’à la validation native Safari et la
-  clôture P2/P6.
+  maintenant alignés, et les tests de non-régression couvrent ce contrat. La validation native
+  Safari a été clôturée le 31 octobre ; P2-E est `Fixe`, tandis que P2 reste `En cours` pour
+  P2-F et P6.
 - Correctif rotation CS au 2026-09-04 : le `onCommit` du Selection Frame est maintenant relié au
   même chemin de geste `pose` que le déplacement. Ainsi `offset.translate` (déplacement et
   compensation de pivot), `offset.width/height` (resize), `offset.rotate` (rotation) et
@@ -806,7 +859,7 @@ passent. Les gates globales de P6 restent ouvertes.
   borne virtuelle, puis un clic natif a confirmé le KF `outro`. La création et
   le déplacement par pointeur/tablette ne sont donc pas qualifiés comme preuve
   native P6.
-- P0, P1, P3-C, P4 et P5 sont implémentés et documentés. Le plan reste `En cours`
+- P0, P1, P2-D, P2-E, P3-C, P4 et P5 sont implémentés et documentés. Le plan reste `En cours`
   jusqu’à la porte native P6 et à la clôture P2 ; aucun module n’est marqué
   `Fini` sur la seule base de tests jsdom.
 - Après chaque étape, mettre à jour la spécification concernée, le statut de ce

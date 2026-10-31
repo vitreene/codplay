@@ -44,7 +44,6 @@ export type {
 
 export { createMotionOverlay } from './overlay'
 export type {
-  MotionDrop,
   MotionOverlayCallbacks,
   MotionOverlayHandle,
   MotionOverlayRole,

@@ -435,15 +435,26 @@ function resolveQuantizedArcSplit(
     }]
   })
 
-  const best = beforeCandidates.flatMap((before) => afterCandidates.map((after) => ({
+  const pairs = beforeCandidates.flatMap((before) => afterCandidates.map((after) => ({
     before,
     after,
+    endpointError: Math.max(
+      Math.abs(angleDifference(before.start, sourceAngle)),
+      Math.abs(angleDifference(after.end, targetAngle)),
+    ),
+    tangentError: Math.abs(angleDifference(before.end, after.start)),
     score: angleDifference(before.start, sourceAngle) ** 2
       + angleDifference(before.end, after.start) ** 2 * 4
       + angleDifference(after.end, targetAngle) ** 2
       + (before.radius * sourceLength - physicalRadius) ** 2 * 0.001
       + (after.radius * targetLength - physicalRadius) ** 2 * 0.001,
-  }))).sort((left, right) => left.score - right.score)[0]
+  })))
+  const endpointAlignedPairs = pairs.filter((pair) => pair.endpointError < 1)
+  const best = endpointAlignedPairs.length === 0
+    ? pairs.sort((left, right) => left.score - right.score)[0]
+    : endpointAlignedPairs.sort((left, right) => left.tangentError - right.tangentError
+      || left.endpointError - right.endpointError
+      || left.score - right.score)[0]
 
   return best === undefined ? undefined : {
     before: best.before.path,

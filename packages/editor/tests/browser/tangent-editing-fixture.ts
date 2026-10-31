@@ -84,7 +84,7 @@ async function until(predicate: () => boolean): Promise<void> {
 /** Mounts the production editor bridges with no persistence adapter. */
 export async function mountFixture(): Promise<void> {
   actor.start()
-  actor.send({ type: 'SCENE_LOADED', scene: scene() })
+  actions.loadScene(scene())
   createScenePlayerBridge(sceneHost, actor, coordination)
   createSequenceEditorBridge(timelineHost, actor, coordination)
   createDecorEditorBridge(paletteHost, actor, coordination)
@@ -95,10 +95,86 @@ export async function mountFixture(): Promise<void> {
 /** Restores only this test's document through the normal scene loading circuit. */
 export async function resetFixture(): Promise<void> {
   const previousRoot = sceneHost.querySelector('.editor-v2-instance-root')
-  actor.send({ type: 'SCENE_LOADED', scene: scene() })
+  actions.loadScene(scene())
   await until(() => sceneHost.querySelector('.editor-v2-instance-root') !== previousRoot
     && coordination.presentation.get()?.timeMs === 0)
   await selectTime(0)
+}
+
+/** Checks a path-backed decor promotion after loading another document with the same KF identities. */
+export async function checkPromotionAfterReload() {
+  await resetFixture()
+  await selectTime(2500)
+  const seed = await rotateItem(20)
+  const previousRoot = sceneHost.querySelector('.editor-v2-instance-root')
+  actions.loadScene(scene())
+  await until(() => sceneHost.querySelector('.editor-v2-instance-root') !== previousRoot
+    && coordination.presentation.get()?.timeMs === 0)
+  await selectTime(2500)
+  await editColor('#cc4400')
+  const result = await rotateItem(20)
+  const gap = Math.max(...result.preview.frameCorners.map((point, index) =>
+    Math.hypot(point.x - result.committed.frameCorners[index]!.x, point.y - result.committed.frameCorners[index]!.y)))
+  if (gap > 1) throw new Error(`Reloaded path promotion changed the preview by ${gap}px`)
+  const seededItem = seed.committed.document?.items[0]
+  const seededKeyframe = seededItem?.keyframes.find((keyframe) => keyframe.timeMs === 2500)
+  return {
+    seededChannel: seededKeyframe?.channel,
+    seededPath: seededKeyframe === undefined || seed.committed.document === null
+      ? undefined
+      : seed.committed.document.decors[seededKeyframe.decorId]?.path,
+    preview: result.preview.frame,
+    committed: result.committed.frame,
+    gap,
+  }
+}
+
+/** Checks every pose ghost against the actual item presentation at that keyframe. */
+export async function checkPoseGhostEndpoints() {
+  await resetFixture()
+  const documentScene = readFixture().document!
+  const results: Array<{ keyframeId: string; timeMs: number; alignmentError: number; display: string }> = []
+  for (const keyframe of documentScene.items[0]!.keyframes) {
+    if (keyframe.channel === 'decor') continue
+    await selectTime(keyframe.timeMs)
+    const ghost = readFixture().ghosts.find((entry) => entry.id === keyframe.id)
+    if (ghost === undefined) throw new Error(`Pose ghost ${keyframe.id} is missing`)
+    if (ghost.alignmentError > 1 || ghost.display !== 'none') {
+      throw new Error(`Pose ghost ${keyframe.id} differs from its presented endpoint`)
+    }
+    results.push({ keyframeId: keyframe.id, timeMs: keyframe.timeMs, alignmentError: ghost.alignmentError, display: ghost.display })
+  }
+  return results
+}
+
+/** Loads a legacy text scene through the production facade and checks its responsive style tween. */
+export async function loadLegacyTextFontSize() {
+  const documentScene = scene()
+  const source = documentScene.decors['test-source']!
+  const target = documentScene.decors['test-target']!
+  source.style = { ...source.style }
+  delete source.style['font-size']
+  target.style = { ...target.style, 'font-size': '8cqw' }
+
+  const previousRoot = sceneHost.querySelector('.editor-v2-instance-root')
+  actions.loadScene(documentScene)
+  await until(() => sceneHost.querySelector('.editor-v2-instance-root') !== previousRoot
+    && coordination.presentation.get()?.timeMs === 0)
+  const sourceFontSize = actor.getSnapshot().context.scene!.decors['test-source']!.style?.['font-size']
+  await selectTime(4000)
+
+  const current = readFixture()
+  const visual = sceneHost.querySelector<HTMLElement>('[data-editor-visual-for="test-item"]')!
+  const snapshotState = current.snapshot?.states.find((entry) => entry.target.persoId === 'test-item')?.state
+  return {
+    sourceFontSize,
+    targetFontSize: current.document!.decors['test-target']!.style?.['font-size'],
+    timeMs: current.time,
+    snapshotTimeMs: current.snapshot?.timeMs,
+    snapshotState,
+    renderedFontSize: getComputedStyle(visual).fontSize,
+    inlineFontSize: visual.style.getPropertyValue('font-size'),
+  }
 }
 
 /** Loads a two-endpoint curved route for testing an inserted rotated waypoint. */
@@ -128,10 +204,14 @@ export async function testInsertedRotationWaypoint(timeMs = 3_000, degrees = 20)
   const before = readFixture()
   const edit = await rotateItem(degrees)
   const seams = await readPathTangentSeam()
-  const angles = await readTangentSeam()
+  const angles = await readTangentSeam(timeMs)
   if (edit.committed.alignmentError > 1) throw new Error(`Rotated waypoint item/CS error ${edit.committed.alignmentError}px`)
-  if (seams.joins.some((join) => Math.abs(join.jump) > 0.2)) {
+  if (seams.joins.some((join) => Math.abs(join.jump) > 0.1)) {
     throw new Error(`Rotated waypoint tangent discontinuity ${JSON.stringify(seams.joins)}`)
+  }
+  if (Math.abs(normalizeDegrees(angles.after - angles.expectedAfter)) > 0.1
+    || Math.abs(normalizeDegrees(angles.jump - angles.expectedJump)) > 0.1) {
+    throw new Error(`Rotated waypoint presentation differs from its tangent and author offset: ${JSON.stringify(angles)}`)
   }
   if (edit.committed.document!.items[0]!.keyframes.length !== 3
     || Object.values(edit.committed.document!.decors).filter((decor) => decor.path !== undefined).length !== 2) {
@@ -258,32 +338,30 @@ function domElementCorners(element: HTMLElement, corners: number[][]) {
 }
 
 /** Measures the real player rotation across the C1 path split at its middle keyframe. */
-export async function readTangentSeam() {
-  const source = { x: 20, y: 16 }
-  const control = { x: 50, y: 55 }
-  const target = { x: 80, y: 30 }
-  const originalPath = createMotionArcPath(source, control, target)!
-  const progress = 0.58
-  const waypoint = motionPathPointAtProgress(source, control, target, progress)
-  const split = splitMotionPath(originalPath, source, waypoint, target, progress)
-  const expectedBefore = motionPathTangentAngle(split.before!, source, waypoint, 1)!
-  const expectedAfter = motionPathTangentAngle(split.after!, waypoint, target, 0)!
+export async function readTangentSeam(timeMs = 3_000) {
+  const currentScene = actor.getSnapshot().context.scene!
+  const item = currentScene.items.find((candidate) => candidate.id === 'test-item')!
+  const keyframe = item.keyframes.find((candidate) => candidate.timeMs === timeMs)
+  if (keyframe === undefined) throw new Error(`No keyframe at ${timeMs}ms`)
+  const join = (await readPathTangentSeam()).joins.find((candidate) => candidate.timeMs === timeMs)
+  if (join === undefined) throw new Error(`No path join at ${timeMs}ms`)
+  const authoredRotate = currentScene.decors[keyframe.decorId]?.offset?.rotate ?? 0
   const readRotation = () => {
     const pose = coordination.presentation.get()?.items.find((item) => item.itemId === 'story-main:test-item')?.pose
     return pose === undefined ? null : Math.atan2(pose.matrix.b, pose.matrix.a) * 180 / Math.PI
   }
-  await selectTime(2999)
+  await selectTime(timeMs - 1)
   const before = readRotation()
-  await selectTime(3000)
+  await selectTime(timeMs)
   const after = readRotation()
   if (before === null || after === null) throw new Error('Tangent fixture did not publish the item pose')
   return {
     before,
     after,
     jump: normalizeDegrees(after - before),
-    expectedBefore,
-    expectedAfter,
-    expectedJump: normalizeDegrees(expectedAfter - expectedBefore),
+    expectedBefore: normalizeDegrees(join.incomingAngle + authoredRotate),
+    expectedAfter: normalizeDegrees(join.outgoingAngle + authoredRotate),
+    expectedJump: join.jump,
   }
 }
 
@@ -385,10 +463,52 @@ export async function rotateItem(degrees: number) {
     { x: pivot.x + Math.cos(angle + degrees * Math.PI / 180) * 60, y: pivot.y + Math.sin(angle + degrees * Math.PI / 180) * 60 })
 }
 
-/** Moves the production trace surface to update the current endpoint or create a waypoint. */
+/** Moves the presented item through the Selection Frame's live snapshot preview. */
 export async function moveItem(dx: number, dy: number) {
-  const from = readFixture().frameCorners[0]!
-  return gesture('[data-motion-move-zone]', from, { x: from.x + dx, y: from.y + dy })
+  const before = readFixture()
+  const corners = before.frameCorners
+  const from = {
+    x: corners.reduce((total, point) => total + point.x, 0) / corners.length,
+    y: corners.reduce((total, point) => total + point.y, 0) / corners.length,
+  }
+  const hitTarget = document.elementFromPoint(from.x, from.y)
+  if (!hitTarget?.closest('[data-selection-frame="v2"]')) {
+    throw new Error(`Selection Frame did not receive the item movement at ${before.time} ms`)
+  }
+  const result = await gesture('[data-selection-frame="v2"]', from, { x: from.x + dx, y: from.y + dy })
+  const itemCenter = (pose: ReturnType<typeof readFixture>) => ({
+    x: pose.itemCorners.reduce((total, point) => total + point.x, 0) / pose.itemCorners.length,
+    y: pose.itemCorners.reduce((total, point) => total + point.y, 0) / pose.itemCorners.length,
+  })
+  const beforeCenter = itemCenter(before)
+  const previewCenter = itemCenter(result.preview)
+  const displacement = Math.hypot(previewCenter.x - beforeCenter.x, previewCenter.y - beforeCenter.y)
+  if (displacement < 1 || result.preview.alignmentError > 1) {
+    throw new Error(`Item movement preview was not presented at ${before.time} ms: displacement ${displacement}, alignment ${result.preview.alignmentError}`)
+  }
+  return result
+}
+
+/** Edits only the dedicated path-control button and verifies that the item pose stays fixed. */
+export async function movePathControl(dx: number, dy: number) {
+  const before = readFixture()
+  const control = sceneHost.querySelector<HTMLElement>('[data-motion-path-control]')!
+  const bounds = control.getBoundingClientRect()
+  const from = { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 }
+  if (document.elementFromPoint(from.x, from.y) !== control) {
+    throw new Error(`Path-control gesture was covered at ${before.time} ms`)
+  }
+  const result = await gesture('[data-motion-path-control]', from, { x: from.x + dx, y: from.y + dy })
+  const keyframe = before.document!.items[0]!.keyframes.find((candidate) => candidate.timeMs === before.time)
+  const updatedKeyframe = result.committed.document!.items[0]!.keyframes.find((candidate) => candidate.id === keyframe?.id)
+  const pathBefore = keyframe === undefined ? undefined : before.document!.decors[keyframe.decorId]?.path
+  const pathAfter = updatedKeyframe === undefined ? undefined : result.committed.document!.decors[updatedKeyframe.decorId]?.path
+  const itemMovement = Math.max(...before.itemCorners.map((point, index) =>
+    Math.hypot(point.x - result.preview.itemCorners[index]!.x, point.y - result.preview.itemCorners[index]!.y)))
+  if (pathBefore === undefined || pathAfter === undefined || pathBefore === pathAfter || itemMovement > 1) {
+    throw new Error(`Path-control edit did not stay on its owner: path changed ${pathBefore !== pathAfter}, item moved ${itemMovement}px`)
+  }
+  return result
 }
 
 /** Resizes through the production southeast handle in the current transformed axes. */
@@ -492,7 +612,7 @@ export async function playToEnd() {
 export async function reloadDocument() {
   const documentScene = JSON.parse(JSON.stringify(actor.getSnapshot().context.scene)) as EditorScene
   const previousRoot = sceneHost.querySelector('.editor-v2-instance-root')
-  actor.send({ type: 'SCENE_LOADED', scene: documentScene })
+  actions.loadScene(documentScene)
   await until(() => sceneHost.querySelector('.editor-v2-instance-root') !== previousRoot
     && coordination.presentation.get()?.timeMs === 0)
   return readFixture()
@@ -538,6 +658,13 @@ export async function runRegressionChecks(section: 'all' | 'editing' | 'playback
   }
   if (section === 'all' || section === 'editing') {
   await resetFixture()
+  await selectTime(1_500)
+  for (const selector of ['[data-motion-path-control]', '#editor-motion-path-orientation']) {
+    const control = sceneHost.querySelector<HTMLElement>(selector)!
+    const bounds = control.getBoundingClientRect()
+    const hitTarget = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2)
+    if (!control.contains(hitTarget)) throw new Error(`Trajectory control was covered at an interpolated pose: ${selector}`)
+  }
   await selectTime(5000)
   results.push(verifyPose('target', readFixture()))
   await checkGesture('needle 30', () => rotateItem(30))
@@ -554,6 +681,10 @@ export async function runRegressionChecks(section: 'all' | 'editing' | 'playback
   }
   await selectTime(0)
   await checkGesture('source needle', () => rotateItem(45))
+  await resetFixture()
+  await selectTime(5000)
+  const pathEdit = await movePathControl(0, 24)
+  results.push(verifyPose('path-control preview', pathEdit.preview), verifyPose('path-control commit', pathEdit.committed))
   }
   if (section === 'all' || section === 'playback') {
   if (section === 'playback') {

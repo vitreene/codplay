@@ -2,7 +2,7 @@
 
 **Statut : point de reprise après la réalisation et la preuve de la première verticale V2 position/taille.**
 **Date : 2026-09-01.**  
-**Plan actif :** [`2026-09-01-editor-v2-organization-plan.md`](./2026-09-01-editor-v2-organization-plan.md)
+**Spécification actuelle :** [intégration Editor V2](../specs/editor-v2-integration-spec.md)
 
 Ce fichier est un point de reprise factuel. Les contrats normatifs restent dans
 les spécifications V2 ; les actions et leur statut restent dans le plan actif.

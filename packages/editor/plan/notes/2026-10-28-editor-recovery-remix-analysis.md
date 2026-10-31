@@ -13,8 +13,8 @@ de validation. Son intégration CodPlay V2 est avancée mais ouverte.
 | Domaine | État retrouvé | Référence |
 | --- | --- | --- |
 | Document | `EditorScene` appartient au contrôleur XState ; commandes pures et transactions constituent la voie d’écriture. | [Modèle](../app/2026-07-11-ed2-document-model.md), [façade](../../src/app/commands/facade.ts) |
-| Timeline | Module autonome, commandes émises au centre, synchronisation post-commit ; le temps auteur reste possédé par `sequence-editor`. | [Contrat SE](../2026-06-11-sequence-editor-grid-spec.md), [organisation V2](../2026-09-01-editor-v2-organization-plan.md) |
-| Décor et cadre | Palette, preview par snapshot V2, cadre de sélection et overlays raccordés ; commits par transactions centrales. | [Dedit](../2026-07-07-dedit-spec.md), [organisation V2](../2026-09-01-editor-v2-organization-plan.md) |
+| Timeline | Module autonome, commandes émises au centre, synchronisation post-commit ; le temps auteur reste possédé par `sequence-editor`. | [Contrat SE](../2026-06-11-sequence-editor-grid-spec.md), [intégration Editor V2](../../specs/editor-v2-integration-spec.md) |
+| Décor et cadre | Palette, preview par snapshot V2, cadre de sélection et overlays raccordés ; commits par transactions centrales. | [Dedit](../2026-07-07-dedit-spec.md), [intégration Editor V2](../../specs/editor-v2-integration-spec.md) |
 | Mouvement | KFs `pose`/`decor`, chemins, ghosts, capture sparse, rotation/pivot et copy-on-write présents ; P2/P2-D/P2-E/P4/P6 ouverts. | [Plan mouvement](../2026-09-02-motion-editor-v2-plan.md) |
 | Builder Decor structuré | Proposition `A relire`, non engagée ; projection de `zone` différée. | [Plan builder](../2026-09-04-decor-builder-projection-plan.md) |
 | Interface | Entrée et cinq vues React : layout, menu provisoire et trois conteneurs de modules. Chutier et vrai parcours projet restent à faire. | [Entrée](../../src/app/main.tsx), [layout](../../src/app/layout/AppLayout.tsx) |

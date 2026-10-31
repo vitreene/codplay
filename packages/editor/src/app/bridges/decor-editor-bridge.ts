@@ -696,6 +696,7 @@ export function createDecorEditorBridge(
   let displayFramePx: SelectionFrameValue | null = null
   let frameLogicalValue: SelectionFrameValue | null = null
   let frameGestureBasePx: SelectionFrameValue | null = null
+  let frameGestureCancelled = false
   /** Authored rotation offset paired with the displayed frame captured at gesture start. */
   let frameGestureBaseAuthorRotate: number | null = null
   /** Keeps a just-released CS pose authoritative while the player presentation catches up. */
@@ -925,6 +926,12 @@ export function createDecorEditorBridge(
    */
   const onKeyDown = (event: KeyboardEvent): void => {
     if (event.key !== 'Escape') return
+    if (selectionFrame?.isGestureActive()) {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      frameGestureCancelled = true
+      selectionFrame.setValue(frameGestureBasePx ?? displayFramePx)
+    }
     abortPhase()
   }
   document.addEventListener('keydown', onKeyDown, { capture: true })
@@ -1579,6 +1586,7 @@ export function createDecorEditorBridge(
     const base = frameGestureBasePx ?? displayFramePx
     const rootWidth = sceneRootWidthPx()
     if (target === null || base === null || rootWidth === null) return null
+    if (frameGestureCancelled) return frameGestureBasePx ?? displayFramePx
     if (frameGestureBasePx === null) {
       frameGestureBasePx = base
       const { scene } = machine.getSnapshot().context
@@ -1853,6 +1861,14 @@ export function createDecorEditorBridge(
 
   /** Commits every Selection Frame affine gesture through the pose-KF path immediately. */
   function commitSelectionFrameDrop(targetFrame: SelectionFrameValue): void {
+    if (frameGestureCancelled) {
+      frameGestureCancelled = false
+      frameGestureBasePx = null
+      frameGestureBaseAuthorRotate = null
+      frameCommitCandidatePx = null
+      controller.notifyInteractionEnd()
+      return
+    }
     const sourceFrame = frameGestureBasePx ?? displayFramePx
     frameCommitCandidatePx = targetFrame
     try {
@@ -1863,6 +1879,7 @@ export function createDecorEditorBridge(
       if (!snapshotCommitAwaitingPresentation) frameCommitCandidatePx = null
       frameGestureBasePx = null
       frameGestureBaseAuthorRotate = null
+      frameGestureCancelled = false
     }
     controller.notifyInteractionEnd()
   }
@@ -2047,6 +2064,7 @@ export function createDecorEditorBridge(
       onCancel: () => {
         frameGestureBasePx = null
         frameGestureBaseAuthorRotate = null
+        frameGestureCancelled = false
         abortPhase()
       },
       creation: { onCreate: commitBlockCreation },
@@ -2055,13 +2073,11 @@ export function createDecorEditorBridge(
       selectionFrame?.setValue(selection?.geometry.frame ?? null)
     })
     selectionFrame.element.style.cursor = 'move'
-    // Keep the movement surface visually and hit-test-wise below the CS layer. The frame body is
-    // intentionally transparent to pointer targeting so the full-frame movement surface can still
-    // receive the item drag; its rotation/resize/pivot children retain pointer-events: auto.
+    // The Selection Frame owns move, resize and rotation gestures. Its body receives pointer input
+    // so the presented item follows the existing snapshot preview circuit during a drag.
     selectionFrame.element.style.zIndex = '1100'
-    selectionFrame.element.style.pointerEvents = 'none'
+    selectionFrame.element.style.pointerEvents = 'auto'
     motionOverlay = createMotionOverlay(host, {
-      onDrop: commitMotionDrop,
       onActivateRole: (role) => {
         const motion = activeMotion
         if (motion === null) return
@@ -2096,7 +2112,6 @@ export function createDecorEditorBridge(
       },
       onPathChange: commitMotionPath,
       onPathOrientationChange: commitMotionPathOrientation,
-      onDrawCancel: () => undefined,
     }, motionGeometry)
     if (activeCreationMode !== null) {
       selectionFrame.setCreationMode(selectionModeFor(activeCreationMode.placementMode))
@@ -2443,6 +2458,8 @@ export function createDecorEditorBridge(
   const unsubscribeLoaded = machine.on('sceneLoaded', ({ scene }) => {
     // Un chargement de document supplante toute phase en cours — rien à committer, rien à préserver.
     cancelIdleFlush()
+    // The active segment is derived state; reload it from the new document even when IDs match.
+    activeMotion = null
     pendingCommands = null
     pendingTemporaryDecorCommit = null
     decorEditStates.clear()

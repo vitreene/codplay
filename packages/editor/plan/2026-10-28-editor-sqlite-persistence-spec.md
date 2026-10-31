@@ -1,8 +1,9 @@
 # Éditeur — persistance SQLite locale
 
 Spécification du stockage local de documents auteur `EditorScene`, vérifié le
-28 octobre 2026. Le périmètre, les décisions encore ouvertes et le suivi de
-validation restent dans le [plan SQLite](./2026-10-28-editor-sqlite-persistence-plan.md).
+31 octobre 2026. Le stockage conserve les types documentaires sous leurs
+propriétaires actuels. Le comportement de leur snap dans la timeline est décrit
+par la [spécification Sequence Editor V2](../specs/sequence-editor-v2-cues-markers-spec.md).
 
 ## Contrat
 
@@ -44,10 +45,11 @@ vérifie aussi qu'un décor qui référence un `zoneId` pointe vers une zone de 
 capsule parente correspondante. Le JSON complet du décor reste la valeur
 d'auteur faisant foi.
 
-Les payloads actuels de cues et `markerTracks` sont conservés à leur
-emplacement dans `EditorScene` ; la persistance ne crée pas de tables
-supplémentaires ni de projection de marqueurs. Cette couche conserve le modèle
-actuel sans faire évoluer le fonctionnement temporel.
+Les cues et `markerTracks` sont conservés à leur emplacement documentaire ; la
+persistance ne crée pas de tables supplémentaires ni de projection de marqueurs.
+Dans la timeline V2, une cue reste fixe avec son contenu source, tandis qu’un
+marqueur auteur peut bouger ; leur snap commun est détaillé dans la
+[spécification de timeline](../specs/sequence-editor-v2-cues-markers-spec.md).
 
 ## Serveur local et API
 
@@ -86,6 +88,6 @@ Le serveur ferme la connexion lors de son arrêt.
 - Parcours navigateur sur l'application réelle : chargement depuis SQLite,
   création, Undo/Redo persistés, retour à la scène d'origine par Undo, puis
   rechargement depuis SQLite sans erreur console.
-- Typecheck et build de `packages/editor` réussis. La suite complète conserve
-  un échec préexistant de présentation en fin de lecture, suivi séparément dans
-  le [plan Remix/historique](./2026-10-28-editor-remix-history-plan.md).
+- La suite complète de `packages/editor` passe (**533 tests sur 50 fichiers**) ;
+  typecheck et build réussis. Le build émet uniquement son avertissement de
+  taille de bundle.

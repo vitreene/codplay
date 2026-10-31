@@ -243,7 +243,7 @@ Le BDC conteneur ferait partie du document Elcé et de ses circuits d’édition
 de validation et d’historique. La scène accueillie conserverait son format et
 son propriétaire de conception. Elcé composerait son emploi dans le contenu ;
 l’éditeur de scène prendrait en charge son élaboration interne. Le
-[plan actuel du projet `editor`](../../../editor/plan/2026-09-01-editor-v2-organization-plan.md)
+[spécification d’intégration actuelle du projet `editor`](../../../editor/specs/editor-v2-integration-spec.md)
 ne constitue pas encore un circuit de publication vers un catalogue Elcé.
 
 Ces BDC peuvent être réutilisables entre mods sans devenir obligatoires dans

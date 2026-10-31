@@ -532,7 +532,7 @@ describe('V2 editor position seek integration', () => {
         actor.send({ type: 'SELECT_ITEM', itemIds: ['item'] })
         actor.send({ type: 'SEEK', timelineMs: timeMs })
         await waitTurns(32)
-        const moveZone = sceneRoot.querySelector<HTMLElement>('[data-motion-central]')
+        const moveZone = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')
         expect(moveZone).not.toBeNull()
         moveZone!.dispatchEvent(pointerEvent('pointerdown', 100, 100))
         moveZone!.dispatchEvent(pointerEvent('pointermove', 100 + dx, 100 + dy))

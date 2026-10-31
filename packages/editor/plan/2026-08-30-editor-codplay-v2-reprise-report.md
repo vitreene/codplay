@@ -1,7 +1,7 @@
 # Rapport de reprise historique — éditeur avec CodPlay V2
 
 > Ce document est un rapport de reprise historique. Il est supersédé par
-> [`2026-09-01-editor-v2-organization-plan.md`](./2026-09-01-editor-v2-organization-plan.md)
+> [la spécification d’intégration V2](../specs/editor-v2-integration-spec.md)
 > et [`2026-09-01-editor-v2-b3-reprise-report.md`](./2026-09-01-editor-v2-b3-reprise-report.md).
 > Les propositions d'une frontière de mesure dédiée ne sont pas retenues : la
 > première verticale utilise `instance.snapshot` et la racine de scène de

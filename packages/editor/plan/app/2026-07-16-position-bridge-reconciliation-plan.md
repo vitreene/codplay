@@ -2,7 +2,7 @@
 
 > **Document historique, supersédé.** Les actions de ce plan reposaient sur le
 > pont de pose V1 et ne sont plus à exécuter. Le circuit retenu est décrit dans
-> [`../2026-09-01-editor-v2-organization-plan.md`](../2026-09-01-editor-v2-organization-plan.md) :
+> [spécification d’intégration Editor V2](../../specs/editor-v2-integration-spec.md) :
 > `decor-editor-bridge` lit `instance.snapshot`, le cadre V2 échange des px
 > locaux et le commit passe par xState. Aucun pont de pose parallèle ne doit
 > être recréé.

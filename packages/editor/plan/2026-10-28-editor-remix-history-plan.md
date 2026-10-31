@@ -1,21 +1,23 @@
 # Éditeur — adaptation Remix, façades et historique
 
-**Statut : En cours — cadrage accepté pour implémentation le 28 octobre 2026 ;
-décisions 1 à 6 fixées.**
+**Statut : En cours — cadrage accepté et décisions 1 à 6 fixées. Vérification
+du 31 octobre : suite Editor 532/532 sur 50 fichiers, typecheck et build
+réussis ; le scénario de présentation terminale ancien ne se reproduit plus.
+La porte V1 de geste natif reste à fermer.**
 **État retrouvé au début du chantier, le 28 octobre 2026 :** build réussi, typecheck en échec,
 452 tests réussis et 3 échecs sur 455. La
 [note d’analyse](./notes/2026-10-28-editor-recovery-remix-analysis.md)
 porte l’inventaire, les preuves et les raisons des propositions.
 
-**Avancement au 28 octobre 2026 :** le portage applicatif est implémenté.
+**Avancement vérifié :** le portage applicatif est implémenté.
 `remix@3.0.0`, le runtime `remix/component`, le routeur `remix/spa`, les vues
 Remix et les façades d’actions sont en place. Le basculement SQLite est intégré :
 round-trip, Undo/Redo persistés, rechargement navigateur, typecheck et build sont
-validés. La suite complète donne 470 réussites et un échec de présentation en fin
-de lecture sur 471 tests ; le même échec est reproduit à HEAD propre. Il reste
-ouvert ci-dessous. Les preuves et limites du stockage sont dans
-le [plan SQLite](./2026-10-28-editor-sqlite-persistence-plan.md) et sa
-[spécification](./2026-10-28-editor-sqlite-persistence-spec.md).
+validés. La suite actuelle passe avec 533 tests sur 50 fichiers. Le scénario de
+présentation terminale qui échouait auparavant passe sur l’arbre courant ; sa
+cause historique n’est pas attribuée à une correction de runtime. Les preuves et
+limites du stockage sont dans
+la [spécification SQLite](./2026-10-28-editor-sqlite-persistence-spec.md).
 
 ## Résultat et limites
 
@@ -41,8 +43,8 @@ aucun contournement éditeur ne doit masquer le défaut.
 `localStorage` pour conserver l’`EditorScene` auteur. L’adaptateur a été retiré
 au début du basculement SQLite, sans migration des données, conformément au
 cadrage accepté. Le schéma, le serveur local, le remplacement et les critères
-de sortie sont maintenant suivis dans le
-[plan SQLite](./2026-10-28-editor-sqlite-persistence-plan.md).
+de sortie sont maintenant décrits dans la
+[spécification SQLite](./2026-10-28-editor-sqlite-persistence-spec.md).
 
 Backend, chutier, zones, nouvelles fonctions auteur et refonte structurelle du
 builder Decor restent hors de ce portage.
@@ -54,9 +56,11 @@ builder Decor restent hors de ce portage.
   [décor](./2026-07-07-dedit-spec.md), [capsule](./2026-07-08-capsule-spec.md).
 - Contrats CodPlay : [façade V2](../../codplay/specs/facade-v2-spec.md),
   [médias](../../codplay/specs/media-sync-v2-spec.md).
-- Travaux ouverts distincts : [organisation V2](./2026-09-01-editor-v2-organization-plan.md),
+- Contrat vérifié distinct : [intégration Editor V2](../specs/editor-v2-integration-spec.md) ;
+  travaux ouverts :
   [mouvement](./2026-09-02-motion-editor-v2-plan.md),
   [builder Decor](./2026-09-04-decor-builder-projection-plan.md).
+- Contrat d’historique Editor : [specification](../specs/editor-history-spec.md).
 - Références Elcé : [Remix](../../elce/specs/remix-spa-spec.md),
   [historique](../../elce/specs/document-history-spec.md).
 - Frontières d’édition existantes : [mouvement V2](./2026-09-02-motion-editor-v2-plan.md)
@@ -68,9 +72,9 @@ builder Decor restent hors de ce portage.
 1. **Baseline — Fixe.** Le catalogue partagé fait référence pour les
    transitions, y compris `swipe-right` ; aligner les attentes éditeur sur ce
    catalogue et apprécier le résultat lors des tests. Il n’y a plus
-   d’arbitrage préalable sur son signe. Restent le diagnostic de présentation
-   absente en fin de lecture et la projection média `master` vers `sync` côté
-   builder éditeur, sous les limites de périmètre déjà fixées.
+   d’arbitrage préalable sur son signe. Le builder projette maintenant
+   `masterItemId` via `initial.sync`; le test de présentation finale passe dans
+   la suite actuelle.
 2. **Runtime — Fixe.** Cible `remix@3.0.0`, runtime sans React, JSX
    `remix/component`, routeur `remix/spa` et port `5174`. Éditeur déclare
    `remix@3.0.0` et `@remix-run/ui@0.11.0` ; build et typecheck valident les
@@ -128,13 +132,10 @@ builder Decor restent hors de ce portage.
   rechargement ; le stockage antérieur contenait un document JSON valide. Le
   garde indique désormais le chemin de la valeur refusée pour qualifier une
   prochaine occurrence. La cause initiale reste ouverte.
-- Le parcours SQLite navigateur est validé, mais le parcours global de
-  reconstruction et les gestes physiques restent à compléter. La suite complète
-  donne 470 réussites et un échec : `scene-player-bridge-v2.spec.ts`, test
-  « keeps the complete ghost chain after creating successive displaced
-  keyframes and playing to the end », ligne 420. La présentation attendue à
-  5000 ms est `undefined`. L’échec est identique sur le HEAD propre archivé pour
-  établir la baseline ; garder cette tranche `En cours`, la cause reste à établir.
+- Le parcours SQLite navigateur et la reconstruction sont vérifiés. La suite
+  complète actuelle passe (532/532 sur 50 fichiers). Le geste physique requis
+  par la parité native reste une porte ouverte ; les contrôles de pointeur non disponibles
+  par MCP sont suivis avec les plans mouvement et création de blocs.
 
 ## Actions ordonnées
 
@@ -143,7 +144,7 @@ d’Éditeur défini au point 3.
 
 | Étape | Fichiers/propriétaires et remplacement | Porte d’acceptation |
 | --- | --- | --- |
-| R0 — Baseline | Builder V2, tests builder/bridge et plans V2 côté Éditeur ; diagnostic CodPlay en lecture seule si nécessaire. | Les attentes de transition et la projection média locale sont alignées ; le défaut de présentation en fin de lecture reste à diagnostiquer. Tout correctif CodPlay attend l’approbation préalable et reste isolé dans un commit ou une branche de fix ; les autres composants exclus exigent une tranche distincte. |
+| R0 — Baseline | Builder V2, tests builder/bridge et plans V2 côté Éditeur ; diagnostic CodPlay en lecture seule si nécessaire. | Les attentes de transition et la projection média locale sont alignées ; le test de présentation terminale passe dans la suite actuelle. Tout correctif CodPlay attend l’approbation préalable et reste isolé dans un commit ou une branche de fix ; les autres composants exclus exigent une tranche distincte. |
 | P0 — Modèle à persister | Modèle documentaire, `src/app/commands/types.ts`, données et tests de sérialisation existants. | Inventorier les valeurs réellement portées par `EditorScene`, leurs références et leur sérialisabilité ; identifier les sources média éphémères. Réutiliser le modèle partagé et distinguer le round-trip existant d’un véritable stockage entre rechargements. |
 | R1 — Contrats applicatifs | Ce plan, étapes 4/5 du plan de construction et définition historique du contrôleur. | Reporter le cadrage fixé, conserver les frontières d’édition, retirer l’intention d’historien externe concurrent ; traiter le contrat provisoire en interne à partir de P0 en gardant la sauvegarde pérenne ouverte. |
 | P1 — Persistance de transition | Adaptateur `temp` sous `src/app/persistence/`, contrôleur et composition applicative. | Réalisée pendant la reconstruction, puis retirée lors du basculement SQLite sans migration. Les preuves SQLite et ses limites sont suivies dans le plan dédié. Aucun changement CodPlay ni des modules spécifiques. |
@@ -176,8 +177,8 @@ d’Éditeur défini au point 3.
 - Lifecycle : updates Remix et changements de scène sans remontage des
   composants ; démontage/remontage propre, aucun callback résiduel ni mutation
   du DOM spécialisé par le rendu de son hôte.
-- Persistance SQLite : le parcours et ses critères de round-trip sont suivis dans
-  le [plan dédié](./2026-10-28-editor-sqlite-persistence-plan.md).
+- Persistance SQLite : le parcours et ses critères de round-trip sont décrits dans
+  la [spécification dédiée](./2026-10-28-editor-sqlite-persistence-spec.md).
 - Depuis les packages concernés : suites ciblées puis suites complètes,
   typecheck/build, parcours navigateur avec les outils MCP exposés. Compléter
   manuellement les gestes physiques non disponibles ; une simulation ne

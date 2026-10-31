@@ -27,6 +27,13 @@ et dimensions du contenu ; les mesures physiques restent dans la projection DOM.
 les propriétés décoratives. Le builder ne compense pas une bordure par des
 actions `x/y` supplémentaires.
 
+Pour un segment courbe, l’action ACE porte ensemble `move.transition.path` et
+les tweens `style.x/y` issus des offsets auteur lorsque ses endpoints diffèrent.
+Ces tweens établissent l’état de pose aux bornes capturées ; `move` reste le
+propriétaire de la trajectoire présentée entre ces bornes. La bordure conserve
+son action de décor distincte. Cette association ne sérialise aucune correction
+de bordure en `x/y` et ne crée pas de seconde trajectoire.
+
 `projectItemStyle` possède la conversion contenu/cadre. Il réutilise les
 insets et la conversion affine communs de `motion-editor`, avec bordure et
 padding. À la frontière CSS, il conserve séparément la bordure et le padding :
@@ -61,6 +68,9 @@ calculé par ACE dans `--editor-item-preview-inverse`. Le composant exprime ce
 candidat dans son ancre privée ; la contribution inline motion reste intacte.
 Cette donnée est éphémère et absente de `snapshot.get()` et du document.
 `snapshot.clear` rétablit le centrage normal et la pose publiée.
+Le déplacement initié sur le body du Selection Frame met à jour cette même
+preview à chaque événement de pointeur : l’item rendu suit la frame jusqu’au
+commit ou à l’annulation. La présentation ne passe pas par une seconde surface.
 
 ## Défaut du bloc texte
 
@@ -71,13 +81,27 @@ décors de keyframes restent clairsemés : ils héritent de ces valeurs initiale
 et ne les recopient que si l’auteur les modifie. Une rotation de pose tourne le
 bloc et son texte ensemble, sans changer leur centrage relatif.
 
+Le preset texte définit aussi `font-size: 3cqw`. Au chargement, la façade
+matérialise cette taille dans le décor initial des anciens items texte qui ne
+portent pas de taille dans `style` ni `custom`, avant leur compilation. Les
+keyframes utilisent ensuite le tween ACE générique ; une taille déjà déclarée
+dans ces champs reste prioritaire. Cette initialisation conserve les longueurs
+auteur en cqw et ne copie pas le défaut dans chaque KF.
+
 Le preset utilise le circuit décor existant ; il ne crée pas de canal temporel
 par propriété. Sa définition est dans
 [`default-decor-presets.ts`](../src/app/commands/default-decor-presets.ts), son
 application dans [`base-commands.ts`](../src/app/commands/base-commands.ts).
-`base-commands.spec.ts` vérifie son application à la création, et le
-[plan de layering](../plan/2026-07-17-decor-keyframe-layering-plan.md) consigne
-sa validation Safari visible.
+[`base-commands.spec.ts`](../tests/commands/base-commands.spec.ts) vérifie son
+application à la création. Le bloc texte du fixture
+[`tangent-editing-fixture.ts`](../tests/browser/tangent-editing-fixture.ts)
+porte les mêmes valeurs ; la validation Safari visible du centrage et du replay
+naturel est consignée dans le
+[plan de correction mouvement](../plan/2026-10-30-editor-motion-responsibility-fix-plan.md).
+[`default-decor-presets.spec.ts`](../tests/commands/default-decor-presets.spec.ts)
+vérifie la matérialisation au chargement et la conservation des tailles auteur.
+La validation Safari du document legacy vérifie `3cqw` à la source, `8cqw` à la
+cible et la valeur intermédiaire du snapshot et de l’élément natif.
 
 La coordination adopte la fin de lecture sans inspecter les chemins ni
 traverser `durée − 2 ms`. Un dépassement lié à l’outro virtuelle conserve le
@@ -96,6 +120,12 @@ Seek existant vers la durée auteur. Les Stop répétés conservent leur garde.
   [`player-interpolation.spec.ts`](../tests/builder-v2/player-interpolation.spec.ts)
   et [`decor-properties-stress.spec.ts`](../tests/builder-v2/decor-properties-stress.spec.ts) :
   builder et player réels, état complet et absence de translations décoratives.
+- [`motion-path.spec.ts`](../tests/builder-v2/motion-path.spec.ts) vérifie un
+  segment courbe traversant un KF décor de bordure : la frame runtime au milieu
+  suit le chemin plutôt que la corde.
+- [`decor-editor-bridge-integration-v2.spec.ts`](../tests/decor-editor-bridge-integration-v2.spec.ts)
+  garde la même action `move` et les mêmes endpoints `x/y` après commit, Undo et
+  Redo ; la bordure reste dans sa propre action de décor.
 - [`scene-player-bridge-v2.spec.ts`](../tests/scene-player-bridge-v2.spec.ts) :
   fin de lecture par le transport monté, absence de Seek compensateur,
   Seek terminal répété et Stop.

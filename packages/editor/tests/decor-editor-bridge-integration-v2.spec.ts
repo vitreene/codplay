@@ -8,6 +8,7 @@ import { createScenePlayerBridge } from '../src/app/bridges/scene-player-bridge'
 import { createDecorEditorBridge } from '../src/app/bridges/decor-editor-bridge'
 import { EditorPlayerCommandFacade } from '../src/app/commands/editor-player-command-facade'
 import { EditorActionsFacade } from '../src/app/facades/editor-actions-facade'
+import { buildSceneDocV2, EDITOR_V2_STORY_ID } from '../src/builder-v2'
 import {
   frameVisualCenter,
   frameWithTangentAtPathAnchor,
@@ -251,7 +252,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     actor = createActor(controllerMachine)
     actor.start()
     actions = new EditorActionsFacade(actor)
-    const documentScene = scene() as EditorScene
+    const documentScene = positionTestScene('0.6cqw', '2cqw') as EditorScene
     documentScene.decors.last!.path = 'M 0 0 A 0.7 0.7 0 0 1 1 0'
     actor.send({ type: 'SCENE_LOADED', scene: documentScene })
     coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
@@ -274,16 +275,63 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const orientationButton = sceneRoot.querySelector<HTMLButtonElement>('#editor-motion-path-orientation')
     expect(orientationButton).not.toBeNull()
     expect(orientationButton!.style.display).toBe('flex')
+
+    /** Checks that ACE receives endpoint style values and a single path owner after each replay. */
+    const expectCompiledPathAndBorder = (orientToPath: boolean): void => {
+      const currentScene = actor.getSnapshot().context.scene!
+      const built = buildSceneDocV2(currentScene)
+      expect(built.ok).toBe(true)
+      if (!built.ok) return
+
+      const perso = built.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos.find((candidate) => candidate.id === 'item')!
+      const moveAction = perso.actions['item-kf-last-kf'] as Record<string, unknown>
+      const move = moveAction.move as Record<string, unknown>
+      const moveTransition = move.transition as Record<string, unknown>
+      const moveStyle = moveAction.style as Record<string, unknown>
+      const borderAction = perso.actions['item-decor-kf-last-kf'] as Record<string, unknown>
+      const borderStyle = borderAction.style as Record<string, unknown>
+      const pathMoveActions = Object.values(perso.actions).filter((value) => {
+        if (typeof value !== 'object' || value === null) return false
+        const actionMove = (value as Record<string, unknown>).move
+        if (typeof actionMove !== 'object' || actionMove === null) return false
+        const transition = (actionMove as Record<string, unknown>).transition
+        return typeof transition === 'object' && transition !== null
+          && (transition as Record<string, unknown>).path === 'M 0 0 A 0.7 0.7 0 0 1 1 0'
+      })
+
+      expect(pathMoveActions).toHaveLength(1)
+      expect(moveTransition).toMatchObject({
+        duration: 5_000,
+        ease: 'inOut',
+        path: 'M 0 0 A 0.7 0.7 0 0 1 1 0',
+        ...(orientToPath ? { orientToPath: true } : {}),
+      })
+      expect(moveStyle.x).toEqual({ from: 10, to: 50, duration: 5_000, ease: 'inOut' })
+      expect(moveStyle.y).toEqual({ from: 10, to: 50, duration: 5_000, ease: 'inOut' })
+      expect(moveStyle).not.toHaveProperty('border-width')
+      expect(borderStyle['border-width']).toEqual({
+        from: '0.6cqw',
+        to: '2cqw',
+        duration: 5_000,
+        ease: 'inOut',
+      })
+      expect(borderStyle).not.toHaveProperty('x')
+      expect(borderStyle).not.toHaveProperty('y')
+    }
+
     orientationButton!.click()
     await waitTurns()
     expect(actor.getSnapshot().context.scene?.decors.last?.orientToPath).toBe(true)
+    expectCompiledPathAndBorder(true)
 
     actions.undo()
     await waitTurns()
     expect(actor.getSnapshot().context.scene?.decors.last?.orientToPath).toBeUndefined()
+    expectCompiledPathAndBorder(false)
     actions.redo()
     await waitTurns()
     expect(actor.getSnapshot().context.scene?.decors.last?.orientToPath).toBe(true)
+    expectCompiledPathAndBorder(true)
   })
 
   it('keeps route endpoints independent of previously visited keyframes', async () => {
@@ -509,7 +557,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     // Browser acceptance compares preview/commit content corners. jsdom does not resolve the
     // CSS transform list used to capture the runtime geometry, so it cannot certify that equality.
 
-    const moveZone = sceneRoot.querySelector<HTMLElement>('[data-motion-move-zone]')!
+    const moveZone = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')!
     let movedPreviewRotation = Number.NaN
     const moveStart = frameVisualCenter(readFrameValue(frame))
     const moveEnd = { x: moveStart.x + 10, y: moveStart.y + 10 }
@@ -809,7 +857,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     actor.send({ type: 'SEEK', timelineMs: 2_500 })
     await waitTurns(24)
 
-    const moveZone = sceneRoot.querySelector<HTMLElement>('[data-motion-move-zone]')!
+    const moveZone = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')!
     moveZone.dispatchEvent(pointerEvent('pointerdown', 100, 100))
     moveZone.dispatchEvent(pointerEvent('pointermove', 140, 100))
     moveZone.dispatchEvent(pointerEvent('pointerup', 140, 100))
@@ -969,25 +1017,47 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     actor.send({ type: 'SEEK', timelineMs: 0 })
     await waitTurns()
 
-    const moveZone = sceneRoot.querySelector<HTMLElement>('[data-motion-central]')
-    expect(moveZone).not.toBeNull()
+    const frame = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')
+    expect(frame).not.toBeNull()
     expect(sceneRoot.querySelector<HTMLElement>('[data-motion-ghost="source"]')?.style.display).toBe('none')
     expect(sceneRoot.querySelector<HTMLElement>('[data-motion-ghost="target"]')?.style.display).toBe('')
     expect(sceneRoot.querySelector('[data-motion-path]')).not.toBeNull()
+    expect(frame?.style.pointerEvents).toBe('auto')
+    expect(sceneRoot.querySelector('[data-motion-move-zone]')).toBeNull()
 
-    // Escape cancels an unreleased trace and leaves the document untouched.
-    moveZone!.dispatchEvent(pointerEvent('pointerdown', 160, 160))
-    moveZone!.dispatchEvent(pointerEvent('pointermove', 220, 190))
+    // Escape cancels an unreleased Selection Frame preview and leaves the document untouched.
+    const frameLeftBeforeEscape = Number.parseFloat(frame!.style.left)
+    frame!.dispatchEvent(pointerEvent('pointerdown', 160, 160))
+    frame!.dispatchEvent(pointerEvent('pointermove', 220, 190))
+    expect(Number.parseFloat(frame!.style.left)).toBeCloseTo(frameLeftBeforeEscape + 60)
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    expect(Number.parseFloat(frame!.style.left)).toBeCloseTo(frameLeftBeforeEscape)
+    frame!.dispatchEvent(pointerEvent('pointerup', 220, 190))
     await waitTurns(8)
     expect(actor.getSnapshot().context.scene!.items.find((item) => item.id === 'item')!.keyframes).toHaveLength(2)
 
-    moveZone!.dispatchEvent(pointerEvent('pointerdown', 160, 160))
-    moveZone!.dispatchEvent(pointerEvent('pointermove', 240, 200))
-    moveZone!.dispatchEvent(pointerEvent('pointerup', 240, 200))
+    const snapshotPort = coordination.snapshot as unknown as {
+      set: (patches: Parameters<typeof coordination.snapshot.set>[0]) => ReturnType<typeof coordination.snapshot.set>
+    }
+    const snapshotPreviews: Parameters<typeof coordination.snapshot.set>[0][] = []
+    const setSnapshot = snapshotPort.set
+    snapshotPort.set = (patches) => {
+      snapshotPreviews.push(patches)
+      return setSnapshot(patches)
+    }
+    const firstFrameLeft = Number.parseFloat(frame!.style.left)
+    const firstFrameTop = Number.parseFloat(frame!.style.top)
+    const snapshotCountBeforeMove = snapshotPreviews.length
+    frame!.dispatchEvent(pointerEvent('pointerdown', 160, 160))
+    frame!.dispatchEvent(pointerEvent('pointermove', 240, 200))
+    expect(Number.parseFloat(frame!.style.left)).toBeCloseTo(firstFrameLeft + 80)
+    expect(Number.parseFloat(frame!.style.top)).toBeCloseTo(firstFrameTop + 40)
+    expect(snapshotPreviews.length).toBeGreaterThan(snapshotCountBeforeMove)
+    expect(snapshotPreviews.at(-1)?.[0]?.state.style).toMatchObject({ x: 20, y: 15 })
+    frame!.dispatchEvent(pointerEvent('pointerup', 240, 200))
     await waitTurns(24)
 
-    // At a real KF the central gesture updates that KF at the same time; it does not invent a
+    // At a real KF the Selection Frame gesture updates that KF at the same time; it does not invent a
     // future target from a provisional duration.
     let committedItem = actor.getSnapshot().context.scene!.items.find((item) => item.id === 'item')!
     expect(committedItem.keyframes).toHaveLength(2)
@@ -997,27 +1067,25 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     actor.send({ type: 'SELECT_ITEM', itemIds: ['item'] })
     actor.send({ type: 'SEEK', timelineMs: 500 })
     await waitTurns(24)
-    const betweenMoveZone = sceneRoot.querySelector<HTMLElement>('[data-motion-central]')
-    expect(betweenMoveZone).not.toBeNull()
     const betweenFrame = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')
-    expect(betweenMoveZone!.style.left).toBe(betweenFrame?.style.left)
-    expect(betweenMoveZone!.style.top).toBe(betweenFrame?.style.top)
+    expect(betweenFrame).not.toBeNull()
+    expect(sceneRoot.querySelector('[data-motion-move-zone]')).toBeNull()
     expect(betweenFrame?.style.zIndex).toBe('1100')
-    expect(betweenFrame?.style.pointerEvents).toBe('none')
+    expect(betweenFrame?.style.pointerEvents).toBe('auto')
     expect(sceneRoot.querySelector('[data-selection-frame-needle-tip]')).not.toBeNull()
     expect(sceneRoot.querySelector<HTMLElement>('[data-selection-frame-needle-tip]')?.style.pointerEvents).toBe('auto')
     expect(sceneRoot.querySelector<HTMLElement>('[data-selection-frame-pivot]')?.style.pointerEvents).toBe('auto')
     const betweenHandles = [...sceneRoot.querySelectorAll<HTMLElement>('[data-selection-frame-handle]')]
     expect(betweenHandles).toHaveLength(8)
     expect(betweenHandles.every((handle) => handle.style.pointerEvents === 'auto')).toBe(true)
-    betweenMoveZone!.dispatchEvent(pointerEvent('pointerdown', 100, 100))
-    betweenMoveZone!.dispatchEvent(pointerEvent('pointermove', 180, 140))
+    betweenFrame!.dispatchEvent(pointerEvent('pointerdown', 100, 100))
+    betweenFrame!.dispatchEvent(pointerEvent('pointermove', 180, 140))
     const previewPaths = [...sceneRoot.querySelectorAll<SVGPathElement>('[data-motion-path]')]
     expect(previewPaths).toHaveLength(2)
     expect(sceneRoot.querySelectorAll('[data-motion-path-inactive]')).toHaveLength(1)
     const previewPathData = previewPaths.map((path) => path.getAttribute('d'))
     expect(previewPathData[0]).not.toBe(previewPathData[1])
-    betweenMoveZone!.dispatchEvent(pointerEvent('pointerup', 180, 140))
+    betweenFrame!.dispatchEvent(pointerEvent('pointerup', 180, 140))
     await waitTurns(24)
 
     const committedScene = actor.getSnapshot().context.scene!
@@ -1034,11 +1102,11 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     expect([...sceneRoot.querySelectorAll<SVGPathElement>('[data-motion-path]')].map((path) => path.getAttribute('d')))
       .toEqual(previewPathData)
 
-    // A second central drag on the newly-created KF updates that same KF; it does not duplicate it.
+    // A second Selection Frame drag on the newly-created KF updates it without duplication.
     const targetOffsetBeforeSecondMove = committedScene.decors[target!.decorId]?.offset?.translate
-    betweenMoveZone!.dispatchEvent(pointerEvent('pointerdown', 240, 200))
-    betweenMoveZone!.dispatchEvent(pointerEvent('pointermove', 300, 230))
-    betweenMoveZone!.dispatchEvent(pointerEvent('pointerup', 300, 230))
+    betweenFrame!.dispatchEvent(pointerEvent('pointerdown', 240, 200))
+    betweenFrame!.dispatchEvent(pointerEvent('pointermove', 300, 230))
+    betweenFrame!.dispatchEvent(pointerEvent('pointerup', 300, 230))
     await waitTurns(24)
     committedItem = actor.getSnapshot().context.scene!.items.find((item) => item.id === 'item')!
     const sameTarget = committedItem.keyframes.find((keyframe) => keyframe.timeMs === 500)
@@ -1166,7 +1234,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     await waitTurns(24)
 
     expect(sceneRoot.querySelector('[data-motion-keyframe-id="decor-kf"]')).toBeNull()
-    const moveZone = sceneRoot.querySelector<HTMLElement>('[data-motion-central]')!
+    const moveZone = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')!
     expect(moveZone).not.toBeNull()
     const initialWidth = Number.parseFloat(moveZone.style.width)
     const initialHeight = Number.parseFloat(moveZone.style.height)
@@ -1185,6 +1253,46 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
       height: initialHeight / 8,
     })
     expect(sceneRoot.querySelectorAll('[data-motion-path]')).toHaveLength(2)
+  })
+
+  it('reconstruit le path actif au chargement d’un décor avec les mêmes identifiants', async () => {
+    originalResizeObserver = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class {
+      observe(): void {}
+      disconnect(): void {}
+    } as unknown as typeof ResizeObserver
+
+    actor = createActor(controllerMachine)
+    actor.start()
+    actions = new EditorActionsFacade(actor)
+    actions.loadScene(tangentScene())
+    coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
+
+    const sceneRoot = document.createElement('div')
+    sceneRoot.style.width = '800px'
+    Object.defineProperty(sceneRoot, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }),
+    })
+    const decorPanel = document.createElement('div')
+    document.body.append(sceneRoot, decorPanel)
+    sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    await waitTurns(24)
+
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item'], keyframeId: 'last-kf' })
+    await waitTurns(24)
+    const originalPath = sceneRoot.querySelector<SVGPathElement>('[data-motion-path-active]')?.getAttribute('d')
+    expect(originalPath).toContain('A')
+
+    const replacementScene = tangentScene()
+    replacementScene.decors.last!.path = 'M 0 0 A 0.7 0.7 0 0 0 1 0'
+    actions.loadScene(replacementScene)
+    await waitTurns(32)
+
+    const replacementPath = sceneRoot.querySelector<SVGPathElement>('[data-motion-path-active]')?.getAttribute('d')
+    expect(replacementPath).toContain('A')
+    expect(replacementPath).not.toBe(originalPath)
   })
 
   it('recalcule la pose cible du segment pendant le repositionnement CS du KF matérialisé', async () => {
@@ -1216,7 +1324,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     actor.send({ type: 'SEEK', timelineMs: 500 })
     await waitTurns()
 
-    const moveZone = sceneRoot.querySelector<HTMLElement>('[data-motion-central]')!
+    const moveZone = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')!
     const middleBaseLeft = Number.parseFloat(moveZone.style.left)
     const middleBaseTop = Number.parseFloat(moveZone.style.top)
     moveZone.dispatchEvent(pointerEvent('pointerdown', 100, 100))
@@ -1291,13 +1399,29 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     actor.send({ type: 'SEEK', timelineMs: 5_000 })
     await waitTurns(24)
 
-    const moveZones = sceneRoot.querySelectorAll<HTMLElement>('[data-motion-move-zone]')
-    expect(moveZones).toHaveLength(1)
+    expect(sceneRoot.querySelectorAll('[data-motion-move-zone]')).toHaveLength(0)
+    const frame = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')!
+    const initialFrameLeft = Number.parseFloat(frame.style.left)
+    const initialFrameTop = Number.parseFloat(frame.style.top)
+    const snapshotPort = coordination.snapshot as unknown as {
+      set: (patches: Parameters<typeof coordination.snapshot.set>[0]) => ReturnType<typeof coordination.snapshot.set>
+    }
+    const snapshotPreviews: Parameters<typeof coordination.snapshot.set>[0][] = []
+    const setSnapshot = snapshotPort.set
+    snapshotPort.set = (patches) => {
+      snapshotPreviews.push(patches)
+      return setSnapshot(patches)
+    }
     expect(sceneRoot.querySelector('[data-motion-border]')).toBeNull()
 
-    moveZones[0]!.dispatchEvent(pointerEvent('pointerdown', 160, 160))
-    moveZones[0]!.dispatchEvent(pointerEvent('pointermove', 240, 200))
-    moveZones[0]!.dispatchEvent(pointerEvent('pointerup', 240, 200))
+    frame.dispatchEvent(pointerEvent('pointerdown', 160, 160))
+    frame.dispatchEvent(pointerEvent('pointermove', 240, 200))
+    const previewedFrameLeft = Number.parseFloat(frame.style.left)
+    const previewedFrameTop = Number.parseFloat(frame.style.top)
+    expect(previewedFrameLeft).toBeCloseTo(initialFrameLeft + 80)
+    expect(previewedFrameTop).toBeCloseTo(initialFrameTop + 40)
+    expect(snapshotPreviews.at(-1)?.[0]?.state.style).toMatchObject({ x: 20, y: 15 })
+    frame.dispatchEvent(pointerEvent('pointerup', 240, 200))
     await waitTurns(24)
 
     const committedScene = actor.getSnapshot().context.scene!
@@ -1468,7 +1592,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     actor.send({ type: 'SEEK', timelineMs: 5_000 })
     await waitTurns(24)
 
-    const moveZone = sceneRoot.querySelector<HTMLElement>('[data-motion-move-zone]')!
+    const moveZone = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')!
     const targetGhost = sceneRoot.querySelector<HTMLElement>('[data-motion-ghost="target"]')!
     expect(moveZone.style.left).toBe(targetGhost.style.left)
     expect(moveZone.style.top).toBe(targetGhost.style.top)
@@ -1513,7 +1637,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     actor.send({ type: 'SEEK', timelineMs: 500 })
     await waitTurns(24)
 
-    const moveZone = sceneRoot.querySelector<HTMLElement>('[data-motion-central]')!
+    const moveZone = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')!
     const middleBaseLeft = Number.parseFloat(moveZone.style.left)
     const middleBaseTop = Number.parseFloat(moveZone.style.top)
     moveZone.dispatchEvent(pointerEvent('pointerdown', 100, 100))
@@ -1619,7 +1743,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     actor.send({ type: 'SELECT_ITEM', itemIds: ['item'] })
     actor.send({ type: 'SEEK', timelineMs: 500 })
     await waitTurns(24)
-    const moveZone = sceneRoot.querySelector<HTMLElement>('[data-motion-central]')!
+    const moveZone = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')!
     const middleBaseLeft = Number.parseFloat(moveZone.style.left)
     moveZone.dispatchEvent(pointerEvent('pointerdown', 100, 100))
     moveZone.dispatchEvent(pointerEvent('pointermove', 180, 140))

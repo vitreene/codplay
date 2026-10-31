@@ -196,19 +196,19 @@ describe('motion-editor geometry', () => {
     const split = splitMotionPath(path, source, waypoint, target, progress)
 
     expect(split.waypoint).toEqual(waypoint)
-    // ACE quantizes normalized radii to two decimals; this near-semicircle has a 0.34° endpoint bound.
+    // ACE's radius quantization trades a sub-degree endpoint drift for a smoother join.
     expect(Math.abs(normalizeAngleDegrees(
       motionPathTangentAngle(path, source, target, 0)!
       - motionPathTangentAngle(split.before!, source, split.waypoint, 0)!,
-    ))).toBeLessThan(0.4)
+    ))).toBeLessThan(1)
     expect(Math.abs(normalizeAngleDegrees(
       motionPathTangentAngle(path, source, target, 1)!
       - motionPathTangentAngle(split.after!, split.waypoint, target, 1)!,
-    ))).toBeLessThan(0.4)
+    ))).toBeLessThan(1)
     expect(Math.abs(normalizeAngleDegrees(
       motionPathTangentAngle(split.before!, source, split.waypoint, 1)!
       - motionPathTangentAngle(split.after!, split.waypoint, target, 0)!,
-    ))).toBeLessThan(0.2)
+    ))).toBeLessThan(0.11)
 
     const beforePrepared = prepareSvgPath(split.before!, { traversal: 'arc-length', precision: 2 })
     const afterPrepared = prepareSvgPath(split.after!, { traversal: 'arc-length', precision: 2 })
@@ -217,6 +217,40 @@ describe('motion-editor geometry', () => {
       const actual = sample <= progress
         ? resolvePathFrame(beforePrepared, [source.x, source.y], [split.waypoint.x, split.waypoint.y], sample / progress).point
         : resolvePathFrame(afterPrepared, [split.waypoint.x, split.waypoint.y], [target.x, target.y], (sample - progress) / (1 - progress)).point
+      expect(Math.hypot(actual[0] - expected[0], actual[1] - expected[1])).toBeLessThan(1.25)
+    }
+  })
+
+  it('smooths an eased-path split for a turned waypoint within endpoint and route bounds', () => {
+    const source = { x: 20, y: 16 }
+    const control = { x: 50, y: 55 }
+    const target = { x: 90, y: 36 }
+    const path = createMotionArcPath(source, control, target)!
+    const progress = 0.6563
+    const waypoint = motionPathPointAtProgress(source, control, target, progress)
+    const split = splitMotionPath(path, source, waypoint, target, progress)
+    const sourceAngle = motionPathTangentAngle(path, source, target, 0)!
+    const targetAngle = motionPathTangentAngle(path, source, target, 1)!
+    const incomingAngle = motionPathTangentAngle(split.before!, source, split.waypoint, 1)!
+    const outgoingAngle = motionPathTangentAngle(split.after!, split.waypoint, target, 0)!
+
+    expect(Math.hypot(split.waypoint.x - waypoint.x, split.waypoint.y - waypoint.y)).toBeLessThan(0.01)
+    expect(Math.abs(normalizeAngleDegrees(incomingAngle - outgoingAngle))).toBeLessThan(0.1)
+    expect(Math.abs(normalizeAngleDegrees(sourceAngle - motionPathTangentAngle(
+      split.before!, source, split.waypoint, 0,
+    )!))).toBeLessThan(0.5)
+    expect(Math.abs(normalizeAngleDegrees(targetAngle - motionPathTangentAngle(
+      split.after!, split.waypoint, target, 1,
+    )!))).toBeLessThan(0.5)
+
+    const original = prepareSvgPath(path, { traversal: 'arc-length', precision: 2 })
+    const before = prepareSvgPath(split.before!, { traversal: 'arc-length', precision: 2 })
+    const after = prepareSvgPath(split.after!, { traversal: 'arc-length', precision: 2 })
+    for (const sample of [0.1, 0.25, 0.5, 0.75, 0.9]) {
+      const expected = resolvePathFrame(original, [source.x, source.y], [target.x, target.y], sample).point
+      const actual = sample <= progress
+        ? resolvePathFrame(before, [source.x, source.y], [split.waypoint.x, split.waypoint.y], sample / progress).point
+        : resolvePathFrame(after, [split.waypoint.x, split.waypoint.y], [target.x, target.y], (sample - progress) / (1 - progress)).point
       expect(Math.hypot(actual[0] - expected[0], actual[1] - expected[1])).toBeLessThan(1.25)
     }
   })
