@@ -1,5 +1,5 @@
 import type { DecorEditorController } from './controller'
-import type { PanelField, PanelId } from './palette-panel'
+import type { PanelField, PanelId, ZonePlacementField } from './palette-panel'
 import { findPanel } from './palette-panel'
 import { cssColorToHex, hexToCssOklch } from './color-adapter'
 import { formatNumberForCssProperty, parseNumberFromCssValue } from './css-value-format'
@@ -128,7 +128,9 @@ function renderActivePanel(
     return renderPresetListPanel(container, controller)
   }
 
-  const updates = panelDef.fields.map(field => renderField(container, controller, field, multi))
+  const updates = panelDef.fields.map(field => field.kind === 'zone-placement'
+    ? renderZonePlacementField(container, controller, field, multi)
+    : renderField(container, controller, field, multi))
   return () => updates.forEach(u => u())
 }
 
@@ -204,6 +206,40 @@ function renderField(
       return renderIconSelectField(container, controller, field, multi)
     case 'text':
       return renderTextField(container, controller, field, multi)
+  }
+}
+
+/** Renders the zone/geometric placement switch without adding a redundant Decor property. */
+function renderZonePlacementField(
+  container: HTMLElement,
+  controller: DecorEditorController,
+  field: ZonePlacementField,
+  multi: boolean,
+): FieldUpdater {
+  const row = document.createElement('label')
+  row.classList.add('dedit-field')
+  const label = document.createElement('span')
+  label.classList.add('dedit-field__label')
+  label.textContent = field.label
+  row.appendChild(label)
+  const control = document.createElement('div')
+  control.classList.add('dedit-field__control')
+  const input = document.createElement('input')
+  input.type = 'checkbox'
+  control.appendChild(input)
+  row.appendChild(control)
+  input.addEventListener('change', () => {
+    if (controller.getZonePlacementMode() === null) return
+    controller.requestZonePlacement(input.checked)
+    input.checked = controller.getZonePlacementMode() === 'zone'
+    controller.notifyInteractionEnd()
+  })
+  container.appendChild(row)
+  return () => {
+    const mode = controller.getZonePlacementMode()
+    row.hidden = multi || mode === null
+    input.disabled = multi || mode === null
+    input.checked = mode === 'zone'
   }
 }
 

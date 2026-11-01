@@ -18,6 +18,7 @@ export const DEFAULT_PALETTE: PaletteConfig = {
       id: 'shape',
       label: 'Forme',
       fields: [
+        { kind: 'zone-placement', label: 'Placement par zone' },
         { path: 'style.background-color', kind: 'color', label: 'Fond' },
         { path: 'style.border-color', kind: 'color', label: 'Bord' },
         { path: 'style.border-width', kind: 'number', label: 'Épaisseur' },

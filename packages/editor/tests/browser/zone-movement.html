@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="fr" id="zone-movement-document">
+  <head id="zone-movement-head">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Déplacement d’un bloc entre deux zones — Editor</title>
+    <style id="zone-movement-tools-style">
+      #zone-movement-decor-content {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 0;
+        min-height: 0;
+      }
+
+      #zone-movement-history-toolbar {
+        display: flex;
+        justify-content: flex-end;
+        gap: 6px;
+        flex: none;
+      }
+
+      #zone-movement-undo,
+      #zone-movement-redo {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        border: 1px solid #374151;
+        border-radius: 4px;
+        background: #1f2937;
+        color: #f9fafb;
+      }
+
+      #zone-movement-undo:disabled,
+      #zone-movement-redo:disabled {
+        color: #6b7280;
+        cursor: default;
+      }
+
+      #zone-movement-palette {
+        flex: 1;
+        min-width: 0;
+        min-height: 0;
+        overflow: auto;
+      }
+    </style>
+  </head>
+  <body id="zone-movement-body">
+    <main id="app" class="app-layout" aria-label="Démo Editor : déplacement entre zones">
+      <section id="editor-menu-region" class="app-region app-region--menu">
+        <div id="zone-movement-info" class="app-demo-content">
+          <h2 id="zone-movement-title">Un bloc passe d’une zone à l’autre</h2>
+          <p id="zone-movement-description">
+            Le bloc est ancré dans z1 au départ. Le second KF pose le rattache à z2 ;
+            lancez la lecture dans la timeline pour voir le déplacement entre ces deux emprises.
+          </p>
+          <ul id="zone-movement-zones" aria-label="Tailles des zones">
+            <li id="zone-movement-zone-one">z1 — 18 × 28 pistes — départ</li>
+            <li id="zone-movement-zone-two">z2 — 38 × 56 pistes — arrivée</li>
+          </ul>
+        </div>
+      </section>
+      <section
+        id="editor-scene-region"
+        class="app-region app-region--scene"
+        aria-label="Deux zones et le bloc animé"
+      >
+        <div id="zone-movement-scene" class="app-region-content app-region-content--scene-player"></div>
+      </section>
+      <section
+        id="editor-decor-region"
+        class="app-region app-region--panel"
+        aria-label="Décor du bloc"
+      >
+        <div id="zone-movement-decor-content" class="app-region-content app-region-content--decor-editor">
+          <div id="zone-movement-history-toolbar" role="toolbar" aria-label="Historique">
+            <button id="zone-movement-undo" type="button" aria-label="Annuler" title="Annuler" disabled></button>
+            <button id="zone-movement-redo" type="button" aria-label="Rétablir" title="Rétablir" disabled></button>
+          </div>
+          <div id="zone-movement-palette"></div>
+        </div>
+      </section>
+      <section id="editor-timeline-region" class="app-region app-region--timeline" aria-label="Timeline Editor">
+        <div id="zone-movement-timeline" class="app-region-content"></div>
+      </section>
+      <section id="editor-telco-region" class="app-region app-region--telco" aria-label="Transport"></section>
+    </main>
+    <script type="module">
+      import * as fixture from './zone-movement-fixture.ts'
+      document.getElementById('app').testApi = fixture
+      await fixture.mountFixture()
+    </script>
+  </body>
+</html>

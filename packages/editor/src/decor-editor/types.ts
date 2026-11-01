@@ -33,13 +33,13 @@ export interface CapsulePatch {
 // confondre une fois `position` construite : ce module ne porte jamais de placement de grille.
 
 export interface OffsetPatch {
-  x?: number // cqw
-  y?: number // cqw
-  width?: number // cqw
-  height?: number // cqw
+  x?: number | null // cqw; null clears inherited placement geometry
+  y?: number | null // cqw
+  width?: number | null // cqw
+  height?: number | null // cqw
   ratio?: number | null // contrainte l/h ; null = libre
   anchor?: FlexAnchor
-  translate?: { x: number; y: number } // cqw
+  translate?: { x?: number | null; y?: number | null } // cqw
   rotate?: number // degrés
   scale?: { x: number; y: number }
   /** Rotation axis in local-box fractions; omitted means the box center. */

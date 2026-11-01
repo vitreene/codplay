@@ -19,8 +19,6 @@ export function mountDecorEditor(
   options: MountDecorEditorOptions = {},
 ): DecorEditorMountHandle {
   const palette = createDecorEditorPalette(controller)
-  palette.element.style.top = '24px'
-  palette.element.style.left = '24px'
   container.appendChild(palette.element)
   let previewSuspended = false
 

@@ -1,4 +1,6 @@
 import type { Decor, EditorScene, ItemType } from './types'
+import { hasExplicitPlacementGeometry, mergePlacementGeometry, missingZoneFillStyle } from './offset-placement'
+import { resolveKeyframeChannel } from './types'
 
 const DEFAULT_TEXT_FONT_SIZE = '3cqw'
 
@@ -56,4 +58,54 @@ export function applyDefaultTextFontSize(scene: EditorScene): EditorScene {
   }, scene.decors)
 
   return decors === scene.decors ? scene : { ...scene, decors }
+}
+
+/** Materializes the existing Builder's zone-fill defaults into unique authored Decor records. */
+export function applyDefaultZonePlacementStyle(scene: EditorScene): EditorScene {
+  const decorUsageCounts = new Map<string, number>()
+  for (const item of scene.items) {
+    for (const decorId of [item.initialDecorId, ...item.keyframes.map((keyframe) => keyframe.decorId)]) {
+      decorUsageCounts.set(decorId, (decorUsageCounts.get(decorId) ?? 0) + 1)
+    }
+  }
+
+  const nextDecors = { ...scene.decors }
+  for (const item of scene.items) {
+    const orderedKeyframes = [...item.keyframes].sort((left, right) => left.timeMs - right.timeMs)
+    const initialDecor = scene.decors[item.initialDecorId]
+    const priorDecors: Decor[] = []
+    let effectiveOffset = initialDecor?.offset
+    let effectiveZoneId = initialDecor?.zoneId ?? null
+    const placementLayers = [
+      ...(initialDecor === undefined ? [] : [{ decorId: initialDecor.id, decor: initialDecor, keyframe: undefined }]),
+      ...orderedKeyframes.map((keyframe) => ({ decorId: keyframe.decorId, decor: scene.decors[keyframe.decorId], keyframe })),
+    ]
+
+    for (const { decorId, decor, keyframe } of placementLayers) {
+      if (decor === undefined) continue
+      if (keyframe !== undefined && resolveKeyframeChannel(keyframe) === 'pose') {
+        effectiveOffset = mergePlacementGeometry(effectiveOffset, decor.offset)
+        if (Object.prototype.hasOwnProperty.call(decor, 'zoneId')) effectiveZoneId = decor.zoneId ?? null
+      }
+      if (effectiveZoneId === null || (decorUsageCounts.get(decorId) ?? 0) > 1
+        || hasExplicitPlacementGeometry(effectiveOffset)) {
+        if (decor !== undefined) priorDecors.push(decor)
+        continue
+      }
+      const inheritedStyle = priorDecors.reduce((style, prior) => ({ ...style, ...prior.style }), {} as Record<string, string>)
+      const inheritedCustom = priorDecors.toReversed().find((prior) => prior.custom !== undefined)?.custom
+      const additions = missingZoneFillStyle(
+        { ...inheritedStyle, ...decor.style },
+        [inheritedCustom, decor.custom].filter((value): value is string => value !== undefined).join(';'),
+      )
+      if (Object.keys(additions).length > 0) {
+        nextDecors[decorId] = { ...decor, style: { ...decor.style, ...additions } }
+      }
+      priorDecors.push(nextDecors[decorId]!)
+    }
+  }
+
+  return Object.keys(scene.decors).every((decorId) => nextDecors[decorId] === scene.decors[decorId])
+    ? scene
+    : { ...scene, decors: nextDecors }
 }

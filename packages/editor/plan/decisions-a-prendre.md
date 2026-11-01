@@ -9,18 +9,28 @@ ce document ne répète que les décisions ou portes qui restent ouvertes.
 (`90 × 160`) rend le placement responsive et proche du libre. Une zone est une
 entité distincte d’un bloc ; sa géométrie est une aire CSS Grid (`row`, `col`,
 `rowSpan`, `colSpan`). Le parcours par défaut est : déclarer une zone, la
-sélectionner, puis créer un bloc qui référence son `Zone.id`.
+sélectionner, puis créer un bloc qui référence son `Zone.id`. Le tracé de bloc
+ne crée jamais de zone. Une géométrie auteur explicite (`x`, `y`, `width`,
+`height`) prime sur l’attache à la zone ; la case « Placement par zone » permet
+de capturer la géométrie actuelle ou de l’effacer pour revenir à l’emprise de la
+zone, en conservant les autres transformations.
 
 Dans une même capsule, déposer un item dans une autre zone change
 `Decor.zoneId` au KF pose ; le Builder émet le `move` existant et le player
 calcule la trajectoire. Le drop ambigu ou sans cible n’écrit pas de géométrie.
 
 **À accepter dans Editor :** drop sur une autre zone au KF exact puis entre
-deux KFs ; présentation par Play/Seek ; Undo/Redo et rechargement SQLite ;
-aucun changement de capsule ni écriture d’offset. La géométrie propre reste
-disponible comme mode complémentaire, à réexaminer seulement si les zones
-atteignent une limite d’usage. Voir la [spec des blocs](../specs/block-creation-spec.md)
-et le [contrat d’intégration](../specs/editor-v2-integration-spec.md).
+deux KFs ; priorité de la géométrie explicite et bascule par case à cocher ;
+présentation par Play/Seek ; Undo/Redo et rechargement SQLite ; aucun changement
+de capsule. Voir la [spec des blocs](../specs/block-creation-spec.md)
+et le [contrat d’intégration](../specs/editor-v2-integration-spec.md). La nouvelle
+fixture [`zone-movement.html`](../tests/browser/zone-movement.html) exerce les
+deux emprises et le `move` réel. La projection du bloc vide remplit maintenant
+le cadre de sa zone ; les Seek à 0, 2500 et 5000 ms vérifient départ,
+interpolation et arrivée. Le fixture importe le layout réel ; le scroll interne
+du menu ne déplace pas la scène. Play rAF reste à accepter : Safari MCP renvoie
+`document.hidden === true` après le changement d’onglet ; le drop Editor,
+Undo/Redo et le rechargement SQLite restent également ouverts.
 
 ## 2. Fermer les portes mouvement V2
 
@@ -64,6 +74,15 @@ reste la référence hors du périmètre Editor.
 - La représentation commune de `width`/`height` entre `Decor.offset` et
   `Decor.style` n’est pas arbitrée. Ne pas introduire de fusion ou de valeur
   de repli qui masquerait l’un des champs.
+- **Décision acceptée :** toute valeur CSS ajoutée automatiquement appartient
+  au `Decor`. Le code Editor matérialise `width`/`height: 100%` manquants sur le
+  décor qui prend en charge l’attache à une zone ; il respecte `style`, `custom`,
+  l’offset effectif hérité et les décors partagés. Le Builder ne les injecte plus
+  dans l’état runtime. L’ancre privée de `item-component` reste une projection
+  structurelle : `max-content` par défaut, `100%` si le Decor résolu demande
+  explicitement cette dimension. Typecheck et build Editor passent. La validation
+  d’usage sur création, bascule zone/géométrie, Play/Seek, Undo/Redo et SQLite
+  reste ouverte avec la tranche 1 ; ne pas déclarer la tranche stabilisée.
 - Le projet de catalogue général de capacités du Builder Decor est **A relire**.
   Aucune refonte du Builder ne commence avant validation explicite de son
   modèle, de ses frontières et de son chemin d’acceptation. Les correctifs

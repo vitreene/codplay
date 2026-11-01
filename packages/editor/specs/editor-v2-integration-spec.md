@@ -64,6 +64,8 @@ vérifie la projection réelle vers ce contrat.
   phase avant d'effacer la sélection. Un réattachement du même ensemble d'items
   conserve le panneau et les réglages actifs. Resize et scroll reprojettent le
   frame depuis la géométrie courante, sans mutation du document.
+- La palette Décor reste dans le flux de sa région, dans la colonne droite du
+  layout Editor ; sa position ne dépend ni du viewport ni de l’item sélectionné.
 - Dedit met à jour la preview pendant la saisie et les gestes. Le pont regroupe
   les changements en une transaction aux frontières de phase : changement ou
   effacement de sélection, seek, mutation documentaire externe, inactivité

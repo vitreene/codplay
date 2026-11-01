@@ -53,6 +53,8 @@ export function createItemComponent<Initial extends Record<string, unknown>>(Nat
       const { frameStyle, visualStyle } = projectItemStyle(itemStyle, this.styleElement!.ownerDocument.defaultView?.devicePixelRatio ?? 1)
       const attributes = state.attr as Readonly<Record<string, unknown>> | undefined ?? {}
       const { 'data-item-id': itemId, ...visualAttributes } = attributes
+      const fillsFrameWidth = visualStyle.width === '100%'
+      const fillsFrameHeight = visualStyle.height === '100%'
       // The native style service formats the author rule; only motion writes inline frame
       // geometry. Captures reveal the current rule when they release their contributions.
       const styleElement = this.styleElement!
@@ -65,13 +67,19 @@ export function createItemComponent<Initial extends Record<string, unknown>>(Nat
       })
       const [fx, fy] = (styleElement.style.transformOrigin || '50% 50%')
         .split(/\s+/).map((value) => Number.parseFloat(value))
+      const anchorLeft = fillsFrameWidth ? '0px' : '50%'
+      const anchorTop = fillsFrameHeight ? '0px' : '50%'
+      const anchorTransform = inverse === undefined
+        ? `translate(${fillsFrameWidth ? '0' : '-50%'},${fillsFrameHeight ? '0' : '-50%'})`
+        : `${inverse} translate(${fx}%, ${fy}%) ${styleElement.style.transform} translate(${-fx!}%, ${-fy!}%)`
       this.services.apply(this.visualAnchor, { style: {
-        position: 'absolute', width: 'max-content', height: 'max-content',
-        left: inverse === undefined ? '50%' : '0px',
-        top: inverse === undefined ? '50%' : '0px',
+        position: 'absolute',
+        width: fillsFrameWidth ? '100%' : 'max-content',
+        height: fillsFrameHeight ? '100%' : 'max-content',
+        left: inverse === undefined ? anchorLeft : '0px',
+        top: inverse === undefined ? anchorTop : '0px',
         'transform-origin': '0 0',
-        transform: inverse === undefined ? 'translate(-50%,-50%)'
-          : `${inverse} translate(${fx}%, ${fy}%) ${styleElement.style.transform} translate(${-fx!}%, ${-fy!}%)`,
+        transform: anchorTransform,
       } })
       this.native.update({
         ...input,

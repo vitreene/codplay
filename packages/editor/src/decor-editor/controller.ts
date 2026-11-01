@@ -5,6 +5,7 @@ import { panelsForTypes } from './palette-panel'
 import type { PaletteConfig, PanelId } from './palette-panel'
 import { resolveFieldAcrossItems } from './field-state'
 import type { FieldState } from './field-state'
+import { hasExplicitPlacementGeometry } from '../app/commands/offset-placement'
 import { buildPatchFromPath } from './path-patch'
 import type {
   DecorPatch, DecorPreset, ItemType, OrientationContext, ResolvedDecor, ZoneCard, ZoneTable,
@@ -52,6 +53,7 @@ export class DecorEditorController {
   private zonesChangeCallbacks = new Set<(zones: ZoneTable) => void>()
   private interactionEndCallbacks = new Set<() => void>()
   private snapToFirstKeyframeCallbacks = new Set<() => void>()
+  private zonePlacementCallbacks = new Set<(useZone: boolean) => void>()
 
   constructor(catalogs: DecorEditorCatalogs, orientationContext: OrientationContext = 'horizontal') {
     this.catalogs = catalogs
@@ -65,6 +67,7 @@ export class DecorEditorController {
     this.zonesChangeCallbacks.clear()
     this.interactionEndCallbacks.clear()
     this.snapToFirstKeyframeCallbacks.clear()
+    this.zonePlacementCallbacks.clear()
   }
 
   // ── Subscription ────────────────────────────────────────────────────────────
@@ -153,6 +156,26 @@ export class DecorEditorController {
 
   setZoneMode(on: boolean): void {
     this.send({ type: 'ZONE_MODE.TOGGLE', on })
+  }
+
+  /** Requests the host to store or clear the current item's explicit geometry. */
+  requestZonePlacement(useZone: boolean): void {
+    for (const callback of this.zonePlacementCallbacks) callback(useZone)
+  }
+
+  /** Subscribes to the host operation behind the derived zone placement checkbox. */
+  onZonePlacementRequest(callback: (useZone: boolean) => void): Unsubscribe {
+    this.zonePlacementCallbacks.add(callback)
+    return () => this.zonePlacementCallbacks.delete(callback)
+  }
+
+  /** Reports whether the attached single item currently follows its zone or explicit geometry. */
+  getZonePlacementMode(): 'zone' | 'geometry' | null {
+    const items = this.getItems()
+    if (items.length !== 1) return null
+    const decor = resolveAttachedDecor(items[0]!)
+    if (typeof decor.zoneId !== 'string' || decor.zoneId.length === 0) return null
+    return hasExplicitPlacementGeometry(decor.offset) ? 'geometry' : 'zone'
   }
 
   // ── Decor editing ───────────────────────────────────────────────────────────

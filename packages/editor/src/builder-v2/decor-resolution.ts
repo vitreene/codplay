@@ -132,13 +132,31 @@ export function resolveKeyframePoseStyle(
   item: Item,
   keyframe: Keyframe,
 ): Record<string, unknown> {
-  const poseStyle = resolveKeyframeLayers(scene, item, keyframe)
+  return resolveKeyframeLayers(scene, item, keyframe)
     .filter((_decor, index) => index === 0 || resolveKeyframeChannel(resolveLayerKeyframe(item, keyframe, index - 1)) === 'pose')
-    .reduce<Record<string, unknown>>(
-      (style, decor) => ({ ...style, ...resolvePoseChannelStyle(decor) }),
-      {},
-    )
-  return poseStyle
+    .reduce<Record<string, unknown>>((style, decor) => {
+      const next = { ...style, ...resolvePoseChannelStyle(decor) }
+      const offset = decor?.offset
+      if (offset === undefined) return next
+      const hasX = offset.x != null || offset.translate?.x != null
+      const hasY = offset.y != null || offset.translate?.y != null
+      if (offset.x === null && offset.translate?.x == null && !hasX) delete next.x
+      if (offset.y === null && offset.translate?.y == null && !hasY) delete next.y
+      if (offset.width === null) delete next.width
+      if (offset.height === null) delete next.height
+      return next
+    }, {})
+}
+
+/** Resolves offset fields through the pose chain, retaining nulls that clear inherited geometry. */
+export function resolveKeyframeOffset(
+  scene: EditorScene,
+  item: Item,
+  keyframe: Keyframe,
+): Decor['offset'] {
+  return resolveKeyframeLayers(scene, item, keyframe)
+    .filter((_decor, index) => index === 0 || resolveKeyframeChannel(resolveLayerKeyframe(item, keyframe, index - 1)) === 'pose')
+    .reduce<Decor['offset']>((offset, decor) => mergeOffsetData(offset, decor?.offset), undefined)
 }
 
 /** Returns the initial decor followed by authored layers through the requested keyframe. */
@@ -165,6 +183,11 @@ function resolveLayerKeyframe(item: Item, keyframe: Keyframe, layerIndex: number
 /** Resolves the item's initial decor when no keyframe exists yet. */
 export function resolveInitialStyle(scene: EditorScene, item: Item): Record<string, unknown> {
   return resolveDecorStyle(scene.decors[item.initialDecorId])
+}
+
+/** Resolves the initial structured offset before any pose keyframe. */
+export function resolveInitialOffset(scene: EditorScene, item: Item): Decor['offset'] {
+  return scene.decors[item.initialDecorId]?.offset
 }
 
 /** Resolves the static class value at one keyframe without treating classes as interpolable data. */
@@ -313,12 +336,12 @@ export function hasOffsetData(decor: Decor | undefined): boolean {
 export function resolveOffsetAsStyle(offset: Decor['offset']): Record<string, unknown> {
   if (offset === undefined) return {}
   const style: Record<string, unknown> = {}
-  if (offset.x !== undefined) style.x = offset.x
-  if (offset.y !== undefined) style.y = offset.y
-  if (offset.translate?.x !== undefined) style.x = offset.translate.x
-  if (offset.translate?.y !== undefined) style.y = offset.translate.y
-  if (offset.width !== undefined) style.width = offset.width
-  if (offset.height !== undefined) style.height = offset.height
+  if (offset.x != null) style.x = offset.x
+  if (offset.y != null) style.y = offset.y
+  if (offset.translate?.x != null) style.x = offset.translate.x
+  if (offset.translate?.y != null) style.y = offset.translate.y
+  if (offset.width != null) style.width = offset.width
+  if (offset.height != null) style.height = offset.height
   if (offset.rotate !== undefined) style.rotate = offset.rotate
   if (offset.scale?.x !== undefined) style.scaleX = offset.scale.x
   if (offset.scale?.y !== undefined) style.scaleY = offset.scale.y
@@ -326,6 +349,24 @@ export function resolveOffsetAsStyle(offset: Decor['offset']): Record<string, un
     style['transform-origin'] = `${offset.rotationOrigin.fx * 100}% ${offset.rotationOrigin.fy * 100}%`
   }
   return style
+}
+
+/** Folds one sparse offset over its inherited fields without losing explicit clear markers. */
+function mergeOffsetData(
+  base: Decor['offset'],
+  addition: Decor['offset'],
+): Decor['offset'] {
+  if (addition === undefined) return base
+  return {
+    ...base,
+    ...addition,
+    ...(base?.translate === undefined && addition.translate === undefined
+      ? {}
+      : { translate: { ...base?.translate, ...addition.translate } }),
+    ...(base?.scale === undefined && addition.scale === undefined
+      ? {}
+      : { scale: { ...base?.scale, ...addition.scale } }),
+  } as Decor['offset']
 }
 
 /** Reports whether a Decor uses an editor zone that is intentionally deferred to the zones tranche. */

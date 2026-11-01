@@ -41,8 +41,16 @@ export interface PanelField {
   step?: number
 }
 
+/** Zone placement selector whose state is derived from Decor, not stored as a second mode field. */
+export interface ZonePlacementField {
+  kind: 'zone-placement'
+  label: string
+}
+
+export type PaletteField = PanelField | ZonePlacementField
+
 export type PalettePanel =
-  | { id: PanelId; label: string; kind?: undefined; fields: PanelField[] }
+  | { id: PanelId; label: string; kind?: undefined; fields: PaletteField[] }
   /** Cas spécial : mini-éditeur de code libre (contrat de palette), un seul contrôle, pas une liste de champs. */
   | { id: PanelId; label: string; kind: 'custom-code' }
   /** Cas spécial : liste des presets du catalogue (contrat de palette) — une action (fusion d'un

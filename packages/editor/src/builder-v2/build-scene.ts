@@ -21,6 +21,7 @@ import type { Move, PersoDoc, SceneDoc } from 'codplay'
 import { parseEase, prepareSvgPath } from 'ace'
 import { resolveKeyframeChannel } from '../app/commands/types'
 import type { CapsuleDef, EditorScene, Item, Keyframe, Transition, Zone } from '../app/commands/types'
+import { hasExplicitPlacementGeometry } from '../app/commands/offset-placement'
 import { resolveKeyframeTransition } from './keyframe-transition'
 import { normalizeMotionEasing } from '../motion-editor/easing'
 import { OFFSET_STYLE_PROPERTIES } from '../decor-editor/units'
@@ -29,11 +30,13 @@ import {
   hasZoneAssignment,
   isInterpolableStylePair,
   resolveInitialClassName,
+  resolveInitialOffset,
   resolveInitialStyle,
   resolveKeyframeDecorStyle,
   resolveStyleDefaultsForTarget,
   resolveKeyframeClassName,
   resolveKeyframePoseStyle,
+  resolveKeyframeOffset,
   resolveKeyframeStyle,
   sortDecorationKeyframes,
   resolveRootClassName,
@@ -421,8 +424,15 @@ function resolveZoneIdAtPoseKeyframe(scene: EditorScene, item: Item, keyframe: K
 
 /** Resolves the target zone represented by the item's initial pose in the Builder projection. */
 function resolveInitialZoneId(scene: EditorScene, item: Item, firstPoseKeyframe: Keyframe | undefined): string | null {
-  if (firstPoseKeyframe !== undefined) return resolveZoneIdAtPoseKeyframe(scene, item, firstPoseKeyframe)
-  return scene.decors[item.initialDecorId]?.zoneId ?? null
+  if (firstPoseKeyframe !== undefined) return resolvePlacementZoneIdAtPoseKeyframe(scene, item, firstPoseKeyframe)
+  const zoneId = scene.decors[item.initialDecorId]?.zoneId ?? null
+  return hasExplicitPlacementGeometry(resolveInitialOffset(scene, item)) ? null : zoneId
+}
+
+/** Lets explicit x/y/width/height geometry own placement while retaining the zone reference. */
+function resolvePlacementZoneIdAtPoseKeyframe(scene: EditorScene, item: Item, keyframe: Keyframe): string | null {
+  if (hasExplicitPlacementGeometry(resolveKeyframeOffset(scene, item, keyframe))) return null
+  return resolveZoneIdAtPoseKeyframe(scene, item, keyframe)
 }
 
 /** Keeps an item in its capsule unless its decor assigns it to one of that capsule's zones. */
@@ -441,8 +451,8 @@ function buildZoneMoveActions(
 ): DecorAction[] {
   return poseKeyframes.slice(1).flatMap((destination, index) => {
     const source = poseKeyframes[index]!
-    const sourceZoneId = resolveZoneIdAtPoseKeyframe(scene, item, source)
-    const destinationZoneId = resolveZoneIdAtPoseKeyframe(scene, item, destination)
+    const sourceZoneId = resolvePlacementZoneIdAtPoseKeyframe(scene, item, source)
+    const destinationZoneId = resolvePlacementZoneIdAtPoseKeyframe(scene, item, destination)
     if (sourceZoneId === destinationZoneId) return []
 
     const { durationMs, ease, startAtMs } = resolveKeyframeTransition(source, destination)
@@ -675,6 +685,9 @@ function buildNestedCapsulePerso(
   const keyframes = sortPoseKeyframes(item)
   const firstKeyframe = keyframes[0]
   const initialZoneId = resolveInitialZoneId(scene, item, firstKeyframe)
+  const initialStyle = firstKeyframe === undefined
+    ? resolveInitialStyle(scene, item)
+    : resolveKeyframeStyle(scene, item, firstKeyframe)
   const zoneActions = buildZoneMoveActions(scene, item, parentPersoId, keyframes, preRollMs)
   const className = [resolution.rootArtifact.className, childArtifact.className].filter(Boolean).join(' ') || undefined
   const actions: Record<string, { style?: Record<string, unknown>; move?: Move }> = { ...transition.actions }
@@ -689,7 +702,7 @@ function buildNestedCapsulePerso(
         tag: 'div',
         attr: { 'data-item-id': `${EDITOR_V2_STORY_ID}:${item.id}` },
         ...(className === undefined ? {} : { className }),
-        ...(initialZoneId === null ? {} : { style: { width: '100%', height: '100%' } }),
+        ...(Object.keys(initialStyle).length === 0 ? {} : { style: initialStyle }),
       },
       actions,
     },
@@ -722,7 +735,6 @@ function buildLeafPerso(
     : resolveKeyframeClassName(scene, item, firstKeyframe)
   const transition = resolveTransitionActions(childArtifact)
   const initial = {
-    ...(initialZoneId === null ? {} : { width: '100%', height: '100%' }),
     ...initialStyle,
     ...transition.introFrom,
   }
@@ -802,17 +814,17 @@ function buildInterpolationActions(
   const missingStyleDefaultProperties = new Set<string>()
   const poseSegments = poseKeyframes.slice(1).map((destination, index) => {
     const source = poseKeyframes[index]!
-    const fromStyle = resolveKeyframePoseStyle(scene, item, source)
+    const fromStyle = resolvePlacementPoseStyle(scene, item, source, resolveKeyframePoseStyle(scene, item, source))
     const toStyle = resolveKeyframePoseStyle(scene, item, destination)
     const path = scene.decors[destination.decorId]?.path
     return {
       source,
       destination,
-      sourceZoneId: resolveZoneIdAtPoseKeyframe(scene, item, source),
-      destinationZoneId: resolveZoneIdAtPoseKeyframe(scene, item, destination),
+      sourceZoneId: resolvePlacementZoneIdAtPoseKeyframe(scene, item, source),
+      destinationZoneId: resolvePlacementZoneIdAtPoseKeyframe(scene, item, destination),
       fromStyle,
-      toStyle,
-      diff: computeStyleDiff(fromStyle, toStyle),
+      toStyle: resolvePlacementPoseStyle(scene, item, destination, toStyle),
+      diff: computeStyleDiff(fromStyle, resolvePlacementPoseStyle(scene, item, destination, toStyle)),
       path,
       hasMotionPath: typeof path === 'string' && path.trim() !== '',
     }
@@ -913,6 +925,18 @@ function buildInterpolationActions(
     }
   }
   return actions
+}
+
+/** Clears inherited x/y runtime offsets when a pose returns to its structural zone target. */
+function resolvePlacementPoseStyle(
+  scene: EditorScene,
+  item: Item,
+  keyframe: Keyframe,
+  style: Record<string, unknown>,
+): Record<string, unknown> {
+  return resolvePlacementZoneIdAtPoseKeyframe(scene, item, keyframe) === null
+    ? style
+    : { x: 0, y: 0, ...style }
 }
 
 /** Builds the visual class delta independently of the frame placement classes. */

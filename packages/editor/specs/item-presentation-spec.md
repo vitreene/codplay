@@ -62,6 +62,12 @@ inline du cadre. La libération de ces contributions lors d’une capture révè
 la règle auteur courante. Ce partage préserve aussi une pose motion identique
 lors d’une nouvelle présentation logique.
 
+Quand l’état natif porte `width` ou `height: 100%`, l’ancre privée remplit
+l’axe correspondant du cadre motion au lieu de rétrécir le visuel à sa taille
+intrinsèque. La dimension vient ainsi du cadre courant, y compris d’une aire de
+zone ; aucun offset auteur n’est ajouté. Les axes sans cette valeur restent
+centrés à leur taille intrinsèque.
+
 La preview passe par `snapshot.set` sur l’unique perso. Le bridge transmet le
 candidat affiché et, lorsqu’une pose motion est publiée, son inverse affine
 calculé par ACE dans `--editor-item-preview-inverse`. Le composant exprime ce

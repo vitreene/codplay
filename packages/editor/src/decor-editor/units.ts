@@ -38,13 +38,13 @@ export function offsetValuesPxToPatch(values: OffsetValuesPx, containerWidthPx: 
 /** champs → geste (conversion d’unités) : sens inverse, `OffsetPatch` (cqw) → `OffsetValuesPx` (px). */
 export function offsetPatchToValuesPx(patch: OffsetPatch, containerWidthPx: number): OffsetValuesPx {
   const values: OffsetValuesPx = {}
-  if (patch.x !== undefined) values.x = cqwToPx(patch.x, containerWidthPx)
-  if (patch.y !== undefined) values.y = cqwToPx(patch.y, containerWidthPx)
-  if (patch.width !== undefined) values.width = cqwToPx(patch.width, containerWidthPx)
-  if (patch.height !== undefined) values.height = cqwToPx(patch.height, containerWidthPx)
+  if (patch.x != null) values.x = cqwToPx(patch.x, containerWidthPx)
+  if (patch.y != null) values.y = cqwToPx(patch.y, containerWidthPx)
+  if (patch.width != null) values.width = cqwToPx(patch.width, containerWidthPx)
+  if (patch.height != null) values.height = cqwToPx(patch.height, containerWidthPx)
   if (patch.translate !== undefined) {
-    values.x = cqwToPx(patch.translate.x, containerWidthPx)
-    values.y = cqwToPx(patch.translate.y, containerWidthPx)
+    if (patch.translate.x != null) values.x = cqwToPx(patch.translate.x, containerWidthPx)
+    if (patch.translate.y != null) values.y = cqwToPx(patch.translate.y, containerWidthPx)
   }
   if (patch.rotate !== undefined) values.rotate = patch.rotate
   if (patch.scale !== undefined) {

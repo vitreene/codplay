@@ -8,6 +8,7 @@
 import type { CapsuleDef, Content, Decor, EditorScene, Item, ItemType, OffsetData } from './types'
 import { nextOrderKey } from './order-key'
 import { DEFAULT_DECOR_PRESET } from './default-decor-presets'
+import { hasExplicitPlacementGeometry, missingZoneFillStyle } from './offset-placement'
 
 /** Generates an author ID that stays distinct from IDs restored from persisted scenes. */
 function freshId(prefix: string): string {
@@ -41,8 +42,11 @@ export function createItem(
 
   const decor: Decor = {
     id: decorId,
-    offset: args.geometry,
+    ...(Object.keys(args.geometry).length === 0 ? {} : { offset: args.geometry }),
     ...(args.zoneId === undefined ? {} : { zoneId: args.zoneId }),
+    ...(zone !== undefined && !hasExplicitPlacementGeometry(args.geometry)
+      ? { style: missingZoneFillStyle(undefined, undefined) }
+      : {}),
   }
   const order = nextOrderKey(childrenOf(scene, parentId).map((i) => i.order))
 
@@ -92,12 +96,16 @@ export function assignType(scene: EditorScene, args: { itemId: string; type: Ite
   // traced position/size while adding the visual defaults. Offset fields therefore merge with
   // the creation decor, with authored geometry taking precedence over preset fallbacks.
   const existingDecor = withType.decors[item.initialDecorId]
-  const patch = preset.offset === undefined
-    ? preset
-    : {
-      ...preset,
-      offset: { ...preset.offset, ...existingDecor?.offset },
-    }
+  const { offset: presetOffset, ...visualPreset } = preset
+  const keepZonePlacement = existingDecor?.zoneId != null
+    && !hasExplicitPlacementGeometry(existingDecor.offset)
+  const patch = {
+    ...visualPreset,
+    ...(preset.style === undefined ? {} : { style: { ...preset.style, ...existingDecor?.style } }),
+    ...(presetOffset === undefined || keepZonePlacement
+      ? {}
+      : { offset: { ...presetOffset, ...existingDecor?.offset } }),
+  }
   return setDecor(withType, { decorId: item.initialDecorId, patch })
 }
 
@@ -193,7 +201,17 @@ export function setCapsuleDef(scene: EditorScene, args: { itemId: string; patch:
  */
 export function placeInZone(scene: EditorScene, args: { itemId: string; zoneId: string | null }): EditorScene {
   const item = requireItem(scene, args.itemId)
-  return setDecor(scene, { decorId: item.initialDecorId, patch: { zoneId: args.zoneId } })
+  const decor = scene.decors[item.initialDecorId]
+  const zoneFillStyle = args.zoneId !== null && !hasExplicitPlacementGeometry(decor?.offset)
+    ? missingZoneFillStyle(decor?.style, decor?.custom)
+    : {}
+  return setDecor(scene, {
+    decorId: item.initialDecorId,
+    patch: {
+      zoneId: args.zoneId,
+      ...(Object.keys(zoneFillStyle).length === 0 ? {} : { style: { ...decor?.style, ...zoneFillStyle } }),
+    },
+  })
 }
 
 /** Removes an item and its descendants while preserving decor/content references still owned by the remaining scene. */

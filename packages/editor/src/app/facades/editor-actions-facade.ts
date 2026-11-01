@@ -1,6 +1,6 @@
 import type { Actor } from 'xstate'
 import { DocumentHistory, type DocumentHistoryState } from '../history/document-history'
-import { applyDefaultTextFontSize } from '../commands/default-decor-presets'
+import { applyDefaultTextFontSize, applyDefaultZonePlacementStyle } from '../commands/default-decor-presets'
 import type { EditorScene, RootPlacementMode } from '../commands/types'
 import type { controllerMachine } from '../controller/controller-machine'
 import type { Command } from '../controller/types'
@@ -23,7 +23,7 @@ export class EditorActionsFacade {
 
   /** Loads a document through the central controller and its existing module bridges. */
   loadScene(scene: EditorScene): void {
-    this.controller.send({ type: 'SCENE_LOADED', scene: applyDefaultTextFontSize(scene) })
+    this.controller.send({ type: 'SCENE_LOADED', scene: applyDefaultZonePlacementStyle(applyDefaultTextFontSize(scene)) })
   }
 
   /** Sends one typed document command through the central facade. */
@@ -33,6 +33,7 @@ export class EditorActionsFacade {
 
   /** Enters the existing creation gesture with one of the root placement modes. */
   beginBlockCreation(placementMode: RootPlacementMode): void {
+    if (placementMode !== 'transform') return
     this.controller.send({ type: 'CREATE_MODE_ENTER', itemType: 'bloc', placementMode })
   }
 

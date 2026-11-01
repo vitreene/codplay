@@ -15,8 +15,9 @@
 
 /* ── Palette ────────────────────────────────────────────────────────────── */
 .dedit-palette {
-  position: fixed;
-  width: 260px;
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
   background: var(--dedit-bg);
   color: var(--dedit-text);
   border: 1px solid var(--dedit-border);

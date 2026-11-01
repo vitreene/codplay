@@ -142,12 +142,12 @@ export interface Content {
  * réservé à ce concept futur, pour ne pas les confondre une fois construit.
  */
 export interface OffsetData {
-  x?: number
-  y?: number
-  width?: number
-  height?: number
+  x?: number | null
+  y?: number | null
+  width?: number | null
+  height?: number | null
   anchor?: { alignSelf?: string; justifySelf?: string }
-  translate?: { x: number; y: number }
+  translate?: { x?: number | null; y?: number | null }
   rotate?: number
   scale?: { x: number; y: number }
   ratio?: number | null
