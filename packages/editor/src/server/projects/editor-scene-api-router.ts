@@ -37,6 +37,24 @@ export function createEditorSceneApiRouter(persistence: SqliteEditorScenePersist
     return Response.json(result)
   })
 
+  router.delete('/api/scenes/:sceneId', async ({ params, request }) => {
+    const body = await readJsonBody(request)
+    if (body === null || !isRecord(body)
+      || typeof body.expectedRevision !== 'number'
+      || !Number.isInteger(body.expectedRevision)
+      || body.expectedRevision < 0) {
+      return errorResponse('La révision attendue est invalide.', 400)
+    }
+
+    const result = await persistence.deleteScene(params.sceneId!, body.expectedRevision)
+    if (result.kind === 'missing') return errorResponse('Scène introuvable.', 404)
+    if (result.kind === 'last-scene') return errorResponse('Au moins une scène doit rester enregistrée.', 409)
+    if (result.kind === 'conflict') {
+      return Response.json({ error: 'La scène a été modifiée depuis son dernier chargement.', ...result }, { status: 409 })
+    }
+    return Response.json(result)
+  })
+
   router.put('/api/active-scene', async ({ request }) => {
     const body = await readJsonBody(request)
     if (body === null || !isRecord(body)

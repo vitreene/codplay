@@ -123,8 +123,8 @@ function editorScenesEqual(left: unknown, right: unknown): boolean {
     knownPairs.add(rightValue)
     compared.set(leftValue, knownPairs)
 
-    const leftKeys = Reflect.ownKeys(leftValue)
-    const rightKeys = Reflect.ownKeys(rightValue)
+    const leftKeys = Reflect.ownKeys(leftValue).filter((key) => (leftValue as Record<PropertyKey, unknown>)[key] !== undefined)
+    const rightKeys = Reflect.ownKeys(rightValue).filter((key) => (rightValue as Record<PropertyKey, unknown>)[key] !== undefined)
     return leftKeys.length === rightKeys.length
       && leftKeys.every((key) => Object.hasOwn(rightValue, key)
         && equalValue(

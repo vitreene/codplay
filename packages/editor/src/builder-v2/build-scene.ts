@@ -548,7 +548,12 @@ function resolveCapsule(
       capsule: {
         id: 'editor-v2-capsule',
         type: capsuleType,
-        grid: { rows: options?.grid?.rows, cols: options?.grid?.cols },
+        grid: {
+          rows: options?.grid?.rows,
+          cols: options?.grid?.cols,
+          ...(options?.grid?.gap?.row === undefined ? {} : { rowGap: `${options.grid.gap.row}cqw` }),
+          ...(options?.grid?.gap?.col === undefined ? {} : { columnGap: `${options.grid.gap.col}cqw` }),
+        },
         sceneRoot: options?.sceneRoot,
         defaults: transitionDefaults,
       },

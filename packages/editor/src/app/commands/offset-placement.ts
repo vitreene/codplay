@@ -6,18 +6,18 @@ type PlacementGeometry = Readonly<{
   translate?: Readonly<{ x?: number | null; y?: number | null }>
 }>
 
-/** Reports whether author geometry overrides a zone's structural placement. */
+/** Reports whether absolute position or size overrides a zone's structural placement.
+ * `translate` is a zone-relative transform, so it does not detach the item from its zone.
+ */
 export function hasExplicitPlacementGeometry(offset: PlacementGeometry | null | undefined): boolean {
   if (offset === undefined || offset === null) return false
   return offset.x != null
     || offset.y != null
     || offset.width != null
     || offset.height != null
-    || offset.translate?.x != null
-    || offset.translate?.y != null
 }
 
-/** Marks inherited position and size values as cleared while preserving rotation and scale. */
+/** Clears a free placement when returning to its zone while preserving rotate/scale. */
 export function clearOffsetPlacementGeometry<T extends PlacementGeometry>(
   offset: T | null | undefined,
 ): T & { x: null; y: null; width: null; height: null; translate: { x: null; y: null } } {

@@ -14,3 +14,9 @@ export type StoredEditorScene = Readonly<{
 export type SaveEditorSceneResult =
   | Readonly<{ kind: 'saved'; revision: number }>
   | Readonly<{ kind: 'conflict'; currentRevision: number | null }>
+
+export type DeleteEditorSceneResult =
+  | Readonly<{ kind: 'deleted'; activeScene: StoredEditorScene }>
+  | Readonly<{ kind: 'conflict'; currentRevision: number }>
+  | Readonly<{ kind: 'missing' }>
+  | Readonly<{ kind: 'last-scene' }>

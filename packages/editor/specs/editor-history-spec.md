@@ -17,6 +17,8 @@ ni dans SQLite, ni dans Elcé, ni dans CodPlay.
   document restauré.
 - Une nouvelle édition après Undo vide la branche Redo. La session conserve au
   plus 100 commits.
+- Chaque signal explicite de fin d'interaction Décor produit son propre commit
+  Undo ; les previews `input` restent hors historique jusqu'à ce signal.
 - Le chargement ou remplacement documentaire remet l'historique de session à
   zéro. Une restauration Undo/Redo passe par `RESTORE_DOCUMENT` et le rebuild
   normal ; elle n'est pas enregistrée comme une nouvelle étape.
@@ -28,6 +30,11 @@ ni dans SQLite, ni dans Elcé, ni dans CodPlay.
   des changements documentaires ; elle ne conserve pas la pile Undo/Redo.
 - Les commandes Undo/Redo, les raccourcis clavier et les boutons de menu
   utilisent la même façade applicative.
+- Dans le menu Editor, Undo/Redo est présenté dans le groupe `Application`, à
+  part des groupes `Scène` (catalogue et commandes de scène) et `Bloc` (création
+  de bloc et de texte). Les boutons icônes ont un gabarit compact fixe et
+  centrent leur icône sans s'étirer sur la largeur du groupe. Le groupe ne change
+  pas le circuit des commandes.
 
 ## Preuves
 
@@ -37,6 +44,11 @@ ni dans SQLite, ni dans Elcé, ni dans CodPlay.
 - [`tests/decor-editor-bridge-integration-v2.spec.ts`](../tests/decor-editor-bridge-integration-v2.spec.ts)
   et [`tests/block-creation-v2.spec.ts`](../tests/block-creation-v2.spec.ts)
   vérifient Undo/Redo à travers les commandes et bridges réels de l'éditeur.
+- [`tests/scene-selection.spec.ts`](../tests/scene-selection.spec.ts) vérifie
+  qu'un clic de sélection n'entre pas dans l'historique, tandis qu'un clic de
+  tracé de zone sur le fond crée bien une entrée documentaire.
 - [`tests/app/persistence/sqlite-editor-scene-persistence.spec.ts`](../tests/app/persistence/sqlite-editor-scene-persistence.spec.ts)
   vérifie la persistance des documents restaurés sans sérialiser la pile
   d'historique.
+- [`src/app/layout/editor-menu-region.tsx`](../src/app/layout/editor-menu-region.tsx)
+  matérialise ces groupes par leurs légendes dans le menu courant.

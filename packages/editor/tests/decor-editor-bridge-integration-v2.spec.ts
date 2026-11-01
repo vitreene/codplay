@@ -189,6 +189,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
 
     actor = createActor(controllerMachine)
     actor.start()
+    actions = new EditorActionsFacade(actor)
     const documentScene = scene()
     actor.send({ type: 'SCENE_LOADED', scene: documentScene })
     const facade = new EditorPlayerCommandFacade()
@@ -217,23 +218,33 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     expect(colorInput!.value.toLowerCase()).not.toBe('#808080')
     colorInput!.value = '#00ff00'
     colorInput!.dispatchEvent(new Event('input', { bubbles: true }))
-    colorInput!.dispatchEvent(new Event('change', { bubbles: true }))
     const candidateStyle = item!.getAttribute('style')
     expect(candidateStyle).toContain('oklch')
     expect(coordination.decorPreview.getAt('item', 2_500)).not.toBeNull()
     expect(decorPanel.querySelector('.dedit-field__control[data-decor-property-path="style.background-color"]')?.classList.contains('dedit-field__control--modified')).toBe(true)
     expect(actor.getSnapshot().context.scene).toBe(documentScene)
 
-    actor.send({ type: 'SEEK', timelineMs: 3_500 })
-    await waitTurns()
-    const awayStyle = item!.getAttribute('style')
-    expect(awayStyle).not.toBe(candidateStyle)
+    colorInput!.dispatchEvent(new Event('change', { bubbles: true }))
     const committedScene = actor.getSnapshot().context.scene!
+    expect(committedScene).not.toBe(documentScene)
     const committedItem = committedScene.items.find(candidate => candidate.id === 'item')!
     const created = committedItem.keyframes.find(keyframe => keyframe.timeMs === 2_500)
     expect(created).toBeDefined()
     expect(committedScene.decors[created!.decorId]?.style).toEqual({ 'background-color': 'oklch(0.8664 0.2948 142.5)' })
     expect(committedScene.decors[created!.decorId]?.offset).toBeUndefined()
+    expect(actions.getHistoryState()).toEqual({ canUndo: true, canRedo: false })
+
+    actions.undo()
+    expect(actor.getSnapshot().context.scene).toBe(documentScene)
+    expect(actions.getHistoryState()).toEqual({ canUndo: false, canRedo: true })
+    actions.redo()
+    expect(actor.getSnapshot().context.scene).toBe(committedScene)
+    expect(actions.getHistoryState()).toEqual({ canUndo: true, canRedo: false })
+
+    actor.send({ type: 'SEEK', timelineMs: 3_500 })
+    await waitTurns()
+    const awayStyle = item!.getAttribute('style')
+    expect(awayStyle).not.toBe(candidateStyle)
 
     actor.send({ type: 'SEEK', timelineMs: 2_500 })
     await waitTurns()
@@ -653,17 +664,21 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
 
     borderWidthInput!.value = '20'
     borderWidthInput!.dispatchEvent(new Event('change', { bubbles: true }))
-    await waitTurns()
+    await waitTurns(24)
 
-    const candidate = coordination.decorPreview.getAt('item', 2_500)
-    expect(candidate?.patch.style?.['border-width']).toBe('5cqw')
+    const committedScene = actor.getSnapshot().context.scene!
+    expect(committedScene).not.toBe(documentScene)
+    const committedItem = committedScene.items.find(candidateItem => candidateItem.id === 'item')!
+    const created = committedItem.keyframes.find(keyframe => keyframe.timeMs === 2_500)
+    expect(created?.channel).toBe('decor')
+    expect(committedScene.decors[created!.decorId]?.style?.['border-width']).toBe('5cqw')
     expect(decorPanel.querySelector('.dedit-field__control[data-decor-property-path="style.border-width"]')
-      ?.classList.contains('dedit-field__control--modified')).toBe(true)
-    expect(actor.getSnapshot().context.scene).toBe(documentScene)
+      ?.classList.contains('dedit-field__control--modified')).toBe(false)
 
     const liveItem = sceneRoot.querySelector<HTMLElement>('[data-editor-visual-for="item"]')!
     expect(liveItem.style.getPropertyValue('border-width')).toBe('5cqw')
     expect(liveItem.style.getPropertyValue('border-style')).toBe('solid')
+    expect(coordination.transport.getProgress()?.timelineMs).toBe(2_500)
     // Increasing the border changes only the border-box origin/size; the content-box anchor stays
     // at the same authored coordinates.
     expect(Number.parseFloat(initialFrame!.style.left)).toBeCloseTo(240, 6)
@@ -673,12 +688,6 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
 
     actor.send({ type: 'SEEK', timelineMs: 3_500 })
     await waitTurns(24)
-
-    const committedScene = actor.getSnapshot().context.scene!
-    const committedItem = committedScene.items.find(candidateItem => candidateItem.id === 'item')!
-    const created = committedItem.keyframes.find(keyframe => keyframe.timeMs === 2_500)
-    expect(created?.channel).toBe('decor')
-    expect(committedScene.decors[created!.decorId]?.style?.['border-width']).toBe('5cqw')
 
     const committedItemNode = sceneRoot.querySelector<HTMLElement>('[data-editor-visual-for="item"]')
     expect(committedItemNode?.style.getPropertyValue('border-width')).not.toBe('')
@@ -922,8 +931,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     tip!.dispatchEvent(pointerEvent('pointermove', 356, 320))
     tip!.dispatchEvent(pointerEvent('pointerup', 356, 320))
 
-    // A Selection Frame rotation is a pose gesture: the middle waypoint is materialized on the
-    // release itself, without waiting for the generic Decor phase idle flush.
+    // A Selection Frame rotation is a pose gesture: the middle waypoint is materialized on release.
     const rotatedScene = actor.getSnapshot().context.scene!
     const rotatedItem = rotatedScene.items.find((candidate) => candidate.id === 'item')!
     const rotatedKeyframe = rotatedItem.keyframes.find((keyframe) => keyframe.timeMs === 2_500)
@@ -1070,7 +1078,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const betweenFrame = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')
     expect(betweenFrame).not.toBeNull()
     expect(sceneRoot.querySelector('[data-motion-move-zone]')).toBeNull()
-    expect(betweenFrame?.style.zIndex).toBe('1100')
+    expect(betweenFrame?.style.zIndex).toBe('1160')
     expect(betweenFrame?.style.pointerEvents).toBe('auto')
     expect(sceneRoot.querySelector('[data-selection-frame-needle-tip]')).not.toBeNull()
     expect(sceneRoot.querySelector<HTMLElement>('[data-selection-frame-needle-tip]')?.style.pointerEvents).toBe('auto')
@@ -1339,15 +1347,15 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const frame = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')!
 
     // Reposition the newly-created target directly through the existing CS move channel. The
-    // target ghost must follow this live candidate before the deferred document flush.
+    // target ghost follows the live candidate while dragging; pointerup commits it.
     frame.dispatchEvent(pointerEvent('pointerdown', 240, 200))
     frame.dispatchEvent(pointerEvent('pointermove', 280, 220))
     expect(targetGhost.style.left).not.toBe(initialTargetLeft)
     expect(sourceGhost.style.left).toBe(initialSourceLeft)
     frame.dispatchEvent(pointerEvent('pointerup', 280, 220))
 
-    // A seek is the phase boundary that persists the CS patch. The target ghost is hidden because
-    // the item occupies that pose; the source remains the navigation artefact.
+    // The move completes at pointerup; the seek replays the committed pose at the same time.
+    // The target ghost is hidden because the item occupies that pose; the source stays available.
     actor.send({ type: 'SEEK', timelineMs: 500 })
     await waitTurns(24)
 

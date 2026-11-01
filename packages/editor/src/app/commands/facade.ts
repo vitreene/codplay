@@ -34,6 +34,8 @@ export function runCommandWithResult(scene: EditorScene, command: Command): { sc
       return { scene: rootPlacement.createRootZone(scene, command.args) }
     case 'setRootZonesSurface':
       return { scene: rootPlacement.setRootZonesSurface(scene, command.args) }
+    case 'setZonesSurface':
+      return { scene: rootPlacement.setZonesSurface(scene, command.args) }
     case 'assignType':
       return { scene: base.assignType(scene, command.args) }
     case 'assignContent':

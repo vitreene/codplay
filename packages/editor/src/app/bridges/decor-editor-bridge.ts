@@ -9,13 +9,19 @@ import type {
   SelectionFrameV2CreationResult,
   SelectionFrameV2Handle,
   ZoneEditorHandle,
+  ZoneEditorV2Pose,
 } from '@codplay/selection-frame/v2'
 import type { ZoneEditorState } from '@codplay/selection-frame/v2'
 import { DecorEditorController } from '../../decor-editor/controller'
+import { iconSvg } from '../../decor-editor/icons'
+import type { IconName } from '../../decor-editor/icons'
 import { mountDecorEditor } from '../../decor-editor/mount'
 import { DEFAULT_PALETTE, DEFAULT_PRESETS } from '../../decor-editor/default-palette'
 import type { DecorEditorCatalogs } from '../../decor-editor/controller'
 import type { DecorEditorMountHandle } from '../../decor-editor/mount'
+import { mountCapsuleDefinitionEditor } from '../../capsule-editor/mount'
+import type { CapsuleDefinitionEditorHandle, CapsuleEditorSelection } from '../../capsule-editor/mount'
+import { capsuleGridForScene, isManualCapsuleType } from '../../capsule-editor/capsule-grid'
 import type { DecorPatch, OffsetPatch, SelectionFrameValue } from '../../decor-editor/types'
 import {
   applyDecorPatch,
@@ -42,6 +48,8 @@ import { resolveDecorationStyleAtTime } from '../../builder-v2/decor-resolution'
 import { createMotionOverlay } from '../../motion-editor/overlay'
 import type { MotionOverlayGhost, MotionOverlayHandle, MotionOverlayRole, MotionOverlaySegment } from '../../motion-editor/overlay'
 import { createMotionGeometryStore } from '../../motion-editor/geometry-store'
+import { createBlockMoveControl } from './block-move-control'
+import type { BlockMoveControlHandle } from './block-move-control'
 import {
   frameVisualCenter,
   frameWithRotationAtPathAnchor,
@@ -464,12 +472,16 @@ export function resolveEffectivePosePatch(
 function withoutPosePatch(patch: DecorPatch): DecorPatch {
   const result = { ...patch }
   delete result.offset
+  delete result.zoneId
   return result
 }
 
-/** Keeps only the structured pose group needed by the current selection-frame projection. */
+/** Keeps explicit geometry and zone assignment in the keyframe's spatial pose cascade. */
 function withoutNonPosePatch(patch: DecorPatch): DecorPatch {
-  return patch.offset === undefined ? {} : { offset: patch.offset }
+  return {
+    ...(patch.offset === undefined ? {} : { offset: patch.offset }),
+    ...(patch.zoneId === undefined ? {} : { zoneId: patch.zoneId }),
+  }
 }
 
 /**
@@ -594,8 +606,6 @@ function materializeZoneFillStyle(base: DecorPatch, patch: DecorPatch): DecorPat
   return Object.keys(additions).length === 0 ? patch : mergePatch(patch, { style: additions })
 }
 
-/** Signal d'inactivité seulement — jamais une cadence de commit pour un geste actif. Exporté pour que les tests avancent les minuteurs factices sur la valeur réelle, sans dupliquer la constante. */
-export const PHASE_IDLE_FLUSH_MS = 4000
 /**
  * Applies one V2 selection-frame gesture to the current local-pixel frame.
  *
@@ -713,10 +723,24 @@ export function createDecorEditorBridge(
   const controller = new DecorEditorController(catalogs)
   const motionGeometry = createMotionGeometryStore()
   let mountHandle: DecorEditorMountHandle | null = null
+  let capsuleDefinitionEditor: CapsuleDefinitionEditorHandle | null = null
+  let decorPanelHost: HTMLElement | null = null
+  let capsulePanelHost: HTMLElement | null = null
+  let capsuleDefinitionHost: HTMLElement | null = null
+  let rootSettingsHost: HTMLElement | null = null
+  let authoringToolsHost: HTMLElement | null = null
+  let decorTab: HTMLButtonElement | null = null
+  let capsuleTab: HTMLButtonElement | null = null
+  let editorTabs: HTMLElement | null = null
+  let activeEditorPanel: 'decor' | 'capsule' = 'decor'
+  let lastCapsuleTargetKey: string | null = null
   let selectionFrame: SelectionFrameV2Handle | null = null
+  let blockMoveControl: BlockMoveControlHandle | null = null
   let zoneEditor: ZoneEditorHandle | null = null
-  let unsubscribeZoneVisibility: (() => void) | null = null
+  let zoneEditorRoot: HTMLElement | null = null
+  let unsubscribeSceneToolState: (() => void) | null = null
   let unsubscribeSelectionGeometry: (() => void) | null = null
+  let syncingZoneSelection = false
   let motionOverlay: MotionOverlayHandle | null = null
   let activeCreationMode: { itemType: ItemType; placementMode: RootPlacementMode } | null = null
   let playbackActive = false
@@ -730,9 +754,11 @@ export function createDecorEditorBridge(
   let frameLogicalValue: SelectionFrameValue | null = null
   let frameGestureBasePx: SelectionFrameValue | null = null
   let frameGestureKind: SelectionFrameDelta['kind'] | null = null
+  let frameGestureHasNetDelta = false
   let frameGestureCancelled = false
   /** Authored rotation offset paired with the displayed frame captured at gesture start. */
   let frameGestureBaseAuthorRotate: number | null = null
+  let blockMoveGestureActive = false
   /** Keeps a just-released CS pose authoritative while the player presentation catches up. */
   let frameCommitCandidatePx: SelectionFrameValue | null = null
   /** Retains the live frame preview until the rebuilt document has been presented by the player. */
@@ -752,18 +778,15 @@ export function createDecorEditorBridge(
   let resizeFrameRequest: number | null = null
   let resizeProjectionQueued = false
 
-  // ── Commit de fin de phase —
-  // dedit lui-même n'a aucun debounce (rôle du pont, émission continue) ; c'est ce pont, l'hôte, qui
-  // décide seul QUAND committer. Six signaux de fin de phase, jamais un minuteur court réarmé à
-  // chaque micro-geste : changement de sélection, seek, mutation externe du document et Échap sont
-  // immédiats (`flushNow`/`abortPhase` appelés directement) ; seule l'inactivité prolongée passe par
-  // un minuteur (`armIdleFlush`, réarmé à chaque signal d'activité). ─────────────────────────────
+  // ── Commit de fin d'interaction —
+  // dedit émet la preview pendant `input` ; ce pont committe au signal explicite de fin d'interaction.
+  // Sélection, seek et mutation externe gardent leurs frontières immédiates ; Échap abandonne.
+  // Aucun délai d'inactivité ne décide du commit. ───────────────────────────────────────────────
 
   let pendingCommands: Command[] | null = null
   const decorEditStates = new Map<string, DecorEditState>()
   let frameGestureBaseDecorState: DecorEditState | null = null
   let pendingTemporaryDecorCommit: { itemId: string; timeMs: number } | null = null
-  let idleFlushTimer: ReturnType<typeof setTimeout> | null = null
   /** Dernière scène/sélection observées — distingue une vraie mutation externe (signal 5) et un simple écho de notre propre flush (qui vide `pendingCommands` avant d'émettre). */
   let lastObservedScene: EditorScene | null = null
   let lastSelectionKey: string | null = null
@@ -907,26 +930,11 @@ export function createDecorEditorBridge(
     return JSON.stringify([selection.itemIds, selection.keyframeId ?? null])
   }
 
-  function armIdleFlush(): void {
-    if (idleFlushTimer !== null) clearTimeout(idleFlushTimer)
-    idleFlushTimer = setTimeout(flushNow, PHASE_IDLE_FLUSH_MS)
-  }
-
-  function cancelIdleFlush(): void {
-    if (idleFlushTimer !== null) {
-      clearTimeout(idleFlushTimer)
-      idleFlushTimer = null
-    }
-  }
-
   /**
-   * Double garde avec `onGestureActiveChange` : un geste CS repris entre-temps (ex. resize→rotate
-   * enchaînés) laisse `pendingCommands` en place sans committer — sa propre fin réarmera. Sans ce
-   * second contrôle au moment du tir, un signal de fin de phase déjà en vol au moment où un nouveau
-   * geste démarre pourrait committer une position intermédiaire.
+   * Commits the pending Decor transaction only after an active Selection Frame gesture has ended;
+   * the gesture's own completion signal will call this again once its pointer session is released.
    */
   function flushNow(): void {
-    cancelIdleFlush()
     if (selectionFrame?.isGestureActive()) return
     const commands = pendingCommands
     pendingCommands = null
@@ -952,7 +960,6 @@ export function createDecorEditorBridge(
 
   /** Échap — abandon de phase (§Étape B.6) : jette l'écart en attente sans committer, puis force le pont `scenePlayer` à rejouer le document inchangé pour effacer la preview live devenue périmée. */
   function abortPhase(): void {
-    cancelIdleFlush()
     const hadPendingCommands = pendingCommands !== null
     const hadPreview = snapshotPreviewActive
     const hadTemporaryEdit = pendingTemporaryDecorCommit !== null || decorEditStates.size > 0
@@ -988,10 +995,231 @@ export function createDecorEditorBridge(
   }
   document.addEventListener('keydown', onKeyDown, { capture: true })
 
-  /** Mounts the palette as soon as the editor region exists; it has no player dependency. */
+  /** Returns the selected explicit capsule definition for its existing editor panel. */
+  function selectedCapsuleDefinition(): CapsuleEditorSelection | null {
+    const { scene, selection } = machine.getSnapshot().context
+    if (scene === null || selection.itemIds.length !== 1) return null
+    const item = scene.items.find((candidate) => candidate.id === selection.itemIds[0])
+    return item?.type === 'capsule' && item.capsule !== undefined
+      ? { itemId: item.id, capsule: item.capsule }
+      : null
+  }
+
+  /** Shows the existing Decor palette and the CapsuleDef editor as tabs inside the same region. */
+  function renderEditorPanels(): void {
+    const { scene, selection } = machine.getSnapshot().context
+    const selectedCapsule = selectedCapsuleDefinition()
+    const rootSelected = scene !== null && selection.itemIds.length === 0
+    const capsuleTargetKey = selectedCapsule?.itemId ?? (rootSelected ? 'root' : null)
+    if (capsuleTargetKey !== lastCapsuleTargetKey) {
+      activeEditorPanel = capsuleTargetKey === null ? 'decor' : 'capsule'
+      lastCapsuleTargetKey = capsuleTargetKey
+    }
+    renderAuthoringTools()
+    if (editorTabs === null || decorPanelHost === null || capsulePanelHost === null) return
+
+    const showScenePanel = selectedCapsule !== null || rootSelected
+    editorTabs.hidden = !showScenePanel
+    if (!showScenePanel) activeEditorPanel = 'decor'
+    if (decorTab !== null) decorTab.hidden = rootSelected
+    if (capsuleTab !== null) capsuleTab.textContent = rootSelected ? 'Scène' : 'Capsule'
+    if (decorTab !== null) decorTab.classList.toggle('dedit-tab--active', activeEditorPanel === 'decor')
+    if (capsuleTab !== null) capsuleTab.classList.toggle('dedit-tab--active', activeEditorPanel === 'capsule')
+    decorPanelHost.hidden = activeEditorPanel !== 'decor'
+    capsulePanelHost.hidden = !showScenePanel || activeEditorPanel !== 'capsule'
+    if (capsuleDefinitionHost !== null) capsuleDefinitionHost.hidden = selectedCapsule === null
+    if (rootSettingsHost !== null) rootSettingsHost.hidden = !rootSelected
+    renderRootSettings()
+    capsuleDefinitionEditor?.render()
+    capsuleDefinitionEditor?.setDisabled(playbackActive)
+    syncZoneEditorVisibility()
+  }
+
+  /** Renders the existing Zone/Bloc authoring state as icon controls above the Decor panels. */
+  function renderAuthoringTools(): void {
+    const host = authoringToolsHost
+    if (host === null) return
+    const context = machine.getSnapshot().context
+    host.replaceChildren()
+    host.hidden = context.scene === null
+    if (context.scene === null) return
+    const target = resolveTarget(context.scene, context.selection, lastKnownTimelineMs)
+    const selectedItem = context.scene.items.find((item) => item.id === target?.itemId)
+    const selectedItemUsesZone = selectedItem !== undefined
+      && itemUsesZonePlacement(context.scene, selectedItem, lastKnownTimelineMs, target?.keyframeId)
+
+    /** Appends one accessible, icon-only action to the authoring toolbar. */
+    const addTool = (
+      id: string,
+      label: string,
+      icon: IconName,
+      pressed: boolean,
+      action: () => void,
+    ): void => {
+      const button = document.createElement('button')
+      button.id = id
+      button.type = 'button'
+      button.className = 'capsule-editor__control-button'
+      button.setAttribute('aria-label', label)
+      button.setAttribute('aria-pressed', String(pressed))
+      button.title = label
+      button.disabled = playbackActive || activeCreationMode !== null
+      button.innerHTML = iconSvg(icon)
+      const svg = button.querySelector('svg')
+      if (svg !== null) svg.id = `${id}-icon`
+      button.addEventListener('click', action)
+      host.appendChild(button)
+    }
+
+    addTool(
+      'editor-authoring-zone',
+      'Mode Zone',
+      'grid',
+      context.authoringMode === 'zone',
+      () => machine.send({ type: 'SET_AUTHORING_MODE', mode: 'zone' }),
+    )
+    addTool(
+      'editor-authoring-block',
+      'Mode Bloc',
+      'square',
+      context.authoringMode === 'block',
+      () => machine.send({ type: 'SET_AUTHORING_MODE', mode: 'block' }),
+    )
+    if (context.authoringMode !== 'block') return
+
+    if (selectedItemUsesZone) {
+      addTool(
+        'editor-block-offset',
+        'Décalage',
+        'offset',
+        context.editGesture === 'offset',
+        () => machine.send({
+          type: 'SET_EDIT_GESTURE',
+          gesture: machine.getSnapshot().context.editGesture === 'offset' ? 'zone' : 'offset',
+        }),
+      )
+    }
+    addTool(
+      'editor-block-toggle-zone-visibility',
+      context.hideZonesInBlockMode ? 'Afficher les zones' : 'Masquer les zones',
+      'eye-off',
+      context.hideZonesInBlockMode,
+      () => machine.send({
+        type: 'SET_HIDE_ZONES_IN_BLOCK_MODE',
+        hidden: !machine.getSnapshot().context.hideZonesInBlockMode,
+      }),
+    )
+  }
+
+  /** Renders only the existing root placement and zone visibility controls in the Decor region. */
+  function renderRootSettings(): void {
+    if (rootSettingsHost === null) return
+    const { scene } = machine.getSnapshot().context
+    rootSettingsHost.replaceChildren()
+    if (scene === null) return
+
+    const fieldset = document.createElement('fieldset')
+    fieldset.id = 'editor-root-settings'
+    fieldset.className = 'capsule-editor'
+    const legend = document.createElement('legend')
+    legend.id = 'editor-root-settings-title'
+    legend.textContent = 'Placement racine'
+    fieldset.appendChild(legend)
+
+    const mode = rootPlacementModeForScene(scene)
+    const modes = document.createElement('div')
+    modes.id = 'editor-root-placement-modes'
+    modes.className = 'editor-menu-actions'
+    modes.setAttribute('aria-label', 'Type de grille racine')
+    for (const option of [
+      { value: 'transform' as const, label: 'Libre', title: 'Grille 1 × 1' },
+      { value: 'fine-grid' as const, label: 'Grille', title: 'Grille 90 × 160' },
+    ]) {
+      const button = document.createElement('button')
+      button.id = `editor-root-placement-${option.value}`
+      button.type = 'button'
+      button.className = 'capsule-editor__control-button'
+      button.textContent = option.label
+      button.title = option.title
+      button.setAttribute('aria-pressed', String(mode === option.value))
+      button.disabled = playbackActive || activeCreationMode !== null
+      button.addEventListener('click', () => machine.send({
+        type: 'RUN_COMMAND',
+        command: { name: 'setRootPlacementMode', args: { mode: option.value } },
+      }))
+      modes.appendChild(button)
+    }
+    fieldset.appendChild(modes)
+
+    const zonesButton = document.createElement('button')
+    zonesButton.id = 'editor-toggle-zones'
+    zonesButton.type = 'button'
+    zonesButton.className = 'capsule-editor__control-button'
+    zonesButton.textContent = machine.getSnapshot().context.zonesVisible ? 'Masquer les zones' : 'Afficher les zones'
+    zonesButton.setAttribute('aria-pressed', String(machine.getSnapshot().context.zonesVisible))
+    zonesButton.disabled = mode !== 'fine-grid' || playbackActive || activeCreationMode !== null
+    zonesButton.addEventListener('click', () => machine.send({ type: 'TOGGLE_ZONES_VISIBLE' }))
+    fieldset.appendChild(zonesButton)
+    rootSettingsHost.appendChild(fieldset)
+  }
+
+  /** Mounts the existing editors as content inside the stable Decor region. */
   function ensureMounted(): void {
     if (mountHandle) return
-    mountHandle = mountDecorEditor(container, controller)
+    const wrapper = document.createElement('div')
+    wrapper.className = 'editor-decor-tabs'
+    wrapper.id = 'editor-decor-tabs-host'
+    authoringToolsHost = document.createElement('div')
+    authoringToolsHost.id = 'editor-authoring-tools'
+    authoringToolsHost.className = 'editor-menu-actions editor-authoring-tools'
+    authoringToolsHost.setAttribute('role', 'group')
+    authoringToolsHost.setAttribute('aria-label', 'Outils d’édition')
+    editorTabs = document.createElement('div')
+    editorTabs.className = 'dedit-tabs'
+    editorTabs.id = 'editor-decor-tabs'
+    decorTab = document.createElement('button')
+    decorTab.type = 'button'
+    decorTab.className = 'dedit-tab'
+    decorTab.textContent = 'Décor'
+    decorTab.addEventListener('click', () => {
+      activeEditorPanel = 'decor'
+      renderEditorPanels()
+    })
+    capsuleTab = document.createElement('button')
+    capsuleTab.type = 'button'
+    capsuleTab.className = 'dedit-tab'
+    capsuleTab.textContent = 'Capsule'
+    capsuleTab.addEventListener('click', () => {
+      activeEditorPanel = 'capsule'
+      renderEditorPanels()
+    })
+    editorTabs.append(decorTab, capsuleTab)
+
+    decorPanelHost = document.createElement('div')
+    decorPanelHost.id = 'editor-decor-content'
+    capsulePanelHost = document.createElement('div')
+    capsulePanelHost.id = 'editor-capsule-content'
+    rootSettingsHost = document.createElement('div')
+    rootSettingsHost.id = 'editor-root-settings-content'
+    capsuleDefinitionHost = document.createElement('div')
+    capsuleDefinitionHost.id = 'editor-capsule-definition-content'
+    capsulePanelHost.append(rootSettingsHost, capsuleDefinitionHost)
+    wrapper.append(authoringToolsHost, editorTabs, decorPanelHost, capsulePanelHost)
+    container.replaceChildren(wrapper)
+
+    mountHandle = mountDecorEditor(decorPanelHost, controller)
+    capsuleDefinitionEditor = mountCapsuleDefinitionEditor(
+      capsuleDefinitionHost,
+      selectedCapsuleDefinition,
+      (itemId, patch) => {
+        flushNow()
+        machine.send({
+          type: 'RUN_COMMAND',
+          command: { name: 'setCapsuleDef', args: { itemId, patch } },
+        })
+      },
+    )
+    renderEditorPanels()
   }
 
   /** Returns the current scene-root width used by the single logical-length conversion boundary. */
@@ -1003,47 +1231,139 @@ export function createDecorEditorBridge(
     return Number.isFinite(width) && width > 0 ? width : null
   }
 
-  /** Selects the authored root-zone surface from the editor host's current aspect. */
-  function rootZoneOrientation(): Orientation {
-    return sceneHost !== null && sceneHost.clientHeight > sceneHost.clientWidth ? 'portrait' : 'landscape'
+  /** Chooses the zone surface being authored or targeted by the current selection. */
+  function activeZoneCapsuleId(scene: EditorScene, selection: Selection): string | null {
+    if (selection.itemIds.length !== 1) return null
+    const item = scene.items.find((candidate) => candidate.id === selection.itemIds[0])
+    if (item === undefined) return null
+    if (item.type === 'capsule' && machine.getSnapshot().context.authoringMode !== 'block') return item.id
+    return item.parentId
   }
 
-  /** Projects the root capsule's persisted track zones into the shared zone-editor model. */
-  function rootZoneEditorState(scene: EditorScene): ZoneEditorState {
-    const placementMode = rootPlacementModeForScene(scene) ?? 'transform'
-    const orientation = rootZoneOrientation()
+  /** Reports whether this capsule type exposes the zone grid used by Editor's current workflow. */
+  function hasZoneSurface(scene: EditorScene, capsuleId: string | null): boolean {
+    if (capsuleId === null) return rootPlacementModeForScene(scene) === 'fine-grid'
+    const capsule = scene.items.find((item) => item.id === capsuleId)
+    return capsule?.type === 'capsule' && capsule.capsule !== undefined && isManualCapsuleType(capsule.capsule.kind)
+  }
+
+  /** Reads a numeric V2 capsule pose for the shared zone overlay without touching player DOM. */
+  function zoneEditorPose(scene: EditorScene, capsuleId: string | null): ZoneEditorV2Pose | null {
+    if (sceneHost === null || !hasZoneSurface(scene, capsuleId)) return null
+    if (capsuleId === null) {
+      const width = sceneHost.clientWidth
+      const height = sceneHost.clientHeight
+      if (width <= 0 || height <= 0) return null
+      return { origin: { x: 0, y: 0 }, matrix: { a: 1, b: 0, c: 0, d: 1 }, localWidth: width, localHeight: height }
+    }
+    const runtimeItemId = `${EDITOR_V2_STORY_ID}:${capsuleId}`
+    return coordination.presentation.get()?.items.find((item) => item.itemId === runtimeItemId)?.pose ?? null
+  }
+
+  /** Chooses the stored zone surface matching the active capsule's current aspect. */
+  function zoneOrientation(scene: EditorScene, capsuleId: string | null): Orientation {
+    const pose = zoneEditorPose(scene, capsuleId)
+    return pose !== null && pose.localHeight > pose.localWidth ? 'portrait' : 'landscape'
+  }
+
+  /** Projects one capsule's track zones and cqw gutters into the shared overlay's local model. */
+  function zoneEditorState(scene: EditorScene, selection: Selection): ZoneEditorState {
+    const capsuleId = activeZoneCapsuleId(scene, selection)
+    const grid = capsuleGridForScene(scene, capsuleId)
+    const orientation = zoneOrientation(scene, capsuleId)
+    const pose = zoneEditorPose(scene, capsuleId)
+    const gapWidth = pose?.localWidth ?? null
+    const gap = grid?.gap === undefined || gapWidth === null
+      ? undefined
+      : { row: cqwToPx(grid.gap.row, gapWidth), col: cqwToPx(grid.gap.col, gapWidth) }
     return {
-      grid: ROOT_PLACEMENT_GRID[placementMode],
+      grid: grid === null
+        ? { ...ROOT_PLACEMENT_GRID['transform'] }
+        : { rows: grid.rows, cols: grid.cols, ...(gap === undefined ? {} : { gap }) },
       zones: Object.values(scene.zones)
-        .filter((zone) => zone.capsuleId === null)
+        .filter((zone) => zone.capsuleId === capsuleId)
         .map((zone) => ({ id: zone.id, name: zone.name, ...zone.surfaces[orientation] })),
     }
   }
 
-  /** Commits one completed root-zone gesture through the controller's existing transaction path. */
-  function commitRootZoneState(state: ZoneEditorState): void {
-    const scene = machine.getSnapshot().context.scene
-    if (scene === null || rootPlacementModeForScene(scene) !== 'fine-grid') return
+  /** Synchronizes the shared zone overlay visibility with authoring mode, capsule type, and playback. */
+  function syncZoneEditorVisibility(): void {
+    const context = machine.getSnapshot().context
+    const capsuleId = context.scene === null ? null : activeZoneCapsuleId(context.scene, context.selection)
+    const capsuleGridEditing = activeEditorPanel === 'capsule'
+      && (selectedCapsuleDefinition() !== null || context.selection.itemIds.length === 0)
+      && context.authoringMode !== 'block'
+    const grid = context.scene === null ? null : capsuleGridForScene(context.scene, capsuleId)
+    const finePlacementGrid = grid?.rows === ROOT_PLACEMENT_GRID['fine-grid'].rows
+      && grid.cols === ROOT_PLACEMENT_GRID['fine-grid'].cols
+    const blockMovePreview = context.authoringMode === 'block' && blockMoveGestureActive
+    const gridDropTarget = blockMovePreview && finePlacementGrid
+    const visible = !playbackActive
+      && context.scene !== null
+      && hasZoneSurface(context.scene, capsuleId)
+      && (context.zonesVisible || context.authoringMode === 'zone' || capsuleGridEditing || blockMovePreview)
+      && (!(context.authoringMode === 'block' && context.hideZonesInBlockMode) || blockMovePreview)
+    const showGrid = visible && (gridDropTarget
+      || (!blockMovePreview && (context.zonesVisible || context.authoringMode === 'zone' || capsuleGridEditing)))
+    zoneEditor?.setPartVisibility('grid', showGrid)
+    zoneEditor?.setPartVisibility('zones', visible && !gridDropTarget)
+    zoneEditor?.setPartVisibility('labels', visible && !gridDropTarget)
+    if (zoneEditorRoot !== null) {
+      zoneEditorRoot.inert = context.authoringMode === 'block' || playbackActive || activeCreationMode !== null
+    }
+  }
+
+  /** Keeps the current target overlay visible for the lifetime of one block move gesture. */
+  function setBlockMoveGestureActive(active: boolean): void {
+    if (blockMoveGestureActive === active) return
+    blockMoveGestureActive = active
+    syncZoneEditorVisibility()
+  }
+
+  /** Commits one completed zone gesture through the controller's existing transaction path. */
+  function commitZoneEditorState(state: ZoneEditorState): void {
+    const context = machine.getSnapshot().context
+    const scene = context.scene
+    if (context.authoringMode === 'block') {
+      if (scene !== null) zoneEditor?.setState(zoneEditorState(scene, context.selection))
+      return
+    }
+    if (scene === null) return
+    const capsuleId = activeZoneCapsuleId(scene, context.selection)
+    if (!hasZoneSurface(scene, capsuleId)) return
     machine.send({
       type: 'RUN_TRANSACTION',
       commands: [{
-        name: 'setRootZonesSurface',
+        name: 'setZonesSurface',
         args: {
-          orientation: rootZoneOrientation(),
-          zones: state.zones.map(({ id, name, row, col, rowSpan, colSpan }) => ({
-            id,
-            name,
-            area: { row, col, rowSpan, colSpan },
+          capsuleId,
+          orientation: zoneOrientation(scene, capsuleId),
+          zones: state.zones.map((zone) => ({
+            id: zone.id,
+            name: zone.name,
+            area: { row: zone.row, col: zone.col, rowSpan: zone.rowSpan, colSpan: zone.colSpan },
           })),
         },
       }],
     })
   }
 
-  /** Resynchronizes the root-zone overlay from the committed document and current host bounds. */
-  function syncRootZoneEditor(scene: EditorScene): void {
-    zoneEditor?.setState(rootZoneEditorState(scene))
+  /** Resynchronizes the active capsule-zone overlay from the committed document and pose. */
+  function syncZoneEditor(scene: EditorScene, selection: Selection): void {
+    zoneEditor?.setState(zoneEditorState(scene, selection))
     zoneEditor?.sync()
+    syncZoneEditorVisibility()
+  }
+
+  /** Restores the zone-editor highlight from the controller when Zone mode becomes active. */
+  function syncZoneEditorSelection(): void {
+    const context = machine.getSnapshot().context
+    const scene = context.scene
+    const capsuleId = scene === null ? null : activeZoneCapsuleId(scene, context.selection)
+    const selectedZone = context.selectedZoneId === null ? undefined : scene?.zones[context.selectedZoneId]
+    syncingZoneSelection = true
+    zoneEditor?.select(selectedZone === undefined || selectedZone.capsuleId !== capsuleId ? [] : [selectedZone.name])
+    syncingZoneSelection = false
   }
 
   /** Reads one logical cqw value from the immutable V2 snapshot representation. */
@@ -1704,10 +2024,19 @@ export function createDecorEditorBridge(
 
   /** Converts a frame delta to a controller patch and returns the accepted pixel candidate. */
   function previewFrame(delta: SelectionFrameDelta): SelectionFrameValue | null {
+    const context = machine.getSnapshot().context
+    if (context.authoringMode === 'zone') return null
     const target = frameTarget
     const base = frameGestureBasePx ?? displayFramePx
     const rootWidth = sceneRootWidthPx()
     if (target === null || base === null || rootWidth === null) return null
+    const scene = context.scene
+    const item = scene?.items.find((candidate) => candidate.id === target.itemId)
+    const zoneOffsetGesture = context.authoringMode === 'block'
+      && context.editGesture === 'offset'
+      && scene !== null
+      && item !== undefined
+      && itemUsesZonePlacement(scene, item, lastKnownTimelineMs, target.keyframeId)
     if (frameGestureCancelled) return frameGestureBasePx ?? displayFramePx
     if (frameGestureBasePx === null) {
       frameGestureBasePx = base
@@ -1716,15 +2045,18 @@ export function createDecorEditorBridge(
       frameGestureBaseDecorState = editState === undefined
         ? null
         : { base: editState.base, modifications: new Map(editState.modifications) }
-      const { scene } = machine.getSnapshot().context
       frameGestureBaseAuthorRotate = scene === null
         ? authorFramePx?.rotate ?? base.rotate ?? 0
         : authoredRotationAtGestureStart(scene, target, base)
     }
+    frameGestureHasNetDelta = delta.kind === 'rotate'
+      ? delta.dr !== 0
+      : delta.kind === 'pivot'
+        ? delta.fx !== 0 || delta.fy !== 0
+        : delta.dx !== 0 || delta.dy !== 0
     const displayedBase = frameGestureBasePx
     const authoredBaseRotate = frameGestureBaseAuthorRotate ?? authorFramePx?.rotate ?? displayedBase.rotate ?? 0
-    const { scene } = machine.getSnapshot().context
-    const tangentMotion = scene !== null && targetUsesTangent(scene, target)
+    const tangentMotion = !zoneOffsetGesture && scene !== null && targetUsesTangent(scene, target)
     const rawCandidate = applyFrameDelta(displayedBase, delta)
     const candidateAuthorFrame = tangentMotion
       ? authorFrameForGesture(rawCandidate, authoredBaseRotate + (delta.kind === 'rotate' ? delta.dr : 0))
@@ -1732,19 +2064,22 @@ export function createDecorEditorBridge(
     const candidate = tangentMotion && scene !== null
       ? displayFrameForAuthorFrame(scene, target, candidateAuthorFrame)
       : rawCandidate
-    const baseOffset = frameToOffsetPatch(
-      tangentMotion ? authorFrameForGesture(displayedBase, authoredBaseRotate) : displayedBase,
-      rootWidth,
-    )
     lastPreviewAccepted = false
-    const candidateOffset = frameToOffsetPatch(candidateAuthorFrame, rootWidth)
-    const frameModifications = modificationsFromDecorPatch(
-      { offset: baseOffset },
-      { offset: candidateOffset },
-    )
+    const framePatch = zoneOffsetGesture && scene !== null
+      ? zoneOffsetPatchForFrameGesture(delta, displayedBase, candidateAuthorFrame, rootWidth, scene, target)
+      : modificationsToDecorPatch(modificationsFromDecorPatch(
+        {
+          offset: frameToOffsetPatch(
+            tangentMotion ? authorFrameForGesture(displayedBase, authoredBaseRotate) : displayedBase,
+            rootWidth,
+          ),
+        },
+        { offset: frameToOffsetPatch(candidateAuthorFrame, rootWidth) },
+      ))
+    if (framePatch === null) return base
     previewContentFrameOverride = candidate
     try {
-      controller.applyPatch(modificationsToDecorPatch(frameModifications))
+      controller.applyPatch(framePatch)
     } finally {
       previewContentFrameOverride = null
     }
@@ -1753,6 +2088,51 @@ export function createDecorEditorBridge(
     setAuthorFrame(candidateAuthorFrame, rootWidth)
     syncMotionOverlay()
     return candidate
+  }
+
+  /** Maps Selection Frame gestures to zone-relative transforms without overriding zone geometry. */
+  function zoneOffsetPatchForFrameGesture(
+    delta: SelectionFrameDelta,
+    base: SelectionFrameValue,
+    candidate: SelectionFrameValue,
+    rootWidth: number,
+    scene: EditorScene,
+    target: Target,
+  ): DecorPatch | null {
+    const item = scene.items.find((entry) => entry.id === target.itemId)
+    if (item === undefined || !itemUsesZonePlacement(scene, item, lastKnownTimelineMs, target.keyframeId)) return null
+    const baseState = frameGestureBaseDecorState
+    const basePatch = baseState === null
+      ? resolveDecorEditBase(scene, target, lastKnownTimelineMs)
+      : applyDecorModifications(baseState.base, baseState.modifications)
+    const original = basePatch.offset ?? {}
+    const translate = original.translate ?? {}
+    const offset: OffsetPatch = {}
+
+    if (delta.kind === 'move') {
+      offset.translate = {
+        x: (translate.x ?? 0) + pxToCqw(candidate.x - base.x, rootWidth),
+        y: (translate.y ?? 0) + pxToCqw(candidate.y - base.y, rootWidth),
+      }
+    }
+    if (delta.kind === 'rotate') offset.rotate = candidate.rotate ?? 0
+    if (delta.kind === 'pivot') offset.rotationOrigin = candidate.rotationOrigin ?? { fx: 0.5, fy: 0.5 }
+    if (delta.kind === 'resize') {
+      if (base.width <= 0 || base.height <= 0) return null
+      const resizeX = delta.handle.includes('e') || delta.handle.includes('w')
+      const resizeY = delta.handle.includes('n') || delta.handle.includes('s')
+      const scaleX = (original.scale?.x ?? base.scaleX ?? 1) * (resizeX ? candidate.width / base.width : 1)
+      const scaleY = (original.scale?.y ?? base.scaleY ?? 1) * (resizeY ? candidate.height / base.height : 1)
+      const scaledBase = { ...base, scaleX, scaleY }
+      const targetCenter = frameVisualCenter(candidate)
+      const scaledCenter = frameVisualCenter(scaledBase)
+      offset.scale = { x: scaleX, y: scaleY }
+      offset.translate = {
+        x: (translate.x ?? 0) + pxToCqw(targetCenter.x - scaledCenter.x, rootWidth),
+        y: (translate.y ?? 0) + pxToCqw(targetCenter.y - scaledCenter.y, rootWidth),
+      }
+    }
+    return { offset }
   }
 
   /** Builds one copy-on-write command batch for a segment-local path edit. */
@@ -1990,11 +2370,14 @@ export function createDecorEditorBridge(
     return activeSegment
   }
 
-  /** Resolves the drop zone from the Selection Frame centre through the zone editor's track hit-test. */
-  function rootZoneAtFrameCenter(frame: SelectionFrameValue): string | null {
+  /** Resolves a same-capsule drop target from the Selection Frame centre and shared track hit-test. */
+  function zoneAtFrameCenter(frame: SelectionFrameValue): string | null {
     const context = machine.getSnapshot().context
     const host = sceneHost
-    if (context.scene === null || !context.zonesVisible || host === null || zoneEditor === null) return null
+    if (context.scene === null || host === null || zoneEditor === null) return null
+    const target = resolveTarget(context.scene, context.selection, lastKnownTimelineMs)
+    const item = context.scene.items.find((candidate) => candidate.id === target?.itemId)
+    if (item === undefined || !hasZoneSurface(context.scene, item.parentId)) return null
     const width = host.clientWidth
     const height = host.clientHeight
     const bounds = host.getBoundingClientRect()
@@ -2004,7 +2387,7 @@ export function createDecorEditorBridge(
       bounds.left + center.x * bounds.width / width,
       bounds.top + center.y * bounds.height / height,
     )
-    const sameCapsuleIds = candidateIds.filter((zoneId) => context.scene!.zones[zoneId]?.capsuleId === null)
+    const sameCapsuleIds = candidateIds.filter((zoneId) => context.scene!.zones[zoneId]?.capsuleId === item.parentId)
     if (context.selectedZoneId !== null && sameCapsuleIds.includes(context.selectedZoneId)) return context.selectedZoneId
     return sameCapsuleIds.length === 1 ? sameCapsuleIds[0]! : null
   }
@@ -2171,15 +2554,118 @@ export function createDecorEditorBridge(
     return true
   }
 
+  /** Commits the sparse transform produced by the optional zone-offset Selection Frame. */
+  function commitZoneOffsetGesture(): void {
+    const before = machine.getSnapshot().context
+    if (before.scene === null) return
+    const beforeTarget = resolveTarget(before.scene, before.selection, lastKnownTimelineMs)
+    if (beforeTarget === null) return
+    const editKey = decorEditStateKey(beforeTarget.itemId, lastKnownTimelineMs)
+    const currentState = decorEditStates.get(editKey)
+    const gestureBaseState = frameGestureBaseDecorState
+    const basePatch = gestureBaseState === null
+      ? currentState?.base ?? resolveDecorEditBase(before.scene, beforeTarget, lastKnownTimelineMs)
+      : applyDecorModifications(gestureBaseState.base, gestureBaseState.modifications)
+    const currentPatch = currentState === undefined
+      ? basePatch
+      : applyDecorModifications(currentState.base, currentState.modifications)
+    const gesturePatch = modificationsToDecorPatch(modificationsFromDecorPatch(basePatch, currentPatch))
+    const previousTemporaryEdit = beforeTarget.isTemporary
+      && pendingTemporaryDecorCommit?.itemId === beforeTarget.itemId
+      && Math.abs(pendingTemporaryDecorCommit.timeMs - lastKnownTimelineMs) <= 1
+    const temporaryPatch = previousTemporaryEdit && currentState !== undefined
+      ? modificationsToDecorPatch(currentState.modifications)
+      : gesturePatch
+    if (previousTemporaryEdit) pendingTemporaryDecorCommit = null
+    flushNow()
+
+    const { scene, selection } = machine.getSnapshot().context
+    if (scene === null) return
+    const target = resolveTarget(scene, selection, lastKnownTimelineMs)
+    if (target === null) return
+    const commitPatch = target.isTemporary ? temporaryPatch : gesturePatch
+    if (Object.keys(commitPatch.offset ?? {}).length === 0) return
+    const item = scene.items.find((candidate) => candidate.id === target.itemId)
+    if (item === undefined) return
+
+    let commands: Command[] = []
+    let createdKeyframeId: string | null = null
+    let targetTimeMs = lastKnownTimelineMs
+    if (target.keyframeId !== null) {
+      const keyframe = item.keyframes.find((candidate) => candidate.id === target.keyframeId)
+      if (keyframe === undefined) return
+      if (resolveKeyframeChannel(keyframe) === 'decor') {
+        commands.push({ name: 'setKeyframeChannel', args: { itemId: item.id, keyframeId: keyframe.id, channel: 'pose' } })
+      }
+      commands.push(...buildDecorCommands(
+        scene,
+        target,
+        materializeZoneFillStyle(resolveDocumentDecorBase(scene, target, lastKnownTimelineMs), commitPatch),
+      ))
+    } else if (target.isTemporary) {
+      const alignment = resolveKeyframeAlignment(item, lastKnownTimelineMs)
+      if (alignment.kind !== 'between') return
+      targetTimeMs = Math.max(0, Math.min(lastKnownTimelineMs, scene.meta.durationMs))
+      if (item.keyframes.some((keyframe) => keyframe.timeMs === targetTimeMs)) return
+      createdKeyframeId = `offset-kf-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+      const decorPatch = patchToDecorArgs(commitPatch)
+      if (decorPatch === null) return
+      commands = [
+        { name: 'createNamedKeyframe', args: { itemId: item.id, keyframeId: createdKeyframeId, timeMs: targetTimeMs, channel: 'pose' } },
+        { name: 'setDecor', args: { decorId: `decor-${createdKeyframeId}`, patch: decorPatch } },
+      ]
+    } else {
+      commands = buildDecorCommands(
+        scene,
+        target,
+        materializeZoneFillStyle(resolveDocumentDecorBase(scene, target, lastKnownTimelineMs), commitPatch),
+      )
+    }
+
+    if (commands.length === 0) return
+    clearDecorEditState(target.itemId, lastKnownTimelineMs)
+    retainSnapshotPreviewUntilPresentation()
+    machine.send({ type: 'RUN_TRANSACTION', commands })
+    if (createdKeyframeId !== null) {
+      machine.send({ type: 'SELECT_ITEM', itemIds: [item.id], keyframeId: createdKeyframeId })
+      coordination.requestAuthorSeek(targetTimeMs)
+    }
+    syncMotionOverlay()
+  }
+
   /** Commits every Selection Frame affine gesture through the pose-KF path immediately. */
   function commitSelectionFrameDrop(targetFrame: SelectionFrameValue): void {
+    if (machine.getSnapshot().context.authoringMode === 'zone') {
+      if (frameGestureBasePx !== null) abortPhase()
+      frameGestureBasePx = null
+      frameGestureKind = null
+      frameGestureHasNetDelta = false
+      frameGestureBaseDecorState = null
+      frameGestureBaseAuthorRotate = null
+      frameCommitCandidatePx = null
+      frameGestureCancelled = false
+      controller.notifyInteractionEnd()
+      return
+    }
     if (frameGestureCancelled) {
       frameGestureCancelled = false
       frameGestureBasePx = null
       frameGestureKind = null
+      frameGestureHasNetDelta = false
       frameGestureBaseDecorState = null
       frameGestureBaseAuthorRotate = null
       frameCommitCandidatePx = null
+      controller.notifyInteractionEnd()
+      return
+    }
+    if (frameGestureKind === null || !frameGestureHasNetDelta) {
+      flushNow()
+      frameCommitCandidatePx = null
+      frameGestureBasePx = null
+      frameGestureKind = null
+      frameGestureHasNetDelta = false
+      frameGestureBaseDecorState = null
+      frameGestureBaseAuthorRotate = null
       controller.notifyInteractionEnd()
       return
     }
@@ -2189,14 +2675,21 @@ export function createDecorEditorBridge(
       if (sourceFrame !== null) {
         const { scene, selection } = machine.getSnapshot().context
         const item = scene?.items.find((candidate) => candidate.id === selection.itemIds[0])
-        const zoneMove = frameGestureKind === 'move'
-          && scene !== null
-          && rootPlacementModeForScene(scene) === 'fine-grid'
-          && item?.parentId === null
+        const context = machine.getSnapshot().context
+        const selectedZoneItem = scene !== null
           && item !== undefined
           && itemUsesZonePlacement(scene, item, lastKnownTimelineMs, selection.keyframeId)
-        if (zoneMove) {
-          const zoneId = rootZoneAtFrameCenter(targetFrame)
+        const zoneOffset = context.authoringMode === 'block'
+          && context.editGesture === 'offset'
+          && selectedZoneItem
+        const zoneMove = frameGestureKind === 'move'
+          && context.authoringMode === 'block'
+          && context.editGesture !== 'offset'
+          && selectedZoneItem
+        if (zoneOffset) {
+          commitZoneOffsetGesture()
+        } else if (zoneMove) {
+          const zoneId = zoneAtFrameCenter(targetFrame)
           if (zoneId === null) cancelZoneMovePreview(sourceFrame)
           else commitZoneAssignment(zoneId, sourceFrame)
         } else {
@@ -2207,6 +2700,7 @@ export function createDecorEditorBridge(
       if (!snapshotCommitAwaitingPresentation) frameCommitCandidatePx = null
       frameGestureBasePx = null
       frameGestureKind = null
+      frameGestureHasNetDelta = false
       frameGestureBaseDecorState = null
       frameGestureBaseAuthorRotate = null
       frameGestureCancelled = false
@@ -2378,11 +2872,39 @@ export function createDecorEditorBridge(
     coordination.requestAuthorSeek(keyframe.timeMs)
   }
 
+  /** Shows only the control surface owned by the current Block tool and selected placement. */
+  function syncControlSurfaces(frame: SelectionFrameValue | null): void {
+    const context = machine.getSnapshot().context
+    const target = context.scene === null ? null : resolveTarget(context.scene, context.selection, lastKnownTimelineMs)
+    const item = context.scene?.items.find((candidate) => candidate.id === target?.itemId)
+    const usesZonePlacement = context.scene !== null
+      && item !== undefined
+      && itemUsesZonePlacement(context.scene, item, lastKnownTimelineMs, target?.keyframeId)
+    const selectionFrameActive = activeCreationMode === null
+      && (context.authoringMode === null
+        || (context.authoringMode === 'block' && item !== undefined
+          && (!usesZonePlacement || context.editGesture === 'offset')))
+    selectionFrame?.setSuspended(playbackActive)
+    selectionFrame?.setValue(selectionFrameActive ? frame : null)
+    if (selectionFrame !== null) selectionFrame.element.style.pointerEvents = selectionFrameActive ? 'auto' : 'none'
+
+    const zoneMoveActive = context.authoringMode === 'block'
+      && context.editGesture !== 'offset'
+      && activeCreationMode === null
+      && !playbackActive
+      && context.scene !== null
+      && item !== undefined
+      && usesZonePlacement
+    blockMoveControl?.setValue(zoneMoveActive ? frame : null, zoneMoveActive)
+  }
+
   /** Creates the frame once a scene host exists and binds it to the decor-owned callbacks. */
   function mountSelectionFrame(host: HTMLElement): void {
     if (selectionFrame !== null && sceneHost === host) return
     unsubscribeSelectionGeometry?.()
     unsubscribeSelectionGeometry = null
+    blockMoveControl?.destroy()
+    blockMoveControl = null
     selectionFrame?.destroy()
     resizeObserver?.disconnect()
     sceneHost = host
@@ -2397,6 +2919,7 @@ export function createDecorEditorBridge(
       onCancel: () => {
         frameGestureBasePx = null
         frameGestureKind = null
+        frameGestureHasNetDelta = false
         frameGestureBaseDecorState = null
         frameGestureBaseAuthorRotate = null
         frameGestureCancelled = false
@@ -2404,29 +2927,42 @@ export function createDecorEditorBridge(
       },
       creation: { onCreate: commitBlockCreation },
     })
+    blockMoveControl = createBlockMoveControl({
+      sceneRoot: host,
+      onPreview: ({ dx, dy }) => previewFrame({ kind: 'move', dx, dy }),
+      onCommit: commitSelectionFrameDrop,
+      onCancel: cancelZoneMovePreview,
+      onGestureStart: () => setBlockMoveGestureActive(true),
+      onGestureEnd: () => setBlockMoveGestureActive(false),
+    })
     unsubscribeSelectionGeometry = motionGeometry.subscribe(({ selection }) => {
-      selectionFrame?.setValue(selection?.geometry.frame ?? null)
+      syncControlSurfaces(selection?.geometry.frame ?? null)
     })
     selectionFrame.element.style.cursor = 'move'
-    // The frame must sit above zone hit surfaces so an item drag starts on the item, then its
-    // committed destination is resolved by the zone editor's shared track hit-test.
+    // The general Selection Frame sits above zone hit surfaces; Block mode uses its own
+    // move-only control at the same layer.
     selectionFrame.element.style.zIndex = '1160'
     selectionFrame.element.style.pointerEvents = 'auto'
     const currentScene = machine.getSnapshot().context.scene
+    const currentSelection = machine.getSnapshot().context.selection
     zoneEditor = createZoneEditorV2({
       sceneRoot: host,
       getPose: () => {
-        const scene = machine.getSnapshot().context.scene
-        const width = host.clientWidth
-        const height = host.clientHeight
-        if (scene === null || rootPlacementModeForScene(scene) !== 'fine-grid' || width <= 0 || height <= 0) return null
-        return { origin: { x: 0, y: 0 }, matrix: { a: 1, b: 0, c: 0, d: 1 }, localWidth: width, localHeight: height }
+        const context = machine.getSnapshot().context
+        return context.scene === null
+          ? null
+          : zoneEditorPose(context.scene, activeZoneCapsuleId(context.scene, context.selection))
       },
       initialState: currentScene === null
         ? { grid: ROOT_PLACEMENT_GRID['fine-grid'], zones: [] }
-        : rootZoneEditorState(currentScene),
-      onZonesChange: commitRootZoneState,
+        : zoneEditorState(currentScene, currentSelection),
+      onZonesChange: commitZoneEditorState,
       onSelectionChange: (names) => {
+        if (syncingZoneSelection) return
+        if (machine.getSnapshot().context.authoringMode === 'block') {
+          syncZoneEditorSelection()
+          return
+        }
         const selectedName = names.length === 1 ? names[0] : undefined
         const selectedZoneId = selectedName === undefined
           ? null
@@ -2438,19 +2974,33 @@ export function createDecorEditorBridge(
         return scene !== null && !Object.values(scene.decors).some((decor) => decor.zoneId === zone.id)
       },
     })
-    let zonesVisible = machine.getSnapshot().context.zonesVisible
-    zoneEditor.setPartVisibility('grid', zonesVisible)
-    zoneEditor.setPartVisibility('zones', zonesVisible)
-    zoneEditor.setPartVisibility('labels', zonesVisible)
-    const visibilitySubscription = machine.subscribe((snapshot) => {
-      if (snapshot.context.zonesVisible === zonesVisible) return
-      zonesVisible = snapshot.context.zonesVisible
-      zoneEditor?.setPartVisibility('grid', zonesVisible)
-      zoneEditor?.setPartVisibility('zones', zonesVisible)
-      zoneEditor?.setPartVisibility('labels', zonesVisible)
+    zoneEditorRoot = host.querySelector<HTMLElement>('[data-zone-editor]')
+    let toolState = machine.getSnapshot().context
+    const syncToolState = (): void => {
+      const context = machine.getSnapshot().context
+      renderAuthoringTools()
+      syncControlSurfaces(motionGeometry.get().selection?.geometry.frame ?? null)
+      syncZoneEditorVisibility()
+      motionOverlay?.setSuspended(playbackActive || activeCreationMode !== null || context.authoringMode === 'zone')
+    }
+    syncToolState()
+    const toolStateSubscription = machine.subscribe((snapshot) => {
+      const next = snapshot.context
+      if (next.authoringMode === toolState.authoringMode
+        && next.editGesture === toolState.editGesture
+        && next.zonesVisible === toolState.zonesVisible
+        && next.hideZonesInBlockMode === toolState.hideZonesInBlockMode) return
+      const authoringModeChanged = next.authoringMode !== toolState.authoringMode
+      toolState = next
+      syncToolState()
+      if (authoringModeChanged) {
+        const context = machine.getSnapshot().context
+        if (context.scene !== null) syncZoneEditor(context.scene, context.selection)
+        syncZoneEditorSelection()
+      }
     })
-    unsubscribeZoneVisibility = () => visibilitySubscription.unsubscribe()
-    if (currentScene !== null) syncRootZoneEditor(currentScene)
+    unsubscribeSceneToolState = () => toolStateSubscription.unsubscribe()
+    if (currentScene !== null) syncZoneEditor(currentScene, currentSelection)
     motionOverlay = createMotionOverlay(host, {
       onActivateRole: (role) => {
         const motion = activeMotion
@@ -2487,9 +3037,10 @@ export function createDecorEditorBridge(
       onPathChange: commitMotionPath,
       onPathOrientationChange: commitMotionPathOrientation,
     }, motionGeometry)
+    syncToolState()
     if (activeCreationMode !== null) {
       selectionFrame.setCreationMode(selectionModeFor())
-      motionOverlay.setSuspended(playbackActive)
+      motionOverlay.setSuspended(playbackActive || machine.getSnapshot().context.authoringMode === 'zone')
     }
     if (typeof ResizeObserver !== 'undefined') {
       resizeObserver = new ResizeObserver(([entry]) => {
@@ -2545,10 +3096,13 @@ export function createDecorEditorBridge(
     sceneRootContentWidthPx = null
     unsubscribeSelectionGeometry?.()
     unsubscribeSelectionGeometry = null
-    unsubscribeZoneVisibility?.()
-    unsubscribeZoneVisibility = null
+    unsubscribeSceneToolState?.()
+    unsubscribeSceneToolState = null
     zoneEditor?.destroy()
     zoneEditor = null
+    zoneEditorRoot = null
+    blockMoveControl?.destroy()
+    blockMoveControl = null
     selectionFrame?.destroy()
     selectionFrame = null
     motionOverlay?.destroy()
@@ -2561,6 +3115,7 @@ export function createDecorEditorBridge(
     seekProjectionActive = false
     frameGestureBasePx = null
     frameGestureKind = null
+    frameGestureHasNetDelta = false
     frameGestureBaseDecorState = null
     frameGestureBaseAuthorRotate = null
     frameCommitCandidatePx = null
@@ -2571,7 +3126,9 @@ export function createDecorEditorBridge(
   }
 
   function syncSelection(scene: EditorScene, selection: Selection): void {
-    syncRootZoneEditor(scene)
+    ensureMounted()
+    renderEditorPanels()
+    syncZoneEditor(scene, selection)
     const target = resolveTarget(scene, selection, lastKnownTimelineMs)
     if (!target) {
       frameTarget = null
@@ -2581,6 +3138,7 @@ export function createDecorEditorBridge(
       seekProjectionActive = false
       frameGestureBasePx = null
       frameGestureKind = null
+      frameGestureHasNetDelta = false
       frameGestureBaseDecorState = null
       frameGestureBaseAuthorRotate = null
       frameCommitCandidatePx = null
@@ -2636,17 +3194,22 @@ export function createDecorEditorBridge(
       decorEditStates.set(decorEditStateKey(target.itemId, lastKnownTimelineMs), { base: patch, modifications: new Map() })
     }
     const rootWidth = sceneRootWidthPx()
-    const targetKeyframeTimeMs = target.keyframeId === null
-      ? null
-      : item.keyframes.find((keyframe) => keyframe.id === target.keyframeId)?.timeMs ?? null
+    const targetKeyframe = target.keyframeId === null
+      ? undefined
+      : item.keyframes.find((keyframe) => keyframe.id === target.keyframeId)
+    const targetKeyframeTimeMs = targetKeyframe?.timeMs ?? null
     const targetIsAtTimeline = targetKeyframeTimeMs === null
       || Math.abs(targetKeyframeTimeMs - lastKnownTimelineMs) <= 1
+    const targetIsDecorOnly = targetKeyframe !== undefined && resolveKeyframeChannel(targetKeyframe) === 'decor'
     // A real KF remains the document target for the trajectory, but an explicit selection can be
     // stale while the author scrubs. In that case the runtime snapshot is also the CS source; this
     // is essential for bordered items because the document endpoint alone would leave the frame on
-    // the last visited KF. A temporary target uses the same snapshot unless it already has a live
-    // candidate of its own.
-    const readsPresentedSnapshot = target.isTemporary || (seekProjectionActive && !targetIsAtTimeline)
+    // the last visited KF. A decoration-only KF also has no authority over pose at its own time;
+    // preserve the player-presented pose after its immediate commit. A temporary target uses the
+    // same snapshot unless it already has a live candidate of its own.
+    const readsPresentedSnapshot = target.isTemporary
+      || (targetIsDecorOnly && targetIsAtTimeline)
+      || (seekProjectionActive && !targetIsAtTimeline)
     const currentLogicalSnapshot = readsPresentedSnapshot
       ? presentedSnapshotAt(lastKnownTimelineMs)
       : null
@@ -2684,6 +3247,7 @@ export function createDecorEditorBridge(
         })()
     frameGestureBasePx = null
     frameGestureKind = null
+    frameGestureHasNetDelta = false
     frameGestureBaseDecorState = null
     frameGestureBaseAuthorRotate = null
     controller.attachItems([
@@ -2768,9 +3332,8 @@ export function createDecorEditorBridge(
     if (target.isTemporary) {
       if (!isFramePoseGesture) {
         pendingTemporaryDecorCommit = { itemId: entry.itemId, timeMs: lastKnownTimelineMs }
-        // Palette changes keep the existing host phase contract. Movement creation is handled by
-        // `commitMotionDrop`, which materializes a pose KF synchronously on pointer release.
-        armIdleFlush()
+        // The explicit control-end signal commits this temporary edit; movement creation is
+        // handled by `commitMotionDrop`, which materializes a pose KF on pointer release.
       }
       return
     }
@@ -2786,19 +3349,11 @@ export function createDecorEditorBridge(
     )
     if (!isFramePoseGesture && commands.length > 0) {
       pendingCommands = commands
-      armIdleFlush()
     }
   })
 
   const unsubscribeInteractionEnd = controller.onInteractionEnd(() => {
-    if (pendingCommands === null && pendingTemporaryDecorCommit === null) return
-    if (selectionFrame?.isGestureActive()) {
-      cancelIdleFlush()
-      return
-    }
-    // `change` d'un champ palette — harmonisé (arbitrage 2026-07-17) : un signal d'activité de
-    // phase comme la fin d'un geste CS, jamais un commit en soi.
-    armIdleFlush()
+    flushNow()
   })
 
   const unsubscribeZonePlacementRequest = controller.onZonePlacementRequest((useZone) => {
@@ -2839,20 +3394,6 @@ export function createDecorEditorBridge(
     controller.applyPatch({ offset: frameToOffsetPatch(frame, rootWidth) })
   })
 
-  /**
-   * Raccourci « aller à kf1 » (`specs/editor-v2-integration-spec.md`) — dedit n'a aucune
-   * notion de temps/keyframe dans son propre domaine, il ne fait que demander ; c'est ce pont qui
-   * résout le premier keyframe de l'item sélectionné et déclenche le `SEEK` (même chemin qu'un
-   * scrub réel — flush, resynchro CS, resynchro palette en découlent déjà tous).
-   */
-  const unsubscribeSnapToFirstKeyframe = controller.onSnapToFirstKeyframeRequest(() => {
-    const { scene, selection } = machine.getSnapshot().context
-    const itemId = selection.itemIds[0]
-    const item = scene && itemId ? scene.items.find((i) => i.id === itemId) : undefined
-    const firstKeyframe = item ? [...item.keyframes].sort((a, b) => a.timeMs - b.timeMs)[0] : undefined
-    if (firstKeyframe) machine.send({ type: 'SEEK', timelineMs: firstKeyframe.timeMs })
-  })
-
   const unsubscribeCommitted = machine.on('sceneCommitted', ({ scene, selection }) => {
     ensureMounted()
     const key = selectionKey(selection)
@@ -2876,7 +3417,6 @@ export function createDecorEditorBridge(
   })
   const unsubscribeLoaded = machine.on('sceneLoaded', ({ scene }) => {
     // Un chargement de document supplante toute phase en cours — rien à committer, rien à préserver.
-    cancelIdleFlush()
     // The active segment is derived state; reload it from the new document even when IDs match.
     activeMotion = null
     pendingCommands = null
@@ -2965,18 +3505,23 @@ export function createDecorEditorBridge(
    */
   const unsubscribePlaybackActive = machine.on('playbackActiveChanged', ({ active }) => {
     playbackActive = active
+    renderAuthoringTools()
     if (active) {
       mountHandle?.setPreviewSuspended(true)
+      capsuleDefinitionEditor?.setDisabled(true)
       selectionFrame?.setSuspended(true)
+      blockMoveControl?.setValue(null)
       motionOverlay?.setSuspended(true)
+      syncZoneEditorVisibility()
       return
     }
     ensureMounted()
     const { scene, selection } = machine.getSnapshot().context
     if (scene) syncSelection(scene, selection)
     mountHandle?.setPreviewSuspended(false)
-    selectionFrame?.setSuspended(false)
-    motionOverlay?.setSuspended(false)
+    const authoringMode = machine.getSnapshot().context.authoringMode
+    motionOverlay?.setSuspended(authoringMode === 'zone' || activeCreationMode !== null)
+    syncControlSurfaces(motionGeometry.get().selection?.geometry.frame ?? null)
   })
   const unsubscribePlaybackReconciled = coordination.onPlaybackReconciled((timelineMs) => {
     lastKnownTimelineMs = timelineMs
@@ -2986,8 +3531,11 @@ export function createDecorEditorBridge(
 
   const unsubscribeCreationMode = machine.on('creationModeChanged', ({ mode }) => {
     activeCreationMode = mode
+    renderAuthoringTools()
     selectionFrame?.setCreationMode(mode === null ? null : selectionModeFor())
-    motionOverlay?.setSuspended(playbackActive || mode !== null)
+    syncZoneEditorVisibility()
+    syncControlSurfaces(motionGeometry.get().selection?.geometry.frame ?? null)
+    motionOverlay?.setSuspended(playbackActive || mode !== null || machine.getSnapshot().context.authoringMode === 'zone')
     if (mode === null) {
       const { scene, selection } = machine.getSnapshot().context
       if (scene) syncSelection(scene, selection)
@@ -3012,7 +3560,6 @@ export function createDecorEditorBridge(
 
   return {
     destroy(): void {
-      cancelIdleFlush()
       document.removeEventListener('keydown', onKeyDown, { capture: true })
       unsubscribeSeek.unsubscribe()
       unsubscribeSeekApplied.unsubscribe()
@@ -3032,15 +3579,19 @@ export function createDecorEditorBridge(
       unsubscribeSelectionGeometry = null
       unsubscribeInteractionEnd()
       unsubscribeZonePlacementRequest()
-      unsubscribeSnapToFirstKeyframe()
       mountHandle?.destroy()
+      capsuleDefinitionEditor?.destroy()
+      container.replaceChildren()
       cancelProjectionAfterResize()
       resizeObserver?.disconnect()
+      blockMoveControl?.destroy()
+      blockMoveControl = null
       selectionFrame?.destroy()
       motionOverlay?.destroy()
       motionOverlay = null
       frameGestureBasePx = null
       frameGestureKind = null
+      frameGestureHasNetDelta = false
       frameGestureBaseDecorState = null
       frameGestureBaseAuthorRotate = null
       frameCommitCandidatePx = null

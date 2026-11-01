@@ -24,6 +24,23 @@ function attachInput(overrides: Partial<AttachItemInput> = {}): AttachItemInput 
 }
 
 describe('createDecorEditorPalette — champ couleur, rafraîchissement après perte de focus', () => {
+  it('signale la fin d’interaction au retrait d’une valeur héritée', () => {
+    const ctrl = new DecorEditorController(catalogs())
+    const palette = createDecorEditorPalette(ctrl)
+    ctrl.attachItems([attachInput({ patch: { style: { 'background-color': 'oklch(0.6 0.24 25)' } } })])
+    palette.render()
+    let interactionEnds = 0
+    const unsubscribe = ctrl.onInteractionEnd(() => { interactionEnds += 1 })
+
+    palette.element.querySelector<HTMLButtonElement>('.dedit-strip-btn')!.click()
+
+    expect(interactionEnds).toBe(1)
+    expect(ctrl.hasOwnPatch('style.background-color')).toBe(false)
+    unsubscribe()
+    palette.destroy()
+    ctrl.destroy()
+  })
+
   it('un patch externe reçu pendant que le champ est focus est appliqué au blur', () => {
     const ctrl = new DecorEditorController(catalogs())
     const palette = createDecorEditorPalette(ctrl)

@@ -1,7 +1,7 @@
 # Éditeur — persistance SQLite locale
 
 Spécification du stockage local de documents auteur `EditorScene`, vérifié le
-31 octobre 2026. Le stockage conserve les types documentaires sous leurs
+1 novembre 2026. Le stockage conserve les types documentaires sous leurs
 propriétaires actuels. Le comportement de leur snap dans la timeline est décrit
 par la [spécification Sequence Editor V2](../specs/sequence-editor-v2-cues-markers-spec.md).
 
@@ -12,10 +12,12 @@ par la [spécification Sequence Editor V2](../specs/sequence-editor-v2-cues-mark
 - Le cache de l'application conserve la scène chargée. La persistance observe
   les chargements, commits documentaires et remplacements de scène ; elle écrit
   les snapshots aux frontières de commit existantes. Les changements de
-  sélection seuls ne déclenchent pas d'écriture.
-- Les écritures d'une scène sont mises en file. Chaque sauvegarde transporte la
-  révision attendue ; une révision périmée est refusée, sans écraser la version
-  plus récente.
+  sélection seuls ne déclenchent pas d'écriture. Par scène, une seule requête
+  SQLite est en vol ; les snapshots arrivant pendant cette requête sont remplacés
+  par le plus récent, puis écrit avec la nouvelle révision.
+- `flush()` attend chaque écriture en vol et le dernier snapshot en attente.
+  Chaque sauvegarde transporte la révision attendue ; une révision périmée est
+  refusée, sans écraser la version plus récente.
 - Undo et Redo passent par le remplacement normal du document et enregistrent
   le snapshot restauré. SQLite ne reçoit aucune entrée d'historique.
 - Au démarrage, l'application charge la scène active et sa révision. Le choix
@@ -83,6 +85,10 @@ Le serveur ferme la connexion lors de son arrêt.
   migration, le round-trip de documents complets (capsules imbriquées, zones,
   géométries, contenus, cues, `markerTracks`, décor opaque et réglages), les
   deux tailles de grille testées et le rejet d'une sauvegarde périmée.
+- [`tests/app/persistence/editor-scene-persistence.spec.ts`](../tests/app/persistence/editor-scene-persistence.spec.ts)
+  exerce la file réelle contre SQLite : les changements faits pendant une
+  requête sont coalescés et `flush()` sauvegarde le dernier snapshot avec la
+  révision attendue suivante.
 - `tests/commands/base-commands.spec.ts` vérifie la création d'IDs après
   restauration d'un document contenant déjà des IDs.
 - Parcours navigateur sur l'application réelle : chargement depuis SQLite,

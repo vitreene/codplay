@@ -39,10 +39,12 @@
   le chemin utilise les ancres, les ghosts utilisent les cadres bordés, et le CS
   garde le cadre de contenu. Le body du Selection Frame est l’unique surface de
   déplacement et son preview suit `snapshot.set`, y compris aux KFs extrêmes.
-  L’overlay ne monte pas de surface de déplacement. Son point de contrôle et
-  son bouton de tangente restent au-dessus du Selection Frame pour être ciblables
-  lorsque la pose interpolée recouvre la courbe. Aucun consommateur ne déduit
-  son propre centre ou ne retombe sur un cadre sans bordure.
+  L’overlay ne monte pas de surface de déplacement. En édition, son point de
+  contrôle et son bouton de tangente restent au-dessus du Selection Frame pour
+  être ciblables lorsque la pose interpolée recouvre la courbe. En lecture, la
+  suspension Editor masque le point central et l’action de tangente ; leur
+  affichage reprend à la sortie de `playing`. Aucun consommateur ne déduit son
+  propre centre ou ne retombe sur un cadre sans bordure.
 - Une part DOM de ghost réutilisée n'est cliquable que si la projection courante
   lui associe un KF. Quand elle quitte cette projection, l'overlay retire aussi
   ses identifiants de KF et de distance ; un identifiant d'un rendu précédent ne
@@ -81,7 +83,8 @@ Le contrat de calcul et de transport runtime est décrit par les
   vérifie le bouton icône accessible, son état et sa disponibilité uniquement
   sur un chemin actif explicite, son niveau de ciblage au-dessus du Selection
   Frame, ainsi que l’usage de la même géométrie bordée par le chemin et les
-  ghosts. Le déplacement appartient au Selection Frame, sans surface seconde.
+  ghosts. La suspension masque le point de trajectoire et sa reprise le réaffiche.
+  Le déplacement appartient au Selection Frame, sans surface seconde.
   Le test vérifie aussi que
   les ghosts réutilisables perdent leur adresse de KF lorsqu'ils sortent de la
   projection, puis reçoivent une seule adresse fraîche quand ils y reviennent.
@@ -91,10 +94,6 @@ Le contrat de calcul et de transport runtime est décrit par les
   trajectoire et les tangentes lors du découpage d’un arc, dont le raccord
   inférieur à `0,11°` sur la route initiale et inférieur à `0,1°` pour une
   insertion au progrès interpolé avec rotation auteur.
-- [`browser/tangent-editing-fixture.ts`](../tests/browser/tangent-editing-fixture.ts)
-  insère un KF tourné au playhead par le geste réel de l’aiguille, puis contrôle
-  la pose item/CS, les deux segments enregistrés et le raccord réel. Le Play
-  rAF lit des échantillons de rotation avant et après le KF.
 - [`decor-editor-bridge-integration-v2.spec.ts`](../tests/decor-editor-bridge-integration-v2.spec.ts)
   vérifie le stockage sur le KF cible, Undo/Redo et la rotation du CS depuis
   l’angle de la pose présentée. Le test `keeps route endpoints independent of
@@ -116,7 +115,7 @@ pivot, resize, bordure et déplacement, puis la création d’un KF pose au play
 Les écarts item/CS de cette série restent inférieurs à 0,58 px, ceux des ghosts
 courants à 0,77 px. La couleur et la promotion d’un KF décor en pose passent
 également. Undo/Redo, rechargement JSON et Stop répété gardent l’alignement.
-Le contenu de la fixture garde `width/height: 20/12 cqw` sans tween de
+Le cas de validation garde `width/height: 20/12 cqw` sans tween de
 dimensions ; l’épaisseur de bordure, déclarée en `cqw`, varie et la rotation
 tangentielle change l’encombrement visuel. Après le choix amélioré des rayons,
 Safari mesure un raccord de `0,1074°` dans la scène initiale et de `0,0681°`
@@ -135,7 +134,7 @@ Le 31 octobre 2026, Safari a aussi rechargé un document après promotion d’un
 décor en pose, puis répété la promotion avec les mêmes IDs. Le path reconstruit
 depuis le document chargé garde la preview et le commit à moins de 0,02 unité
 CSS d’écart.
-La fixture vérifie aussi chaque ghost des trois KFs pose à son propre temps ;
+La validation Safari couvre aussi chaque ghost des trois KFs pose à son propre temps ;
 l’écart ghost/player maximal mesuré reste inférieur à 0,21 unité CSS.
 
 Le 31 octobre 2026, le déplacement depuis le body du Selection Frame a été
@@ -144,3 +143,8 @@ de production dans Safari. À chaque preview, l’item et le cadre restent align
 0,006 unité CSS ; le commit garde quatre KFs. À 1,5 s, le contrôle de courbe et
 le bouton de tangente restent les cibles DOM au-dessus du cadre. Le déplacement
 et l’édition de courbe passent par leurs propriétaires respectifs.
+
+Le 1 novembre 2026, Play dans l’application Editor masque le point central de
+trajectoire (`display: none`) et Pause le réaffiche ; la révision SQLite reste
+inchangée. Safari signalait `document.hidden === true`, donc cette validation
+couvre l’état de lecture et le rendu synchrones, pas une progression rAF visible.

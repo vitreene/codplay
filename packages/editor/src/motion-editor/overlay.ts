@@ -123,6 +123,7 @@ export function createMotionOverlay(
   control.type = 'button'
   control.dataset.motionPathControl = ''
   control.setAttribute('aria-label', 'Modifier la trajectoire')
+  control.title = 'Modifier la trajectoire'
   control.textContent = ''
   control.style.position = 'absolute'
   control.style.boxSizing = 'border-box'
@@ -143,6 +144,7 @@ export function createMotionOverlay(
   orientationButton.type = 'button'
   orientationButton.dataset.editorOverlay = 'motion-orientation'
   orientationButton.setAttribute('aria-label', 'Aligner sur la tangente')
+  orientationButton.title = 'Aligner sur la tangente'
   orientationButton.setAttribute('aria-pressed', 'false')
   orientationButton.style.position = 'absolute'
   orientationButton.style.display = 'none'
@@ -496,7 +498,7 @@ export function createMotionOverlay(
     path.setAttribute('d', displayPath)
     path.dataset.motionPathActive = ''
     path.style.opacity = '1'
-    control.style.display = ''
+    control.style.display = suspended ? 'none' : ''
     // The visible median is a path marker, not the raw authoring handle. It therefore remains on
     // the canonical curve at 50% traversal even when the three-point circle's authoring point is
     // not itself the arc midpoint.

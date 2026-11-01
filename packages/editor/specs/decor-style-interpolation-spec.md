@@ -49,7 +49,7 @@ timeline ou d'horloge par propriété.
 - [`scene-player-bridge-v2.spec.ts`](../tests/scene-player-bridge-v2.spec.ts)
   vérifie qu'une valeur initiale fournie par une classe CSS d'application est
   capturée pendant le staging avant la compilation publiée.
-- Safari Technology Preview, fixture réelle des bridges Editor : saisie palette
+- Safari Technology Preview, bridges Editor : saisie palette
   `32` au KF de `2 500 ms` → décor cible `8cqw`, décor source absent, snapshot et
   style natif à `4cqw` au seek de `1 250 ms`.
 - Suite Editor : 49 fichiers, 525 tests ; typecheck et build Vite réussis.

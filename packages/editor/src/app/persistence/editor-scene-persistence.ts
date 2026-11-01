@@ -1,7 +1,7 @@
 import type { EditorScene } from '../commands/types'
 import type { controllerMachine } from '../controller/controller-machine'
 import type { Actor } from 'xstate'
-import type { EditorSceneSummary, SaveEditorSceneResult, StoredEditorScene } from './editor-scene-persistence-types'
+import type { DeleteEditorSceneResult, EditorSceneSummary, SaveEditorSceneResult, StoredEditorScene } from './editor-scene-persistence-types'
 import { stringifyJson } from './json-serialization'
 
 type SceneCatalogue = Readonly<{
@@ -18,8 +18,10 @@ export type EditorScenePersistenceStatus = Readonly<{
 /** Persists EditorScene snapshots through the local SQLite API at existing commit boundaries. */
 export class EditorScenePersistence {
   private scenes: EditorSceneSummary[] = []
+  private activeSceneId: string | null = null
   private readonly sceneCache = new Map<string, EditorScene>()
   private readonly revisions = new Map<string, number>()
+  private readonly pendingSnapshots = new Map<string, EditorScene>()
   private readonly writeQueues = new Map<string, Promise<void>>()
   private status: EditorScenePersistenceStatus = {
     kind: 'ready',
@@ -28,6 +30,7 @@ export class EditorScenePersistence {
   }
   private readonly listeners = new Set<() => void>()
   private readonly stopSubscriptions: Array<() => void> = []
+  private deletingSceneId: string | null = null
 
   /** Loads the active scene from the local API and caches its revision. */
   async open(): Promise<EditorScene | null> {
@@ -35,6 +38,7 @@ export class EditorScenePersistence {
       const response = await fetch('/api/scenes')
       const catalogue = await responseValue<SceneCatalogue>(response)
       this.scenes = catalogue.scenes
+      this.activeSceneId = catalogue.activeSceneId
       for (const scene of catalogue.scenes) this.revisions.set(scene.id, scene.revision)
 
       const chosenSceneId = catalogue.activeSceneId !== null
@@ -67,6 +71,11 @@ export class EditorScenePersistence {
     return this.status
   }
 
+  /** Reports whether a scene deletion is currently in flight. */
+  isDeletingScene(sceneId: string): boolean {
+    return this.deletingSceneId === sceneId
+  }
+
   /** Loads a scene on demand, reusing its cached author document when possible. */
   async loadScene(sceneId: string): Promise<EditorScene | null> {
     const cached = this.sceneCache.get(sceneId)
@@ -78,6 +87,43 @@ export class EditorScenePersistence {
       this.cacheScene(stored.scene, stored.revision)
       return stored.scene
     } catch (error) {
+      this.publish({ kind: 'error', message: persistenceErrorMessage(error), ephemeralSourceCount: 0 })
+      return null
+    }
+  }
+
+  /** Flushes the current document, deletes its matching SQLite revision, and returns the replacement scene. */
+  async deleteScene(sceneId: string): Promise<EditorScene | null> {
+    if (this.deletingSceneId !== null || this.scenes.length <= 1 || this.status.kind === 'error') return null
+    this.deletingSceneId = sceneId
+    this.publish({ kind: 'ready', message: 'Suppression de la scène…', ephemeralSourceCount: 0 })
+    try {
+      await this.flush()
+      if (this.getStatus().kind === 'error') {
+        throw new Error('La scène ne peut pas être supprimée car des modifications ne sont pas enregistrées.')
+      }
+      const expectedRevision = this.revisions.get(sceneId)
+      if (expectedRevision === undefined) throw new Error('La révision de la scène est inconnue ; recharge-la avant de la supprimer.')
+
+      const response = await fetch(`/api/scenes/${encodeURIComponent(sceneId)}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: stringifyJson({ expectedRevision }),
+      })
+      const result = await responseValue<DeleteEditorSceneResult>(response)
+      if (result.kind !== 'deleted') throw new Error('La scène n’a pas été supprimée.')
+
+      const { scene, revision } = result.activeScene
+      this.scenes = this.scenes.filter((candidate) => candidate.id !== sceneId)
+      this.sceneCache.delete(sceneId)
+      this.revisions.delete(sceneId)
+      this.activeSceneId = scene.id
+      this.cacheScene(scene, revision)
+      this.deletingSceneId = null
+      this.publishSceneStatus(scene, 'Scène supprimée.')
+      return scene
+    } catch (error) {
+      this.deletingSceneId = null
       this.publish({ kind: 'error', message: persistenceErrorMessage(error), ephemeralSourceCount: 0 })
       return null
     }
@@ -111,9 +157,12 @@ export class EditorScenePersistence {
     return () => this.listeners.delete(listener)
   }
 
-  /** Waits for all already queued document writes before the app releases its actor. */
+  /** Waits until every scene's latest queued snapshot has reached SQLite. */
   async flush(): Promise<void> {
-    await Promise.all(this.writeQueues.values())
+    while (this.pendingSnapshots.size > 0 || this.writeQueues.size > 0) {
+      for (const sceneId of this.pendingSnapshots.keys()) this.startSceneWrites(sceneId)
+      await Promise.all(this.writeQueues.values())
+    }
   }
 
   /** Releases controller subscriptions when the Remix application is removed. */
@@ -122,24 +171,48 @@ export class EditorScenePersistence {
     this.listeners.clear()
   }
 
-  /** Saves a document snapshot after serializing writes for its scene identity. */
+  /** Keeps only the newest pending document snapshot and serializes writes per scene. */
   private persist(scene: EditorScene): Promise<void> {
     this.publish({
       kind: 'ready',
       message: 'Enregistrement dans SQLite…',
       ephemeralSourceCount: countEphemeralMediaSources(scene),
     })
-    const previous = this.writeQueues.get(scene.id) ?? Promise.resolve()
-    const queued = previous.catch(() => undefined).then(() => this.saveSnapshot(scene))
-    const settled = queued.catch((error: unknown) => {
-      this.publish({
-        kind: 'error',
-        message: persistenceErrorMessage(error),
-        ephemeralSourceCount: countEphemeralMediaSources(scene),
-      })
+    this.pendingSnapshots.set(scene.id, scene)
+    return this.startSceneWrites(scene.id)
+  }
+
+  /** Starts one writer per scene; changes during an HTTP write replace its pending snapshot. */
+  private startSceneWrites(sceneId: string): Promise<void> {
+    const running = this.writeQueues.get(sceneId)
+    if (running !== undefined) return running
+
+    const queued = this.writePendingSnapshots(sceneId)
+    this.writeQueues.set(sceneId, queued)
+    void queued.then(() => {
+      if (this.writeQueues.get(sceneId) !== queued) return
+      this.writeQueues.delete(sceneId)
+      if (this.pendingSnapshots.has(sceneId)) this.startSceneWrites(sceneId)
     })
-    this.writeQueues.set(scene.id, settled)
-    return settled
+    return queued
+  }
+
+  /** Saves pending snapshots in revision order, skipping superseded snapshots not yet sent. */
+  private async writePendingSnapshots(sceneId: string): Promise<void> {
+    while (this.pendingSnapshots.has(sceneId)) {
+      const scene = this.pendingSnapshots.get(sceneId)
+      if (scene === undefined) return
+      this.pendingSnapshots.delete(sceneId)
+      try {
+        await this.saveSnapshot(scene)
+      } catch (error) {
+        this.publish({
+          kind: 'error',
+          message: persistenceErrorMessage(error),
+          ephemeralSourceCount: countEphemeralMediaSources(scene),
+        })
+      }
+    }
   }
 
   /** Writes one scene revision and refreshes its catalogue entry. */
@@ -152,6 +225,8 @@ export class EditorScenePersistence {
     const result = await responseValue<SaveEditorSceneResult>(response)
     if (result.kind === 'conflict') throw new Error('La scène a une révision plus récente en base. Recharge-la avant de poursuivre.')
     this.cacheScene(scene, result.revision)
+    this.activeSceneId = scene.id
+    if (this.pendingSnapshots.has(scene.id)) return
     this.publishSceneStatus(scene, countEphemeralMediaSources(scene) === 0
       ? 'Modèle auteur sauvegardé dans SQLite.'
       : 'La scène est sauvegardée, mais ses URLs blob: ne survivront pas au rechargement.')
@@ -164,6 +239,7 @@ export class EditorScenePersistence {
         await this.persist(scene)
         return
       }
+      if (this.activeSceneId === scene.id) return
       await this.activateStoredScene(scene.id)
     } catch (error) {
       this.publish({ kind: 'error', message: persistenceErrorMessage(error), ephemeralSourceCount: countEphemeralMediaSources(scene) })
@@ -178,6 +254,7 @@ export class EditorScenePersistence {
       body: stringifyJson({ sceneId }),
     })
     await responseValue<void>(response)
+    this.activeSceneId = sceneId
   }
 
   /** Updates the local scene list, revision cache, and document cache after a successful write. */

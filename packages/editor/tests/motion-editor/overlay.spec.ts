@@ -160,6 +160,26 @@ describe('motion overlay', () => {
     expect(host.querySelector('[data-motion-path-control]')).toBeNull()
   })
 
+  it('hides the central trajectory point while suspended and restores it on resume', () => {
+    const overlay = createMotionOverlay(host, {
+      onActivateRole: () => undefined,
+      onPathActivate: () => undefined,
+      onPathChange: () => undefined,
+    })
+    overlay.setSegment(segment)
+    const control = host.querySelector<HTMLElement>('[data-motion-path-control]')!
+
+    expect(control.style.display).toBe('')
+    overlay.setSuspended(true)
+    expect(control.style.display).toBe('none')
+    expect(host.querySelector<HTMLElement>('#editor-motion-overlay')?.style.display).toBe('none')
+
+    overlay.setSuspended(false)
+    expect(control.style.display).toBe('')
+    expect(host.querySelector<HTMLElement>('#editor-motion-overlay')?.style.display).toBe('')
+    overlay.destroy()
+  })
+
   it('leaves item movement to the Selection Frame and mounts no second movement surface', () => {
     const overlay = createMotionOverlay(host, {
       onActivateRole: () => undefined,

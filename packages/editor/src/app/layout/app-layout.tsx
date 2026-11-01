@@ -1,12 +1,11 @@
-import { on, type Handle } from 'remix/component'
+import type { Handle } from 'remix/component'
 import type { Actor } from 'xstate'
 import './app-layout.css'
 import type { controllerMachine } from '../controller/controller-machine'
-import type { EditorScene } from '../commands/types'
-import { EDITOR_V2_STORY_ID } from '../../builder-v2/types'
 import { EditorActionsFacade } from '../facades/editor-actions-facade'
 import { EditorPlayerCommandFacade } from '../commands/editor-player-command-facade'
 import { EditorCoordinationBridge } from '../bridges/editor-coordination-bridge'
+import { createSceneSelectionHandler } from '../bridges/scene-selection'
 import type { EditorScenePersistence } from '../persistence/editor-scene-persistence'
 import { EditorMenuRegion } from './editor-menu-region'
 import { SequenceEditorRegion } from './sequence-editor-region'
@@ -18,15 +17,6 @@ type AppLayoutProps = Readonly<{
   actions: EditorActionsFacade
   persistence: EditorScenePersistence
 }>
-
-/** Resolves a rendered player item to its stable document identity. */
-function resolveClickedItemId(target: Element, scene: EditorScene): string | null {
-  const runtimeId = target.closest('[data-item-id]')?.getAttribute('data-item-id')
-  if (!runtimeId) return null
-  const prefix = `${EDITOR_V2_STORY_ID}:`
-  const itemId = runtimeId.startsWith(prefix) ? runtimeId.slice(prefix.length) : runtimeId
-  return scene.items.some((item) => item.id === itemId) ? itemId : null
-}
 
 /** Composes the Remix page, central actor listeners, player facade, and existing DOM bridges. */
 export function AppLayout(handle: Handle<AppLayoutProps>) {
@@ -70,29 +60,15 @@ export function AppLayout(handle: Handle<AppLayoutProps>) {
   }
   document.addEventListener('keydown', onKeyDown)
 
-  /** Selects a clicked player item or clears selection only on the empty scene surface. */
-  const onSceneMouseDown = (event: MouseEvent): void => {
-    const target = event.target
-    if (!(target instanceof Element)) return
-    if (target.closest('[data-selection-frame]') !== null) return
-    if (target.closest('[data-selection-frame-creation]') !== null) return
-    if (target.closest('[data-editor-overlay]') !== null) return
-    if (snapshot.value === 'creating') return
-
-    const scene = snapshot.context.scene
-    const itemId = scene === null ? null : resolveClickedItemId(target, scene)
-    if (itemId !== null) {
-      actions.selectItem([itemId])
-      return
-    }
-    if (snapshot.context.selection.itemIds.length > 0) actions.clearSelection()
-  }
+  const onScenePointerDown = createSceneSelectionHandler(controller, actions, coordination)
+  document.addEventListener('pointerdown', onScenePointerDown, true)
 
   handle.signal.addEventListener('abort', () => {
     stopController.unsubscribe()
     stopHistory()
     stopPersistence()
     document.removeEventListener('keydown', onKeyDown)
+    document.removeEventListener('pointerdown', onScenePointerDown, true)
     coordination.destroy()
     playerFacade.destroy()
   }, { once: true })
@@ -110,7 +86,6 @@ export function AppLayout(handle: Handle<AppLayoutProps>) {
     <section
       id="editor-scene-region"
       className="app-region app-region--scene"
-      mix={on<HTMLElement, 'mousedown'>('mousedown', onSceneMouseDown)}
     >
       <ScenePlayerRegion controller={controller} coordination={coordination} />
     </section>

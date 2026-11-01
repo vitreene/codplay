@@ -2,7 +2,7 @@
  * Contexte et événements du contrôleur central — `specs/editor-v2-integration-spec.md`.
  */
 
-import type { CapsuleDef, Content, Decor, EditorScene, ItemType, OffsetData, RootPlacementMode, ZoneRect } from '../commands/types'
+import type { CapsuleDef, Content, Decor, EditorScene, ItemType, OffsetData, Orientation, RootPlacementMode, ZoneRect } from '../commands/types'
 import type { SequenceEditorCommand } from '../../sequence-editor/commands'
 
 // ─── Sélection ──────────────────────────────────────────────────────────────
@@ -12,6 +12,8 @@ export interface Selection {
   itemIds: string[]
   keyframeId?: string
 }
+
+export type AuthoringMode = 'zone' | 'block'
 
 export const EMPTY_SELECTION: Selection = { itemIds: [] }
 
@@ -37,6 +39,10 @@ export interface ControllerContext {
   selection: Selection
   /** Selected zone id for the active zone-editing surface; UI state only, never persisted. */
   selectedZoneId: string | null
+  /** Active target for the selection tool; null retains the existing unscoped editor behavior. */
+  authoringMode: AuthoringMode | null
+  /** Whether the zone overlay is hidden while the selection tool edits blocks. */
+  hideZonesInBlockMode: boolean
   openPanels: EditPanel[]
   editGesture: 'zone' | 'offset' | null
   zonesVisible: boolean
@@ -64,6 +70,7 @@ export type Command =
   | { name: 'setRootPlacementMode'; args: { mode: RootPlacementMode } }
   | { name: 'createRootZone'; args: { zoneId: string; area: ZoneRect } }
   | { name: 'setRootZonesSurface'; args: { orientation: 'portrait' | 'landscape'; zones: readonly { id: string; name: string; area: ZoneRect }[] } }
+  | { name: 'setZonesSurface'; args: { capsuleId: string | null; orientation: Orientation; zones: readonly { id: string; name: string; area: ZoneRect }[] } }
   | { name: 'assignType'; args: { itemId: string; type: ItemType } }
   | { name: 'assignContent'; args: { itemId: string; content: Omit<Content, 'id'> } }
   | { name: 'attachItem'; args: { itemId: string; parentId: string | null; order?: string } }
@@ -84,6 +91,8 @@ export type ControllerEvent =
   | { type: 'CREATE_CANCEL' }
   | { type: 'SELECT_ITEM'; itemIds: string[]; keyframeId?: string }
   | { type: 'SELECT_ZONE'; zoneId: string | null }
+  | { type: 'SET_AUTHORING_MODE'; mode: AuthoringMode }
+  | { type: 'SET_HIDE_ZONES_IN_BLOCK_MODE'; hidden: boolean }
   | { type: 'CLEAR_SELECTION' }
   | { type: 'TOGGLE_ZONES_VISIBLE' }
   | { type: 'SET_EDIT_GESTURE'; gesture: 'zone' | 'offset' | null }

@@ -99,9 +99,7 @@ par propriété. Sa définition est dans
 [`default-decor-presets.ts`](../src/app/commands/default-decor-presets.ts), son
 application dans [`base-commands.ts`](../src/app/commands/base-commands.ts).
 [`base-commands.spec.ts`](../tests/commands/base-commands.spec.ts) vérifie son
-application à la création. Le bloc texte du fixture
-[`tangent-editing-fixture.ts`](../tests/browser/tangent-editing-fixture.ts)
-porte les mêmes valeurs ; Safari a confirmé le centrage calculé après
+application à la création. Safari a confirmé le centrage calculé après
 rechargement et pendant le replay naturel.
 [`default-decor-presets.spec.ts`](../tests/commands/default-decor-presets.spec.ts)
 vérifie la matérialisation au chargement et la conservation des tailles auteur.
@@ -136,19 +134,17 @@ Seek existant vers la durée auteur. Les Stop répétés conservent leur garde.
   Seek terminal répété et Stop.
 - [`decor-editor-bridge-v2.spec.ts`](../tests/decor-editor-bridge-v2.spec.ts) :
   exclusion du placement technique lors de la capture auteur.
-- Safari MCP, 30 octobre 2026,
-  [`item-presentation-fixture.ts`](../tests/browser/item-presentation-fixture.ts) :
+- Safari MCP, 30 octobre 2026 :
   quatre scénarios avec/sans chemin et padding asymétrique ; pose 5 s,
   bordure 2 s, largeur de contenu 200 px à mi-parcours puis 160 px après resize
   de 800 à 640 px. Seek après détour, Play/Seek au même temps, preview et clear,
   absence d’écriture sur le transform motion pendant la preview, fin et Seek
   terminal identique, reset et destruction sont vérifiés. La lecture utilise
   le port public `engine.advance`.
-- Safari MCP, fixture des ponts Editor : rotation, pivot, resize, bordure,
+- Safari MCP, ponts Editor : rotation, pivot, resize, bordure,
   déplacement, insertion, couleur, Undo/Redo, rechargement JSON et Stop répété.
   Aux viewports 1328 × 775, 1100 × 780 et 1024 × 775, les écarts item/CS
   et ghosts observés restent inférieurs à 0,59 px.
-- Safari visible, 31 octobre : lecture rAF naturelle du
-  [fixture `tangent-editing.html`](../tests/browser/tangent-editing.html)
-  de 0 à 5 s, pause stable, seek terminal répété, Stop répété puis replay
-  complet ; l'item et le Selection Frame gardent une pose cohérente.
+- Safari visible, 31 octobre : lecture rAF naturelle de 0 à 5 s, pause stable,
+  seek terminal répété, Stop répété puis replay complet ; l'item et le Selection
+  Frame gardent une pose cohérente.

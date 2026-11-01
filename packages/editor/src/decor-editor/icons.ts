@@ -10,6 +10,10 @@ const ICONS: Record<string, string> = {
   'align-justify': '<path d="M3 5h18"/><path d="M3 12h18"/><path d="M3 19h18"/>',
   bold: '<path d="M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8"/>',
   italic: '<line x1="19" x2="10" y1="4" y2="4"/><line x1="14" x2="5" y1="20" y2="20"/><line x1="15" x2="9" y1="4" y2="20"/>',
+  grid: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>',
+  offset: '<rect x="4" y="4" width="13" height="13" rx="2"/><path d="M10 14 20 4M15 4h5v5"/>',
+  square: '<rect x="4" y="4" width="16" height="16" rx="2"/>',
+  'eye-off': '<path d="m3 3 18 18"/><path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"/><path d="M9.9 5.2A10.8 10.8 0 0 1 12 5c5 0 8.3 3.4 9.5 7a10.5 10.5 0 0 1-2.1 3.5"/><path d="M6.6 6.6C4.5 7.8 3.1 9.8 2.5 12c.4 1.2 1.2 2.3 2.2 3.2A10.2 10.2 0 0 0 12 19c.8 0 1.5-.1 2.2-.3"/>',
   undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
   redo: '<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>',
 }

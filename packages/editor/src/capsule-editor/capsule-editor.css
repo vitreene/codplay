@@ -1,0 +1,116 @@
+.capsule-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 12px;
+  color: var(--dedit-text, #f9fafb);
+  background: var(--dedit-bg, #1f2937);
+  border: 1px solid var(--dedit-border, #374151);
+  border-radius: var(--dedit-radius, 8px);
+  font: inherit;
+}
+
+.capsule-editor__field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--dedit-text-muted, #9ca3af);
+}
+
+.capsule-editor__field select,
+.capsule-editor__field input {
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 5px 7px;
+  color: var(--dedit-text, #f9fafb);
+  background: #111827;
+  border: 1px solid var(--dedit-border, #374151);
+  border-radius: 4px;
+  font: inherit;
+}
+
+.capsule-editor__field select {
+  width: 56%;
+}
+
+.capsule-editor__control-button {
+  padding: 6px 10px;
+  color: var(--dedit-text, #f9fafb);
+  background: #111827;
+  border: 1px solid var(--dedit-border, #374151);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.capsule-editor__control-button[aria-pressed='true'] {
+  border-color: var(--dedit-accent, #3b82f6);
+}
+
+.capsule-editor__control-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.capsule-editor__label {
+  margin: 0;
+  color: var(--dedit-text-muted, #9ca3af);
+}
+
+.capsule-editor__grid-preview {
+  width: 100%;
+  aspect-ratio: 16 / 7;
+  border: 1px solid var(--dedit-border, #374151);
+  border-radius: 4px;
+  background-color: #111827;
+  background-image:
+    linear-gradient(to right, #64748b 1px, transparent 1px),
+    linear-gradient(to bottom, #64748b 1px, transparent 1px);
+  background-repeat: repeat;
+}
+
+.capsule-editor__stepper,
+.capsule-editor__unit-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.capsule-editor__stepper input {
+  width: 68px;
+  text-align: center;
+}
+
+.capsule-editor__unit-field input {
+  width: 82px;
+  text-align: right;
+}
+
+.capsule-editor__unit-field span {
+  color: var(--dedit-text-muted, #9ca3af);
+}
+
+.capsule-editor__stepper button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--dedit-text, #f9fafb);
+  background: #111827;
+  border: 1px solid var(--dedit-border, #374151);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.capsule-editor:disabled {
+  opacity: 0.65;
+}
+
+.capsule-editor:disabled button,
+.capsule-editor:disabled input,
+.capsule-editor:disabled select {
+  cursor: not-allowed;
+}

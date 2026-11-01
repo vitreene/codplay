@@ -4,9 +4,9 @@
  * passe par `runCommand`/`transaction` (voie d'écriture unique) ; rien d'autre n'écrit
  * `context.scene`.
  *
- * Un seul découpage en états macro (`idle`/`creating`) : la sélection, le panneau ouvert, le
- * document courant sont des valeurs de CONTEXTE, pas des états, parce qu'ils ne changent pas ce que
- * les événements font. Seul le mode de geste actif (idle vs tracé de création) change ça.
+ * Les états macro (`idle`/`creating`/`playing`) portent le cycle de geste et de lecture. La cible
+ * d'édition Zone/Bloc reste une valeur de contexte possédée par cet acteur ; elle conditionne les
+ * transitions de sélection sans remplacer le cycle de vie.
  */
 
 import { assign, emit, enqueueActions, setup } from 'xstate'
@@ -60,10 +60,14 @@ export const controllerMachine = setup({
   actions: {
     /** Les émetteurs de sélection convergent ici, un seul point de vérité. */
     selectItem: assign({
-      selection: ({ event }) => {
+      selection: ({ context, event }) => {
+        if (context.authoringMode === 'zone') return context.selection
         if (event.type !== 'SELECT_ITEM') return EMPTY_SELECTION
         return { itemIds: event.itemIds, keyframeId: event.keyframeId }
       },
+      editGesture: ({ context, event }) => event.type === 'SELECT_ITEM' && context.authoringMode === 'block'
+        ? 'zone'
+        : context.editGesture,
     }),
     /** Re-derives the keyframe only when an author seek or pause reaches its boundary. */
     normalizeSelectionAtTimeline: assign({
@@ -73,14 +77,34 @@ export const controllerMachine = setup({
         return resolveSelectionAtTimeline(context.scene, context.selection, event.timelineMs)
       },
     }),
-    clearSelection: assign({ selection: () => EMPTY_SELECTION }),
+    clearSelection: assign({
+      selection: () => EMPTY_SELECTION,
+      editGesture: ({ context }) => context.authoringMode === 'block' ? 'zone' : context.editGesture,
+    }),
 
     /** Keeps the selected zone id as transient app state, independent of document history. */
     selectZone: assign({
       selectedZoneId: ({ context, event }) => {
+        if (context.authoringMode === 'block') return context.selectedZoneId
         if (event.type !== 'SELECT_ZONE' || event.zoneId === null) return null
         return context.scene?.zones[event.zoneId] === undefined ? null : event.zoneId
       },
+    }),
+
+    /** Changes the active selection target without mutating the document. */
+    setAuthoringMode: assign({
+      authoringMode: ({ context, event }) => event.type === 'SET_AUTHORING_MODE' ? event.mode : context.authoringMode,
+      editGesture: ({ event }) => event.type === 'SET_AUTHORING_MODE' && event.mode === 'block' ? 'zone' : null,
+      selectedZoneId: ({ context, event }) => event.type === 'SET_AUTHORING_MODE' && event.mode === 'block'
+        ? null
+        : context.selectedZoneId,
+    }),
+
+    /** Stores the optional presentation preference for the Zone overlay in Bloc mode. */
+    setHideZonesInBlockMode: assign({
+      hideZonesInBlockMode: ({ event }) => event.type === 'SET_HIDE_ZONES_IN_BLOCK_MODE'
+        ? event.hidden
+        : false,
     }),
 
     toggleZonesVisible: assign({
@@ -88,7 +112,10 @@ export const controllerMachine = setup({
     }),
 
     setEditGesture: assign({
-      editGesture: ({ event }) => (event.type === 'SET_EDIT_GESTURE' ? event.gesture : null),
+      editGesture: ({ context, event }) => event.type === 'SET_EDIT_GESTURE'
+        && context.authoringMode === 'block'
+        ? event.gesture
+        : context.editGesture,
     }),
 
     enterCreateMode: assign({
@@ -222,6 +249,8 @@ export const controllerMachine = setup({
 
     selection: EMPTY_SELECTION,
     selectedZoneId: null,
+    authoringMode: null,
+    hideZonesInBlockMode: false,
     openPanels: [],
     editGesture: null,
     zonesVisible: false,
@@ -238,6 +267,8 @@ export const controllerMachine = setup({
      */
     SELECT_ITEM: { actions: ['selectItem', 'emitSceneCommitted'] },
     SELECT_ZONE: { actions: 'selectZone' },
+    SET_AUTHORING_MODE: { actions: 'setAuthoringMode' },
+    SET_HIDE_ZONES_IN_BLOCK_MODE: { actions: 'setHideZonesInBlockMode' },
     CLEAR_SELECTION: { actions: ['clearSelection', 'emitSceneCommitted'] },
     TOGGLE_ZONES_VISIBLE: { actions: 'toggleZonesVisible' },
     SET_EDIT_GESTURE: { actions: 'setEditGesture' },

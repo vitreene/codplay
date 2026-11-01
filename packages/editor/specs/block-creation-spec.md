@@ -51,10 +51,3 @@ Cette tranche ne crée pas d’items image, vidéo ou son et ne modifie pas CodP
   et l’égalité de l’emprise DOM du bloc avec la cible de zone Capsule Automation.
   Undo a retiré le bloc ; l’annulation des mutations de vérification puis le
   rechargement SQLite ont restauré la scène sans données de vérification.
-- [`tests/browser/zone-movement.html`](../tests/browser/zone-movement.html)
-  présente un bloc sans offset, affecté de `z1` à `z2` sur deux KF pose. Safari
-  a vérifié par Seek à 0, 2500 et 5000 ms que le visuel suit la taille et la
-  position de l’emprise interpolée ; le snapshot V2 conserve le `move` vers z2.
-  Le fixture charge la feuille `app-layout.css` réelle : le scroll interne du
-  menu ne déplace ni l’hôte de scène ni l’item, et le document ne déborde pas du
-  viewport.

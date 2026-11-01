@@ -9,6 +9,7 @@ import type { CapsuleDef, Content, Decor, EditorScene, Item, ItemType, OffsetDat
 import { nextOrderKey } from './order-key'
 import { DEFAULT_DECOR_PRESET } from './default-decor-presets'
 import { hasExplicitPlacementGeometry, missingZoneFillStyle } from './offset-placement'
+import { capsuleGridForScene, clampZoneRectToGrid, isManualCapsuleType } from '../../capsule-editor/capsule-grid'
 
 /** Generates an author ID that stays distinct from IDs restored from persisted scenes. */
 function freshId(prefix: string): string {
@@ -186,11 +187,91 @@ export function createCapsule(
   return { scene: withCapsule, itemId: created.itemId }
 }
 
-/** Modifie les réglages d'une capsule. Cf. modèle : la capsule est figée une fois en usage — cette commande vaut pour la phase de réglage, pas une reconfiguration dynamique arbitraire. */
+/** Updates a capsule definition and applies the editor's temporary grid-change fallback in one document command. */
 export function setCapsuleDef(scene: EditorScene, args: { itemId: string; patch: Partial<CapsuleDef> }): EditorScene {
   const item = requireItem(scene, args.itemId)
   if (!item.capsule) throw new Error(`setCapsuleDef: item '${args.itemId}' has no CapsuleDef (not a capsule?)`)
-  return updateItem(scene, args.itemId, (i) => ({ ...i, capsule: { ...i.capsule!, ...args.patch } }))
+  const nextCapsule = { ...item.capsule, ...args.patch }
+  if (args.patch.grid !== undefined) {
+    const { rows, cols, gap } = args.patch.grid
+    if (!Number.isInteger(rows) || rows < 1 || !Number.isInteger(cols) || cols < 1) {
+      throw new RangeError('setCapsuleDef: grid rows and cols must be positive integers')
+    }
+    if (gap !== undefined && (!Number.isFinite(gap.row) || gap.row < 0 || !Number.isFinite(gap.col) || gap.col < 0)) {
+      throw new RangeError('setCapsuleDef: grid gaps must be non-negative finite cqw values')
+    }
+  }
+
+  const gridWithPotentialGap = nextCapsule.grid
+  const normalizedCapsule = gridWithPotentialGap !== undefined
+    && isManualCapsuleType(nextCapsule.kind)
+    && gridWithPotentialGap.gap !== undefined
+    && (gridWithPotentialGap.rows > 32 || gridWithPotentialGap.cols > 32)
+    ? { ...nextCapsule, grid: { rows: gridWithPotentialGap.rows, cols: gridWithPotentialGap.cols } }
+    : nextCapsule
+  const nextScene = updateItem(scene, args.itemId, (current) => ({ ...current, capsule: normalizedCapsule }))
+  const previousGrid = capsuleGridForScene(scene, args.itemId)
+  const nextGrid = capsuleGridForScene(nextScene, args.itemId)
+  const tracksChanged = previousGrid !== null && nextGrid !== null
+    && (previousGrid.rows !== nextGrid.rows || previousGrid.cols !== nextGrid.cols)
+  if (!tracksChanged || !isManualCapsuleType(normalizedCapsule.kind)) return nextScene
+
+  const zones = { ...nextScene.zones }
+  const capsuleZones = Object.values(nextScene.zones).filter((zone) => zone.capsuleId === args.itemId)
+  for (const zone of capsuleZones) {
+    zones[zone.id] = {
+      ...zone,
+      surfaces: {
+        portrait: clampZoneRectToGrid(zone.surfaces.portrait, nextGrid),
+        landscape: clampZoneRectToGrid(zone.surfaces.landscape, nextGrid),
+      },
+    }
+  }
+
+  const orderedChildren = nextScene.items
+    .filter((child) => child.parentId === args.itemId)
+    .sort((left, right) => left.order < right.order ? -1 : left.order > right.order ? 1 : left.id.localeCompare(right.id))
+  const reflowed = orderedChildren.reduce<{ items: Item[]; decors: EditorScene['decors'] }>((current, child, index) => {
+    if (capsuleZones.length === 0) return { ...current, items: [...current.items, child] }
+    const zone = capsuleZones[Math.min(index, capsuleZones.length - 1)]!
+    const decor = current.decors[child.initialDecorId]
+    if (decor === undefined) return { ...current, items: [...current.items, child] }
+    const zoneFillStyle = hasExplicitPlacementGeometry(decor.offset)
+      ? {}
+      : missingZoneFillStyle(decor.style, decor.custom)
+    const decorWithZone = {
+      ...decor,
+      zoneId: zone.id,
+      ...(Object.keys(zoneFillStyle).length === 0 ? {} : { style: { ...decor.style, ...zoneFillStyle } }),
+    }
+    if (initialDecorIsShared(nextScene, child)) {
+      const decorId = freshId('decor')
+      return {
+        items: [...current.items, { ...child, initialDecorId: decorId }],
+        decors: { ...current.decors, [decorId]: { ...decorWithZone, id: decorId } },
+      }
+    }
+    return {
+      items: [...current.items, child],
+      decors: { ...current.decors, [decor.id]: decorWithZone },
+    }
+  }, { items: [], decors: { ...nextScene.decors } })
+  const reflowedItems = new Map(reflowed.items.map((item) => [item.id, item]))
+
+  return {
+    ...nextScene,
+    items: nextScene.items.map((item) => reflowedItems.get(item.id) ?? item),
+    zones,
+    decors: reflowed.decors,
+  }
+}
+
+/** Reports whether a base decor is also used outside one item's initial state. */
+function initialDecorIsShared(scene: EditorScene, item: Item): boolean {
+  const decorId = item.initialDecorId
+  return scene.rootDecorId === decorId
+    || scene.items.some((candidate) => candidate.id !== item.id && candidate.initialDecorId === decorId)
+    || scene.items.some((candidate) => candidate.keyframes.some((keyframe) => keyframe.decorId === decorId))
 }
 
 /**

@@ -20,17 +20,6 @@ export function createDecorEditorPalette(controller: DecorEditorController): Dec
   const el = document.createElement('div')
   el.classList.add('dedit-palette', 'dedit-palette--hidden')
 
-  // Raccourci « aller à kf1 » — visible seulement pendant un décor temporaire
-  // (contrat d'intégration V2), pour revenir à l'ancrage réel sans chercher le
-  // kf dans la timeline. dedit ne résout pas lui-même « où est kf1 » (aucune notion de temps/
-  // keyframe dans son propre domaine) — relaie seulement la demande à l'hôte via le contrôleur.
-  const snapButton = document.createElement('button')
-  snapButton.type = 'button'
-  snapButton.classList.add('dedit-snap-to-kf1', 'dedit-snap-to-kf1--hidden')
-  snapButton.textContent = 'Aller à kf1'
-  snapButton.addEventListener('click', () => controller.requestSnapToFirstKeyframe())
-  el.appendChild(snapButton)
-
   const tabs = document.createElement('div')
   tabs.classList.add('dedit-tabs')
   el.appendChild(tabs)
@@ -54,7 +43,6 @@ export function createDecorEditorPalette(controller: DecorEditorController): Dec
     // le CSS (`dedit-palette--temporary`, fond plus clair) reste le seul endroit qui décide de la
     // présentation, jamais mêlé à la détection elle-même.
     el.classList.toggle('dedit-palette--temporary', controller.isTemporary())
-    snapButton.classList.toggle('dedit-snap-to-kf1--hidden', !controller.isTemporary())
     if (!active) return
 
     const config = controller.getPaletteConfig()
@@ -171,7 +159,10 @@ function fieldRow(
     stripBtn.classList.add('dedit-strip-btn', 'dedit-strip-btn--hidden')
     stripBtn.title = 'Hériter'
     stripBtn.textContent = '+'
-    stripBtn.addEventListener('click', () => controller.stripInherited(path))
+    stripBtn.addEventListener('click', () => {
+      controller.stripInherited(path)
+      controller.notifyInteractionEnd()
+    })
     row.appendChild(stripBtn)
   }
 
@@ -288,7 +279,7 @@ function renderColorField(
       control.parentElement?.classList.toggle('dedit-field--mixed', state.kind === 'mixed')
     }
 
-    // Un patch externe (raccourci « aller à kf1 », undo…) peut survenir pendant que ce champ a
+    // Un patch externe (undo…) peut survenir pendant que ce champ a
     // encore le focus — la mise à jour est alors différée (guard ci-dessous) mais rien d'autre ne
     // la redéclenche ensuite (perte de focus native ≠ notification machine) : sans ce handler,
     // la valeur reste figée sur l'ancien état jusqu'au prochain événement quelconque.

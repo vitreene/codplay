@@ -64,14 +64,28 @@ vérifie la projection réelle vers ce contrat.
   phase avant d'effacer la sélection. Un réattachement du même ensemble d'items
   conserve le panneau et les réglages actifs. Resize et scroll reprojettent le
   frame depuis la géométrie courante, sans mutation du document.
+- En mode Bloc, quand le hit-test de scène résout un item, le handler de capture
+  Editor consomme son `pointerdown` avant qu'il atteigne la grille Zone superposée.
+  Le clic sélectionne donc l'item sans tracer une zone ni committer le document.
+  Un pointeur résolu sur le fond vide continue vers le circuit de tracé Zone V2.
+- En mode Bloc, le clic scène et la sélection du nom dans la timeline convergent
+  vers la sélection du contrôleur central. Si un `move` rend l'item visible dans
+  l'overlay player plutôt que dans son élément structurel, le pont cible son
+  identité depuis la pose affine publiée. Pour un item dont le placement effectif
+  suit une zone, le CS dédié est une bordure sans poignées ; l’icône Déplacement
+  rend cette surface interactive. Le Selection Frame général reste masqué pour
+  ce placement. L'overlay Zone reste visible selon son réglage, mais devient inerte.
 - La palette Décor reste dans le flux de sa région, dans la colonne droite du
   layout Editor ; sa position ne dépend ni du viewport ni de l’item sélectionné.
-- Dedit met à jour la preview pendant la saisie et les gestes. Le pont regroupe
-  les changements en une transaction aux frontières de phase : changement ou
-  effacement de sélection, seek, mutation documentaire externe, inactivité
-  prolongée ou lancement de lecture. Échap abandonne les commandes en attente
-  et efface leur preview sans commit. Un patch d'offset ne contient que les
-  composantes touchées par le geste.
+- Chaque contrôle d’action à icône ou glyphe dans Editor expose un `title`
+  descriptif au survol.
+- Dedit met à jour la preview pendant `input` et les gestes. Le signal explicite
+  `notifyInteractionEnd`, émis après le patch final du contrôle, committe aussitôt
+  la transaction en attente ; le geste de cadre garde son commit au relâchement.
+  Sélection, seek, mutation documentaire externe et lancement de lecture restent
+  des frontières immédiates. Aucun délai d'inactivité ne retarde ou ne déclenche
+  un commit. Échap abandonne les commandes en attente et efface leur preview sans
+  commit. Un patch d'offset ne contient que les composantes touchées par le geste.
 - La capture à un temps interpolé lit le snapshot logique après `seekApplied`,
   jamais la matrice de rendu du nœud. Un registre ouvert des chemins modifiés
   produit un patch sparse à la création du keyframe : seules les propriétés
@@ -79,8 +93,9 @@ vérifie la projection réelle vers ce contrat.
   ajoutée.
 - L'acteur Editor entre dans `playing` sur la demande éditeur juste avant
   `telco.play()` et en sort sur pause ou seek ; le statut brut `isPlaying` ne
-  pilote pas ce cycle. Pendant la lecture, dedit et le Selection Frame
-  suspendent leurs previews et gestes. Un Play/Seek simple garde l'instance,
+  pilote pas ce cycle. Pendant la lecture, dedit, le Selection Frame et
+  l'overlay de trajectoire suspendent leurs previews et gestes ; le point central
+  est masqué avec l'overlay. Un Play/Seek simple garde l'instance,
   réapplique la pose par le seek de présentation puis reprend la lecture. Un
   rebuild n'a lieu que si une scène différente a effectivement été commitée.
   À la sortie, dedit se resynchronise et reprend sa preview sans rebuild.
@@ -107,6 +122,15 @@ vérifie la projection réelle vers ce contrat.
   document.
 - [`decor-editor-bridge-integration-v2.spec.ts`](../tests/decor-editor-bridge-integration-v2.spec.ts)
   couvre l'édition, le snapshot, la preview et le commit/rebuild.
+  Safari MCP a confirmé le 1 novembre 2026 le parcours palette réel : `input`
+  garde la preview hors document, `change` crée immédiatement un KF décor au
+  playhead (75 ms pour une couleur et 99 ms pour un nombre), Undo le retire,
+  Redo le rétablit, et Échap abandonne une preview sans modifier le décor auteur.
+- [`scene-selection.spec.ts`](../tests/scene-selection.spec.ts) vérifie qu'un
+  clic item ne crée pas d'étape Undo et qu'un clic sur le fond vide garde le
+  tracé de zone et son commit. Safari a confirmé le 1 novembre 2026, dans
+  l'application et sa scène SQLite, la sélection de l'item, Undo désactivé,
+  zones inchangées et aucune requête PUT sur le clic.
 - [`decor-editor-bridge-v2.spec.ts`](../tests/decor-editor-bridge-v2.spec.ts),
   [`decor-editor-field-state.spec.ts`](../tests/decor-editor-field-state.spec.ts),
   [`decor-editor-machine.spec.ts`](../tests/decor-editor-machine.spec.ts) et

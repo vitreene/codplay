@@ -52,7 +52,6 @@ export class DecorEditorController {
   private decorChangeCallbacks = new Set<(entries: DecorChangeEntry[]) => void>()
   private zonesChangeCallbacks = new Set<(zones: ZoneTable) => void>()
   private interactionEndCallbacks = new Set<() => void>()
-  private snapToFirstKeyframeCallbacks = new Set<() => void>()
   private zonePlacementCallbacks = new Set<(useZone: boolean) => void>()
 
   constructor(catalogs: DecorEditorCatalogs, orientationContext: OrientationContext = 'horizontal') {
@@ -66,7 +65,6 @@ export class DecorEditorController {
     this.decorChangeCallbacks.clear()
     this.zonesChangeCallbacks.clear()
     this.interactionEndCallbacks.clear()
-    this.snapToFirstKeyframeCallbacks.clear()
     this.zonePlacementCallbacks.clear()
   }
 
@@ -318,21 +316,6 @@ export class DecorEditorController {
 
   notifyInteractionEnd(): void {
     for (const cb of this.interactionEndCallbacks) cb()
-  }
-
-  /**
-   * Raccourci « aller à kf1 » (contrat d'intégration V2), accessible depuis
-   * l'état temporaire — dedit n'a aucune notion de temps/keyframe dans son propre domaine (ça vit
-   * dans `EditorScene`, côté pont) ; il ne fait que relayer la demande à l'hôte, qui seul sait
-   * résoudre le premier keyframe de l'item courant et déclencher le `SEEK`.
-   */
-  onSnapToFirstKeyframeRequest(cb: () => void): Unsubscribe {
-    this.snapToFirstKeyframeCallbacks.add(cb)
-    return () => this.snapToFirstKeyframeCallbacks.delete(cb)
-  }
-
-  requestSnapToFirstKeyframe(): void {
-    for (const cb of this.snapToFirstKeyframeCallbacks) cb()
   }
 
   private emitDecorChange(): void {

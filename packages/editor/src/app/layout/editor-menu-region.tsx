@@ -5,11 +5,11 @@ import { onSelectChange } from '@remix-run/ui/select/primitives'
 import type { Actor } from 'xstate'
 import type { EditorScene } from '../commands/types'
 import type { controllerMachine } from '../controller/controller-machine'
-import { rootPlacementModeForScene } from '../commands/root-placement-commands'
-import { EditorActionsFacade } from '../facades/editor-actions-facade'
+import type { EditorActionsFacade } from '../facades/editor-actions-facade'
 import type { DocumentHistoryState } from '../history/document-history'
 import { createEmptyEditorScene } from '../scenes/editor-scene'
 import type { EditorScenePersistence } from '../persistence/editor-scene-persistence'
+import { rootPlacementModeForScene } from '../commands/root-placement-commands'
 
 type EditorMenuRegionProps = Readonly<{
   controller: Actor<typeof controllerMachine>
@@ -25,78 +25,27 @@ const defaultItemGeometry = {
   height: 18,
 }
 
-/** Creates one test item with two authored keyframes and distinct decor values. */
-function createLaneTestItem(
-  controller: Actor<typeof controllerMachine>,
-  actions: EditorActionsFacade,
-  laneX: number,
-  label: string,
-  firstColor: string,
-  secondColor: string,
-  rotate: number,
-): void {
-  const scene = controller.getSnapshot().context.scene
-  if (scene === null) return
-
-  actions.runCommand({ name: 'createItem', args: { geometry: {} } })
-  const items = controller.getSnapshot().context.scene?.items ?? []
-  const itemId = items.at(-1)?.id
-  if (itemId === undefined) return
-
-  actions.runTransaction([
-    { name: 'assignType', args: { itemId, type: 'text' } },
-    { name: 'assignContent', args: { itemId, content: { type: 'text', text: label } } },
-    { name: 'createKeyframe', args: { itemId, timeMs: 0 } },
-    { name: 'createKeyframe', args: { itemId, timeMs: scene.meta.durationMs } },
-  ])
-
-  const createdItem = controller.getSnapshot().context.scene?.items.find((item) => item.id === itemId)
-  const keyframes = createdItem?.keyframes.toSorted((left, right) => left.timeMs - right.timeMs)
-  const [firstKeyframe, lastKeyframe] = keyframes ?? []
-  if (firstKeyframe === undefined || lastKeyframe === undefined) return
-
-  actions.runTransaction([
-    {
-      name: 'setDecor',
-      args: {
-        decorId: firstKeyframe.decorId,
-        patch: { offset: { translate: { x: laneX, y: 15 }, width: 18, height: 18, rotate: 0 }, style: { 'background-color': firstColor } },
-      },
-    },
-    {
-      name: 'setDecor',
-      args: {
-        decorId: lastKeyframe.decorId,
-        patch: { offset: { translate: { x: laneX, y: 50 }, width: 18, height: 18, rotate }, style: { 'background-color': secondColor } },
-      },
-    },
-  ])
-}
-
-/** Creates the existing two-item position-and-color integration fixture. */
-function createPositionColorTestScene(
-  controller: Actor<typeof controllerMachine>,
-  actions: EditorActionsFacade,
-): void {
-  actions.clearSelection()
-  createLaneTestItem(controller, actions, 8, 'Item A', 'oklch(0.6 0.24 25)', 'oklch(0.6 0.24 260)', 15)
-  createLaneTestItem(controller, actions, 54, 'Item B', 'oklch(0.6 0.24 145)', 'oklch(0.7 0.2 80)', -15)
-  actions.clearSelection()
-}
-
-/** Creates a block attached to an existing root zone and selects the new item. */
-function createBlockInZone(
+/** Creates an item in the selected zone through the existing command and history paths. */
+function createItemInZone(
   controller: Actor<typeof controllerMachine>,
   actions: EditorActionsFacade,
   zoneId: string,
+  type: 'bloc' | 'text',
 ): void {
   const beforeItemIds = new Set((controller.getSnapshot().context.scene?.items ?? []).map((item) => item.id))
   actions.runCommand({ name: 'createItem', args: { geometry: {}, zoneId } })
-  const createdItem = controller.getSnapshot().context.scene?.items.find((item) => !beforeItemIds.has(item.id))
-  if (createdItem !== undefined) actions.selectItem([createdItem.id])
+  const itemId = controller.getSnapshot().context.scene?.items.find((item) => !beforeItemIds.has(item.id))?.id
+  if (itemId === undefined) return
+  if (type === 'text') {
+    actions.runTransaction([
+      { name: 'assignType', args: { itemId, type } },
+      { name: 'assignContent', args: { itemId, content: { type, text: 'Nouveau texte' } } },
+    ])
+  }
+  actions.selectItem([itemId])
 }
 
-/** Renders scene selection, SQLite status, history controls, and editor fixtures. */
+/** Renders the compact authoring actions without the removed integration fixtures. */
 export function EditorMenuRegion(handle: Handle<EditorMenuRegionProps>) {
   const { controller, actions, persistence } = handle.props
   const buttonStyle = button({ size: 'md', tone: 'neutral' })
@@ -107,28 +56,70 @@ export function EditorMenuRegion(handle: Handle<EditorMenuRegionProps>) {
     const persistenceStatus = persistence.getStatus()
     const controllerSnapshot = controller.getSnapshot()
     const placementMode = scene === null ? null : rootPlacementModeForScene(scene)
-    const rootZonesExist = scene !== null && Object.values(scene.zones).some((zone) => zone.capsuleId === null)
     const selectedZone = scene === null || controllerSnapshot.context.selectedZoneId === null
       ? undefined
       : scene.zones[controllerSnapshot.context.selectedZoneId]
     const selectedRootZone = selectedZone?.capsuleId === null ? selectedZone : undefined
-    const isCreatingBlock = controllerSnapshot.context.creatingType === 'bloc'
     const isCreating = controllerSnapshot.value === 'creating'
     const isPlaying = controllerSnapshot.value === 'playing'
-    const zonesVisible = controllerSnapshot.context.zonesVisible
-    const canCreateBlock = scene !== null
+    const canCreate = scene !== null
       && placementMode !== null
       && !isPlaying
       && !isCreating
       && (placementMode === 'transform' || selectedRootZone !== undefined)
+    const createItemDisabledReason = scene === null
+      ? 'Charger une scène pour créer'
+      : placementMode === null
+        ? 'Définir la grille racine pour créer'
+        : isPlaying
+          ? 'Arrêter la lecture pour créer'
+          : isCreating
+            ? 'Terminer ou annuler la création en cours'
+            : placementMode === 'fine-grid' && selectedRootZone === undefined
+              ? 'Sélectionner une zone racine pour créer'
+              : null
+    const canDeleteScene = scene !== null
+      && scenes.some((savedScene) => savedScene.id === scene.id)
+      && scenes.length > 1
+      && !persistence.isDeletingScene(scene.id)
+      && persistenceStatus.kind !== 'error'
+
+    const createItem = (type: 'bloc' | 'text'): void => {
+      if (scene === null || placementMode === null || isPlaying || isCreating) return
+      if (placementMode === 'fine-grid') {
+        if (selectedRootZone !== undefined) createItemInZone(controller, actions, selectedRootZone.id, type)
+        return
+      }
+      if (type === 'bloc') {
+        actions.beginBlockCreation(placementMode)
+        return
+      }
+
+      const beforeItemIds = new Set(controller.getSnapshot().context.scene?.items.map((item) => item.id) ?? [])
+      actions.runCommand({ name: 'createItem', args: { geometry: defaultItemGeometry } })
+      const itemId = controller.getSnapshot().context.scene?.items.find((item) => !beforeItemIds.has(item.id))?.id
+      if (itemId === undefined) return
+      actions.runTransaction([
+        { name: 'assignType', args: { itemId, type } },
+        { name: 'assignContent', args: { itemId, content: { type, text: 'Nouveau texte' } } },
+      ])
+      actions.selectItem([itemId])
+    }
+
+    const deleteScene = (): void => {
+      if (!canDeleteScene || scene === null) return
+      void persistence.deleteScene(scene.id).then((replacement) => {
+        if (replacement !== null) actions.loadScene(replacement)
+      })
+    }
 
     return <div id={handle.id} className="app-demo-content">
-      <section id="editor-scene-menu" className="editor-menu-section">
-        <h2 id="editor-menu-title">Éditeur</h2>
-        <label id="editor-scene-picker-label" className="editor-menu-label">
-          <span id="editor-scene-picker-caption">Scène</span>
+      <fieldset id="editor-scene-menu" className="editor-menu-group">
+        <legend id="editor-scene-legend">Scène</legend>
+        <div id="editor-scene-controls" className="editor-menu-section">
           <Select
             id="editor-scene-picker"
+            aria-label="Choisir une scène"
             key={`${scene?.id ?? 'none'}:${scenes.length}`}
             defaultLabel={scene?.meta.title ?? 'Aucune scène'}
             defaultValue={scene?.id ?? null}
@@ -152,138 +143,99 @@ export function EditorMenuRegion(handle: Handle<EditorMenuRegionProps>) {
               {savedScene.title}
             </Option>)}
           </Select>
-        </label>
-        <p id="editor-persistence-status" className={`editor-persistence-status editor-persistence-status--${persistenceStatus.kind}`} role="status">
-          {persistenceStatus.message}
-        </p>
-        {persistenceStatus.ephemeralSourceCount > 0 && <p id="editor-ephemeral-media-status" role="note">
-          Sources média temporaires : {persistenceStatus.ephemeralSourceCount}
-        </p>}
-      </section>
+          <p id="editor-persistence-status" className={`editor-persistence-status editor-persistence-status--${persistenceStatus.kind}`} role="status">
+            {persistenceStatus.message}
+          </p>
+          {persistenceStatus.ephemeralSourceCount > 0 && <p id="editor-ephemeral-media-status" role="note">
+            Sources média temporaires : {persistenceStatus.ephemeralSourceCount}
+          </p>}
+          <div id="editor-scene-actions" className="editor-menu-actions" aria-label="Scènes">
+            <button
+              id="editor-create-scene"
+              type="button"
+              aria-label="Créer une scène"
+              title="Créer une scène"
+              mix={[buttonStyle, on('click', () => actions.loadScene(createEmptyEditorScene()))]}
+            >
+              <svg id="editor-create-scene-icon" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </button>
+            <button
+              id="editor-delete-scene"
+              type="button"
+              aria-label="Supprimer la scène"
+              title="Supprimer la scène"
+              disabled={!canDeleteScene}
+              mix={[buttonStyle, on('click', deleteScene)]}
+            >
+              <svg id="editor-delete-scene-icon" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </fieldset>
 
-      <section id="editor-history-menu" className="editor-menu-section">
-        <h3 id="editor-history-title">Historique</h3>
-        <div id="editor-history-actions" className="editor-menu-actions">
+      <fieldset id="editor-history-menu" className="editor-menu-group">
+        <legend id="editor-history-legend">Application</legend>
+        <div id="editor-history-actions" className="editor-menu-actions" aria-label="Historique">
           <button
             id="editor-undo"
             type="button"
+            aria-label="Annuler"
+            title="Annuler"
             disabled={!history.canUndo}
             mix={[buttonStyle, on('click', () => actions.undo())]}
           >
-            Annuler
+            <svg id="editor-undo-icon" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
+            </svg>
           </button>
           <button
             id="editor-redo"
             type="button"
+            aria-label="Rétablir"
+            title="Rétablir"
             disabled={!history.canRedo}
             mix={[buttonStyle, on('click', () => actions.redo())]}
           >
-            Rétablir
+            <svg id="editor-redo-icon" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m15 14 5-5-5-5M20 9H9.5a5.5 5.5 0 0 0 0 11H13" />
+            </svg>
           </button>
         </div>
-        <p id="editor-history-shortcuts">Ctrl/Cmd+Z · Ctrl/Cmd+Shift+Z</p>
-      </section>
+      </fieldset>
 
-      <section id="editor-scene-actions" className="editor-menu-section">
-        <h3 id="editor-scene-actions-title">Scènes et éléments</h3>
-        <button
-          id="editor-create-scene"
-          type="button"
-          mix={[buttonStyle, on('click', () => actions.loadScene(createEmptyEditorScene()))]}
-        >
-          Créer une scène
-        </button>
-        <div id="editor-root-placement-modes" className="editor-menu-actions" aria-label="Mode de placement racine">
+      <fieldset id="editor-item-creation" className="editor-menu-group">
+        <legend id="editor-item-creation-legend">Bloc</legend>
+        <div id="editor-item-actions" className="editor-menu-actions" aria-label="Créer un élément">
           <button
-            id="editor-root-placement-transform"
+            id="editor-create-block"
             type="button"
-            aria-pressed={placementMode === 'transform'}
-            disabled={scene === null || isCreating || isPlaying || (rootZonesExist && placementMode !== 'transform')}
-            mix={[buttonStyle, on('click', () => actions.runCommand({ name: 'setRootPlacementMode', args: { mode: 'transform' } }))]}
+            aria-label="Créer un bloc"
+            title={createItemDisabledReason ?? 'Créer un bloc'}
+            disabled={!canCreate}
+            mix={[buttonStyle, on('click', () => createItem('bloc'))]}
           >
-            Racine 1 × 1 · transforms
+            <svg id="editor-create-block-icon" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="4" y="4" width="16" height="16" rx="2" />
+            </svg>
           </button>
           <button
-            id="editor-root-placement-grid"
+            id="editor-create-text"
             type="button"
-            aria-pressed={placementMode === 'fine-grid'}
-            disabled={scene === null || isCreating || isPlaying}
-            mix={[buttonStyle, on('click', () => actions.runCommand({ name: 'setRootPlacementMode', args: { mode: 'fine-grid' } }))]}
+            aria-label="Créer un texte"
+            title={createItemDisabledReason ?? 'Créer un texte'}
+            disabled={!canCreate}
+            mix={[buttonStyle, on('click', () => createItem('text'))]}
           >
-            Racine 160 × 90
+            <svg id="editor-create-text-icon" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 5h16M8 5v14m-3 0h6M14 11h6M14 15h6M14 19h6" />
+            </svg>
           </button>
         </div>
-        <button
-          id="editor-toggle-zones"
-          type="button"
-          aria-pressed={zonesVisible}
-          disabled={scene === null || placementMode !== 'fine-grid' || isCreating || isPlaying}
-          mix={[buttonStyle, on('click', () => controller.send({ type: 'TOGGLE_ZONES_VISIBLE' }))]}
-        >
-          {zonesVisible ? 'Masquer les zones' : 'Afficher les zones'}
-        </button>
-        <button
-          id="editor-create-block"
-          type="button"
-          disabled={!canCreateBlock}
-          mix={[buttonStyle, on('click', () => {
-            if (placementMode === 'fine-grid') {
-              if (selectedRootZone !== undefined) createBlockInZone(controller, actions, selectedRootZone.id)
-              return
-            }
-            if (placementMode === 'transform') actions.beginBlockCreation(placementMode)
-          })]}
-        >
-          {placementMode === 'fine-grid'
-            ? selectedRootZone === undefined ? 'Sélectionner une zone' : `Créer un bloc dans ${selectedRootZone.name}`
-            : 'Tracer un bloc'}
-        </button>
-        {isCreatingBlock && <button
-          id="editor-cancel-block-creation"
-          type="button"
-          mix={[buttonStyle, on('click', () => actions.cancelCreation())]}
-        >
-          Annuler le tracé (Échap)
-        </button>}
-        <p id="editor-block-creation-hint">
-          {placementMode === 'fine-grid'
-            ? selectedRootZone === undefined
-              ? rootZonesExist
-                ? 'Afficher les zones, puis sélectionner celle qui recevra le bloc.'
-                : 'Afficher les zones et en déclarer une avant de créer le bloc.'
-              : `Le bloc hérite de l’emprise de ${selectedRootZone.name}.`
-            : 'Sur la grille libre, tracer le bloc définit sa géométrie.'}
-        </p>
-        <button
-          id="editor-create-item"
-          type="button"
-          disabled={scene === null}
-          mix={[buttonStyle, on('click', () => {
-            if (scene === null) return
-            actions.runCommand({ name: 'createItem', args: { geometry: defaultItemGeometry } })
-            const itemId = controller.getSnapshot().context.scene?.items.at(-1)?.id
-            if (itemId === undefined) return
-            const durationMs = controller.getSnapshot().context.scene?.meta.durationMs ?? scene.meta.durationMs
-            actions.runTransaction([
-              { name: 'assignType', args: { itemId, type: 'text' } },
-              { name: 'assignContent', args: { itemId, content: { type: 'text', text: 'Nouvel item' } } },
-              { name: 'createKeyframe', args: { itemId, timeMs: 0 } },
-              { name: 'createKeyframe', args: { itemId, timeMs: durationMs } },
-            ])
-            actions.selectItem([itemId])
-          })]}
-        >
-          Créer un item de test
-        </button>
-        <button
-          id="editor-position-color-fixture"
-          type="button"
-          disabled={scene === null}
-          mix={[buttonStyle, on('click', () => createPositionColorTestScene(controller, actions))]}
-        >
-          Test position + couleur
-        </button>
-      </section>
+      </fieldset>
     </div>
   }
 }

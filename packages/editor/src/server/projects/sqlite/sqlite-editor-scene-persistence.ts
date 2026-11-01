@@ -13,6 +13,7 @@ import type {
 } from '../../../app/commands/types'
 import { assertJsonCompatible, stringifyJson } from '../../../app/persistence/json-serialization'
 import type {
+  DeleteEditorSceneResult,
   EditorSceneSummary,
   SaveEditorSceneResult,
   StoredEditorScene,
@@ -63,6 +64,31 @@ export class SqliteEditorScenePersistence {
         'SELECT scene_id FROM editor_scenes WHERE scene_id = ?', [sceneId])).length === 0) return false
       await writeActiveSceneId(transaction, sceneId)
       return true
+    })
+  }
+
+  /** Deletes one revision-matched scene and activates the first remaining catalogue entry. */
+  async deleteScene(sceneId: string, expectedRevision: number): Promise<DeleteEditorSceneResult> {
+    return this.database.transaction(async (transaction) => {
+      const target = await queryRows(transaction,
+        'SELECT revision FROM editor_scenes WHERE scene_id = ?', [sceneId])
+      if (target.length === 0) return { kind: 'missing' }
+      const currentRevision = numberValue(target[0]!, 'revision')
+      if (currentRevision !== expectedRevision) return { kind: 'conflict', currentRevision }
+
+      const remaining = await queryRows(transaction, `
+        SELECT scene_id FROM editor_scenes
+        WHERE scene_id <> ?
+        ORDER BY title COLLATE NOCASE, scene_id
+      `, [sceneId])
+      if (remaining.length === 0) return { kind: 'last-scene' }
+
+      const activeSceneId = stringValue(remaining[0]!, 'scene_id')
+      await queryRows(transaction, 'DELETE FROM editor_scenes WHERE scene_id = ?', [sceneId])
+      await writeActiveSceneId(transaction, activeSceneId)
+      const activeScene = await readScene(transaction, activeSceneId)
+      if (activeScene === null) throw new Error(`deleteScene: replacement scene '${activeSceneId}' disappeared`)
+      return { kind: 'deleted', activeScene }
     })
   }
 
