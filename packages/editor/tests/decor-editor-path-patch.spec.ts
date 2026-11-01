@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest'
 import { buildPatchFromPath } from '../src/decor-editor/path-patch'
 
-describe('buildPatchFromPath (symétrique de readPath, spec dedit §4 bis)', () => {
+describe('buildPatchFromPath (symétrique de readPath, contrat de patch par chemin)', () => {
   it('chemin imbriqué sous style', () => {
     expect(buildPatchFromPath('style.font-size', '16cqw')).toEqual({ style: { 'font-size': '16cqw' } })
   })
 
   it('chemin racine simple', () => {
-    expect(buildPatchFromPath('zone', 'header')).toEqual({ zone: 'header' })
+    expect(buildPatchFromPath('zoneId', 'header-id')).toEqual({ zoneId: 'header-id' })
   })
 
   it('module hors style (offset)', () => {

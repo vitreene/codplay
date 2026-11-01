@@ -5,7 +5,7 @@ import type { IconName } from './icons'
 //
 // Sépare strictement le CONTRAT (décor, résolution d'héritage, multi-sélection —
 // aucune notion de panneau) de la couche de RENDU (dupliquable/adaptable sans
-// toucher au contrat). Cf plan/2026-07-07-dedit-palette-panels-plan.md
+// toucher au contrat). Voir `specs/editor-v2-integration-spec.md`.
 
 export type PanelId = string
 
@@ -29,7 +29,7 @@ export interface PanelField {
    * Pour kind: 'boolean' uniquement — valeur écrite pour actif/inactif. Le plus souvent
    * une valeur CSS (ex. "bold"/"normal") pour un champ sous `style.*`, mais un module hors
    * `style` (ex. `textAutoSize.enabled`) porte un vrai booléen TypeScript, pas une chaîne —
-   * le rendu n'a pas à imposer un format de valeur au décor (cf §4 bis, moteur de panneaux).
+   * le rendu n'a pas à imposer un format de valeur au décor (selon le moteur de panneaux).
    */
   trueValue?: string | boolean
   falseValue?: string | boolean
@@ -43,15 +43,15 @@ export interface PanelField {
 
 export type PalettePanel =
   | { id: PanelId; label: string; kind?: undefined; fields: PanelField[] }
-  /** Cas spécial : mini-éditeur de code libre (spec §9), un seul contrôle, pas une liste de champs. */
+  /** Cas spécial : mini-éditeur de code libre (contrat de palette), un seul contrôle, pas une liste de champs. */
   | { id: PanelId; label: string; kind: 'custom-code' }
-  /** Cas spécial : liste des presets du catalogue (spec §9) — une action (fusion d'un
+  /** Cas spécial : liste des presets du catalogue (contrat de palette) — une action (fusion d'un
    *  patch complet), pas une propriété à éditer, donc pas un PanelField classique. */
   | { id: PanelId; label: string; kind: 'preset-list' }
 
 export interface PaletteConfig {
   panels: PalettePanel[]
-  /** Ids de panneaux visibles par type d'item — pas de filtrage par champ (spec §5). */
+  /** Ids de panneaux visibles par type d'item — pas de filtrage par champ (panneaux par type). */
   panelsByItemType: Record<ItemType, PanelId[]>
 }
 
@@ -59,7 +59,7 @@ export function panelsForType(itemType: ItemType, config: PaletteConfig): PanelI
   return config.panelsByItemType[itemType] ?? []
 }
 
-/** Intersection des panneaux visibles pour plusieurs types (multi-sélection, spec §7 bis). */
+/** Intersection des panneaux visibles pour plusieurs types (multi-sélection, contrat de multi-sélection). */
 export function panelsForTypes(itemTypes: ItemType[], config: PaletteConfig): PanelId[] {
   if (itemTypes.length === 0) return []
   return itemTypes

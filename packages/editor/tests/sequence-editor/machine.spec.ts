@@ -1,5 +1,5 @@
 // Filet de sécurité — machine.ts n'auto-mute plus jamais `scene`/`selection` (§"unicité de la
-// source", `2026-07-13-controller-islands-bridge-plan.md` §3bis) : les handlers de geste
+// source", `specs/editor-v2-integration-spec.md`) : les handlers de geste
 // utilisateur ÉMETTENT des commandes/intentions de sélection au lieu de les appliquer localement.
 // Seuls SCENE.SYNC/SCENE.LOAD écrivent scene/selection — testés séparément, en contraste explicite
 // (SCENE.SYNC préserve playhead/sélection/interaction ; SCENE.LOAD réinitialise tout).

@@ -24,7 +24,7 @@ function attachInput(overrides: Partial<AttachItemInput> = {}): AttachItemInput 
 }
 
 describe('createDecorEditorPalette — champ couleur, rafraîchissement après perte de focus', () => {
-  it('un patch externe reçu pendant que le champ est focus est appliqué au blur (2026-07-17-resolved-state-at-time-notes.md)', () => {
+  it('un patch externe reçu pendant que le champ est focus est appliqué au blur', () => {
     const ctrl = new DecorEditorController(catalogs())
     const palette = createDecorEditorPalette(ctrl)
     document.body.appendChild(palette.element)

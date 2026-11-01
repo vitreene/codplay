@@ -1,6 +1,6 @@
 // ─── Document — réexporté depuis le modèle normatif ──────────────────────────
 //
-// `app/commands/types.ts` est la source de vérité du document (`app/2026-07-11-ed2-document-model.md`).
+// `app/commands/types.ts` est la source de vérité du document (`specs/editor-document-model-spec.md`).
 // Le sequence-editor n'a pas son propre `EditorScene`/`TrackNode`. Ce qui reste ici est propre au
 // sequence-editor : viewport, sélection, interaction, layout/display config — aucun n'a d'équivalent
 // dans le modèle document (ce sont des états d'ÉDITEUR, jamais persistés dans `EditorScene`).

@@ -8,7 +8,7 @@ import { iconSvg } from './icons'
 // ─── Palette container ────────────────────────────────────────────────────────
 //
 // Couche de RENDU — dupliquable/adaptable sans toucher au contrat (domaine,
-// machine, contrôleur). Cf plan/2026-07-07-dedit-palette-panels-plan.md
+// machine, contrôleur). Voir `specs/editor-v2-integration-spec.md`.
 
 export interface DecorEditorPaletteHandle {
   element: HTMLElement
@@ -21,7 +21,7 @@ export function createDecorEditorPalette(controller: DecorEditorController): Dec
   el.classList.add('dedit-palette', 'dedit-palette--hidden')
 
   // Raccourci « aller à kf1 » — visible seulement pendant un décor temporaire
-  // (`2026-07-17-resolved-state-at-time-notes.md`), pour revenir à l'ancrage réel sans chercher le
+  // (contrat d'intégration V2), pour revenir à l'ancrage réel sans chercher le
   // kf dans la timeline. dedit ne résout pas lui-même « où est kf1 » (aucune notion de temps/
   // keyframe dans son propre domaine) — relaie seulement la demande à l'hôte via le contrôleur.
   const snapButton = document.createElement('button')
@@ -50,7 +50,7 @@ export function createDecorEditorPalette(controller: DecorEditorController): Dec
     const active = snapshot.value === 'active'
     el.classList.toggle('dedit-palette--hidden', !active)
     // Signal visuel « décor temporaire » (état live au playhead, pas encore un kf réel) — piloté
-    // en donnée par `controller.isTemporary()` (`2026-07-17-resolved-state-at-time-notes.md`),
+    // en donnée par `controller.isTemporary()` (`specs/editor-v2-integration-spec.md`),
     // le CSS (`dedit-palette--temporary`, fond plus clair) reste le seul endroit qui décide de la
     // présentation, jamais mêlé à la détection elle-même.
     el.classList.toggle('dedit-palette--temporary', controller.isTemporary())
@@ -132,7 +132,7 @@ function renderActivePanel(
   return () => updates.forEach(u => u())
 }
 
-// ─── Generic field row (état mixte §7 bis, marqueur d'écart §3.1) ──────────
+// ─── Generic field row (état mixte multi-sélection, marqueur d'écart) ──────────
 
 function fieldRow(
   container: HTMLElement,
@@ -160,8 +160,8 @@ function fieldRow(
   row.appendChild(control)
   const updateControl = buildControl(control)
 
-  // Contrôle « hériter » (spec §3.1) — discret, visible seulement s'il y a un écart
-  // explicite sur cette propriété ; masqué en multi-sélection (spec §7 bis).
+  // Contrôle « hériter » (contrat d’héritage) — discret, visible seulement s'il y a un écart
+  // explicite sur cette propriété ; masqué en multi-sélection (contrat de multi-sélection).
   let stripBtn: HTMLButtonElement | null = null
   if (!multi) {
     stripBtn = document.createElement('button')
@@ -219,7 +219,7 @@ function cssPropertyOf(path: string): string {
 // ─── Field kinds ─────────────────────────────────────────────────────────────
 //
 // Chaque contrôle produit une chaîne CSS finale avant d'écrire dans le décor
-// (jamais de valeur intermédiaire stockée) — cf spec §3.2 et le principe posé
+// (jamais de valeur intermédiaire stockée) — cf modèle du décor et le principe posé
 // par l'utilisateur : "la palette est responsable de produire la chaîne CSS
 // finale complète".
 
@@ -496,7 +496,7 @@ function renderTextField(
   })
 }
 
-// ─── Custom code panel — cas spécial, pas une liste de PanelField (spec §9) ────
+// ─── Custom code panel — cas spécial, pas une liste de PanelField (contrat de palette) ────
 
 function renderCustomCodePanel(container: HTMLElement, controller: DecorEditorController): FieldUpdater {
   const wrapper = document.createElement('div')
@@ -507,8 +507,8 @@ function renderCustomCodePanel(container: HTMLElement, controller: DecorEditorCo
 
   textarea.addEventListener('change', () => {
     if (textarea.value === '') {
-      // Effacer le mini-éditeur revient à l'hérité (spec §3.1) — pas de patch avec
-      // chaîne vide, mais un stripInherited (no-op en multi-sélection, cf §7 bis).
+      // Effacer le mini-éditeur revient à l'hérité (contrat d’héritage) — pas de patch avec
+      // chaîne vide, mais un stripInherited (no-op en multi-sélection, cf multi-sélection).
       controller.stripInherited('custom')
     } else {
       controller.applyPatch({ custom: textarea.value })
@@ -524,7 +524,7 @@ function renderCustomCodePanel(container: HTMLElement, controller: DecorEditorCo
   }
 }
 
-// ─── Preset list panel — cas spécial, une action par preset, pas un PanelField (spec §9) ──
+// ─── Preset list panel — cas spécial, une action par preset, pas un PanelField (contrat de palette) ──
 
 function renderPresetListPanel(container: HTMLElement, controller: DecorEditorController): FieldUpdater {
   const wrapper = document.createElement('div')

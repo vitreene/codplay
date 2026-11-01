@@ -18,10 +18,9 @@ beforeAll(() => {
 
 /**
  * Un kf FIXE le décor à son instant : `transitionIn` le PRÉCÈDE (bande à gauche, se termine AU
- * kf) ; `transitionOut` le SUIT (bande à droite, débute AU kf) — `2026-06-11-sequence-editor-
- * grid-spec.md` §2.2 "Sémantique des transitions". kf-intro porte les deux à la fois (le fondu
+ * kf) ; `transitionOut` le SUIT (bande à droite, débute AU kf). kf-intro porte les deux à la fois (le fondu
  * d'apparition ET la dissolution vers kf-outro) pour vérifier qu'ils coexistent sans collision —
- * l'exclusivité (§7 Q1) ne s'applique qu'à une PAIRE adjacente, jamais à un seul keyframe.
+ * l'exclusivité ne s'applique qu'à une PAIRE adjacente, jamais à un seul keyframe.
  */
 function sceneWithTransitions(): EditorScene {
   return {

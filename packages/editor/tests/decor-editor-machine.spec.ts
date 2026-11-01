@@ -141,11 +141,11 @@ describe('decorEditorMachine — édition du décor (item unique)', () => {
 
   it('PRESET.APPLY fusionne le patch du preset sans écraser le reste', () => {
     const actor = boot()
-    actor.send(attachEvent({ patch: { zone: 'header' } }))
+    actor.send(attachEvent({ patch: { zoneId: 'header-id' } }))
     actor.send({ type: 'PRESET.APPLY', patch: { style: { 'font-weight': 'bold' } } })
     const item = actor.getSnapshot().context.items[0]!
     expect(item.patch.style).toEqual({ 'font-weight': 'bold' })
-    expect(item.patch.zone).toBe('header')
+    expect(item.patch.zoneId).toBe('header-id')
     actor.stop()
   })
 
@@ -243,7 +243,7 @@ describe('decorEditorMachine — modes et zones', () => {
   it('ZONES.SET met à jour la table de zones', () => {
     const actor = boot()
     actor.send(attachEvent())
-    const zones = [{ name: 'header', coords: { x: 0, y: 0, width: 100, height: 20 } }]
+    const zones = [{ id: 'zone-header', name: 'header', coords: { x: 0, y: 0, width: 100, height: 20 } }]
     actor.send({ type: 'ZONES.SET', zones })
     expect(actor.getSnapshot().context.zones).toEqual(zones)
     actor.stop()

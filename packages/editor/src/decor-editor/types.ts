@@ -26,7 +26,7 @@ export interface CapsulePatch {
   grid?: { rows: number; cols: number } | { preset: string }
 }
 
-// ─── Offset (module non-CSS, transposé en aval — spec §6) ──────────────────
+// ─── Offset (module non-CSS, transposé en aval — conversion d’unités) ──────────────────
 //
 // Décalage libre (transform + dimensions), distinct de la future `position` (placement dans la
 // grille d'une capsule, pas encore construite) — nommage précisé par l'auteur pour ne pas les
@@ -77,7 +77,7 @@ export interface DecorPatch {
   /** Même modèle que le runtime codplay (add/remove sur chaînes espacées, ou remplacement total). */
   classes?: ClassNameValue
   offset?: OffsetPatch
-  zone?: string | null // référence PAR NOM ; null = surface de la capsule
+  zoneId?: string | null // identifiant stable ; null = surface de la capsule
   capsule?: CapsulePatch // items capsule uniquement (§ 8)
   text?: string // contenu textuel (saisie dans dedit)
   textAutoSize?: TextAutoSizePatch // items texte uniquement (spec text-auto-size §5)
@@ -100,7 +100,7 @@ export type ResolvedDecor = DecorPatch
 
 export interface DecorPreset {
   name: string
-  /** Jamais `offset`, `zone`, `capsule` — cf spec §9. */
+  /** Jamais `offset`, `zoneId`, `capsule` — cf contrat de palette. */
   patch: DecorPatch
 }
 
@@ -114,8 +114,8 @@ export interface ZoneCoords {
 }
 
 export type ZoneDef =
-  | { name: string; coords: ZoneCoords }
-  | { name: string; contexts: Record<OrientationContext, ZoneCoords> }
+  | { id: string; name: string; coords: ZoneCoords }
+  | { id: string; name: string; contexts: Record<OrientationContext, ZoneCoords> }
 
 export type ZoneTable = ZoneDef[]
 

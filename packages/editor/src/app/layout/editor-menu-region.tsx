@@ -84,6 +84,18 @@ function createPositionColorTestScene(
   actions.clearSelection()
 }
 
+/** Creates a block attached to an existing root zone and selects the new item. */
+function createBlockInZone(
+  controller: Actor<typeof controllerMachine>,
+  actions: EditorActionsFacade,
+  zoneId: string,
+): void {
+  const beforeItemIds = new Set((controller.getSnapshot().context.scene?.items ?? []).map((item) => item.id))
+  actions.runCommand({ name: 'createItem', args: { geometry: {}, zoneId } })
+  const createdItem = controller.getSnapshot().context.scene?.items.find((item) => !beforeItemIds.has(item.id))
+  if (createdItem !== undefined) actions.selectItem([createdItem.id])
+}
+
 /** Renders scene selection, SQLite status, history controls, and editor fixtures. */
 export function EditorMenuRegion(handle: Handle<EditorMenuRegionProps>) {
   const { controller, actions, persistence } = handle.props
@@ -96,9 +108,19 @@ export function EditorMenuRegion(handle: Handle<EditorMenuRegionProps>) {
     const controllerSnapshot = controller.getSnapshot()
     const placementMode = scene === null ? null : rootPlacementModeForScene(scene)
     const rootZonesExist = scene !== null && Object.values(scene.zones).some((zone) => zone.capsuleId === null)
+    const selectedZone = scene === null || controllerSnapshot.context.selectedZoneId === null
+      ? undefined
+      : scene.zones[controllerSnapshot.context.selectedZoneId]
+    const selectedRootZone = selectedZone?.capsuleId === null ? selectedZone : undefined
     const isCreatingBlock = controllerSnapshot.context.creatingType === 'bloc'
     const isCreating = controllerSnapshot.value === 'creating'
     const isPlaying = controllerSnapshot.value === 'playing'
+    const zonesVisible = controllerSnapshot.context.zonesVisible
+    const canCreateBlock = scene !== null
+      && placementMode !== null
+      && !isPlaying
+      && !isCreating
+      && (placementMode === 'transform' || selectedRootZone !== undefined)
 
     return <div id={handle.id} className="app-demo-content">
       <section id="editor-scene-menu" className="editor-menu-section">
@@ -192,14 +214,29 @@ export function EditorMenuRegion(handle: Handle<EditorMenuRegionProps>) {
           </button>
         </div>
         <button
+          id="editor-toggle-zones"
+          type="button"
+          aria-pressed={zonesVisible}
+          disabled={scene === null || placementMode !== 'fine-grid' || isCreating || isPlaying}
+          mix={[buttonStyle, on('click', () => controller.send({ type: 'TOGGLE_ZONES_VISIBLE' }))]}
+        >
+          {zonesVisible ? 'Masquer les zones' : 'Afficher les zones'}
+        </button>
+        <button
           id="editor-create-block"
           type="button"
-          disabled={scene === null || placementMode === null || isPlaying || isCreating}
+          disabled={!canCreateBlock}
           mix={[buttonStyle, on('click', () => {
-            if (placementMode !== null) actions.beginBlockCreation(placementMode)
+            if (placementMode === 'fine-grid') {
+              if (selectedRootZone !== undefined) createBlockInZone(controller, actions, selectedRootZone.id)
+              return
+            }
+            if (placementMode === 'transform') actions.beginBlockCreation(placementMode)
           })]}
         >
-          Tracer un bloc
+          {placementMode === 'fine-grid'
+            ? selectedRootZone === undefined ? 'Sélectionner une zone' : `Créer un bloc dans ${selectedRootZone.name}`
+            : 'Tracer un bloc'}
         </button>
         {isCreatingBlock && <button
           id="editor-cancel-block-creation"
@@ -208,7 +245,15 @@ export function EditorMenuRegion(handle: Handle<EditorMenuRegionProps>) {
         >
           Annuler le tracé (Échap)
         </button>}
-        <p id="editor-block-creation-hint">Choisir la grille racine, puis tracer le bloc sur la scène. Le bloc reste vide et peut recevoir un décor.</p>
+        <p id="editor-block-creation-hint">
+          {placementMode === 'fine-grid'
+            ? selectedRootZone === undefined
+              ? rootZonesExist
+                ? 'Afficher les zones, puis sélectionner celle qui recevra le bloc.'
+                : 'Afficher les zones et en déclarer une avant de créer le bloc.'
+              : `Le bloc hérite de l’emprise de ${selectedRootZone.name}.`
+            : 'Sur la grille libre, tracer le bloc définit sa géométrie.'}
+        </p>
         <button
           id="editor-create-item"
           type="button"

@@ -280,7 +280,7 @@ describe('decor-editor bridge V2', () => {
         style: { color: 'green' },
         classes: 'target-class',
         offset: { translate: { x: 32, y: 18 }, width: 24, height: 22 },
-        zone: 'target',
+        zoneId: 'target-id',
         custom: 'filter: grayscale(1);',
         path: 'M 0 0 A 10 10 0 0 1 1 0',
       },
@@ -289,7 +289,7 @@ describe('decor-editor bridge V2', () => {
       style: { color: 'green' },
       classes: 'target-class',
       offset: { translate: { x: 32, y: 18 }, width: 24, height: 22 },
-      zone: 'target',
+      zoneId: 'target-id',
       custom: 'filter: grayscale(1);',
       path: 'M 0 0 A 10 10 0 0 1 1 0',
     })

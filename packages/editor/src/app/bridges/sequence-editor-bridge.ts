@@ -8,7 +8,7 @@ import type { BridgeHandle } from './types'
 import type { EditorCoordinationBridge, EditorDecorPreviewCandidate } from './editor-coordination-bridge'
 
 /**
- * Pont `sequenceEditor` — `2026-07-13-controller-islands-bridge-plan.md` §3.1. Module de câblage
+ * Pont `sequenceEditor` — `specs/editor-v2-integration-spec.md`. Module de câblage
  * impératif, pas un acteur XState : le contrôleur n'a plus d'état propre à réconcilier (architecture
  * par émission), donc rien qu'un `invoke`/`fromCallback` apporterait ici. Créé une fois que son
  * conteneur DOM existe, détruit uniquement au démontage complet de l'app.
@@ -112,7 +112,7 @@ export function createSequenceEditorBridge(
   /**
    * `KEYFRAME.ADD` (`sequence-editor/machine.ts`) est une fonction PURE, sans accès à
    * `snapshot`/`scene` réels — elle ne peut pas calculer l'état interpolé courant elle-même
-   * (`2026-07-25-decor-unified-channel-plan.md` §B). Ce pont, lui, a accès aux deux : il enrichit
+   * (`specs/decor-style-interpolation-spec.md`). Ce pont, lui, a accès aux deux : il enrichit
    * la commande `createNamedKeyframe` d'un `setDecor` séparé quand la map de propriétés modifiées
    * fournit un candidat d'édition, jamais depuis un node ou une pose runtime. Sans candidat,
    * l'insertion conserve le décor adjacent et ne fige aucune valeur interpolée.
@@ -133,7 +133,7 @@ export function createSequenceEditorBridge(
     // `resolveKeyframeInsertionPatch` n'a déjà renvoyé un patch non-null qu'après avoir vérifié
     // `patchDiffersFromBase` — au moins un champ diverge donc forcément ici, `patchToDecorArgs`
     // (`touched` sur les mêmes champs) ne peut pas renvoyer `null` pour ce même patch.
-    const decorArgs = patchToDecorArgs(patch, scene)
+    const decorArgs = patchToDecorArgs(patch)
     if (decorArgs === null) {
       captures.push({ itemId, keyframeId, candidate, persisted: false })
       return [command]

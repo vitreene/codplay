@@ -2,10 +2,10 @@
 //
 // La palette édite des propriétés CSS via des contrôles conviviaux (nombre sans
 // unité affichée, curseur…) mais le décor ne stocke que des chaînes CSS finales
-// (spec §3.2) — jamais de valeur intermédiaire à convertir en aval. Cette table
+// (modèle du décor) — jamais de valeur intermédiaire à convertir en aval. Cette table
 // dit, pour une propriété CSS donnée, comment un nombre saisi devient une chaîne
 // CSS : certaines propriétés acceptent un nombre nu (order, z-index, opacity…),
-// d'autres ont besoin d'une unité (cqw, systématique pour toute grandeur — §3.3).
+// d'autres ont besoin d'une unité (cqw, systématique pour toute grandeur).
 //
 // Un FACTEUR D'ÉCHELLE (`scale`) permet d'ajuster la granularité perçue : une
 // saisie de "1" ne produit pas nécessairement "1cqw" — pour des grandeurs fines

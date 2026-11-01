@@ -1,5 +1,5 @@
 /**
- * Le document d'ed2 — modèle NORMATIF, `app/2026-07-11-ed2-document-model.md`. Seul ce modèle
+ * Le document d'ed2 — modèle NORMATIF, `specs/editor-document-model-spec.md`. Seul ce modèle
  * fait foi ; `sequence-editor/types.ts` le réexporte, ne le redéclare jamais.
  */
 
@@ -32,7 +32,7 @@ export type Transition =
       easing: Easing
       /**
        * Raccourcissement d'une transition d'état de décor entre deux kf internes quelconques
-       * (`2026-06-11-sequence-editor-grid-spec.md` §2.2) — `'before'` la fait se terminer AU kf
+       * `'before'` la fait se terminer AU kf
        * destination (même logique de recul qu'une `transitionIn` nommée) ; `'after'` (défaut) la
        * fait démarrer AU kf source, comportement historique inchangé.
        */
@@ -43,9 +43,9 @@ export type Transition =
 
 /**
  * `bloc` = le type fondateur, sans contenu (tout item naît `bloc` puis se différencie —
- * document-model, discussion §« Tout item naît en type bloc »). Les futurs types média
+ * document-model, le modèle du document). Les futurs types média
  * (story-média, lottie, rive…) s'ajoutent ici à la disponibilité de leur composant Codplay —
- * jamais fusionnés sous un `media` générique (item-model-spec §5, confirmé document-model).
+ * jamais fusionnés sous un `media` générique (le modèle du document).
  */
 export type ItemType = 'bloc' | 'text' | 'image' | 'media' | 'video' | 'capsule'
 

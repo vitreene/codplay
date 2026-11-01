@@ -30,6 +30,10 @@ export type {
   SelectionFrameValue,
 } from './v2/types'
 export { createRotationModifier } from './v2/rotation-modifier'
+export { createZoneEditorV2 } from './zone-editor-v2'
+export type { ZoneEditorV2Options, ZoneEditorV2Pose } from './zone-editor-v2'
+export type { ZoneEditorHandle } from './zone-editor'
+export type { ZoneEditorState, ZoneGridModel, ZoneDef } from './zone-model'
 
 type Gesture = Readonly<{
   startX: number

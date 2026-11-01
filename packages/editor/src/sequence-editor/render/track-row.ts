@@ -162,7 +162,7 @@ export function renderTrackRows(
     // Transition duration bands (named = amber, interpolated = blue). Un kf FIXE le décor à son
     // instant : `transitionIn` le PRÉCÈDE (bande à gauche, se termine AU kf) ; `transitionOut` le
     // SUIT (bande à droite, débute AU kf) — intro/outro sont les bornes du clip, la transition ne se
-    // fait donc que d'un seul côté (règle d'exclusivité, `2026-06-11-sequence-editor-grid-spec.md`).
+    // fait donc que d'un seul côté.
     for (const kf of item.keyframes) {
       const kfX = toPx(getEffectiveMs(kf.id, kf.timeMs, ctx))
       const center = channelCenter(rowHeight, resolveKeyframeChannel(kf), dualChannel)

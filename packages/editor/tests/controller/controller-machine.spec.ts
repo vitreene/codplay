@@ -61,7 +61,7 @@ describe('controllerMachine — scene lifecycle', () => {
   })
 })
 
-describe('controllerMachine — selection, two emitters converging on one truth (§5)', () => {
+describe('controllerMachine — selection, two emitters converging on one truth', () => {
   it('SELECT_ITEM sets the selection regardless of which module emitted it', () => {
     const actor = createActor(controllerMachine)
     actor.start()
@@ -119,7 +119,7 @@ describe('controllerMachine — selection, two emitters converging on one truth 
   })
 })
 
-describe('controllerMachine — create mode (§3)', () => {
+describe('controllerMachine — create mode', () => {
   it('CREATE_MODE_ENTER moves to creating and records the target type', () => {
     const actor = createActor(controllerMachine)
     actor.start()
@@ -172,7 +172,7 @@ describe('controllerMachine — create mode (§3)', () => {
   })
 })
 
-describe('controllerMachine — RUN_COMMAND is the only write path (§4)', () => {
+describe('controllerMachine — RUN_COMMAND is the only write path', () => {
   it('applies a createItem command onto the loaded scene', () => {
     const actor = createActor(controllerMachine)
     actor.start()
@@ -241,7 +241,7 @@ describe('controllerMachine — panels', () => {
   })
 })
 
-describe('controllerMachine — playing state (2026-07-17-play-mode-decor-editor-deactivation-plan)', () => {
+describe('controllerMachine — playing state', () => {
   it('TELCO_ACTION_REQUEST moves from idle to playing and emits playbackActiveChanged(active: true)', () => {
     const actor = createActor(controllerMachine)
     actor.start()
@@ -326,7 +326,7 @@ describe('controllerMachine — playing state (2026-07-17-play-mode-decor-editor
   })
 })
 
-describe('controllerMachine — zones visibility (§3, ephemeral toggle)', () => {
+describe('controllerMachine — zones visibility (ephemeral toggle)', () => {
   it('TOGGLE_ZONES_VISIBLE flips the flag', () => {
     const actor = createActor(controllerMachine)
     actor.start()

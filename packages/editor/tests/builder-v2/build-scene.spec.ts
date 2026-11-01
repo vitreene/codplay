@@ -74,7 +74,7 @@ describe('buildSceneDocV2 — current native editor increment', () => {
     owner.destroy()
   })
 
-  it('produces V2 list/tag persos with target placement and no V1 shape', () => {
+  it('produces V2 list/tag persos with target placement', () => {
     const result = buildSceneDocV2(fixtureScene())
     expect(result.ok).toBe(true)
     if (!result.ok) return
@@ -277,7 +277,7 @@ describe('buildSceneDocV2 — current native editor increment', () => {
     expect(item.actions['item-1-decor-kf-kf-b-discrete']?.style).toEqual({ objectFit: 'cover' })
   })
 
-  it('is accepted by the real CodPlay V2 compiler without importing V1', () => {
+  it('is accepted by the real CodPlay V2 compiler', () => {
     const result = buildSceneDocV2(fixtureScene())
     expect(result.ok).toBe(true)
     if (!result.ok) return

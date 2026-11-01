@@ -2,13 +2,15 @@ import type { Actor } from 'xstate'
 import type { CodPlaySnapshot, CodPlaySnapshotPatch } from 'codplay'
 import type { MotionEasing } from '../../motion-editor/easing'
 import { resolveMotionEaseProgress } from '../../motion-editor/easing'
-import { createRotationModifier, createSelectionFrameV2 } from '@codplay/selection-frame/v2'
+import { createRotationModifier, createSelectionFrameV2, createZoneEditorV2 } from '@codplay/selection-frame/v2'
 import type {
   SelectionFrameDelta,
   SelectionFrameHandleId,
   SelectionFrameV2CreationResult,
   SelectionFrameV2Handle,
+  ZoneEditorHandle,
 } from '@codplay/selection-frame/v2'
+import type { ZoneEditorState } from '@codplay/selection-frame/v2'
 import { DecorEditorController } from '../../decor-editor/controller'
 import { mountDecorEditor } from '../../decor-editor/mount'
 import { DEFAULT_PALETTE, DEFAULT_PRESETS } from '../../decor-editor/default-palette'
@@ -24,7 +26,7 @@ import {
 } from '../../decor-editor/modified-properties'
 import type { DecorModificationMap } from '../../decor-editor/modified-properties'
 import { resolveKeyframeChannel } from '../commands/types'
-import type { Content, Decor, EditorScene, Item, ItemType, OffsetData, RootPlacementMode } from '../commands/types'
+import type { Content, Decor, EditorScene, Item, ItemType, OffsetData, Orientation, RootPlacementMode } from '../commands/types'
 import { ROOT_PLACEMENT_GRID, rootPlacementModeForScene } from '../commands/root-placement-commands'
 import type { Command, Selection } from '../controller/types'
 import type { controllerMachine } from '../controller/controller-machine'
@@ -40,6 +42,7 @@ import { createMotionOverlay } from '../../motion-editor/overlay'
 import type { MotionOverlayGhost, MotionOverlayHandle, MotionOverlayRole, MotionOverlaySegment } from '../../motion-editor/overlay'
 import { createMotionGeometryStore } from '../../motion-editor/geometry-store'
 import {
+  frameVisualCenter,
   frameWithRotationAtPathAnchor,
   midpoint,
   motionControlFromPath,
@@ -62,7 +65,7 @@ import {
 } from '../../motion-editor/timing'
 
 /**
- * Pont `decorEditor` — `2026-07-13-controller-islands-bridge-plan.md` §3.2. `defaults`/`chain`
+ * Pont `decorEditor` — `specs/editor-v2-integration-spec.md`. `defaults`/`chain`
  * restent vides : aucune chaîne d'héritage (capsule/zone) n'est modélisée côté document
  * aujourd'hui — `patch` porte donc, à lui seul, le décor résolu.
  */
@@ -107,11 +110,33 @@ type MotionEndpointProjection = Readonly<{
   authorFrame: SelectionFrameValue
 }>
 
+type DecorEditState = Readonly<{ base: DecorPatch; modifications: DecorModificationMap }>
+
 /** Returns the keyframes that define the item's spatial chain in temporal order. */
 function sortPoseKeyframes(item: Item): Item['keyframes'] {
   return [...item.keyframes]
     .filter((keyframe) => resolveKeyframeChannel(keyframe) === 'pose')
     .sort((left, right) => left.timeMs - right.timeMs)
+}
+
+/** Resolves one pose keyframe's inherited zone assignment. */
+function resolveZoneIdAtPoseKeyframe(scene: EditorScene, item: Item, keyframeId: string): string | null {
+  const content = item.contentId === null ? undefined : scene.contents[item.contentId]
+  return resolveEffectiveKeyframePatch(scene, item, keyframeId, content).zoneId ?? null
+}
+
+/** Resolves the zone assignment inherited at one pose time from the initial decor and prior poses. */
+function resolveZoneIdAtTime(scene: EditorScene, item: Item, timelineMs: number): string | null {
+  const keyframe = sortPoseKeyframes(item).filter((candidate) => candidate.timeMs <= timelineMs).at(-1)
+  if (keyframe === undefined) return scene.decors[item.initialDecorId]?.zoneId ?? null
+  return resolveZoneIdAtPoseKeyframe(scene, item, keyframe.id)
+}
+
+/** Identifies items whose placement geometry is owned by the capsule's zone targets. */
+function itemUsesZonePlacement(scene: EditorScene, item: Item): boolean {
+  const content = item.contentId === null ? undefined : scene.contents[item.contentId]
+  return scene.decors[item.initialDecorId]?.zoneId != null
+    || sortPoseKeyframes(item).some((keyframe) => resolveEffectiveKeyframePatch(scene, item, keyframe.id, content).zoneId != null)
 }
 
 /** Resolves the selected document item and its active decor target, including an undecorated block. */
@@ -280,8 +305,8 @@ function parseRotationOrigin(value: unknown): { fx: number; fy: number } | undef
 }
 
 /**
- * Copy-on-write (`2026-06-11-sequence-editor-grid-spec.md` §2.3) : un `decorId` peut être partagé
- * entre plusieurs keyframes adjacents (`KEYFRAME.ADD` en hérite délibérément, §2.3 « à la création
+ * Copy-on-write  : un `decorId` peut être partagé
+ * entre plusieurs keyframes adjacents (`KEYFRAME.ADD` en hérite délibérément, « à la création
  * d'un keyframe » — pour ne pas dupliquer inutilement des décors identiques). Le muter en place
  * (`setDecor`) modifierait TOUS les keyframes qui le référencent, pas seulement celui en cours
  * d'édition — bug constaté 2026-07-17 (kf2 hérite du décor de kf1, éditer kf2 change aussi kf1, et
@@ -306,12 +331,12 @@ function freshDecorId(): string {
 }
 
 /**
- * `decor.zoneId` (référence par id) → `patch.zone` (référence par nom, modèle dedit).
+ * `decor.zoneId` → `patch.zoneId` conserve l'identité stable de la zone dans tout le circuit.
  * `content.text`/`.textAutoSize` sont inclus ici (pas seulement le décor) : le panneau
  * « Contenu »/« Auto » de la palette doit refléter la valeur RÉELLEMENT posée à l'attache,
  * pas repartir vide alors que l'item porte déjà du texte.
  */
-export function resolveCurrentPatch(decor: Decor, content: Content | undefined, scene: EditorScene): DecorPatch {
+export function resolveCurrentPatch(decor: Decor, content: Content | undefined): DecorPatch {
   const patch: DecorPatch = {}
   if (decor.style !== undefined) patch.style = decor.style
   // Le modèle document accepte une chaîne ou un tableau ; le modèle décor accepte aussi
@@ -320,14 +345,7 @@ export function resolveCurrentPatch(decor: Decor, content: Content | undefined, 
   // Le document et le décor portent la même structure d'offset pour cette frontière.
   if (decor.offset !== undefined) patch.offset = decor.offset as unknown as OffsetPatch
   if (decor.custom !== undefined) patch.custom = decor.custom
-  if (decor.zoneId !== undefined) {
-    if (decor.zoneId === null) {
-      patch.zone = null
-    } else {
-      const zone = scene.zones[decor.zoneId]
-      if (zone) patch.zone = zone.name
-    }
-  }
+  if (decor.zoneId !== undefined) patch.zoneId = decor.zoneId
   if (decor.path !== undefined) patch.path = decor.path
   if (decor.orientToPath !== undefined) patch.orientToPath = decor.orientToPath
   if (content?.text !== undefined) patch.text = content.text
@@ -373,7 +391,7 @@ function resolveMotionEasing(item: Item, sourceKeyframeId: string, targetKeyfram
  * (persistance visuelle standard d'un keyframe non retouché) — recalculée à CHAQUE sélection,
  * jamais mémorisée : un réordonnancement ultérieur ou une édition faite après coup sur un
  * keyframe antérieur se reflètent immédiatement, sans jamais devenir « faux »
- * (`2026-07-17-decor-keyframe-layering-plan.md` §3 — répond précisément au cas : border ajouté sur
+ * (`specs/decor-style-interpolation-spec.md` — répond précisément au cas : border ajouté sur
  * kf1 après que kf2 existe déjà, kf2 doit le voir dès sa prochaine sélection). Réutilise
  * `resolveCurrentPatch` (conversion décor→patch déjà existante) et `mergePatch`
  * (`decor-editor/merge.ts`, déjà existant) — aucune nouvelle logique de fusion ici.
@@ -386,7 +404,7 @@ export function resolveEffectiveKeyframePatch(
 ): DecorPatch {
   const kf = item.keyframes.find((k) => k.id === keyframeId)
   const initial = scene.decors[item.initialDecorId] ?? { id: item.initialDecorId }
-  if (!kf) return resolveCurrentPatch(initial, content, scene)
+  if (!kf) return resolveCurrentPatch(initial, content)
 
   const precedingDecors = item.keyframes
     .filter((k) => k.timeMs < kf.timeMs)
@@ -402,8 +420,8 @@ export function resolveEffectiveKeyframePatch(
   ]
   return layers
     .map(({ keyframe, decor }) => keyframe === null || resolveKeyframeChannel(keyframe) === 'pose'
-      ? resolveCurrentPatch(decor, content, scene)
-      : withoutPosePatch(resolveCurrentPatch(decor, content, scene)))
+      ? resolveCurrentPatch(decor, content)
+      : withoutPosePatch(resolveCurrentPatch(decor, content)))
     .reduce((acc, patch) => mergePatch(acc, patch), {} as DecorPatch)
 }
 
@@ -416,14 +434,14 @@ export function resolveEffectivePosePatch(
 ): DecorPatch {
   const keyframe = item.keyframes.find((candidate) => candidate.id === keyframeId)
   const initial = scene.decors[item.initialDecorId] ?? { id: item.initialDecorId }
-  if (keyframe === undefined) return withoutNonPosePatch(resolveCurrentPatch(initial, content, scene))
+  if (keyframe === undefined) return withoutNonPosePatch(resolveCurrentPatch(initial, content))
 
   const poseKeyframes = item.keyframes
     .filter((candidate) => (candidate.timeMs < keyframe.timeMs || candidate.id === keyframe.id)
       && resolveKeyframeChannel(candidate) === 'pose')
     .sort((left, right) => left.timeMs - right.timeMs)
   return [initial, ...poseKeyframes.map((candidate) => scene.decors[candidate.decorId])]
-    .map((decor) => withoutNonPosePatch(resolveCurrentPatch(decor ?? { id: '' }, content, scene)))
+    .map((decor) => withoutNonPosePatch(resolveCurrentPatch(decor ?? { id: '' }, content)))
     .reduce((acc, patch) => mergePatch(acc, patch), {} as DecorPatch)
 }
 
@@ -443,7 +461,7 @@ function withoutNonPosePatch(patch: DecorPatch): DecorPatch {
  * Diff propriété par propriété entre deux `DecorPatch` résolus — vrai si `patch` diverge de `base`
  * sur au moins une propriété présente dans `patch`. Granularité identique à `mergePatch`
  * (`decor-editor/merge.ts`) : clés de `style` une à une, sous-champs d'`offset` un à un,
- * `classes`/`custom`/`zone` comme valeurs entières.
+ * `classes`/`custom`/`zoneId` comme valeurs entières.
  */
 export function patchDiffersFromBase(base: DecorPatch, patch: DecorPatch): boolean {
   return modificationsFromDecorPatch(base, patch).size > 0
@@ -478,8 +496,8 @@ export function resolveKeyframeInsertionPatch(
   return modifications.size > 0 ? modificationsToDecorPatch(modifications) : null
 }
 
-/** Écarts routés vers `setDecor` (`style`/`classes`/`offset`/`custom`/`zone`) — présents seulement si modifiés. */
-export function patchToDecorArgs(patch: DecorPatch, scene: EditorScene): Partial<Omit<Decor, 'id'>> | null {
+/** Écarts routés vers `setDecor` (`style`/`classes`/`offset`/`custom`/`zoneId`) — présents seulement si modifiés. */
+export function patchToDecorArgs(patch: DecorPatch): Partial<Omit<Decor, 'id'>> | null {
   const args: Partial<Omit<Decor, 'id'>> = {}
   let touched = false
   if (patch.style !== undefined) { args.style = patch.style; touched = true }
@@ -488,17 +506,8 @@ export function patchToDecorArgs(patch: DecorPatch, scene: EditorScene): Partial
   if (patch.custom !== undefined) { args.custom = patch.custom; touched = true }
   if (patch.path !== undefined) { args.path = patch.path; touched = true }
   if (patch.orientToPath !== undefined) { args.orientToPath = patch.orientToPath; touched = true }
-  if (patch.zone !== undefined) {
-    touched = true
-    if (patch.zone === null) {
-      args.zoneId = null
-    } else {
-      const zone = Object.values(scene.zones).find((z) => z.name === patch.zone)
-      if (zone) args.zoneId = zone.id
-      else console.warn(`[decorEditor bridge] zone '${patch.zone}' introuvable dans la scène`)
-    }
-  }
-  const knownProperties = new Set(['style', 'classes', 'offset', 'custom', 'path', 'orientToPath', 'zone'])
+  if (patch.zoneId !== undefined) { args.zoneId = patch.zoneId; touched = true }
+  const knownProperties = new Set(['style', 'classes', 'offset', 'custom', 'path', 'orientToPath', 'zoneId'])
   const argsRecord = args as Record<string, unknown>
   for (const [property, value] of Object.entries(patch)) {
     if (knownProperties.has(property)) continue
@@ -512,7 +521,7 @@ export function patchToDecorArgs(patch: DecorPatch, scene: EditorScene): Partial
 function materializeExistingDecorPatch(scene: EditorScene, decorId: string, patch: DecorPatch): DecorPatch {
   const existing = scene.decors[decorId]
   if (!existing) return patch
-  const existingPatch = resolveCurrentPatch(existing, undefined, scene)
+  const existingPatch = resolveCurrentPatch(existing, undefined)
   return applyDecorPatch(existingPatch, patch)
 }
 
@@ -532,22 +541,21 @@ function patchToContentArgs(patch: DecorPatch, existing: Content | undefined, it
 }
 
 /**
- * Commandes d'écriture pour `patch` sur `target` — fork-si-partagé (spec §2.3) inclus. Commun à
+ * Commandes d'écriture pour `patch` sur `target` — fork-si-partagé (règle de copy-on-write) inclus. Commun à
  * `onDecorChange` (édition continue via dedit — palette, CSS libre, presets) et au commit d'une
- * `DecorLiveSession` (fin de geste CS-family — `2026-07-25-decor-unified-channel-plan.md` §4 étape
- * 5) : un seul endroit qui sait construire ces commandes, plus deux copies qui auraient pu diverger.
+ * `DecorLiveSession` (fin de geste CS-family — `specs/decor-style-interpolation-spec.md` — fin de geste) : un seul endroit qui sait construire ces commandes, plus deux copies qui auraient pu diverger.
  */
 function buildDecorCommands(scene: EditorScene, target: Target, patch: DecorPatch): Command[] {
   const commands: Command[] = []
   let writeDecorId = target.writeDecorId!
   if (target.keyframeId && isDecorSharedByAnotherReference(scene, writeDecorId, target.keyframeId)) {
-    // Fork avant d'écrire, jamais après (spec §2.3) — sinon la mutation en place a déjà atteint
+    // Fork avant d'écrire, jamais après (règle de copy-on-write) — sinon la mutation en place a déjà atteint
     // le keyframe voisin le temps que le fork soit décidé.
     writeDecorId = freshDecorId()
     commands.push({ name: 'registerDecor', args: { decorId: writeDecorId } })
     commands.push({ name: 'assignKeyframeDecor', args: { itemId: target.itemId, keyframeId: target.keyframeId, decorId: writeDecorId } })
   }
-  const decorArgs = patchToDecorArgs(materializeExistingDecorPatch(scene, writeDecorId, patch), scene)
+  const decorArgs = patchToDecorArgs(materializeExistingDecorPatch(scene, writeDecorId, patch))
   if (decorArgs) commands.push({ name: 'setDecor', args: { decorId: writeDecorId, patch: decorArgs } })
 
   const existingContent = target.contentId ? scene.contents[target.contentId] : undefined
@@ -557,13 +565,13 @@ function buildDecorCommands(scene: EditorScene, target: Target, patch: DecorPatc
   // `.capsule` (→ `Item.capsule`) : aucun geste de création de capsule n'existe encore dans
   // l'app (`DemoMenuRegion` ne crée que des items texte) — rien à vérifier tant que ce cas ne
   // se présente pas réellement. `.custom` (CSS libre) est routé depuis ce jour via
-  // `Decor.custom`/`patchToDecorArgs` — plus un gap, cf `2026-07-17-decor-keyframe-layering-plan.md`.
+  // `Decor.custom`/`patchToDecorArgs` — plus un gap, cf `specs/decor-style-interpolation-spec.md`.
   if (patch.capsule !== undefined) console.warn('[decorEditor bridge] patch.capsule non routé — aucune capsule créée par cet incrément')
 
   return commands
 }
 
-/** Signal d'inactivité seulement — jamais une cadence de commit pour un geste actif (spec §4.3, `2026-07-17-phase-commit-selection-recovery-plan.md` §Étape B.4). Exporté pour que les tests avancent les minuteurs factices sur la valeur réelle, sans dupliquer la constante. */
+/** Signal d'inactivité seulement — jamais une cadence de commit pour un geste actif. Exporté pour que les tests avancent les minuteurs factices sur la valeur réelle, sans dupliquer la constante. */
 export const PHASE_IDLE_FLUSH_MS = 4000
 /**
  * Applies one V2 selection-frame gesture to the current local-pixel frame.
@@ -683,6 +691,8 @@ export function createDecorEditorBridge(
   const motionGeometry = createMotionGeometryStore()
   let mountHandle: DecorEditorMountHandle | null = null
   let selectionFrame: SelectionFrameV2Handle | null = null
+  let zoneEditor: ZoneEditorHandle | null = null
+  let unsubscribeZoneVisibility: (() => void) | null = null
   let unsubscribeSelectionGeometry: (() => void) | null = null
   let motionOverlay: MotionOverlayHandle | null = null
   let activeCreationMode: { itemType: ItemType; placementMode: RootPlacementMode } | null = null
@@ -696,6 +706,7 @@ export function createDecorEditorBridge(
   let displayFramePx: SelectionFrameValue | null = null
   let frameLogicalValue: SelectionFrameValue | null = null
   let frameGestureBasePx: SelectionFrameValue | null = null
+  let frameGestureKind: SelectionFrameDelta['kind'] | null = null
   let frameGestureCancelled = false
   /** Authored rotation offset paired with the displayed frame captured at gesture start. */
   let frameGestureBaseAuthorRotate: number | null = null
@@ -718,16 +729,16 @@ export function createDecorEditorBridge(
   let resizeFrameRequest: number | null = null
   let resizeProjectionQueued = false
 
-  // ── Commit de fin de phase (`2026-07-17-phase-commit-selection-recovery-plan.md` §Étape B) —
-  // dedit lui-même n'a aucun debounce (spec §4.3, émission continue) ; c'est ce pont, l'hôte, qui
+  // ── Commit de fin de phase —
+  // dedit lui-même n'a aucun debounce (rôle du pont, émission continue) ; c'est ce pont, l'hôte, qui
   // décide seul QUAND committer. Six signaux de fin de phase, jamais un minuteur court réarmé à
   // chaque micro-geste : changement de sélection, seek, mutation externe du document et Échap sont
   // immédiats (`flushNow`/`abortPhase` appelés directement) ; seule l'inactivité prolongée passe par
   // un minuteur (`armIdleFlush`, réarmé à chaque signal d'activité). ─────────────────────────────
 
   let pendingCommands: Command[] | null = null
-  type DecorEditState = { base: DecorPatch; modifications: DecorModificationMap }
   const decorEditStates = new Map<string, DecorEditState>()
+  let frameGestureBaseDecorState: DecorEditState | null = null
   let pendingTemporaryDecorCommit: { itemId: string; timeMs: number } | null = null
   let idleFlushTimer: ReturnType<typeof setTimeout> | null = null
   /** Dernière scène/sélection observées — distingue une vraie mutation externe (signal 5) et un simple écho de notre propre flush (qui vide `pendingCommands` avant d'émettre). */
@@ -739,7 +750,7 @@ export function createDecorEditorBridge(
    * la lecture (`telco.onProgress`, local à `sequence-editor`, ne redescend jamais vers ce
    * contrôleur — sans conséquence : dedit est de toute façon suspendu pendant `playing`, §Signal
    * `playbackActiveChanged`). Sert à `resolveKeyframeAlignment` pour situer la sélection courante
-   * par rapport aux keyframes de l'item (`2026-07-17-resolved-state-at-time-notes.md`).
+   * par rapport aux keyframes de l'item (`specs/editor-v2-integration-spec.md`).
    */
   let lastKnownTimelineMs = 0
 
@@ -766,7 +777,7 @@ export function createDecorEditorBridge(
     if (!target.isTemporary) {
       const authored = target.keyframeId !== null
         ? resolveEffectiveKeyframePatch(scene, item, target.keyframeId, content)
-        : resolveCurrentPatch(scene.decors[target.writeDecorId!] ?? { id: target.writeDecorId! }, content, scene)
+        : resolveCurrentPatch(scene.decors[target.writeDecorId!] ?? { id: target.writeDecorId! }, content)
       return mergePatch(
         authored,
         resolveTemporaryPatch(presentedSnapshotAt(timeMs), item.id),
@@ -812,7 +823,7 @@ export function createDecorEditorBridge(
     const state = decorEditStates.get(decorEditStateKey(itemId, timeMs))
     if (state === undefined || state.modifications.size === 0) return null
     const patch = modificationsToDecorPatch(state.modifications)
-    const decorArgs = patchToDecorArgs(patch, scene)
+    const decorArgs = patchToDecorArgs(patch)
     if (decorArgs === null) return null
     const keyframeId = `decor-kf-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
     return {
@@ -949,6 +960,49 @@ export function createDecorEditorBridge(
     const width = sceneRootContentWidthPx
       ?? (Number.isFinite(cssWidth) && cssWidth > 0 ? cssWidth : sceneHost.clientWidth)
     return Number.isFinite(width) && width > 0 ? width : null
+  }
+
+  /** Selects the authored root-zone surface from the editor host's current aspect. */
+  function rootZoneOrientation(): Orientation {
+    return sceneHost !== null && sceneHost.clientHeight > sceneHost.clientWidth ? 'portrait' : 'landscape'
+  }
+
+  /** Projects the root capsule's persisted track zones into the shared zone-editor model. */
+  function rootZoneEditorState(scene: EditorScene): ZoneEditorState {
+    const placementMode = rootPlacementModeForScene(scene) ?? 'transform'
+    const orientation = rootZoneOrientation()
+    return {
+      grid: ROOT_PLACEMENT_GRID[placementMode],
+      zones: Object.values(scene.zones)
+        .filter((zone) => zone.capsuleId === null)
+        .map((zone) => ({ id: zone.id, name: zone.name, ...zone.surfaces[orientation] })),
+    }
+  }
+
+  /** Commits one completed root-zone gesture through the controller's existing transaction path. */
+  function commitRootZoneState(state: ZoneEditorState): void {
+    const scene = machine.getSnapshot().context.scene
+    if (scene === null || rootPlacementModeForScene(scene) !== 'fine-grid') return
+    machine.send({
+      type: 'RUN_TRANSACTION',
+      commands: [{
+        name: 'setRootZonesSurface',
+        args: {
+          orientation: rootZoneOrientation(),
+          zones: state.zones.map(({ id, name, row, col, rowSpan, colSpan }) => ({
+            id,
+            name,
+            area: { row, col, rowSpan, colSpan },
+          })),
+        },
+      }],
+    })
+  }
+
+  /** Resynchronizes the root-zone overlay from the committed document and current host bounds. */
+  function syncRootZoneEditor(scene: EditorScene): void {
+    zoneEditor?.setState(rootZoneEditorState(scene))
+    zoneEditor?.sync()
   }
 
   /** Reads one logical cqw value from the immutable V2 snapshot representation. */
@@ -1133,6 +1187,10 @@ export function createDecorEditorBridge(
     currentMotion: ActiveMotion | null,
     timelineMs: number,
   ): { selection: MotionGeometryPose | null; segments: MotionOverlaySegment[] } {
+    const selectionGeometry = displayFramePx === null
+      ? null
+      : resolveMotionGeometryPose(displayFramePx, frameBorderInsetsPx)
+    if (itemUsesZonePlacement(scene, item)) return { selection: selectionGeometry, segments: [] }
     const keyframes = sortPoseKeyframes(item)
     const selectedPair = resolveMotionPair(item, selectedKeyframeId, timelineMs)
     const activeSourceId = currentMotion?.sourceKeyframeId ?? selectedPair?.sourceKeyframe.id
@@ -1171,9 +1229,6 @@ export function createDecorEditorBridge(
         authorFrame,
       })
     }
-    const selectionGeometry = displayFramePx === null
-      ? null
-      : resolveMotionGeometryPose(displayFramePx, frameBorderInsetsPx)
     const segments: MotionOverlaySegment[] = []
 
     for (let index = 0; index < keyframes.length - 1; index += 1) {
@@ -1310,6 +1365,7 @@ export function createDecorEditorBridge(
     projectedSegments: readonly MotionOverlaySegment[],
     selectionGeometry: MotionGeometryPose | null,
   ): MotionOverlayGhost[] {
+    if (itemUsesZonePlacement(scene, item)) return []
     const keyframes = sortPoseKeyframes(item)
     const content = item.contentId === null ? undefined : scene.contents[item.contentId]
     const activeSegment = projectedSegments.find((candidate) => candidate.active === true)
@@ -1559,7 +1615,7 @@ export function createDecorEditorBridge(
   /** Presents a patch through snapshot and optionally records its temporary candidate. */
   function previewPatch(itemId: string, patch: DecorPatch, recordCandidate = false): boolean {
     // Snapshot V2 currently carries the live style channel. A temporary edit may nevertheless
-    // touch content, classes, custom data, zone or a future decor module. Record the complete
+    // touch content, classes, custom data, zoneId or a future decor module. Record the complete
     // candidate independently so creation of a KF can capture those properties as well.
     if (recordCandidate) {
       coordination.decorPreview.set({ itemId, timeMs: lastKnownTimelineMs, patch })
@@ -1589,6 +1645,11 @@ export function createDecorEditorBridge(
     if (frameGestureCancelled) return frameGestureBasePx ?? displayFramePx
     if (frameGestureBasePx === null) {
       frameGestureBasePx = base
+      frameGestureKind = delta.kind
+      const editState = decorEditStates.get(decorEditStateKey(target.itemId, lastKnownTimelineMs))
+      frameGestureBaseDecorState = editState === undefined
+        ? null
+        : { base: editState.base, modifications: new Map(editState.modifications) }
       const { scene } = machine.getSnapshot().context
       frameGestureBaseAuthorRotate = scene === null
         ? authorFramePx?.rotate ?? base.rotate ?? 0
@@ -1836,7 +1897,7 @@ export function createDecorEditorBridge(
         : mergePatch(capturedPosePatch, modificationsToDecorPatch(editState.modifications))),
       ...splitPatch,
     }
-    const targetPatch = patchToDecorArgs(sparsePatch, scene)
+    const targetPatch = patchToDecorArgs(sparsePatch)
     if (targetPatch === null) return null
 
     const targetKeyframeId = `motion-kf-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
@@ -1859,11 +1920,191 @@ export function createDecorEditorBridge(
     return activeSegment
   }
 
+  /** Resolves the drop zone from the Selection Frame centre through the zone editor's track hit-test. */
+  function rootZoneAtFrameCenter(frame: SelectionFrameValue): string | null {
+    const context = machine.getSnapshot().context
+    const host = sceneHost
+    if (context.scene === null || !context.zonesVisible || host === null || zoneEditor === null) return null
+    const width = host.clientWidth
+    const height = host.clientHeight
+    const bounds = host.getBoundingClientRect()
+    if (width <= 0 || height <= 0 || bounds.width <= 0 || bounds.height <= 0) return null
+    const center = frameVisualCenter(frame)
+    const candidateIds = zoneEditor.getZoneIdsAtPoint(
+      bounds.left + center.x * bounds.width / width,
+      bounds.top + center.y * bounds.height / height,
+    )
+    const sameCapsuleIds = candidateIds.filter((zoneId) => context.scene!.zones[zoneId]?.capsuleId === null)
+    if (context.selectedZoneId !== null && sameCapsuleIds.includes(context.selectedZoneId)) return context.selectedZoneId
+    return sameCapsuleIds.length === 1 ? sameCapsuleIds[0]! : null
+  }
+
+  /** Restores the decor edit state captured before Selection Frame preview mutations. */
+  function restoreFrameGestureDecorEdit(): DecorPatch {
+    const target = frameTarget
+    if (target === null) return {}
+    const editKey = decorEditStateKey(target.itemId, lastKnownTimelineMs)
+    const baseState = frameGestureBaseDecorState
+    if (baseState === null) decorEditStates.delete(editKey)
+    else decorEditStates.set(editKey, baseState)
+    controller.setModifiedProperties(target.itemId, baseState === null ? [] : [...baseState.modifications.keys()])
+    if (target.isTemporary) {
+      if (baseState === null || baseState.modifications.size === 0) {
+        coordination.decorPreview.clear(target.itemId, lastKnownTimelineMs)
+      } else {
+        coordination.decorPreview.set({
+          itemId: target.itemId,
+          timeMs: lastKnownTimelineMs,
+          patch: applyDecorModifications(baseState.base, baseState.modifications),
+        })
+      }
+    }
+    return baseState === null ? {} : modificationsToDecorPatch(baseState.modifications)
+  }
+
+  /** Cancels a zone-mode preview and restores staged author edits only before the phase flush consumes them. */
+  function cancelZoneMovePreview(sourceFrame: SelectionFrameValue, restoreAuthorEdits = true): void {
+    if (restoreAuthorEdits) restoreFrameGestureDecorEdit()
+    frameCommitCandidatePx = sourceFrame
+    displayFramePx = sourceFrame
+    const rootWidth = sceneRootWidthPx()
+    if (rootWidth !== null) setAuthorFrame(sourceFrame, rootWidth)
+    flushNow()
+    abortPhase()
+  }
+
+  /** Commits a same-capsule zone reassignment on the pose channel through the document transaction path. */
+  function commitZoneAssignment(zoneId: string, sourceFrame: SelectionFrameValue): boolean {
+    const before = machine.getSnapshot().context
+    const beforeScene = before.scene
+    const beforeTarget = beforeScene === null ? null : resolveTarget(beforeScene, before.selection, lastKnownTimelineMs)
+    const beforeItem = beforeScene?.items.find((candidate) => candidate.id === beforeTarget?.itemId)
+    const beforeZone = beforeScene?.zones[zoneId]
+    if (beforeScene === null || beforeTarget === null || beforeItem === undefined
+      || beforeZone === undefined || beforeZone.capsuleId !== beforeItem.parentId) {
+      cancelZoneMovePreview(sourceFrame)
+      return false
+    }
+
+    const firstPoseKeyframe = beforeTarget.isTemporary
+      ? undefined
+      : sortPoseKeyframes(beforeItem)[0]
+    const sourceZoneId = beforeTarget.keyframeId !== null
+      ? resolveZoneIdAtPoseKeyframe(beforeScene, beforeItem, beforeTarget.keyframeId)
+      : firstPoseKeyframe === undefined
+        ? resolveZoneIdAtTime(beforeScene, beforeItem, lastKnownTimelineMs)
+        : resolveZoneIdAtPoseKeyframe(beforeScene, beforeItem, firstPoseKeyframe.id)
+    if (sourceZoneId === zoneId) {
+      cancelZoneMovePreview(sourceFrame)
+      return false
+    }
+
+    if (beforeTarget.isTemporary) {
+      const targetTime = Math.max(0, Math.min(lastKnownTimelineMs, beforeScene.meta.durationMs))
+      const hasPoseChain = sortPoseKeyframes(beforeItem).length > 0
+      if ((hasPoseChain && resolveKeyframeAlignment(beforeItem, lastKnownTimelineMs).kind !== 'between')
+        || beforeItem.keyframes.some((keyframe) => keyframe.timeMs === targetTime)) {
+        cancelZoneMovePreview(sourceFrame)
+        return false
+      }
+    }
+
+    const currentTemporaryEdit = beforeTarget.isTemporary
+      && pendingTemporaryDecorCommit?.itemId === beforeTarget.itemId
+      && Math.abs(pendingTemporaryDecorCommit.timeMs - lastKnownTimelineMs) <= 1
+    const gestureDecorPatch = restoreFrameGestureDecorEdit()
+    const carriedTemporaryPatch = beforeTarget.isTemporary ? gestureDecorPatch : {}
+    if (currentTemporaryEdit) pendingTemporaryDecorCommit = null
+    flushNow()
+
+    const { scene, selection } = machine.getSnapshot().context
+    if (scene === null) {
+      cancelZoneMovePreview(sourceFrame, false)
+      return false
+    }
+    const target = resolveTarget(scene, selection, lastKnownTimelineMs)
+    const item = scene.items.find((candidate) => candidate.id === target?.itemId)
+    const zone = scene.zones[zoneId]
+    if (target === null || item === undefined || zone === undefined || zone.capsuleId !== item.parentId) {
+      cancelZoneMovePreview(sourceFrame, false)
+      return false
+    }
+
+    const patch = mergePatch(carriedTemporaryPatch, { zoneId })
+    const commands: Command[] = []
+    let createdKeyframeId: string | null = null
+    let targetTimeMs = lastKnownTimelineMs
+    if (target.keyframeId !== null) {
+      const keyframe = item.keyframes.find((candidate) => candidate.id === target.keyframeId)
+      if (keyframe === undefined) {
+        cancelZoneMovePreview(sourceFrame, false)
+        return false
+      }
+      if (resolveKeyframeChannel(keyframe) === 'decor') {
+        commands.push({ name: 'setKeyframeChannel', args: { itemId: item.id, keyframeId: keyframe.id, channel: 'pose' } })
+      }
+      targetTimeMs = keyframe.timeMs
+      commands.push(...buildDecorCommands(scene, target, patch))
+    } else if (target.isTemporary) {
+      const alignment = resolveKeyframeAlignment(item, lastKnownTimelineMs)
+      if (alignment.kind !== 'between' && sortPoseKeyframes(item).length > 0) {
+        cancelZoneMovePreview(sourceFrame, false)
+        return false
+      }
+      targetTimeMs = Math.max(0, Math.min(lastKnownTimelineMs, scene.meta.durationMs))
+      if (item.keyframes.some((keyframe) => keyframe.timeMs === targetTimeMs)) {
+        cancelZoneMovePreview(sourceFrame, false)
+        return false
+      }
+      createdKeyframeId = `zone-kf-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+      commands.push({
+        name: 'createNamedKeyframe',
+        args: { itemId: item.id, keyframeId: createdKeyframeId, timeMs: targetTimeMs, channel: 'pose' },
+      })
+      commands.push(...buildDecorCommands(scene, {
+        ...target,
+        keyframeId: createdKeyframeId,
+        writeDecorId: `decor-${createdKeyframeId}`,
+        isTemporary: false,
+      }, patch))
+    } else {
+      const firstPoseKeyframe = sortPoseKeyframes(item)[0]
+      if (firstPoseKeyframe === undefined) {
+        commands.push(...buildDecorCommands(scene, target, { zoneId }))
+      } else {
+        commands.push(...buildDecorCommands(scene, {
+          ...target,
+          keyframeId: firstPoseKeyframe.id,
+          writeDecorId: firstPoseKeyframe.decorId,
+          isTemporary: false,
+        }, { zoneId }))
+        targetTimeMs = firstPoseKeyframe.timeMs
+      }
+    }
+    if (commands.length === 0) {
+      cancelZoneMovePreview(sourceFrame, false)
+      return false
+    }
+
+    clearDecorEditState(target.itemId, lastKnownTimelineMs)
+    activeMotion = null
+    retainSnapshotPreviewUntilPresentation()
+    machine.send({ type: 'RUN_TRANSACTION', commands })
+    if (createdKeyframeId !== null) {
+      machine.send({ type: 'SELECT_ITEM', itemIds: [item.id], keyframeId: createdKeyframeId })
+      coordination.requestAuthorSeek(targetTimeMs)
+    }
+    syncMotionOverlay()
+    return true
+  }
+
   /** Commits every Selection Frame affine gesture through the pose-KF path immediately. */
   function commitSelectionFrameDrop(targetFrame: SelectionFrameValue): void {
     if (frameGestureCancelled) {
       frameGestureCancelled = false
       frameGestureBasePx = null
+      frameGestureKind = null
+      frameGestureBaseDecorState = null
       frameGestureBaseAuthorRotate = null
       frameCommitCandidatePx = null
       controller.notifyInteractionEnd()
@@ -1873,11 +2114,25 @@ export function createDecorEditorBridge(
     frameCommitCandidatePx = targetFrame
     try {
       if (sourceFrame !== null) {
-        commitMotionDrop({ sourceFrame, targetFrame })
+        const { scene, selection } = machine.getSnapshot().context
+        const item = scene?.items.find((candidate) => candidate.id === selection.itemIds[0])
+        const zoneMove = frameGestureKind === 'move'
+          && scene !== null
+          && rootPlacementModeForScene(scene) === 'fine-grid'
+          && item?.parentId === null
+        if (zoneMove) {
+          const zoneId = rootZoneAtFrameCenter(targetFrame)
+          if (zoneId === null) cancelZoneMovePreview(sourceFrame)
+          else commitZoneAssignment(zoneId, sourceFrame)
+        } else {
+          commitMotionDrop({ sourceFrame, targetFrame })
+        }
       }
     } finally {
       if (!snapshotCommitAwaitingPresentation) frameCommitCandidatePx = null
       frameGestureBasePx = null
+      frameGestureKind = null
+      frameGestureBaseDecorState = null
       frameGestureBaseAuthorRotate = null
       frameGestureCancelled = false
     }
@@ -1911,10 +2166,12 @@ export function createDecorEditorBridge(
       publishMotionGeometrySnapshot(null, [], [], false)
       return
     }
+    const item = scene?.items.find((candidate) => candidate.id === target.itemId)
     // A temporary/interpolated pose is also a valid source for the movement gesture: releasing it
     // materializes a real KF at the current author playhead. Path editing still requires a real
     // target KF because `Decor.path` has no temporary document owner.
-    const canDraw = target.keyframeId !== null || target.isTemporary
+    const canDraw = (target.keyframeId !== null || target.isTemporary)
+      && !(scene !== null && item !== undefined && itemUsesZonePlacement(scene, item))
     let motion = activeMotion
     // A motion remains the active projection while the author seeks between its endpoints. When
     // another real KF is selected, however, the active segment must be reconstructed from that
@@ -1928,7 +2185,6 @@ export function createDecorEditorBridge(
       activeMotion = null
     }
     const rootWidth = sceneRootWidthPx()
-    const item = scene?.items.find((candidate) => candidate.id === target.itemId)
     if (scene !== null && item !== undefined && rootWidth !== null) {
       if (motion !== null) {
         const role: MotionOverlayRole = target.keyframeId === motion.sourceKeyframeId ? 'source'
@@ -2063,6 +2319,8 @@ export function createDecorEditorBridge(
       onCommit: commitSelectionFrameDrop,
       onCancel: () => {
         frameGestureBasePx = null
+        frameGestureKind = null
+        frameGestureBaseDecorState = null
         frameGestureBaseAuthorRotate = null
         frameGestureCancelled = false
         abortPhase()
@@ -2073,10 +2331,49 @@ export function createDecorEditorBridge(
       selectionFrame?.setValue(selection?.geometry.frame ?? null)
     })
     selectionFrame.element.style.cursor = 'move'
-    // The Selection Frame owns move, resize and rotation gestures. Its body receives pointer input
-    // so the presented item follows the existing snapshot preview circuit during a drag.
-    selectionFrame.element.style.zIndex = '1100'
+    // The frame must sit above zone hit surfaces so an item drag starts on the item, then its
+    // committed destination is resolved by the zone editor's shared track hit-test.
+    selectionFrame.element.style.zIndex = '1160'
     selectionFrame.element.style.pointerEvents = 'auto'
+    const currentScene = machine.getSnapshot().context.scene
+    zoneEditor = createZoneEditorV2({
+      sceneRoot: host,
+      getPose: () => {
+        const scene = machine.getSnapshot().context.scene
+        const width = host.clientWidth
+        const height = host.clientHeight
+        if (scene === null || rootPlacementModeForScene(scene) !== 'fine-grid' || width <= 0 || height <= 0) return null
+        return { origin: { x: 0, y: 0 }, matrix: { a: 1, b: 0, c: 0, d: 1 }, localWidth: width, localHeight: height }
+      },
+      initialState: currentScene === null
+        ? { grid: ROOT_PLACEMENT_GRID['fine-grid'], zones: [] }
+        : rootZoneEditorState(currentScene),
+      onZonesChange: commitRootZoneState,
+      onSelectionChange: (names) => {
+        const selectedName = names.length === 1 ? names[0] : undefined
+        const selectedZoneId = selectedName === undefined
+          ? null
+          : zoneEditor?.getState().zones.find((zone) => zone.name === selectedName)?.id ?? null
+        machine.send({ type: 'SELECT_ZONE', zoneId: selectedZoneId })
+      },
+      canRemoveZone: (zone) => {
+        const scene = machine.getSnapshot().context.scene
+        return scene !== null && !Object.values(scene.decors).some((decor) => decor.zoneId === zone.id)
+      },
+    })
+    let zonesVisible = machine.getSnapshot().context.zonesVisible
+    zoneEditor.setPartVisibility('grid', zonesVisible)
+    zoneEditor.setPartVisibility('zones', zonesVisible)
+    zoneEditor.setPartVisibility('labels', zonesVisible)
+    const visibilitySubscription = machine.subscribe((snapshot) => {
+      if (snapshot.context.zonesVisible === zonesVisible) return
+      zonesVisible = snapshot.context.zonesVisible
+      zoneEditor?.setPartVisibility('grid', zonesVisible)
+      zoneEditor?.setPartVisibility('zones', zonesVisible)
+      zoneEditor?.setPartVisibility('labels', zonesVisible)
+    })
+    unsubscribeZoneVisibility = () => visibilitySubscription.unsubscribe()
+    if (currentScene !== null) syncRootZoneEditor(currentScene)
     motionOverlay = createMotionOverlay(host, {
       onActivateRole: (role) => {
         const motion = activeMotion
@@ -2184,6 +2481,10 @@ export function createDecorEditorBridge(
     sceneRootContentWidthPx = null
     unsubscribeSelectionGeometry?.()
     unsubscribeSelectionGeometry = null
+    unsubscribeZoneVisibility?.()
+    unsubscribeZoneVisibility = null
+    zoneEditor?.destroy()
+    zoneEditor = null
     selectionFrame?.destroy()
     selectionFrame = null
     motionOverlay?.destroy()
@@ -2195,6 +2496,8 @@ export function createDecorEditorBridge(
     frameLogicalValue = null
     seekProjectionActive = false
     frameGestureBasePx = null
+    frameGestureKind = null
+    frameGestureBaseDecorState = null
     frameGestureBaseAuthorRotate = null
     frameCommitCandidatePx = null
     frameBorderInsetsPx = ZERO_CONTENT_BOX_INSETS_PX
@@ -2204,6 +2507,7 @@ export function createDecorEditorBridge(
   }
 
   function syncSelection(scene: EditorScene, selection: Selection): void {
+    syncRootZoneEditor(scene)
     const target = resolveTarget(scene, selection, lastKnownTimelineMs)
     if (!target) {
       frameTarget = null
@@ -2212,6 +2516,8 @@ export function createDecorEditorBridge(
       frameLogicalValue = null
       seekProjectionActive = false
       frameGestureBasePx = null
+      frameGestureKind = null
+      frameGestureBaseDecorState = null
       frameGestureBaseAuthorRotate = null
       frameCommitCandidatePx = null
       frameBorderInsetsPx = ZERO_CONTENT_BOX_INSETS_PX
@@ -2308,6 +2614,8 @@ export function createDecorEditorBridge(
             ?? authorFramePx
         })()
     frameGestureBasePx = null
+    frameGestureKind = null
+    frameGestureBaseDecorState = null
     frameGestureBaseAuthorRotate = null
     controller.attachItems([
       {
@@ -2421,7 +2729,7 @@ export function createDecorEditorBridge(
   })
 
   /**
-   * Raccourci « aller à kf1 » (`2026-07-17-resolved-state-at-time-notes.md`) — dedit n'a aucune
+   * Raccourci « aller à kf1 » (`specs/editor-v2-integration-spec.md`) — dedit n'a aucune
    * notion de temps/keyframe dans son propre domaine, il ne fait que demander ; c'est ce pont qui
    * résout le premier keyframe de l'item sélectionné et déclenche le `SEEK` (même chemin qu'un
    * scrub réel — flush, resynchro CS, resynchro palette en découlent déjà tous).
@@ -2489,7 +2797,7 @@ export function createDecorEditorBridge(
   })
   // Signal 3 — seek de l'auteur : flush immédiat (le rebuild qui suit rejoue la position demandée).
   // Resynchronise aussi la palette après coup — l'alignement kf/décor temporaire dépend de
-  // `lastKnownTimelineMs` (`2026-07-17-resolved-state-at-time-notes.md`) ; sans ce resync explicite,
+  // `lastKnownTimelineMs` (`specs/editor-v2-integration-spec.md`) ; sans ce resync explicite,
   // un seek qui ne flush rien (rien en attente) laisserait la palette affichant l'instant précédent.
   const unsubscribeSeek = machine.on('seek', ({ timelineMs }) => {
     lastKnownTimelineMs = timelineMs
@@ -2533,7 +2841,7 @@ export function createDecorEditorBridge(
   const unsubscribeFlushPending = machine.on('flushPending', () => flushNow())
 
   /**
-   * État `playing` (`2026-07-17-play-mode-decor-editor-deactivation-plan.md`) — aucune écriture de
+   * État `playing` — aucune écriture de
    * preview live pendant que `isPlaying === true`. Le pont `scenePlayer` conserve l'instance pour
    * un simple Play/Seek et réapplique la pose runtime avant de jouer ; le gel empêche donc la
    * palette de réinjecter une preview périmée pendant ce handoff.
@@ -2620,6 +2928,8 @@ export function createDecorEditorBridge(
       motionOverlay?.destroy()
       motionOverlay = null
       frameGestureBasePx = null
+      frameGestureKind = null
+      frameGestureBaseDecorState = null
       frameGestureBaseAuthorRotate = null
       frameCommitCandidatePx = null
       snapshotCommitAwaitingPresentation = false

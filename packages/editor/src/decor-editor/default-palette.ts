@@ -4,9 +4,8 @@ import type { PaletteConfig } from './palette-panel'
 /**
  * Palette réelle de dedit — récupérée depuis `dedit-demo.ts` (démo isolée, supprimée après
  * extraction complète de sa mécanique dans `mount.ts`) plutôt que réinventée : c'était déjà
- * l'exemple de référence du moteur de panneaux (`docs/formalisation/2026-07-07-dedit-palette-
- * panels-plan.md`), pas un contenu jetable. Un exemple d'usage, pas une norme imposée par dedit —
- * `style` est une carte OUVERTE de propriétés CSS (spec §3.2).
+ * l'exemple de référence du moteur de panneaux. Un exemple d'usage, pas une norme imposée par dedit —
+ * `style` est une carte OUVERTE de propriétés CSS (modèle du décor).
  */
 const FONT_FAMILIES = [
   'Inter', 'Roboto', 'Open Sans', 'Lato', 'Montserrat',

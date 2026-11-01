@@ -18,8 +18,7 @@ import { childrenOf, findParentClipBounds } from './utils'
 import { resolveMotionLifetime } from '../motion-editor/timing'
 
 /**
- * §"unicité de la source" (`2026-07-13-controller-islands-bridge-plan.md` §3bis, tranché
- * 2026-07-13) — cette machine NE POSSÈDE PLUS `scene`/`selection` : ce sont des projections en
+ * `specs/editor-v2-integration-spec.md` — cette machine NE POSSÈDE PLUS `scene`/`selection` : ce sont des projections en
  * lecture seule, écrites UNIQUEMENT par `SCENE.SYNC`/`SCENE.LOAD` (l'écho du contrôleur central).
  * Aucun handler de geste utilisateur n'assigne plus `scene`/`selection` directement — chacun
  * calcule ce qui a changé et l'ÉMET (`emit`, XState v5) comme commande(s) vers l'extérieur ;
@@ -30,12 +29,11 @@ import { resolveMotionLifetime } from '../motion-editor/timing'
  * (l'ancien mécanisme de filtre par timestamp, `lastMutation`, est retiré : plus nécessaire, plus
  * de deuxième écrivain à distinguer).
  *
- * Champs restés PUREMENT locaux (jamais synchronisés, jamais émis) : `viewport`, `playheadMs`,
+ * Champs restés locaux (jamais synchronisés, jamais émis) : `viewport`, `playheadMs`,
  * `playRange`, `followPlayhead`, `interaction`, `layoutProfile`, `displayConfig`, `viewMode` —
  * l'éphémère des gestes, qui n'a jamais été le problème. `isPlaying` a existé ici (drapeau local
  * piloté par une simulation de lecture propre à ce module) puis a été retiré
- * (`2026-07-17-telco-real-transport-plan.md` §Étape C) : le statut de lecture réel vit désormais
- * dans le port de coordination, jamais dupliqué ici — `playheadMs` reste la progression auteur ;
+ * Le statut de lecture réel vit dans le port de coordination, jamais dupliqué ici — `playheadMs` reste la progression auteur ;
  * la sortie de lecture peut l'adopter une fois via `PLAYHEAD.RECONCILE`, sans boucle vers le player.
  *
  * `selection.markerId` fait exception : les marqueurs n'ont pas d'équivalent dans le modèle
@@ -44,7 +42,7 @@ import { resolveMotionLifetime } from '../motion-editor/timing'
  * de même (toute synchronisation autoritaire prime sur une sélection de marqueur locale).
  */
 
-// ─── Machine-specific types (§3.1) ──────────────────────────────────────────
+// ─── Types propres à la machine ──────────────────────────────────────────
 
 export interface MachineViewport {
   startMs: number
@@ -116,7 +114,7 @@ export type SequenceEditorEmitted =
   | { type: 'commandBatch'; commands: Command[] }
   | { type: 'selectionRequested'; itemIds: string[]; keyframeId?: string }
 
-// ─── Events (§3.4) ──────────────────────────────────────────────────────────
+// ─── Events de la machine ──────────────────────────────────────────────────────────
 
 export type SequenceEditorEvent =
   | { type: 'TRACK.SELECT'; trackId: string | null }

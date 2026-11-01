@@ -1,10 +1,10 @@
 /**
- * Le contrôleur central — `plan/app/2026-07-12-app-controller-definition.md`. Possède le document
+ * Le contrôleur central — `specs/editor-v2-integration-spec.md`. Possède le document
  * (`EditorScene`), la sélection, et l'état d'édition partagé de l'app. Toute mutation du document
- * passe par `runCommand`/`transaction` (§4 — voie d'écriture unique) ; rien d'autre n'écrit
+ * passe par `runCommand`/`transaction` (voie d'écriture unique) ; rien d'autre n'écrit
  * `context.scene`.
  *
- * §3 — un seul découpage en états macro (`idle`/`creating`) : la sélection, le panneau ouvert, le
+ * Un seul découpage en états macro (`idle`/`creating`) : la sélection, le panneau ouvert, le
  * document courant sont des valeurs de CONTEXTE, pas des états, parce qu'ils ne changent pas ce que
  * les événements font. Seul le mode de geste actif (idle vs tracé de création) change ça.
  */
@@ -58,7 +58,7 @@ export const controllerMachine = setup({
     emitted: ControllerEmitted
   },
   actions: {
-    /** §5 — les émetteurs de sélection convergent ici, un seul point de vérité. */
+    /** Les émetteurs de sélection convergent ici, un seul point de vérité. */
     selectItem: assign({
       selection: ({ event }) => {
         if (event.type !== 'SELECT_ITEM') return EMPTY_SELECTION
@@ -74,6 +74,14 @@ export const controllerMachine = setup({
       },
     }),
     clearSelection: assign({ selection: () => EMPTY_SELECTION }),
+
+    /** Keeps the selected zone id as transient app state, independent of document history. */
+    selectZone: assign({
+      selectedZoneId: ({ context, event }) => {
+        if (event.type !== 'SELECT_ZONE' || event.zoneId === null) return null
+        return context.scene?.zones[event.zoneId] === undefined ? null : event.zoneId
+      },
+    }),
 
     toggleZonesVisible: assign({
       zonesVisible: ({ context }) => !context.zonesVisible,
@@ -107,12 +115,17 @@ export const controllerMachine = setup({
         event.type === 'CLOSE_PANEL' ? context.openPanels.filter((p) => p !== event.panel) : context.openPanels,
     }),
 
-    /** §4 — la seule action qui écrit le document : dispatch vers la façade, jamais une mutation directe. */
+    /** La seule action qui écrit le document : dispatch vers la façade, jamais une mutation directe. */
     runCommand: enqueueActions(({ context, event, enqueue }) => {
       if (event.type !== 'RUN_COMMAND' || !context.scene) return
       const beforeScene = context.scene
       const afterScene = runCommand(beforeScene, event.command)
-      enqueue.assign({ scene: afterScene })
+      enqueue.assign({
+        scene: afterScene,
+        selectedZoneId: context.selectedZoneId !== null && afterScene.zones[context.selectedZoneId] !== undefined
+          ? context.selectedZoneId
+          : null,
+      })
       if (afterScene !== beforeScene) {
         enqueue.emit({
           type: 'documentCommitted',
@@ -127,7 +140,12 @@ export const controllerMachine = setup({
       if (event.type !== 'RUN_TRANSACTION' || !context.scene) return
       const beforeScene = context.scene
       const afterScene = transaction(beforeScene, event.commands)
-      enqueue.assign({ scene: afterScene })
+      enqueue.assign({
+        scene: afterScene,
+        selectedZoneId: context.selectedZoneId !== null && afterScene.zones[context.selectedZoneId] !== undefined
+          ? context.selectedZoneId
+          : null,
+      })
       if (afterScene !== beforeScene) {
         enqueue.emit({
           type: 'documentCommitted',
@@ -139,9 +157,10 @@ export const controllerMachine = setup({
       }
     }),
 
-    /** §6 — chargement d'un document (une seule scène chargée à la fois à cette étape, cf. §6 du document contrôleur). */
+    /** Chargement d'un document (une seule scène chargée à la fois à cette étape). */
     sceneLoaded: assign({
       scene: ({ event }) => (event.type === 'SCENE_LOADED' ? event.scene : null),
+      selectedZoneId: () => null,
       currentSceneId: ({ event }) => (event.type === 'SCENE_LOADED' ? event.scene.id : null),
       documents: ({ context, event }) => event.type === 'SCENE_LOADED'
         ? { ...context.documents, [event.scene.id]: { id: event.scene.id, title: event.scene.meta.title } }
@@ -150,10 +169,15 @@ export const controllerMachine = setup({
     restoreDocument: assign({
       scene: ({ event }) => (event.type === 'RESTORE_DOCUMENT' ? event.scene : null),
       selection: ({ event }) => (event.type === 'RESTORE_DOCUMENT' ? event.selection : EMPTY_SELECTION),
+      selectedZoneId: ({ context, event }) => event.type === 'RESTORE_DOCUMENT'
+        && context.selectedZoneId !== null
+        && event.scene.zones[context.selectedZoneId] !== undefined
+        ? context.selectedZoneId
+        : null,
     }),
 
     /**
-     * `bridge-plan.md` §3 — les ponts se resynchronisent via ces deux events émis, jamais via un
+     * `specs/editor-v2-integration-spec.md` — les ponts se resynchronisent via ces deux events émis, jamais via un
      * `subscribe()` sur chaque snapshot. Placées APRÈS `runCommand`/`runTransaction`/`selectItem`/
      * `clearSelection` dans chaque liste `actions` : XState v5 exécute un tableau d'actions dans
      * l'ordre, un `assign` antérieur est donc déjà visible ici. `enqueueActions` (pas un simple
@@ -167,7 +191,7 @@ export const controllerMachine = setup({
     }),
     emitSceneLoaded: emit(({ context }) => ({ type: 'sceneLoaded' as const, scene: context.scene! })),
 
-    /** Relais pur (§7 étape 5) — `playheadMs` n'est jamais stocké ici, `sequence-editor` en reste l'unique possesseur. */
+    /** Relais pur — `playheadMs` n'est jamais stocké ici, `sequence-editor` en reste l'unique possesseur. */
     emitSeek: emit(({ event }) => ({ type: 'seek' as const, timelineMs: event.type === 'SEEK' ? event.timelineMs : 0 })),
 
     /** Relais pur — voir `SEEK_APPLIED`/`seekApplied` (`types.ts`) : signal de fin, jamais de demande. */
@@ -178,13 +202,13 @@ export const controllerMachine = setup({
     /** Notifies deferred editor captures that an Undo/Redo boundary is being applied. */
     emitHistoryBoundary: emit(() => ({ type: 'historyBoundary' as const })),
 
-    /** §Étape B.6 — pure broadcast, ne mute jamais `context.scene` (rien n'a été committé pour cette phase). */
+    /** Pure broadcast, ne mute jamais `context.scene` (rien n'a été committé pour cette phase). */
     emitSceneReverted: enqueueActions(({ context, enqueue }) => {
       if (!context.scene) return
       enqueue.emit({ type: 'sceneReverted', scene: context.scene })
     }),
 
-    /** Entrée/sortie de l'état `playing` (`2026-07-17-play-mode-decor-editor-deactivation-plan.md`). */
+    /** Entrée/sortie de l'état `playing` (spécification d'intégration Editor V2). */
     emitPlaybackActive: emit(() => ({ type: 'playbackActiveChanged' as const, active: true })),
     emitPlaybackInactive: emit(() => ({ type: 'playbackActiveChanged' as const, active: false })),
   },
@@ -197,6 +221,7 @@ export const controllerMachine = setup({
     scene: null,
 
     selection: EMPTY_SELECTION,
+    selectedZoneId: null,
     openPanels: [],
     editGesture: null,
     zonesVisible: false,
@@ -212,6 +237,7 @@ export const controllerMachine = setup({
      * propre projection locale de `selection.trackId`/`.keyframeId` resterait périmée.
      */
     SELECT_ITEM: { actions: ['selectItem', 'emitSceneCommitted'] },
+    SELECT_ZONE: { actions: 'selectZone' },
     CLEAR_SELECTION: { actions: ['clearSelection', 'emitSceneCommitted'] },
     TOGGLE_ZONES_VISIBLE: { actions: 'toggleZonesVisible' },
     SET_EDIT_GESTURE: { actions: 'setEditGesture' },
@@ -228,8 +254,8 @@ export const controllerMachine = setup({
     SEEK_APPLIED: { actions: 'emitSeekApplied' },
     /**
      * Émis une seule fois, juste avant `telco.play()`, jamais pour pause (`mount.ts::onPlayClick`)
-     * — point d'entrée de l'état `playing` (`2026-07-17-play-mode-decor-editor-deactivation-plan.md`
-     * §2). `emitFlushPending` reste une action de TRANSITION, donc exécutée avant les actions
+     * — point d'entrée de l'état `playing` (voir la spécification d'intégration Editor V2).
+     * `emitFlushPending` reste une action de TRANSITION, donc exécutée avant les actions
      * `entry` de `playing` (ordre XState : sortie → actions de transition → entrée) — une édition
      * dedit tout juste faite est déjà committée avant que `playing` ne désactive dedit.
      */
@@ -250,7 +276,7 @@ export const controllerMachine = setup({
       },
     },
     /**
-     * `2026-07-17-play-mode-decor-editor-deactivation-plan.md` — aucune situation où dedit est actif
+     * Spécification d'intégration Editor V2 — aucune situation où dedit est actif
      * pendant qu'on joue. Sibling d'`idle`/`creating`, jamais imbriqué : jouer coupe court à un
      * geste de création en cours exactement comme il coupe court à une édition dedit en cours (même
      * règle, un seul état macro plutôt que deux gestes indépendants à synchroniser).

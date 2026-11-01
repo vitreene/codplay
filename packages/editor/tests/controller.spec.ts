@@ -1,5 +1,5 @@
 // `SequenceEditorController` n'auto-applique plus les mutations de document (§"unicité de la
-// source" — `2026-07-13-controller-islands-bridge-plan.md` §3bis) : la plupart des méthodes
+// source" — `specs/editor-v2-integration-spec.md`) : la plupart des méthodes
 // émettent une commande via `onCommand` plutôt que de la refléter dans `getScene()`. Les EFFETS de
 // chaque commande (ce qu'elle fait réellement à une scène) sont déjà testés dans
 // `tests/sequence-editor/commands.spec.ts` — ce fichier vérifie que la bonne commande, avec les

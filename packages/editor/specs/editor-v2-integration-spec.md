@@ -16,7 +16,15 @@ timeline et l'édition visuelle. Chaque responsabilité a un propriétaire uniqu
 
 Le Selection Frame est un outil d'interaction du `decor-editor`. Le présentateur
 CodPlay V2 reste la source de l'état logique et de la trajectoire. La verticale
-ne lit ni n'écrit les nodes du player et ne contient pas d'accès `codplay-v1`.
+utilise les contrats V2 du player et ne lit ni n'écrit ses nœuds.
+
+Le Builder traduit `EditorScene` en `SceneDoc` V2. Il délègue la construction
+du document à `SceneDocEditor`, la distribution temporelle à
+`CapsuleDistribution` et la résolution de grilles/placements aux capacités de
+Capsule Automation ; il ne crée pas de second calcul de timing ou de placement.
+La compilation et la présentation restent sur le chemin V2 `CodPlay.build()` →
+instance. Le test [`build-scene.spec.ts`](../tests/builder-v2/build-scene.spec.ts)
+vérifie la projection réelle vers ce contrat.
 
 ## Données et projection
 
@@ -49,6 +57,32 @@ ne lit ni n'écrit les nodes du player et ne contient pas d'accès `codplay-v1`.
   notifications `telco` restent la responsabilité de la façade player et ne
   deviennent pas un second flux de géométrie ou de progression auteur.
 
+## Sélection, phases et lecture
+
+- Le Selection Frame se réattache à l'item sélectionné après un rebuild réel.
+  Un clic sur un item sélectionne son frame ; un clic hors du frame termine la
+  phase avant d'effacer la sélection. Un réattachement du même ensemble d'items
+  conserve le panneau et les réglages actifs. Resize et scroll reprojettent le
+  frame depuis la géométrie courante, sans mutation du document.
+- Dedit met à jour la preview pendant la saisie et les gestes. Le pont regroupe
+  les changements en une transaction aux frontières de phase : changement ou
+  effacement de sélection, seek, mutation documentaire externe, inactivité
+  prolongée ou lancement de lecture. Échap abandonne les commandes en attente
+  et efface leur preview sans commit. Un patch d'offset ne contient que les
+  composantes touchées par le geste.
+- La capture à un temps interpolé lit le snapshot logique après `seekApplied`,
+  jamais la matrice de rendu du nœud. Un registre ouvert des chemins modifiés
+  produit un patch sparse à la création du keyframe : seules les propriétés
+  changées sont écrites. Aucune whitelist CSS ni timeline par propriété n'est
+  ajoutée.
+- L'acteur Editor entre dans `playing` sur la demande éditeur juste avant
+  `telco.play()` et en sort sur pause ou seek ; le statut brut `isPlaying` ne
+  pilote pas ce cycle. Pendant la lecture, dedit et le Selection Frame
+  suspendent leurs previews et gestes. Un Play/Seek simple garde l'instance,
+  réapplique la pose par le seek de présentation puis reprend la lecture. Un
+  rebuild n'a lieu que si une scène différente a effectivement été commitée.
+  À la sortie, dedit se resynchronise et reprend sa preview sans rebuild.
+
 ## Autorité temporelle
 
 - En mode édition, `sequence-editor.playheadMs` est la référence. Un seek suit
@@ -71,6 +105,14 @@ ne lit ni n'écrit les nodes du player et ne contient pas d'accès `codplay-v1`.
   document.
 - [`decor-editor-bridge-integration-v2.spec.ts`](../tests/decor-editor-bridge-integration-v2.spec.ts)
   couvre l'édition, le snapshot, la preview et le commit/rebuild.
+- [`decor-editor-bridge-v2.spec.ts`](../tests/decor-editor-bridge-v2.spec.ts),
+  [`decor-editor-field-state.spec.ts`](../tests/decor-editor-field-state.spec.ts),
+  [`decor-editor-machine.spec.ts`](../tests/decor-editor-machine.spec.ts) et
+  [`controller-machine.spec.ts`](../tests/controller/controller-machine.spec.ts)
+  couvrent les frontières de phase, l'abandon, l'état du panneau, la sélection
+  et la suspension de lecture. Safari a confirmé le 17–18 juillet le commit
+  unique d'une séquence composite, l'abandon sans commit, le clic item/hors-frame,
+  la conservation du panneau et le cycle Play/Pause/Stop.
 - Les parcours navigateur item, tangente, rotation, preview et lecture sont
   documentés dans les spécifications de
   [présentation](./item-presentation-spec.md),

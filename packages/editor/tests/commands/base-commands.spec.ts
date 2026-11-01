@@ -97,7 +97,7 @@ describe('assignType', () => {
     expect(() => commands.assignType(typed, { itemId, type: 'image' })).toThrow()
   })
 
-  // `2026-07-17-decor-keyframe-layering-plan.md` §2 — le preset se pose une seule fois, bundlé
+  // `specs/item-presentation-spec.md` — le preset se pose une seule fois, bundlé
   // dans `assignType`, jamais une commande séparée que l'appelant devrait penser à enchaîner.
   it('applies the type default preset to initialDecorId, bundled in the same command', () => {
     const { scene, itemId } = commands.createItem(emptyScene(), { geometry: {} })

@@ -20,7 +20,7 @@ import type { CapsuleKind } from '@codplay/scene-factory/capsule-preset'
 import type { Move, PersoDoc, SceneDoc } from 'codplay'
 import { parseEase, prepareSvgPath } from 'ace'
 import { resolveKeyframeChannel } from '../app/commands/types'
-import type { CapsuleDef, EditorScene, Item, Keyframe, Transition } from '../app/commands/types'
+import type { CapsuleDef, EditorScene, Item, Keyframe, Transition, Zone } from '../app/commands/types'
 import { resolveKeyframeTransition } from './keyframe-transition'
 import { normalizeMotionEasing } from '../motion-editor/easing'
 import { OFFSET_STYLE_PROPERTIES } from '../decor-editor/units'
@@ -78,11 +78,12 @@ export function buildSceneDocV2(
     }
   }))
 
+  const rootZones = zonesForCapsule(scene, null)
   const rootResolution = resolveCapsule(rootItems, rootCapsuleType, preRollMs, diagnostics, {
     sceneRoot: true,
     fallbackClipDurationMs: scene.meta.durationMs,
     grid: rootCapsule?.grid,
-    placements: resolveRootZonePlacements(scene, rootItems),
+    targetPlacements: resolveZoneTargetPlacements(rootZones),
     distribution: rootCapsule?.distribution ?? { mode: 'stagger', staggerInMs: 0, staggerOutMs: 0 },
     transitionDefaults: rootTransitionDefaults,
   })
@@ -97,13 +98,24 @@ export function buildSceneDocV2(
   const styleSheets: string[] = [rootResolution.styleSheet]
   type WorkItem = Readonly<{
     items: Item[]
+    capsuleId: string | null
     parentPersoId: string
     resolution: CapsuleResolution
   }>
-  const worklist: WorkItem[] = [{ items: rootItems, parentPersoId: EDITOR_V2_ROOT_PERSO_ID, resolution: rootResolution }]
+  const worklist: WorkItem[] = [{ items: rootItems, capsuleId: null, parentPersoId: EDITOR_V2_ROOT_PERSO_ID, resolution: rootResolution }]
 
   while (worklist.length > 0) {
     const current = worklist.shift()!
+    const zones = zonesForCapsule(scene, current.capsuleId)
+    persos.push(...zones.flatMap((zone) => {
+      const targetId = zoneTargetPersoId(zone.id)
+      const childArtifact = current.resolution.childArtifactById.get(targetId)
+      if (childArtifact === undefined) {
+        diagnostics.push(error('EDITOR_V2_ZONE_TARGET_UNRESOLVED', `No capsule artifact was produced for zone '${zone.id}'.`, { zoneId: zone.id, capsuleId: current.capsuleId }))
+        return []
+      }
+      return [buildZoneTargetPerso(zone, current.parentPersoId, childArtifact)]
+    }))
     for (const item of current.items) {
       const childArtifact = current.resolution.childArtifactById.get(item.id)
       if (childArtifact === undefined) {
@@ -119,6 +131,7 @@ export function buildSceneDocV2(
         styleSheets.push(nested.resolution.styleSheet)
         worklist.push({
           items: childrenOf(scene.items, item.id),
+          capsuleId: item.id,
           parentPersoId: item.id,
           resolution: nested.resolution,
         })
@@ -181,6 +194,12 @@ function validateSceneInput(scene: EditorScene): BuilderDiagnostic[] {
       diagnostics.push(error('EDITOR_V2_ITEM_ID_DUPLICATED', `Item id '${item.id}' is duplicated.`, { itemId: item.id }))
     } else {
       itemById.set(item.id, item)
+    }
+  }
+
+  for (const zone of Object.values(scene.zones)) {
+    if (itemById.has(zoneTargetPersoId(zone.id))) {
+      diagnostics.push(error('EDITOR_V2_ZONE_TARGET_ID_COLLISION', `Zone '${zone.id}' resolves to an existing item id.`, { zoneId: zone.id, targetId: zoneTargetPersoId(zone.id) }))
     }
   }
 
@@ -302,15 +321,19 @@ function validateItemInput(
     }
     if (zone.capsuleId !== item.parentId) {
       diagnostics.push(error('EDITOR_V2_ZONE_PARENT_MISMATCH', `Zone '${zone.id}' does not belong to the capsule that contains item '${item.id}'.`, { itemId: item.id, zoneId: zone.id, parentId: item.parentId, zoneParentId: zone.capsuleId }))
-      continue
     }
-    if (item.parentId === null && decor.id === item.initialDecorId) continue
-    diagnostics.push({
-      level: 'warning',
-      code: 'EDITOR_V2_ZONE_DEFERRED',
-      message: 'This zone assignment is not the root item’s initial decor; its temporal materialization remains deferred.',
-      context: { itemId: item.id, decorId: decor.id, zoneId: decor.zoneId },
-    })
+  }
+  for (const keyframe of item.keyframes) {
+    const decor = scene.decors[keyframe.decorId]
+    if (resolveKeyframeChannel(keyframe) === 'decor'
+      && decor !== undefined
+      && Object.prototype.hasOwnProperty.call(decor, 'zoneId')) {
+      diagnostics.push(error(
+        'EDITOR_V2_ZONE_KEYFRAME_CHANNEL_INVALID',
+        `Zone assignment for item '${item.id}' must be placed on a pose keyframe.`,
+        { itemId: item.id, keyframeId: keyframe.id, decorId: decor.id },
+      ))
+    }
   }
   if (keyframes[0]?.transitionIn?.kind === 'interpolated') {
     diagnostics.push(error('EDITOR_V2_FIRST_INTRO_UNSUPPORTED', 'The first keyframe intro must use a named transition in this increment.', { itemId: item.id }))
@@ -363,19 +386,76 @@ type CapsuleResolution = Readonly<{
   grid: Readonly<{ rows: number; cols: number }>
 }>
 
-/** Resolves initial root-item zones into Capsule Automation's existing row/column placement input. */
-function resolveRootZonePlacements(
-  scene: EditorScene,
-  items: readonly Item[],
-): ReadonlyMap<string, AutoCapsuleChildPlacementInput> {
-  return new Map(items.flatMap((item) => {
-    const decor = scene.decors[item.initialDecorId]
-    if (decor?.zoneId == null) return []
-    const zone = scene.zones[decor.zoneId]
-    if (zone === undefined || zone.capsuleId !== null) return []
+/** Returns zones declared on one capsule so their targets share that capsule's grid. */
+function zonesForCapsule(scene: EditorScene, capsuleId: string | null): Zone[] {
+  return Object.values(scene.zones).filter((zone) => zone.capsuleId === capsuleId)
+}
+
+/** Resolves each declared zone through Capsule Automation's existing child-placement input. */
+function resolveZoneTargetPlacements(zones: readonly Zone[]): ReadonlyMap<string, AutoCapsuleChildPlacementInput> {
+  return new Map(zones.map((zone) => {
     const { row, col, rowSpan, colSpan } = zone.surfaces.landscape
-    return [[item.id, { row, col, rowSpan, colSpan } as const]]
+    return [zoneTargetPersoId(zone.id), { row, col, rowSpan, colSpan }]
   }))
+}
+
+/** Gives each editor zone a stable V2 structural target without adding it to the authored item tree. */
+function zoneTargetPersoId(zoneId: string): string {
+  return `editor-zone-target:${zoneId}`
+}
+
+/** Resolves a pose keyframe's zone by folding explicit assignments over the initial decor. */
+function resolveZoneIdAtPoseKeyframe(scene: EditorScene, item: Item, keyframe: Keyframe): string | null {
+  const poseKeyframes = sortPoseKeyframes(item)
+  const targetIndex = poseKeyframes.findIndex((candidate) => candidate.id === keyframe.id)
+  const initialDecor = scene.decors[item.initialDecorId]
+  let zoneId = initialDecor?.zoneId ?? null
+  for (const poseKeyframe of poseKeyframes.slice(0, targetIndex + 1)) {
+    const decor = scene.decors[poseKeyframe.decorId]
+    if (decor !== undefined && Object.prototype.hasOwnProperty.call(decor, 'zoneId')) {
+      zoneId = decor.zoneId ?? null
+    }
+  }
+  return zoneId
+}
+
+/** Resolves the target zone represented by the item's initial pose in the Builder projection. */
+function resolveInitialZoneId(scene: EditorScene, item: Item, firstPoseKeyframe: Keyframe | undefined): string | null {
+  if (firstPoseKeyframe !== undefined) return resolveZoneIdAtPoseKeyframe(scene, item, firstPoseKeyframe)
+  return scene.decors[item.initialDecorId]?.zoneId ?? null
+}
+
+/** Keeps an item in its capsule unless its decor assigns it to one of that capsule's zones. */
+function resolveMoveTarget(parentPersoId: string, zoneId: string | null): string {
+  if (zoneId === null) return parentPersoId
+  return zoneTargetPersoId(zoneId)
+}
+
+/** Builds zone-reassignment Move actions for capsule items using CodPlay's existing target motion. */
+function buildZoneMoveActions(
+  scene: EditorScene,
+  item: Item,
+  parentPersoId: string,
+  poseKeyframes: readonly Keyframe[],
+  preRollMs: number,
+): DecorAction[] {
+  return poseKeyframes.slice(1).flatMap((destination, index) => {
+    const source = poseKeyframes[index]!
+    const sourceZoneId = resolveZoneIdAtPoseKeyframe(scene, item, source)
+    const destinationZoneId = resolveZoneIdAtPoseKeyframe(scene, item, destination)
+    if (sourceZoneId === destinationZoneId) return []
+
+    const { durationMs, ease, startAtMs } = resolveKeyframeTransition(source, destination)
+    const actionName = `${item.id}-zone-kf-${destination.id}`
+    return [{
+      name: actionName,
+      move: {
+        target: resolveMoveTarget(parentPersoId, destinationZoneId),
+        transition: { duration: durationMs, ease },
+      },
+      startAt: startAtMs + preRollMs,
+    }]
+  })
 }
 
 /** Builds the implicit scene-root list and keeps its authored decor separate from layout CSS. */
@@ -397,6 +477,26 @@ function buildRootPerso(scene: EditorScene, generatedClassName: string): PersoDo
   }
 }
 
+/** Builds one invisible structural target whose grid area is owned by Capsule Automation. */
+function buildZoneTargetPerso(
+  zone: Zone,
+  parentPersoId: string,
+  childArtifact: AutoCapsuleChildElementArtifact,
+): PersoDoc<'list'> {
+  return {
+    id: zoneTargetPersoId(zone.id),
+    name: zone.name,
+    type: 'list',
+    initial: {
+      move: { target: parentPersoId },
+      tag: 'div',
+      ...(childArtifact.className === '' ? {} : { className: childArtifact.className }),
+      attr: { 'data-editor-zone-target': zone.id },
+    },
+    actions: {},
+  }
+}
+
 /** Builds one capsule level from the existing timing, placement and CSS domain services. */
 function resolveCapsule(
   items: Item[],
@@ -410,7 +510,7 @@ function resolveCapsule(
     grid?: CapsuleDef['grid']
     distribution?: CapsuleDef['distribution']
     transitionDefaults?: ReturnType<typeof resolveAutoCapsuleDefaults>
-    placements?: ReadonlyMap<string, AutoCapsuleChildPlacementInput>
+    targetPlacements?: ReadonlyMap<string, AutoCapsuleChildPlacementInput>
   }>,
 ): CapsuleResolution | undefined {
   try {
@@ -420,15 +520,20 @@ function resolveCapsule(
     const children: AutoCapsuleChildInput[] = items.map((item, index) => {
       const timing = distribution.children.find((child) => child.trackId === item.id)
       if (timing === undefined) throw new Error(`No timing was produced for item '${item.id}'.`)
-      const placement = options?.placements?.get(item.id)
       return {
         id: item.id,
         order: index,
         timeRange: { startMs: timing.introMs, endMs: timing.outroMs },
-        ...(placement === undefined ? {} : { placement }),
         events: buildTransitionEvents(item),
       }
     })
+    children.push(...[...(options?.targetPlacements ?? [])].map(([id, placement], index) => ({
+      id,
+      order: items.length + index,
+      timeRange: { startMs: 0, endMs: 0 },
+      placement,
+      events: {},
+    })))
     const autoCapsule = new AutoCapsule({
       capsule: {
         id: 'editor-v2-capsule',
@@ -555,9 +660,11 @@ function buildNestedCapsulePerso(
   diagnostics: BuilderDiagnostic[],
 ): Readonly<{ perso: PersoDoc<'list'>; eventimes: Array<{ name: string; startAt: number }>; resolution: CapsuleResolution }> | undefined {
   if (item.capsule === undefined) return undefined
+  const nestedZones = zonesForCapsule(scene, item.id)
   const resolution = resolveCapsule(childrenOf(scene.items, item.id), item.capsule.kind, preRollMs, diagnostics, {
     grid: item.capsule.grid,
     distribution: item.capsule.distribution,
+    targetPlacements: resolveZoneTargetPlacements(nestedZones),
     transitionDefaults: resolveAutoCapsuleDefaults(item.capsule.kind, {
       introTransitionRef: item.capsule.defaultTransitionIn,
       outroTransitionRef: item.capsule.defaultTransitionOut,
@@ -565,21 +672,28 @@ function buildNestedCapsulePerso(
   })
   if (resolution === undefined) return undefined
   const transition = resolveTransitionActions(childArtifact)
+  const keyframes = sortPoseKeyframes(item)
+  const firstKeyframe = keyframes[0]
+  const initialZoneId = resolveInitialZoneId(scene, item, firstKeyframe)
+  const zoneActions = buildZoneMoveActions(scene, item, parentPersoId, keyframes, preRollMs)
   const className = [resolution.rootArtifact.className, childArtifact.className].filter(Boolean).join(' ') || undefined
+  const actions: Record<string, { style?: Record<string, unknown>; move?: Move }> = { ...transition.actions }
+  for (const action of zoneActions) actions[action.name] = { move: action.move }
   return {
     perso: {
       id: item.id,
       name: item.id,
       type: 'list',
       initial: {
-        move: { target: parentPersoId },
+        move: { target: resolveMoveTarget(parentPersoId, initialZoneId) },
         tag: 'div',
         attr: { 'data-item-id': `${EDITOR_V2_STORY_ID}:${item.id}` },
         ...(className === undefined ? {} : { className }),
+        ...(initialZoneId === null ? {} : { style: { width: '100%', height: '100%' } }),
       },
-      actions: transition.actions,
+      actions,
     },
-    eventimes: transition.eventimes,
+    eventimes: [...transition.eventimes, ...zoneActions.map((action) => ({ name: action.name, startAt: action.startAt }))],
     resolution,
   }
 }
@@ -599,6 +713,7 @@ function buildLeafPerso(
   const keyframes = sortPoseKeyframes(item)
   const decorationKeyframes = sortDecorationKeyframes(scene, item)
   const firstKeyframe = keyframes[0]
+  const initialZoneId = resolveInitialZoneId(scene, item, firstKeyframe)
   const initialStyle = firstKeyframe === undefined
     ? resolveInitialStyle(scene, item)
     : resolveKeyframeStyle(scene, item, firstKeyframe)
@@ -606,10 +721,15 @@ function buildLeafPerso(
     ? resolveInitialClassName(scene, item)
     : resolveKeyframeClassName(scene, item, firstKeyframe)
   const transition = resolveTransitionActions(childArtifact)
-  const initial = { ...initialStyle, ...transition.introFrom }
+  const initial = {
+    ...(initialZoneId === null ? {} : { width: '100%', height: '100%' }),
+    ...initialStyle,
+    ...transition.introFrom,
+  }
   const decorActions = buildInterpolationActions(
     scene,
     item,
+    parentPersoId,
     decorationKeyframes,
     keyframes,
     preRollMs,
@@ -628,7 +748,7 @@ function buildLeafPerso(
   }
   const eventimes = [...transition.eventimes, ...decorActions.map((action) => ({ name: action.name, startAt: action.startAt }))]
   const common = {
-    move: { target: parentPersoId },
+    move: { target: resolveMoveTarget(parentPersoId, initialZoneId) },
     attr: { 'data-item-id': `${EDITOR_V2_STORY_ID}:${item.id}` },
     editorFrameClassName: childArtifact.className,
     ...(initialClassName === undefined ? {} : { className: initialClassName }),
@@ -669,6 +789,7 @@ function buildLeafElement(
 function buildInterpolationActions(
   scene: EditorScene,
   item: Item,
+  parentPersoId: string,
   decorationKeyframes: Keyframe[],
   poseKeyframes: Keyframe[],
   preRollMs: number,
@@ -687,6 +808,8 @@ function buildInterpolationActions(
     return {
       source,
       destination,
+      sourceZoneId: resolveZoneIdAtPoseKeyframe(scene, item, source),
+      destinationZoneId: resolveZoneIdAtPoseKeyframe(scene, item, destination),
       fromStyle,
       toStyle,
       diff: computeStyleDiff(fromStyle, toStyle),
@@ -731,8 +854,9 @@ function buildInterpolationActions(
     })
   }
 
-  for (const { source, destination, fromStyle, toStyle, diff, path, hasMotionPath } of poseSegments) {
+  for (const { source, destination, sourceZoneId, destinationZoneId, fromStyle, toStyle, diff, path, hasMotionPath } of poseSegments) {
     const orientToPath = hasMotionPath && scene.decors[destination.decorId]?.orientToPath === true
+    const zoneChanged = sourceZoneId !== destinationZoneId
     if (hasMotionPath && path !== undefined) {
       try {
         prepareSvgPath(path, { traversal: 'arc-length', precision: 2 })
@@ -745,35 +869,39 @@ function buildInterpolationActions(
         continue
       }
     }
-    if (Object.keys(diff).length === 0 && !hasMotionPath) continue
+    if (Object.keys(diff).length === 0 && !hasMotionPath && !zoneChanged) continue
 
     const intervalMs = Math.max(0, destination.timeMs - source.timeMs)
     const { durationMs, ease, startAtMs } = resolveKeyframeTransition(source, destination)
     const startAt = startAtMs + preRollMs
     const style = buildStyleTransition(fromStyle, diff, durationMs, ease, true, hasMotionPath && intervalMs > 0)
     const actionName = `${item.id}-kf-${destination.id}`
-    if (Object.keys(style.interpolated).length > 0 || (hasMotionPath && intervalMs > 0)) {
+    const hasTimedMotionPath = hasMotionPath && intervalMs > 0
+    const move = hasTimedMotionPath || zoneChanged
+      ? {
+        target: resolveMoveTarget(parentPersoId, destinationZoneId),
+        transition: hasTimedMotionPath
+          ? {
+            duration: intervalMs,
+            ease,
+            ...(path === undefined ? {} : { path }),
+            ...(orientToPath ? {
+              orientToPath: true,
+              rotateOffset: {
+                from: typeof fromStyle.rotate === 'number' ? fromStyle.rotate : 0,
+                to: typeof toStyle.rotate === 'number' ? toStyle.rotate : 0,
+              },
+            } : {}),
+          }
+          : { duration: durationMs, ease },
+      }
+      : undefined
+    if (Object.keys(style.interpolated).length > 0 || move !== undefined) {
       actions.push({
         name: actionName,
         ...(Object.keys(style.interpolated).length === 0 ? {} : { style: style.interpolated }),
-        ...(hasMotionPath && intervalMs > 0 ? {
-          move: {
-            target: item.parentId === null ? EDITOR_V2_ROOT_PERSO_ID : item.parentId,
-            transition: {
-              duration: intervalMs,
-              ease,
-              path,
-              ...(orientToPath ? {
-                orientToPath: true,
-                rotateOffset: {
-                  from: typeof fromStyle.rotate === 'number' ? fromStyle.rotate : 0,
-                  to: typeof toStyle.rotate === 'number' ? toStyle.rotate : 0,
-                },
-              } : {}),
-            },
-          },
-        } : {}),
-        startAt: hasMotionPath && intervalMs > 0 ? source.timeMs + preRollMs : startAt,
+        ...(move === undefined ? {} : { move }),
+        startAt: hasTimedMotionPath ? source.timeMs + preRollMs : startAt,
       })
     }
     if (Object.keys(style.discrete).length > 0) {

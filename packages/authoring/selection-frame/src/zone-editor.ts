@@ -1,9 +1,9 @@
 /**
  * Éditeur interactif de zones sur la grille d'un conteneur. Son contrat vérifié
  * est décrit dans ../specs/zone-editor-spec.md ; les raccords hôte encore ouverts
- * sont suivis dans ../plan/zone-editor-plan.md. Il partage avec selection-frame
- * l'ancrage du nœud, la calibration overlay, la mesure des pistes et les sessions
- * de geste.
+ * sont suivis dans ../plan/zone-editor-plan.md. Ce module possède les sessions
+ * de geste et le modèle de présentation ; les entrées hôte fournissent la pose,
+ * la géométrie des pistes et la conversion pointeur.
  *
  * RENDU DE GRILLE — jamais un nœud DOM par cellule. Une première version en créait un par cellule
  * (voire un par macro-cellule au-delà du seuil de finesse) : à l'échelle visée
@@ -23,15 +23,11 @@
  * par macro-cellule.
  */
 import { createActor } from 'xstate'
-import { worldDeltaToLocalDelta } from 'codplay-v1/runtime/modules/list-flip/engine/dom-matrix'
-import type { AuthorApi } from './author-api'
-import { calibrateGhostToWorldSnapshot, captureOverlayPose, ensureOverlayLayer, localFractionToViewportPoint } from './overlay-pose'
-import { measureGridTracks, trackIndexAtPx, uniformTrackGeometry } from './grid-geometry'
+import { trackIndexAtPx } from './grid-geometry'
 import type { GridTrackGeometry } from './grid-geometry'
 import { bindGestureSession } from './gesture-session'
 import { CHARACTERISTIC_POINTS, createHandleNode } from './handle-geometry'
 import type { HandleId } from './handle-geometry'
-import { createMinimalAnchor } from './tracked-session'
 import { zoneMachine } from './zone-machine'
 import * as zoneModel from './zone-model'
 import type { Axis, ZoneDef, ZoneEditorState, ZoneGridModel } from './zone-model'
@@ -39,7 +35,7 @@ import type { Axis, ZoneDef, ZoneEditorState, ZoneGridModel } from './zone-model
 /**
  * NEUTRALIZED for now (2026-07-09) — the background-gradient rewrite made the previous per-regime
  * cell rendering obsolete, but what this threshold should drive next (rendering is still being
- * tuned — grid legibility at real scale, notably) isn't decided. `ZoneEditorOptions.fineDisplayThreshold`
+ * tuned — grid legibility at real scale, notably) isn't decided. `ZoneEditorCoreOptions.fineDisplayThreshold`
  * stays in the API (the plan lists it explicitly) but is currently READ AND IGNORED, not wired to
  * anything — never silently repurposed without saying so.
  */
@@ -53,14 +49,34 @@ const DEFAULT_FINE_DISPLAY_THRESHOLD = 40
  */
 const DEFAULT_MIN_CELL_SIZE_PX = 6
 
-export type ZoneEditorOptions = {
-  authorApi: AuthorApi
-  sceneRoot: Element
-  /** persoId of the capsule being edited — this module's own container accrochage. */
-  containerId: string
+export type ZoneEditorAnchorPose = Readonly<{
+  origin: Readonly<{ x: number; y: number }>
+  matrix: Readonly<{ a: number; b: number; c: number; d: number }>
+  localWidth: number
+  localHeight: number
+}>
+
+/** Host-owned pose, pointer conversion and track measurement for one zone-editor surface. */
+export type ZoneEditorHost = Readonly<{
+  getPose: () => ZoneEditorAnchorPose | null
+  subscribe: (listener: () => void) => () => void
+  positionOverlay: (overlay: HTMLElement, pose: ZoneEditorAnchorPose) => void
+  getTrackGeometry: (grid: ZoneGridModel) => GridTrackGeometry | null
+  viewportToLocal: (x: number, y: number) => Readonly<{ x: number; y: number }> | null
+  isCellPlacementAvailable: (grid: ZoneGridModel, minCellSize: number) => boolean
+  destroy: () => void
+}>
+
+export type ZoneEditorCoreOptions = {
+  overlayRoot: HTMLElement
+  host: ZoneEditorHost
   initialState: ZoneEditorState
   onZonesChange: (state: ZoneEditorState) => void
   onSelectionChange: (names: string[]) => void
+  /** Rejects removal of zones whose references are still owned by the host document. */
+  canRemoveZone?: (zone: ZoneDef) => boolean
+  /** Controls whether host-supplied `setState()` values are reported back as authored edits. */
+  setStateNotifiesHost?: boolean
   fineDisplayThreshold?: number
   minCellSizePx?: number
 }
@@ -84,14 +100,16 @@ export type ZoneEditorHandle = {
   mergeZones(names: string[], name?: string): string
   select(names: string[]): void
   getState(): ZoneEditorState
+  /** Returns the stable ids of zones containing one viewport point, in model order. */
+  getZoneIdsAtPoint(x: number, y: number): string[]
   setPartVisibility(part: 'grid' | 'zones' | 'labels', visible: boolean): void
   /** Whether the grid is currently fine enough that per-cell placement should be offered. */
   isCellPlacementAvailable(): boolean
 }
 
-export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
-  const doc = options.sceneRoot.ownerDocument
-  const overlayLayer = ensureOverlayLayer(options.sceneRoot)
+/** Creates the shared gesture/model surface from one host-supplied numeric anchor. */
+export function createZoneEditorCore(options: ZoneEditorCoreOptions): ZoneEditorHandle {
+  const doc = options.overlayRoot.ownerDocument
   // NEUTRALIZED (see DEFAULT_FINE_DISPLAY_THRESHOLD's own doc) — read for API compatibility, not
   // wired to anything in the current rendering. Referencing the option itself (not just the
   // default) keeps `options.fineDisplayThreshold` a real, type-checked field rather than dead API
@@ -100,8 +118,8 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
   const minCellSizePx = options.minCellSizePx ?? DEFAULT_MIN_CELL_SIZE_PX
 
   let state = options.initialState
-  let containerNode: HTMLElement | null = null
   let destroyed = false
+  let hostWasAvailable = false
   let gridVisible = true
   let zonesVisible = true
   let labelsVisible = true
@@ -115,13 +133,12 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
   // ── DOM ────────────────────────────────────────────────────────────────────
 
   const editorRoot = doc.createElement('div')
-  editorRoot.setAttribute('data-zone-editor', options.containerId)
-  editorRoot.style.position = 'fixed'
+  editorRoot.setAttribute('data-zone-editor', '')
   editorRoot.style.boxSizing = 'border-box'
   editorRoot.style.transformOrigin = '0px 0px'
   editorRoot.style.display = 'none'
   editorRoot.style.pointerEvents = 'none'
-  overlayLayer.appendChild(editorRoot)
+  options.overlayRoot.appendChild(editorRoot)
 
   /**
    * The grid background — ONE element, ONE `repeating-linear-gradient` per axis, no matter how
@@ -182,10 +199,15 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
    * §Commandes programmatiques: "les commandes passent par le même chemin de mutation que les
    * gestes").
    */
-  function applyState(next: ZoneEditorState): void {
+  function applyState(next: ZoneEditorState, notifyHost = true): boolean {
+    const nextIds = new Set(next.zones.map((zone) => zone.id))
+    const removedZones = state.zones.filter((zone) => !nextIds.has(zone.id))
+    const canRemoveZone = options.canRemoveZone
+    if (notifyHost && canRemoveZone !== undefined && removedZones.some((zone) => !canRemoveZone(zone))) return false
     state = next
     refresh()
-    options.onZonesChange(state)
+    if (notifyHost) options.onZonesChange(state)
+    return true
   }
 
   function applySelection(names: string[]): void {
@@ -379,70 +401,31 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
     zonesRoot.style.display = zonesVisible ? '' : 'none'
   }
 
-  // ── accrochage + calibration (mêmes dispositifs que le gabarit du cs) ───────
-  // Node tracking shared via l'ancrage minimal (`2026-07-16-authoring-shared-tracking-layer-plan.md`
-  // §3 Étape 4) instead of a raw `authorApi.subscribeToNode` — `zoneMachine` itself stays untouched
-  // (same precedent as `SelectionFrame`/`csMachine` in Étape 2: it owns selection/visibility/
-  // container-lifecycle state well beyond a plain gesture skeleton, not a candidate for replacement
-  // here). `refresh()` is gated on `anchor.canAct()`, not mere presence — the correctif central this
-  // migration exists for: a `containerNode` can be notified before it's actually attached
-  // (`tracked-nodes.ts`), and reading its pose at that instant produced the same class of transient
-  // 0×0 geometry `positionCs()` used to.
-
-  const anchor = createMinimalAnchor({ authorApi: options.authorApi, persoIds: [options.containerId] })
-
+  // ── host-provided pose and lifecycle ───────────────────────────────────────
   function refresh(): void {
-    if (destroyed || !anchor.canAct()) {
+    if (destroyed) return
+    const pose = options.host.getPose()
+    if (pose === null) {
+      if (hostWasAvailable) actor.send({ type: 'NODE_DISAPPEARED' })
+      hostWasAvailable = false
       editorRoot.style.display = 'none'
       return
     }
-
-    const containerPose = captureOverlayPose(containerNode!)
-    const m = containerPose.matrix
+    if (!hostWasAvailable) actor.send({ type: 'NODE_APPEARED' })
+    hostWasAvailable = true
     editorRoot.style.display = ''
-    editorRoot.style.width = `${containerPose.localWidth}px`
-    editorRoot.style.height = `${containerPose.localHeight}px`
-    editorRoot.style.transform = `matrix(${m.a}, ${m.b}, ${m.c}, ${m.d}, 0, 0)`
+    options.host.positionOverlay(editorRoot, pose)
     renderAll()
-    calibrateGhostToWorldSnapshot(editorRoot, containerPose.rect)
   }
 
-  const unsubscribeContainer = anchor.subscribe(() => {
-    if (destroyed) return
-    const node = anchor.getNode(options.containerId)
-    const nextContainerNode = node instanceof HTMLElement ? node : null
-    const appeared = nextContainerNode !== null && containerNode === null
-    const disappeared = nextContainerNode === null && containerNode !== null
-    containerNode = nextContainerNode
-    if (appeared) actor.send({ type: 'NODE_APPEARED' })
-    if (disappeared) actor.send({ type: 'NODE_DISAPPEARED' })
-    refresh()
-  })
+  const unsubscribeHost = options.host.subscribe(refresh)
 
   refresh()
 
   // ── géométrie de pistes du conteneur (repli uniforme si non mesurable, jsdom) ─
 
   function containerTrackGeometry(): GridTrackGeometry | null {
-    if (containerNode === null) return null
-    const measured = measureGridTracks(containerNode)
-    if (measured !== null) return measured
-    // Same fallback discipline as the cs's own gridDragActive path (jsdom never resolves
-    // gridTemplateColumns/Rows to px, so gestures still need SOME geometry to react against in
-    // tests) — and the SAME helper, `uniformTrackGeometry`, rather than a hand-rolled equivalent
-    // (found duplicated during the consolidation audit, 2026-07-10: the earlier version ignored
-    // `state.grid.gap` entirely, always returning 0, unlike the cs's own repli which reads real
-    // gaps via `gridGapsPx()`).
-    const pose = captureOverlayPose(containerNode)
-    if (pose.localWidth <= 0 || pose.localHeight <= 0) return null
-    return uniformTrackGeometry({
-      rows: state.grid.rows,
-      cols: state.grid.cols,
-      localWidth: pose.localWidth,
-      localHeight: pose.localHeight,
-      columnGap: state.grid.gap?.col ?? 0,
-      rowGap: state.grid.gap?.row ?? 0
-    })
+    return options.host.getTrackGeometry(state.grid)
   }
 
   /**
@@ -474,10 +457,7 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
    * resolved the wrong cell under the pointer.
    */
   function viewportToContainerLocal(x: number, y: number): { x: number; y: number } | null {
-    if (containerNode === null) return null
-    const containerPose = captureOverlayPose(containerNode)
-    const containerOrigin = localFractionToViewportPoint(containerPose, 0, 0)
-    return worldDeltaToLocalDelta(containerPose.matrix, x - containerOrigin.x, y - containerOrigin.y)
+    return options.host.viewportToLocal(x, y)
   }
 
   // ── geste : tracer une zone (drag sur le fond de grille, même pattern que le tracé grid du cs) ─
@@ -856,9 +836,11 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
     if (destroyed || selectedNames.length === 0) return
     if (event.key !== 'Delete' && event.key !== 'Backspace') return
     if (!actor.getSnapshot().matches({ active: 'still' })) return
+    const selectedZones = state.zones.filter((zone) => selectedNames.includes(zone.name))
     event.preventDefault()
-    for (const name of selectedNames) {
-      applyState(zoneModel.removeZone(state, name))
+    const next = selectedNames.reduce((nextState, name) => zoneModel.removeZone(nextState, name), state)
+    if (!applyState(next)) return
+    for (const { name } of selectedZones) {
       actor.send({ type: 'ZONE_REMOVED', name })
     }
     applySelection([])
@@ -869,8 +851,8 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
     destroy(): void {
       if (destroyed) return
       destroyed = true
-      unsubscribeContainer()
-      anchor.destroy()
+      unsubscribeHost()
+      options.host.destroy()
       traceGesture.unbind()
       doc.removeEventListener('keydown', onContainerResizeKeydown)
       actor.stop()
@@ -884,7 +866,7 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
 
     setState(next: ZoneEditorState): void {
       selectedNames = selectedNames.filter((name) => next.zones.some((z) => z.name === name))
-      applyState(next)
+      applyState(next, options.setStateNotifiesHost ?? true)
       actor.send({ type: 'STATE_REPLACED' })
     },
 
@@ -901,7 +883,7 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
     },
 
     removeZone(name: string): void {
-      applyState(zoneModel.removeZone(state, name))
+      if (!applyState(zoneModel.removeZone(state, name))) return
       actor.send({ type: 'ZONE_REMOVED', name })
       if (selectedNames.includes(name)) applySelection(selectedNames.filter((n) => n !== name))
     },
@@ -927,7 +909,7 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
 
     breakContainer(name: string): string[] {
       const { state: next, createdNames } = zoneModel.breakContainer(state, name)
-      applyState(next)
+      if (!applyState(next)) return []
       actor.send({ type: 'CONTAINER_BROKEN', name })
       for (const created of createdNames) actor.send({ type: 'ZONE_ADDED', name: created })
       return createdNames
@@ -939,7 +921,7 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
 
     mergeZones(names, name): string {
       const { state: next, mergedName } = zoneModel.mergeZones(state, names, name)
-      applyState(next)
+      if (!applyState(next)) return ''
       for (const removed of names) if (removed !== mergedName) actor.send({ type: 'ZONE_REMOVED', name: removed })
       actor.send({ type: 'ZONE_ADDED', name: mergedName })
       applySelection([mergedName])
@@ -952,6 +934,16 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
 
     getState(): ZoneEditorState {
       return state
+    },
+
+    getZoneIdsAtPoint(x: number, y: number): string[] {
+      const pose = options.host.getPose()
+      const local = viewportToContainerLocal(x, y)
+      const tracks = containerTrackGeometry()
+      if (pose === null || local === null || tracks === null
+        || local.x < 0 || local.x >= pose.localWidth
+        || local.y < 0 || local.y >= pose.localHeight) return []
+      return zonesContainingCell(cellAtLocalPoint(local, tracks)).map((zone) => zone.id)
     },
 
     setPartVisibility(part: 'grid' | 'zones' | 'labels', visible: boolean): void {
@@ -969,12 +961,7 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
     },
 
     isCellPlacementAvailable(): boolean {
-      if (containerNode === null) return true
-      const tracks = measureGridTracks(containerNode)
-      if (tracks === null) return true
-      const cellWidth = (tracks.cols[0] ?? 0) - tracks.columnGap
-      const cellHeight = (tracks.rows[0] ?? 0) - tracks.rowGap
-      return cellWidth >= minCellSizePx && cellHeight >= minCellSizePx
+      return options.host.isCellPlacementAvailable(state.grid, minCellSizePx)
     }
   }
 }

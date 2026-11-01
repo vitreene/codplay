@@ -95,9 +95,8 @@ application dans [`base-commands.ts`](../src/app/commands/base-commands.ts).
 [`base-commands.spec.ts`](../tests/commands/base-commands.spec.ts) vérifie son
 application à la création. Le bloc texte du fixture
 [`tangent-editing-fixture.ts`](../tests/browser/tangent-editing-fixture.ts)
-porte les mêmes valeurs ; la validation Safari visible du centrage et du replay
-naturel est consignée dans le
-[plan de correction mouvement](../plan/2026-10-30-editor-motion-responsibility-fix-plan.md).
+porte les mêmes valeurs ; Safari a confirmé le centrage calculé après
+rechargement et pendant le replay naturel.
 [`default-decor-presets.spec.ts`](../tests/commands/default-decor-presets.spec.ts)
 vérifie la matérialisation au chargement et la conservation des tailles auteur.
 La validation Safari du document legacy vérifie `3cqw` à la source, `8cqw` à la
@@ -143,6 +142,7 @@ Seek existant vers la durée auteur. Les Stop répétés conservent leur garde.
   déplacement, insertion, couleur, Undo/Redo, rechargement JSON et Stop répété.
   Aux viewports 1328 × 775, 1100 × 780 et 1024 × 775, les écarts item/CS
   et ghosts observés restent inférieurs à 0,59 px.
-
-L’acceptation rAF naturelle dans Safari reste au
-[plan d’acceptation](../plan/2026-10-30-editor-motion-responsibility-fix-plan.md).
+- Safari visible, 31 octobre : lecture rAF naturelle du
+  [fixture `tangent-editing.html`](../tests/browser/tangent-editing.html)
+  de 0 à 5 s, pause stable, seek terminal répété, Stop répété puis replay
+  complet ; l'item et le Selection Frame gardent une pose cohérente.

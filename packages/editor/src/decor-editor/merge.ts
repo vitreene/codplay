@@ -68,13 +68,13 @@ export function mergePatch(base: DecorPatch, addition: DecorPatch): DecorPatch {
     }
   }
 
-  if ('zone' in addition) result.zone = addition.zone
+  if ('zoneId' in addition) result.zoneId = addition.zoneId
   if ('text' in addition) result.text = addition.text
   if ('custom' in addition) result.custom = addition.custom
 
   // The Decor contract is intentionally open. Known properties above keep their documented
   // semantics; every future root property is retained without adding a whitelist here.
-  const knownProperties = new Set(['style', 'classes', ...STRUCTURED_GROUPS, 'zone', 'text', 'custom', 'path'])
+  const knownProperties = new Set(['style', 'classes', ...STRUCTURED_GROUPS, 'zoneId', 'text', 'custom', 'path'])
   const resultRecord = result as Record<string, unknown>
   for (const [property, value] of Object.entries(addition)) {
     if (knownProperties.has(property)) continue

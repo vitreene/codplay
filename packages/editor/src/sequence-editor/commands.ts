@@ -5,16 +5,15 @@
  * sans état interne. Le contrôleur central (`app/commands/facade.ts`) est
  * la SEULE voie d'écriture qui les invoque et remplace le document dans son
  * contexte — cette bibliothèque n'est jamais elle-même possesseur d'une
- * scène (`2026-07-13-controller-islands-bridge-plan.md` §3bis : une
- * DEUXIÈME BIBLIOTHÈQUE de fonctions pures, pas une deuxième voie
- * d'écriture).
+ * scène : une bibliothèque de fonctions pures, pas une deuxième voie
+ * d'écriture.
  *
  * Périmètre : tout ce qui est spécifique à la mécanique timeline
  * (keyframes, marqueurs, visibilité de piste, durée de scène). Les
  * opérations de structure du document (déplacer/supprimer un item) restent
  * dans `base-commands.ts`, réutilisées telles quelles par le sequence-editor
  * via la façade centrale (`attachItem` pour TRACK.MOVE, `deleteItem` pour
- * TRACK.REMOVE) — pas dupliquées ici.
+ * TRACK.REMOVE) — pas dupliquées ici (voir `specs/editor-v2-integration-spec.md`).
  *
  * La création de keyframe (`createNamedKeyframe`) N'appelle PAS le
  * `createKeyframe` central : le sequence-editor a besoin de choisir l'id du

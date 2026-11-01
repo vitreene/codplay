@@ -132,7 +132,7 @@ export class DecorEditorController {
     this.send({ type: 'PANEL.SELECT', panelId })
   }
 
-  /** Intersection des panneaux pertinents pour tous les items attachés (spec §7 bis). */
+  /** Intersection des panneaux pertinents pour tous les items attachés (contrat de multi-sélection). */
   getPanelsForCurrentItems(): PanelId[] {
     const items = this.getItems()
     if (items.length === 0) return []
@@ -157,7 +157,7 @@ export class DecorEditorController {
 
   // ── Decor editing ───────────────────────────────────────────────────────────
 
-  /** Appliqué à chaque item attaché, identiquement (spec §7 bis). */
+  /** Appliqué à chaque item attaché, identiquement (contrat de multi-sélection). */
   applyPatch(patch: DecorPatch): void {
     this.send({ type: 'PATCH.APPLY', patch })
     this.emitDecorChange()
@@ -165,7 +165,7 @@ export class DecorEditorController {
 
   /**
    * Construit un écart à partir d'un chemin générique ("groupe.propriete", ou racine) et
-   * l'applique — même règle que `applyPatch` (spec §7 bis). Le rendu appelle cette méthode
+   * l'applique — même règle que `applyPatch` (contrat de multi-sélection). Le rendu appelle cette méthode
    * sans connaître la structure du décor, symétrique de `resolveField`/`hasOwnPatch` en
    * lecture : aucune limitation du rendu à `style.*`.
    */
@@ -206,7 +206,7 @@ export class DecorEditorController {
 
   // ── Field resolution (multi-sélection) ──────────────────────────────────────
 
-  /** État d'un champ à travers tous les items attachés — valeur commune, ou mixte (spec §7 bis). */
+  /** État d'un champ à travers tous les items attachés — valeur commune, ou mixte (contrat de multi-sélection). */
   resolveField<T>(path: string): FieldState<T> {
     const decors = this.getItems().map(resolveAttachedDecor)
     return resolveFieldAcrossItems<T>(decors, path)
@@ -214,8 +214,8 @@ export class DecorEditorController {
 
   /**
    * Vrai si l'item unique attaché porte un écart explicite sur cette propriété
-   * (distinct de la valeur résolue — sert au marqueur « hériter », §3.1). Toujours
-   * faux en multi-sélection (le contrôle n'existe pas dans ce cas, §7 bis).
+   * (distinct de la valeur résolue — sert au marqueur « hériter »). Toujours
+   * faux en multi-sélection (le contrôle n'existe pas dans ce cas, multi-sélection).
    */
   hasOwnPatch(path: string): boolean {
     const items = this.getItems()
@@ -243,7 +243,7 @@ export class DecorEditorController {
 
   /**
    * Vrai si l'item unique attaché affiche un décor temporaire (état live au playhead, jamais
-   * enregistré) plutôt qu'un décor réel — `2026-07-17-resolved-state-at-time-notes.md`. Piloté en
+   * enregistré) plutôt qu'un décor réel — voir `specs/editor-v2-integration-spec.md`. Piloté en
    * DONNÉE ; le rendu décide seul comment le signaler visuellement. Toujours faux en multi-
    * sélection (même garde que `hasOwnPatch`).
    */
@@ -283,9 +283,9 @@ export class DecorEditorController {
    * Signal de bord "l'utilisateur vient de terminer une interaction sur un champ" — le rendu
    * l'appelle sur l'événement natif `'change'` des contrôles continus (couleur, curseur : `'input'`
    * n'a pas de fin détectable), ou juste après le patch d'un contrôle déjà discret (nombre,
-   * sélection, texte — sa propre fin de geste). Généralise le flush de fin de phase (chantier 3,
-   * `2026-07-16-position-bridge-reconciliation-plan.md` §Étape D) au-delà du seul CS : dedit ne
-   * décide pas lui-même de la cadence de commit (§4.3 du spec — jamais de debounce ici), il ne fait
+   * sélection, texte — sa propre fin de geste). Généralise le flush de fin de phase au-delà du seul
+   * CS : dedit ne
+   * décide pas lui-même de la cadence de commit (contrat de phase — jamais de debounce ici), il ne fait
    * que relayer ce signal à l'hôte, qui en reste seul juge.
    */
   onInteractionEnd(cb: () => void): Unsubscribe {
@@ -298,7 +298,7 @@ export class DecorEditorController {
   }
 
   /**
-   * Raccourci « aller à kf1 » (`2026-07-17-resolved-state-at-time-notes.md`), accessible depuis
+   * Raccourci « aller à kf1 » (contrat d'intégration V2), accessible depuis
    * l'état temporaire — dedit n'a aucune notion de temps/keyframe dans son propre domaine (ça vit
    * dans `EditorScene`, côté pont) ; il ne fait que relayer la demande à l'hôte, qui seul sait
    * résoudre le premier keyframe de l'item courant et déclencher le `SEEK`.

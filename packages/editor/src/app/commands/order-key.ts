@@ -1,6 +1,6 @@
 /**
- * Clé d'ordre textuelle fractionnaire — `plan/notes/2026-07-10-app-construction-discussion.md`
- * §1 « Parent / ordre » : trie alphabétiquement (`"a" < "b" < …`), une insertion entre deux clés
+ * Clé d'ordre textuelle fractionnaire — `specs/editor-document-model-spec.md`
+ * Parent et ordre : trie alphabétiquement (`"a" < "b" < …`), une insertion entre deux clés
  * s'obtient en ajoutant une lettre à la clé la plus basse des deux (ex. entre `"a"` et `"b"` →
  * `"ab"`). Une insertion/déplacement ne touche jamais la fratrie — c'est le défaut qu'avait Eddy
  * (ordre par entier, renumérotation à chaque déplacement) que ce modèle évite.

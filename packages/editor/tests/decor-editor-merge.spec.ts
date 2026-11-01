@@ -51,16 +51,16 @@ describe('mergePatch', () => {
     expect(result.textAutoSize).toEqual({ enabled: true })
   })
 
-  it('zone: null abandonne toute zone', () => {
-    const base: DecorPatch = { zone: 'header' }
-    const result = mergePatch(base, { zone: null })
-    expect(result.zone).toBeNull()
+  it('zoneId: null abandonne toute zone', () => {
+    const base: DecorPatch = { zoneId: 'header-id' }
+    const result = mergePatch(base, { zoneId: null })
+    expect(result.zoneId).toBeNull()
   })
 
   it('zone absente de addition reste héritée', () => {
-    const base: DecorPatch = { zone: 'header' }
+    const base: DecorPatch = { zoneId: 'header-id' }
     const result = mergePatch(base, { style: { color: 'red' } })
-    expect(result.zone).toBe('header')
+    expect(result.zoneId).toBe('header-id')
   })
 
   it('custom écrase intégralement (pas de fusion de chaîne)', () => {
@@ -117,18 +117,18 @@ describe('resolveDecor', () => {
   })
 
   it('replie toute la chaîne dans l\'ordre, chaque écart primant sur les précédents', () => {
-    const defaults: DecorPatch = { style: { 'font-size': '10cqw', 'font-weight': 'normal' }, zone: null }
+    const defaults: DecorPatch = { style: { 'font-size': '10cqw', 'font-weight': 'normal' }, zoneId: null }
     const patch1: DecorPatch = { style: { 'font-size': '20cqw' } }
-    const patch2: DecorPatch = { style: { 'font-weight': 'bold' }, zone: 'header' }
+    const patch2: DecorPatch = { style: { 'font-weight': 'bold' }, zoneId: 'header-id' }
     const result = resolveDecor(defaults, [patch1, patch2])
-    expect(result).toEqual({ style: { 'font-size': '20cqw', 'font-weight': 'bold' }, zone: 'header' })
+    expect(result).toEqual({ style: { 'font-size': '20cqw', 'font-weight': 'bold' }, zoneId: 'header-id' })
   })
 
   it('un écart plus récent peut neutraliser une propriété posée par un écart antérieur', () => {
     const defaults: DecorPatch = {}
-    const patch1: DecorPatch = { zone: 'header' }
-    const patch2: DecorPatch = { zone: null }
-    expect(resolveDecor(defaults, [patch1, patch2]).zone).toBeNull()
+    const patch1: DecorPatch = { zoneId: 'header-id' }
+    const patch2: DecorPatch = { zoneId: null }
+    expect(resolveDecor(defaults, [patch1, patch2]).zoneId).toBeNull()
   })
 
   it('révision de chaîne (déplacement de kf) = repli complet sur le nouveau flux, sans état résiduel', () => {

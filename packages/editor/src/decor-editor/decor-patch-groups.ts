@@ -1,7 +1,7 @@
 /**
  * Modules non-CSS du décor dont l'écart est un objet imbriqué, fusionné superficiellement
  * propriété par propriété — même mécanique que `style`, mais hors de la carte CSS plate
- * (spec dedit §3.2 : « toute donnée qui produit du CSS via une interface intermédiaire
+ * (modèle du décor : « toute donnée qui produit du CSS via une interface intermédiaire
  * sort de `style` » — `offset` en est le premier exemple, `capsule` et `textAutoSize`
  * suivent le même principe).
  *

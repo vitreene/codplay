@@ -14,7 +14,7 @@ export interface AttachedItem {
   patch: DecorPatch
   /**
    * `patch` reflète l'état live du node (playhead entre deux kf), pas un décor enregistré —
-   * `2026-07-17-resolved-state-at-time-notes.md`. Piloté en donnée jusqu'ici ; la présentation
+   * `specs/editor-v2-integration-spec.md`. Piloté en donnée jusqu'ici ; la présentation
    * (ex. fond de palette plus clair) reste un choix du rendu, jamais décidé ici.
    */
   isTemporary?: boolean
@@ -168,7 +168,7 @@ export const decorEditorMachine = setup({
         },
 
         'PATCH.APPLY': {
-          // Appliqué à CHAQUE item de la sélection, identiquement (spec §7 bis).
+          // Appliqué à CHAQUE item de la sélection, identiquement (contrat de multi-sélection).
           actions: assign(({ context, event }) => ({
             items: context.items.map(item => ({ ...item, patch: mergePatch(item.patch, event.patch) })),
           })),
@@ -176,7 +176,7 @@ export const decorEditorMachine = setup({
 
         'PATCH.STRIP': {
           // No-op en multi-sélection : le contrôleur garde cet événement à 1 seul item
-          // (contrôle « hériter » masqué au-delà, spec §7 bis) ; la machine applique
+          // (contrôle « hériter » masqué au-delà, contrat de multi-sélection) ; la machine applique
           // simplement à tous les items présents, ce qui est un no-op à un seul item.
           actions: assign(({ context, event }) => ({
             items: context.items.map(item => ({ ...item, patch: stripInherited(item.patch, event.path) })),

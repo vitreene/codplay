@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { resolveFieldAcrossItems } from '../src/decor-editor/field-state'
 import type { ResolvedDecor } from '../src/decor-editor/types'
 
-describe('resolveFieldAcrossItems (spec §7 bis, multi-sélection)', () => {
+describe('resolveFieldAcrossItems (contrat de multi-sélection, multi-sélection)', () => {
   it('un seul décor → uniform avec sa valeur', () => {
     const decors: ResolvedDecor[] = [{ style: { 'font-size': '12cqw' } }]
     expect(resolveFieldAcrossItems(decors, 'style.font-size')).toEqual({ kind: 'uniform', value: '12cqw' })
@@ -29,7 +29,7 @@ describe('resolveFieldAcrossItems (spec §7 bis, multi-sélection)', () => {
   })
 
   it('propriété racine simple (zone)', () => {
-    const decors: ResolvedDecor[] = [{ zone: 'header' }, { zone: 'header' }]
+    const decors: ResolvedDecor[] = [{ zoneId: 'header-id' }, { zoneId: 'header-id' }]
     expect(resolveFieldAcrossItems(decors, 'zone')).toEqual({ kind: 'uniform', value: 'header' })
   })
 

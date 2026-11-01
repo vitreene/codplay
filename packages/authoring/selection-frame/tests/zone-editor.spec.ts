@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import type { AuthorApi } from '../src/author-api'
-import { createZoneEditor } from '../src/zone-editor'
+import { createZoneEditor } from '../src/zone-editor-v1'
 import type { ZoneEditorState } from '../src/zone-model'
 
 const temp__emittedNodes = new Set<Element>()

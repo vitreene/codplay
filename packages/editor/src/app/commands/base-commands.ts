@@ -1,6 +1,6 @@
 /**
- * Commandes de base de la façade — `plan/app/2026-07-12-app-controller-definition.md` §4.1. Chaque
- * commande est une mutation PURE `(EditorScene, args) → EditorScene`, testable par entrée→sortie
+ * Commandes de base de la façade — elles appliquent les mutations documentaires de l'éditeur V2.
+ * Chaque commande est une mutation PURE `(EditorScene, args) → EditorScene`, testable par entrée→sortie
  * sans DOM (même patron que `zone-model.ts` et le Builder). Le contrôleur les invoque et remplace
  * le document dans son contexte — il n'y a pas d'autre voie d'écriture du document.
  */
@@ -22,8 +22,7 @@ function childrenOf(scene: EditorScene, parentId: string | null): Item[] {
 /**
  * Crée un item `bloc` (sans contenu — `assignType`/`assignContent` le différencient ensuite),
  * positionné par `geometry` (devient le décor initial), attaché sous `parentId` (racine si absent).
- * `geometry` peut venir d'un tracé libre ou du rect d'une zone désignée (§3 du document
- * contrôleur) — cette commande ne distingue pas la source, seulement la valeur.
+ * `geometry` peut venir d'un tracé libre ou du rect d'une zone désignée (voir le mémo de décisions Editor) — cette commande ne distingue pas la source, seulement la valeur.
  */
 export function createItem(
   scene: EditorScene,
@@ -76,7 +75,7 @@ export function createItem(
 /**
  * Applique aussi le preset par défaut du type (s'il en existe un) à `item.initialDecorId`, dans le
  * même geste — jamais une commande séparée que l'appelant devrait penser à enchaîner
- * (`2026-07-17-decor-keyframe-layering-plan.md` §2). Un objet JSON simple appliqué une fois, pas
+ * (`specs/item-presentation-spec.md`). Un objet JSON simple appliqué une fois, pas
  * une couche vivante — changer le preset plus tard ne rétroagit pas sur les items déjà créés.
  */
 export function assignType(scene: EditorScene, args: { itemId: string; type: ItemType }): EditorScene {
@@ -133,9 +132,9 @@ export function setDecor(scene: EditorScene, args: { decorId: string; patch: Par
 
 /**
  * Crée (ou remplace) une entrée vide dans `scene.decors` — le `registerDecor` du copy-on-write
- * (`2026-06-11-sequence-editor-grid-spec.md` §2.3 : « à la modification d'un décor partagé,
- * l'éditeur de décors doit créer une nouvelle entrée via `registerDecor` et appeler `assignDecor`
- * pour lier le keyframe à ce nouvel id, avant d'écrire les propriétés »). Toujours suivie d'un
+ * : à la modification d'un décor partagé, l'éditeur crée une nouvelle entrée via `registerDecor`
+ * et appelle `assignDecor` pour lier le keyframe à ce nouvel id, avant d'écrire les propriétés.
+ * Toujours suivie d'un
  * `assignKeyframeDecor` puis d'un `setDecor` dans la même transaction (`decor-editor-bridge.ts`) —
  * jamais appelée seule, même convention que `createKeyframe`/`createNamedKeyframe` (entrée `{id}`
  * vide, remplie par le `setDecor` qui suit).

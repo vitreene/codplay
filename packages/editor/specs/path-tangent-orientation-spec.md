@@ -126,7 +126,7 @@ KF dans les trois viewports avec la page visible. Après alignement
 de l’arrondi des bordures avec le CSS natif, les gestes et ghosts passent dans
 les trois viewports avec des écarts inférieurs à 0,59 px. Le parcours Play rAF
 du raccord tangent est validé ; les autres gates de transport restent suivies
-au plan ciblé. Après le nettoyage de l’identité DOM des
+au [mémo de décisions Editor](../plan/decisions-a-prendre.md). Après le nettoyage de l’identité DOM des
 ghosts réutilisés, les parcours navigateur `editing` (17 contrôles) et `decor`
 (4 contrôles) passent sans adresse de KF obsolète ; l’erreur item/CS maximale
 mesurée dans ces deux parcours est de 0,584 px.

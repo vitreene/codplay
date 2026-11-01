@@ -86,8 +86,8 @@ export {
 } from './zone-model'
 export type { Axis, ZoneCard, ZoneContainerChild, ZoneContainerData, ZoneDef, ZoneEditorState, ZoneGridModel, ZoneModelValidationError } from './zone-model'
 
-export { createZoneEditor } from './zone-editor'
-export type { ZoneEditorHandle, ZoneEditorOptions } from './zone-editor'
+export { createZoneEditor } from './zone-editor-v1'
+export type { ZoneEditorHandle, ZoneEditorOptions } from './zone-editor-v1'
 
 export { zoneMachine } from './zone-machine'
 export type { ZoneMachineContext, ZoneMachineEvent } from './zone-machine'

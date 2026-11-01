@@ -26,6 +26,3 @@ courbe par une autre.
 - Safari MCP, le 30 octobre 2026 : les quatre alias donnent les mêmes résultats
   qu’ACE aux six instants contrôlés ; le builder renvoie le diagnostic attendu
   pour l’objet Bézier.
-
-Les corrections structurelles restantes sont suivies dans le
-[plan ciblé](../plan/2026-10-30-editor-motion-responsibility-fix-plan.md).

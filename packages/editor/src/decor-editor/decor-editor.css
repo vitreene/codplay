@@ -136,7 +136,7 @@
   font-style: italic;
 }
 
-/* ── Inherit control (§3.1) — discret, visible seulement s'il y a un écart ── */
+/* ── Inherit control — discret, visible seulement s'il y a un écart ── */
 .dedit-strip-btn {
   flex: none;
   width: 14px;
@@ -232,7 +232,7 @@
   padding: 8px 0;
 }
 
-/* ── Presets (spec §9 — action de fusion, pas une propriété) ────────────── */
+/* ── Presets (contrat de palette — action de fusion, pas une propriété) ────────────── */
 .dedit-preset-list {
   display: flex;
   flex-wrap: wrap;

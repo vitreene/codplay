@@ -41,7 +41,7 @@ describe('panelsForType', () => {
   })
 })
 
-describe('panelsForTypes — intersection (spec §7 bis, multi-sélection)', () => {
+describe('panelsForTypes — intersection (contrat de multi-sélection, multi-sélection)', () => {
   it('un seul type → mêmes panneaux que panelsForType', () => {
     expect(panelsForTypes(['text'], config())).toEqual(panelsForType('text', config()))
   })

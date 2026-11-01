@@ -1,9 +1,10 @@
 /**
- * La façade de commandes — `plan/app/2026-07-12-app-controller-definition.md` §4. Point d'entrée
+ * La façade de commandes — propriétaire des écritures documentaires, selon
+ * `specs/editor-history-spec.md`. Point d'entrée
  * UNIQUE pour toute mutation du document : le contrôleur ne connaît que `runCommand`/`transaction`
  * (jamais les fonctions de `base-commands.ts` directement, jamais une mutation arbitraire fournie
  * par l'appelant) — la union discriminée `Command` (`controller/types.ts`) ferme le vocabulaire
- * exactement au §4.1.
+ * de commandes.
  */
 
 import * as base from './base-commands'
@@ -31,6 +32,8 @@ export function runCommandWithResult(scene: EditorScene, command: Command): { sc
       return { scene: rootPlacement.setRootPlacementMode(scene, command.args) }
     case 'createRootZone':
       return { scene: rootPlacement.createRootZone(scene, command.args) }
+    case 'setRootZonesSurface':
+      return { scene: rootPlacement.setRootZonesSurface(scene, command.args) }
     case 'assignType':
       return { scene: base.assignType(scene, command.args) }
     case 'assignContent':
@@ -52,7 +55,7 @@ export function runCommandWithResult(scene: EditorScene, command: Command): { sc
     case 'deleteItem':
       return { scene: base.deleteItem(scene, command.args) }
     // ── Commandes locales au sequence-editor (`sequence-editor/commands.ts`) — même voie
-    // d'écriture, deuxième bibliothèque de fonctions pures (§3bis du plan îlots) ──────────────
+    // d'écriture, deuxième bibliothèque de fonctions pures (contrat d’intégration V2) ──────────────
     case 'createNamedKeyframe':
       return { scene: sequenceEditor.createNamedKeyframe(scene, command.args) }
     case 'setKeyframeChannel':
@@ -101,7 +104,7 @@ export function runCommandWithResult(scene: EditorScene, command: Command): { sc
 }
 
 /**
- * Une transaction groupe N commandes en un seul commit (§4.1 — une macro en est la première
+ * Une transaction groupe N commandes en un seul commit (une macro en est la première
  * instance, pas un cas isolé). Chaque commande reçoit le document produit par la précédente ; seul
  * le document final est retourné — pas d'état intermédiaire visible au contrôleur.
  */

@@ -40,6 +40,3 @@ ni dans SQLite, ni dans Elcé, ni dans CodPlay.
 - [`tests/app/persistence/sqlite-editor-scene-persistence.spec.ts`](../tests/app/persistence/sqlite-editor-scene-persistence.spec.ts)
   vérifie la persistance des documents restaurés sans sérialiser la pile
   d'historique.
-- Le parcours navigateur des boutons, des raccourcis physiques, du titre en
-  attente et de la restauration après import est suivi dans le
-  [plan Remix/historique](../plan/2026-10-28-editor-remix-history-plan.md).

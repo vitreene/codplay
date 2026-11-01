@@ -16,13 +16,13 @@ describe('stripInherited', () => {
   })
 
   it('retire une propriété racine simple (zone)', () => {
-    const patch: DecorPatch = { zone: 'header', style: { 'font-weight': 'bold' } }
+    const patch: DecorPatch = { zoneId: 'header-id', style: { 'font-weight': 'bold' } }
     const result = stripInherited(patch, 'zone')
-    expect(result.zone).toBeUndefined()
+    expect(result.zoneId).toBeUndefined()
     expect(result.style).toEqual({ 'font-weight': 'bold' })
   })
 
-  it('retire custom : effacer le mini-éditeur revient à l\'hérité (spec §3.1)', () => {
+  it('retire custom : effacer le mini-éditeur revient à l\'hérité (contrat d’héritage)', () => {
     const patch: DecorPatch = { custom: 'color: red;' }
     const result = stripInherited(patch, 'custom')
     expect(result.custom).toBeUndefined()
