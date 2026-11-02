@@ -228,18 +228,18 @@ describe('Remix editor workspace', () => {
     setProfileTokenTargetId('elce-test-profile-target')
     rendered.cleanup()
     rendered = mount()
-    expect(rendered.$('#elce-content-catalog-tab-profile')?.textContent).toBe('Profil')
+    expect(rendered.$('#elce-content-catalog-tab-profile')?.textContent).toBe('Variables')
     await rendered.act(() => rendered.$('#elce-content-catalog-tab-profile')?.dispatchEvent(new Event('click', { bubbles: true })))
     rendered.cleanup()
     rendered = mount()
     expect(rendered.$('#elce-content-catalog-tab-profile')?.getAttribute('aria-pressed')).toBe('true')
-    expect(rendered.$(`#elce-profile-token-insertion-${propertyId}`)).not.toBeNull()
+    expect(rendered.$(`#elce-profile-token-insertion-profile-${propertyId}`)).not.toBeNull()
 
     const target = rendered.$('#elce-test-profile-target') as HTMLTextAreaElement
     target.focus()
     target.setSelectionRange(8, 13)
     await rendered.act(() => {
-      const insert = rendered.$(`#elce-profile-token-insertion-${propertyId}`)
+      const insert = rendered.$(`#elce-profile-token-insertion-profile-${propertyId}`)
       insert?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
       insert?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
@@ -291,6 +291,7 @@ function createWorkspace(
       appearanceTarget: { kind: 'document' },
       summarySettingsOpen,
       profileTokenTargetId,
+      selectedInlineLabel: null,
       authoringError,
       dropTarget,
       visible: true,

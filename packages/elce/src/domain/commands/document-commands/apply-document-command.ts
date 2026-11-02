@@ -1,7 +1,7 @@
 import { BDC_LOCATION, BDC_TYPE, PAGE_LOCATION } from '../../../config/document-config'
 import { ElceDocument } from '../../../domain/document/document-model'
 import type { DocumentCommand } from '../document-command-types'
-import { createChapter, renameChapter, updateChapterEvaluationSettings, moveChapter, deleteChapter, createPage, renamePage, movePage, deletePage } from './page-commands'
+import { createChapter, renameChapter, updateChapterEvaluationSettings, moveChapter, deleteChapter, createPage, renamePage, setPageEarlyExit, movePage, deletePage } from './page-commands'
 import { createBdc, deleteCatalogBdc, updateQuestion, updateEvaluationResult, updateCarousel, updateCard, updateStatisticalGraph, setStatisticalGraphLayout, deleteStatisticalGraph, setCardLayout, deleteCard, deleteQuestion, deleteEvaluationResult, deleteCarousel } from './bdc-commands'
 import { moveBdc, createAnchoredBdc, attachCatalogBdc, moveAnchoredBdc, removeAnchoredBdc, returnAnchoredBdc } from './anchor-commands'
 import { findBdc, fail } from './command-helpers'
@@ -33,6 +33,8 @@ function applyCommand(document: ElceDocument, command: DocumentCommand): ElceDoc
       return createPage(document, command)
     case 'page.rename':
       return renamePage(document, command.pageId, command.name)
+    case 'page.early-exit.set':
+      return setPageEarlyExit(document, command)
     case 'page.move':
       return movePage(document, command)
     case 'page.remove':

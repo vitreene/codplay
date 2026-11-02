@@ -5,10 +5,13 @@ import { CHAPTER_TYPE, CHAPTER_TYPE_CONFIG, PAGE_LOCATION, PAGE_TYPE, SCENARIO_E
 import type { PageType } from '../../../config/document-config-types'
 import type { PagePlacement } from '../../../domain/commands/document-command-types'
 import type { Chapter, Page } from '../../../domain/document/document-types'
+import { plainTextFromValue } from '../../../domain/inline-text/inline-text-value'
 import type { ScenarioEntry } from '../../../domain/scenario/scenario-entry-types'
 import { renderLucideIcon } from '../lucide-static-icon'
 import { SUMMARY_PROFILE_ACCESS_ICON } from '../summary-profile-access-icon'
 import { getPageTypeIcon } from './page-type-icon.ts'
+import { renderWorkspacePanelReduceButton } from './workspace-panel-controls.tsx'
+import { workspacePanelVisibilityFromResponsiveState } from './workspace-panel-state.ts'
 import type { ScenarioPanelProps } from './scenario-panel-types'
 import { renderAppearanceTrigger } from '../../appearance/appearance-trigger'
 
@@ -16,14 +19,25 @@ import { renderAppearanceTrigger } from '../../appearance/appearance-trigger'
 export function renderScenarioPanel(props: ScenarioPanelProps): RemixNode {
   const { workspace } = props
   const { view, actions, responsivePanel } = workspace
+  const panelVisibility = workspace.panelVisibility
+    ?? workspacePanelVisibilityFromResponsiveState(responsivePanel, typeof window === 'undefined' ? 1280 : window.innerWidth)
   const selectedPageId = view.selectedChapter === undefined ? view.selectedPage?.id : undefined
 
   return <section
     id="elce-outline"
     className="elce-panel elce-outline"
-    data-panel-open={responsivePanel === 'outline'}
+    data-panel-open={panelVisibility.outline}
     aria-labelledby="elce-outline-title"
   >
+    <div
+      id="elce-outline-reduce-row"
+      className="elce-panel-reduce-row"
+    >
+      {renderWorkspacePanelReduceButton('outline', () => {
+        if (workspace.onSetPanelVisibility !== undefined) workspace.onSetPanelVisibility('outline', false)
+        else workspace.onSetResponsivePanel(null, 'elce-outline-toggle')
+      })}
+    </div>
     <div
       id="elce-outline-heading"
       className="elce-panel-heading"
@@ -138,7 +152,7 @@ function renderScenarioEntryList(props: ScenarioPanelProps, entries: readonly Sc
         mix={on<HTMLButtonElement, 'click'>('click', () => workspace.onSetSummarySettingsOpen(true))}
       >
         {renderLucideIcon(SUMMARY_PROFILE_ACCESS_ICON, 'elce-scenario-summary-page-icon')}
-        <span id="elce-scenario-summary-page-title">{view.documentModel.data.summary.title}</span>
+        <span id="elce-scenario-summary-page-title">{plainTextFromValue(view.documentModel.data.summary.title)}</span>
       </button>
     </li> : null}
     {children}
@@ -151,6 +165,7 @@ function renderChapterItem(props: ScenarioPanelProps, chapter: Chapter): RemixNo
   const { view, actions } = workspace
   const isSelected = view.selectedChapter?.id === chapter.id
   const itemId = `elce-chapter-${chapter.id}`
+  const chapterName = plainTextFromValue(chapter.name)
   const onAddChapterPage = (chapterId: string, pageType: PageType): void => {
     actions.createPage({ kind: PAGE_LOCATION.CHAPTER, chapterId }, pageType)
   }
@@ -162,7 +177,7 @@ function renderChapterItem(props: ScenarioPanelProps, chapter: Chapter): RemixNo
       id={`elce-chapter-heading-${chapter.id}`}
       className="elce-outline-item-heading"
       draggable={true}
-      aria-label={`Glisser pour déplacer ${chapter.name}`}
+      aria-label={`Glisser pour déplacer ${chapterName}`}
       mix={[
         on<HTMLDivElement, 'dragstart'>('dragstart', (event) => onDragStartChapter(event, chapter.id)),
         on<HTMLDivElement, 'dragend'>('dragend', onDragEnd),
@@ -187,15 +202,15 @@ function renderChapterItem(props: ScenarioPanelProps, chapter: Chapter): RemixNo
         <strong
           id={`elce-chapter-name-${chapter.id}`}
         >
-          {chapter.name}
+          {chapterName}
         </strong>
       </button>
       <div
         id={`elce-chapter-actions-${chapter.id}`}
         className="elce-outline-item-actions"
       >
-        {renderIconButton(`elce-create-page-${chapter.id}`, `Ajouter une Page dans ${chapter.name}`, getPageTypeIcon(PAGE_TYPE.FLUX), () => onAddChapterPage(chapter.id, PAGE_TYPE.FLUX), 'elce-location-page-action')}
-        {renderIconButton(`elce-create-diapo-${chapter.id}`, `Ajouter une Diapo dans ${chapter.name}`, getPageTypeIcon(PAGE_TYPE.DIAPO), () => onAddChapterPage(chapter.id, PAGE_TYPE.DIAPO), 'elce-location-page-action')}
+        {renderIconButton(`elce-create-page-${chapter.id}`, `Ajouter une Page dans ${chapterName}`, getPageTypeIcon(PAGE_TYPE.FLUX), () => onAddChapterPage(chapter.id, PAGE_TYPE.FLUX), 'elce-location-page-action')}
+        {renderIconButton(`elce-create-diapo-${chapter.id}`, `Ajouter une Diapo dans ${chapterName}`, getPageTypeIcon(PAGE_TYPE.DIAPO), () => onAddChapterPage(chapter.id, PAGE_TYPE.DIAPO), 'elce-location-page-action')}
         {renderDeleteButton(`elce-chapter-delete-${chapter.id}`, () => actions.deleteChapter(chapter.id), chapter.pageIds.length > 0)}
       </div>
     </div>
@@ -249,6 +264,7 @@ function renderPageList(
 /** Renders a page as a draggable source, never as a drop target. */
 function renderPageItem(props: ScenarioPanelProps, listId: string, page: Page, selectedPageId?: string): RemixNode {
   const { workspace, onDragStartPage, onDragEnd } = props
+  const pageName = plainTextFromValue(page.name)
   return <li
     id={`${listId}-item-${page.id}`}
   >
@@ -256,7 +272,7 @@ function renderPageItem(props: ScenarioPanelProps, listId: string, page: Page, s
       id={`${listId}-row-${page.id}`}
       className="elce-page-row"
       draggable={true}
-      aria-label={`Glisser pour déplacer ${page.name}`}
+      aria-label={`Glisser pour déplacer ${pageName}`}
       mix={[
         on<HTMLDivElement, 'dragstart'>('dragstart', (event) => {
           event.stopPropagation()
@@ -279,7 +295,7 @@ function renderPageItem(props: ScenarioPanelProps, listId: string, page: Page, s
         type="button"
         mix={on<HTMLButtonElement, 'click'>('click', () => workspace.actions.selectPage(page.id))}
       >
-        {page.name}
+        {pageName}
       </button>
       <span
         id={`${listId}-type-${page.id}`}

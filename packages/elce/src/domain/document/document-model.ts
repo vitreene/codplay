@@ -9,8 +9,10 @@ import {
 import { ELCE_EDITOR_SETTINGS } from '../../config/editor-settings'
 import type { Bdc, Chapter, ElceDocumentData, MediaMetadata, Page, PageId, RichTextDocument } from './document-types'
 import { INITIAL_PROFILE_DEFINITION, INITIAL_SUMMARY_SETTINGS } from '../summary-profile/summary-profile-types'
+import { parseInlineTextTokens } from '../inline-text/inline-text-value'
+import { plainTextFromValue } from '../inline-text/inline-text-value'
 
-export const ELCE_DOCUMENT_VERSION = 7 as const
+export const ELCE_DOCUMENT_VERSION = 9 as const
 
 /** Creates the empty rich-text document used by a new Section. */
 export function createEmptyRichTextDocument(): RichTextDocument {
@@ -65,13 +67,94 @@ export class ElceDocument {
     return this.data
   }
 
-  /** Rehydrates a document after a structured clone or a JSON round trip. */
-  public static fromJSON(data: ElceDocumentData): ElceDocument {
-    if (data.version !== ELCE_DOCUMENT_VERSION) {
-      throw new Error(`Version de document Elcé non supportée : ${String(data.version)}`)
+  /** Rehydrates a document and migrates v7 inline profile tokens to Tiptap JSON. */
+  public static fromJSON(value: unknown): ElceDocument {
+    if (!isRecord(value) || (value.version !== 7 && value.version !== 8 && value.version !== ELCE_DOCUMENT_VERSION)) {
+      const version = isRecord(value) ? value.version : undefined
+      throw new Error(`Version de document Elcé non supportée : ${String(version)}`)
     }
+    const data = value.version === 7
+      ? migrateV7Document(value)
+      : value.version === 8
+        ? migrateV8Document(value)
+        : value as unknown as ElceDocumentData
     return new ElceDocument(data)
   }
+}
+
+/** Upgrades a v8 document with the optional page-level early-exit setting. */
+function migrateV8Document(value: Record<string, unknown>): ElceDocumentData {
+  return { ...value, version: ELCE_DOCUMENT_VERSION } as unknown as ElceDocumentData
+}
+
+/** Upgrades v7 authored text fields while preserving all other document data. */
+function migrateV7Document(value: Record<string, unknown>): ElceDocumentData {
+  const migrated: Record<string, unknown> = {
+    ...value,
+    version: ELCE_DOCUMENT_VERSION,
+    summary: mapTextFields(value.summary, ['title', 'description']),
+    chapters: mapRecords(value.chapters, (chapter) => mapTextRecordFields(chapter, ['name'])),
+    pages: mapRecords(value.pages, (page) => mapTextRecordFields(page, ['name'])),
+    bdcs: mapRecords(value.bdcs, migrateBdcTextFields),
+  }
+  return migrated as unknown as ElceDocumentData
+}
+
+/** Migrates every authored text value in one BDC while leaving identifiers intact. */
+function migrateBdcTextFields(bdc: Record<string, unknown>): Record<string, unknown> {
+  const question = mapTextFields(bdc.question, ['title', 'prompt', 'validationLabel'])
+  if (isRecord(question) && Array.isArray(question.answers)) {
+    question.answers = mapRecords(question.answers, (answer) => mapTextRecordFields(answer, ['label']))
+  }
+  const statisticalGraph = mapTextFields(bdc.statisticalGraph, [
+    'overline', 'title', 'categoryAxisLabel', 'seriesAxisLabel', 'editorialText',
+  ])
+  if (isRecord(statisticalGraph)) {
+    statisticalGraph.categories = mapRecords(statisticalGraph.categories, (category) => mapTextRecordFields(category, ['label']))
+    statisticalGraph.series = mapRecords(statisticalGraph.series, (series) => mapTextRecordFields(series, ['label']))
+  }
+  const evaluationResult = isRecord(bdc.evaluationResult)
+    ? {
+      ...bdc.evaluationResult,
+      success: mapTextFields(bdc.evaluationResult.success, ['message']),
+      failure: mapTextFields(bdc.evaluationResult.failure, ['message']),
+    }
+    : bdc.evaluationResult
+  return {
+    ...bdc,
+    section: mapTextFields(bdc.section, ['title']),
+    question,
+    card: mapTextFields(bdc.card, ['overline', 'title', 'description', 'message', 'note', 'caption']),
+    statisticalGraph,
+    evaluationResult,
+  }
+}
+
+/** Promotes only text strings that contain recognized inline-label tokens. */
+function mapTextFields(value: unknown, fields: readonly string[]): unknown {
+  if (!isRecord(value)) return value
+  return mapTextRecordFields(value, fields)
+}
+
+/** Promotes text fields on an already narrowed document record. */
+function mapTextRecordFields(value: Record<string, unknown>, fields: readonly string[]): Record<string, unknown> {
+  const mapped: Record<string, unknown> = { ...value }
+  for (const field of fields) {
+    const current = mapped[field]
+    mapped[field] = typeof current === 'string' ? parseInlineTextTokens(current) ?? current : current
+  }
+  return mapped
+}
+
+/** Maps array records while retaining malformed entries for domain validation. */
+function mapRecords(value: unknown, mapper: (record: Record<string, unknown>) => Record<string, unknown>): unknown {
+  if (!Array.isArray(value)) return value
+  return value.map((item) => isRecord(item) ? mapper(item) : item)
+}
+
+/** Narrows document records before a version migration reads their fields. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 /** Creates an identifier within the document model boundary. */
@@ -92,7 +175,7 @@ function pageNameForIndex(index: number): string {
 
 /** Returns the next automatic page name without inspecting presentation state. */
 export function nextPageName(document: ElceDocument): string {
-  const names = new Set(document.pages.map((page) => page.name))
+  const names = new Set(document.pages.map((page) => plainTextFromValue(page.name)))
   let index = document.pages.length
   let name = pageNameForIndex(index)
   while (names.has(name)) {
@@ -117,7 +200,7 @@ export function nextChapterName(
 
 /** Returns the next automatic name for a standard chapter. */
 function nextStandardChapterName(document: ElceDocument): string {
-  const names = new Set(document.chapters.map((chapter) => chapter.name))
+  const names = new Set(document.chapters.map((chapter) => plainTextFromValue(chapter.name)))
   let index = document.chapters.length
   let name = `Chapitre ${index + 1}`
   while (names.has(name)) {

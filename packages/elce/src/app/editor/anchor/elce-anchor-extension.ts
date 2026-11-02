@@ -19,6 +19,7 @@ import type {
 import { anchorEditorBlockPositionFor, anchorEditorReservationFor, anchorNameFor, statisticalGraphAnchorPaddingBottom } from '../../anchor/anchor-position'
 import { ElceAnchorRatioService } from '../../../domain/anchor/anchor-ratio-service'
 import { ElceStatisticalGraphSceneBuilder } from '../../../builders/statistical-graph/statistical-graph-scene-builder'
+import { plainTextFromValue } from '../../../domain/inline-text/inline-text-value'
 
 export const ELCE_ANCHOR_TRANSACTION_META = 'elceAnchorAction'
 
@@ -44,7 +45,7 @@ function renderAnchorCardPreview(
   onPhotoImage: (image: HTMLImageElement) => void,
 ): void {
   if (preview.kind === 'statistical-graph') {
-    const graphBuild = statisticalGraphSceneBuilder.buildContent(preview.content, preview.layoutId, `${bdcId}-anchor-preview`)
+    const graphBuild = statisticalGraphSceneBuilder.buildContent(preview.content, preview.layoutId, `${bdcId}-anchor-preview`, undefined, undefined, false)
     container.innerHTML = graphBuild.markup
     const graph = container.firstElementChild
     if (graph instanceof HTMLElement) graph.classList.add('elce-anchor-card-preview')
@@ -57,12 +58,12 @@ function renderAnchorCardPreview(
   const layout = cardPresetBuilder.build(preview.layoutId, rootId, partPrefix)
   let markup = layout.markup
   const textFields: Readonly<Record<string, string>> = {
-    overline: preview.content.overline,
-    title: preview.content.title,
-    description: preview.content.description,
-    message: preview.content.message,
-    note: preview.content.note,
-    caption: preview.content.caption,
+    overline: plainTextFromValue(preview.content.overline),
+    title: plainTextFromValue(preview.content.title),
+    description: plainTextFromValue(preview.content.description),
+    message: plainTextFromValue(preview.content.message),
+    note: plainTextFromValue(preview.content.note),
+    caption: plainTextFromValue(preview.content.caption),
   }
   for (const zone of preset.zones) {
     const target = layout.zonePartIds[zone.id]

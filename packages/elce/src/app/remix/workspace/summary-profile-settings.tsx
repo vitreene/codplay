@@ -11,6 +11,9 @@ import { mediaTypeFromMimeType } from '../../../domain/media/media-resource-serv
 import { renderRemixMediaPicker } from '../../editor/media/remix-media-picker'
 import type { EditorActionsFacade } from '../../facades/editor-actions-facade'
 import { renderLucideIcon } from '../lucide-static-icon'
+import { setInlineTextFieldContext } from '../../editor/inline-text/inline-text-field'
+import { renderInlineTextField } from '../../editor/inline-text/inline-text-field'
+import { plainTextFromValue } from '../../../domain/inline-text/inline-text-value'
 
 interface SummaryProfileSettingsProps {
   readonly document: ElceDocument
@@ -57,6 +60,13 @@ export function renderSummaryProfileSettings(props: SummaryProfileSettingsProps)
 /** Edits the unique summary presentation settings through the document facade. */
 function renderSummarySettings(props: SummaryProfileSettingsProps): RemixNode {
   const summary = props.document.data.summary
+  setInlineTextFieldContext(
+    props.document.data.profile.properties,
+    props.document.scenarioPageIds.flatMap((pageId) => {
+      const page = props.document.pages.find((candidate) => candidate.id === pageId)
+      return page === undefined ? [] : [page]
+    }),
+  )
   const change = (patch: Partial<SummarySettings>): void => {
     const next = { ...summary, ...patch }
     if (!next.showAtRoot && next.endChapterDestination === 'summary') next.endChapterDestination = 'next'
@@ -67,14 +77,13 @@ function renderSummarySettings(props: SummaryProfileSettingsProps): RemixNode {
     <div id="elce-summary-presentation-fields" className="elce-summary-profile-settings__fields">
       <div id="elce-summary-title-control" className="elce-summary-profile-settings__field">
         <label id="elce-summary-title-field" htmlFor="elce-summary-title">Titre</label>
-        <input
-          id="elce-summary-title"
-          type="text"
-          value={summary.title}
-          data-elce-profile-token-target="true"
-          maxLength={120}
-          mix={on<HTMLInputElement, 'blur'>('blur', (event) => change({ title: event.currentTarget.value }))}
-        />
+        {renderInlineTextField({
+          id: 'elce-summary-title',
+          ariaLabel: 'Titre du sommaire',
+          value: summary.title,
+          maxLength: 120,
+          onChange: (title) => change({ title }),
+        })}
       </div>
       <div id="elce-summary-background-control" className="elce-summary-profile-settings__field">
         <span id="elce-summary-background-field">Image de fond</span>
@@ -98,13 +107,13 @@ function renderSummarySettings(props: SummaryProfileSettingsProps): RemixNode {
       </div>
       <div id="elce-summary-description-control" className="elce-summary-profile-settings__field elce-summary-profile-settings__field--wide">
         <label id="elce-summary-description-field" htmlFor="elce-summary-description">Description</label>
-        <textarea
-          id="elce-summary-description"
-          value={summary.description}
-          rows={3}
-          data-elce-profile-token-target="true"
-          mix={on<HTMLTextAreaElement, 'blur'>('blur', (event) => change({ description: event.currentTarget.value }))}
-        />
+        {renderInlineTextField({
+          id: 'elce-summary-description',
+          ariaLabel: 'Description du sommaire',
+          value: summary.description,
+          multiline: true,
+          onChange: (description) => change({ description }),
+        })}
       </div>
     </div>
     <fieldset id="elce-summary-navigation-options" className="elce-summary-profile-settings__subgroup">
@@ -412,19 +421,19 @@ function renderConstraintTargetTree(document: ElceDocument): RemixNode {
   for (const entry of document.data.scenarioEntries) {
     if (entry.kind === SCENARIO_ENTRY_KIND.PAGE) {
       const page = pages.get(entry.pageId)
-      if (page !== undefined) entries.push(renderConstraintTargetItem(document, { kind: 'page', id: page.id }, page.name))
+      if (page !== undefined) entries.push(renderConstraintTargetItem(document, { kind: 'page', id: page.id }, plainTextFromValue(page.name)))
       continue
     }
     const chapter = chapters.get(entry.chapterId)
     if (chapter === undefined) continue
     const pageItems = chapter.pageIds.flatMap((pageId) => {
       const page = pages.get(pageId)
-      return page === undefined ? [] : [renderConstraintTargetItem(document, { kind: 'page', id: page.id }, page.name)]
+      return page === undefined ? [] : [renderConstraintTargetItem(document, { kind: 'page', id: page.id }, plainTextFromValue(page.name))]
     })
     entries.push(renderConstraintTargetItem(
       document,
       { kind: 'chapter', id: chapter.id },
-      chapter.name,
+      plainTextFromValue(chapter.name),
       pageItems,
     ))
   }
@@ -546,7 +555,7 @@ function renderReadingConstraintEditor(props: SummaryProfileSettingsProps): Remi
         >
           <option value="ignore">-</option>
           <option value="previous">Précédent</option>
-          {chapters.map((chapter) => <option id={`elce-reading-prerequisite-${chapter.id}`} value={`chapter:${chapter.id}`}>{chapter.name}</option>)}
+          {chapters.map((chapter) => <option id={`elce-reading-prerequisite-${chapter.id}`} value={`chapter:${chapter.id}`}>{plainTextFromValue(chapter.name)}</option>)}
         </select>
       </div>
       <p id="elce-reading-rule-current-state" role="status">Sélectionnez au moins un chapitre.</p>
@@ -1194,15 +1203,22 @@ function syncVisibilityConditionControls(
 /** Resolves a stable target to its readable label. */
 function targetLabel(document: ElceDocument, target: ProfileTarget): string {
   switch (target.kind) {
-    case 'chapter': return `Chapitre ${document.chapters.find((entry) => entry.id === target.id)?.name ?? target.id}`
-    case 'page': return `Page ${document.pages.find((entry) => entry.id === target.id)?.name ?? target.id}`
+    case 'chapter': {
+      const chapter = document.chapters.find((entry) => entry.id === target.id)
+      return `Chapitre ${chapter === undefined ? target.id : plainTextFromValue(chapter.name)}`
+    }
+    case 'page': {
+      const page = document.pages.find((entry) => entry.id === target.id)
+      return `Page ${page === undefined ? target.id : plainTextFromValue(page.name)}`
+    }
     case 'bdc': return `BDC ${target.id}`
   }
 }
 
 /** Resolves one chapter identifier to its author-facing name. */
 function chapterLabel(document: ElceDocument, chapterId: string): string {
-  return document.chapters.find((chapter) => chapter.id === chapterId)?.name ?? chapterId
+  const chapter = document.chapters.find((entry) => entry.id === chapterId)
+  return chapter === undefined ? chapterId : plainTextFromValue(chapter.name)
 }
 
 /** Describes one chapter-reading prerequisite. */

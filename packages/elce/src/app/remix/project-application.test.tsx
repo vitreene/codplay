@@ -3,12 +3,14 @@ import { createActor } from 'xstate'
 import { describe, expect, it, vi } from 'vitest'
 
 import { render } from 'remix/ui/test'
-import { CHAPTER_TYPE, DEFAULT_PRESET_ID } from '../../config/document-config'
+import { BDC_TYPE, CHAPTER_TYPE, DEFAULT_PRESET_ID } from '../../config/document-config'
 import type { ElceDocumentStore } from '../../infrastructure/indexed-db/document-store-types'
 import { ElceMediaResourceService } from '../../domain/media/media-resource-service'
 import type { ProfileProperty } from '../../domain/summary-profile/summary-profile-types'
 import { controllerMachine } from '../controller/controller-machine'
 import { EditorActionsFacade } from '../facades/editor-actions-facade'
+import { INLINE_TEXT_LABEL_SELECTION_EVENT } from '../editor/profile/profile-token-events'
+import type { InlineTextLabelSelectionEventDetail } from '../editor/profile/profile-token-events'
 import type { ProjectSessionPort } from '../projects/project-session-types'
 import { EditorContextProvider } from './editor-context'
 import { ProjectApplication } from './project-application'
@@ -380,6 +382,9 @@ describe('Remix project application', () => {
     expect(controller.getSnapshot().context.document.bdcs.some((bdc) => bdc.id === questionId)).toBe(false)
     await rendered.act(() => rendered.$('#elce-history-redo')?.click())
     expect(controller.getSnapshot().context.document.bdcs.some((bdc) => bdc.id === questionId)).toBe(true)
+    await rendered.act(() => actions.createStandaloneCard(page.id))
+    const card = controller.getSnapshot().context.document.bdcs.find((bdc) => bdc.type === BDC_TYPE.CARD)
+    if (card === undefined) throw new Error('La fixture de la page Remix doit contenir une Carte.')
 
     const title = rendered.$(`#elce-page-title-${page.id}`) as HTMLInputElement | null
     if (title === null) throw new Error('Le titre de page doit être éditable.')
@@ -403,15 +408,56 @@ describe('Remix project application', () => {
       prompt.setSelectionRange(0, prompt.value.length)
     })
     await vi.waitFor(() => expect(rendered.$('#elce-content-catalog-tab-profile')).not.toBeNull())
-    await rendered.act(() => rendered.$('#elce-content-catalog-tab-profile')?.click())
-    await vi.waitFor(() => expect(rendered.$('#elce-profile-token-insertion-profile-audience')).not.toBeNull())
+    await rendered.act(() => rendered.$('#elce-content-catalog-tab-profile')?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    expect(controller.getSnapshot().context.catalogTab).toBe('profile')
+    await vi.waitFor(() => expect(rendered.$('#elce-profile-token-insertion-profile-profile-audience')).not.toBeNull())
     await rendered.act(() => {
-      const insert = rendered.$('#elce-profile-token-insertion-profile-audience')
-      insert?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
+      const insert = rendered.$('#elce-profile-token-insertion-profile-profile-audience') as HTMLButtonElement | null
+      insert?.dispatchEvent(new Event('pointerdown', { bubbles: true, cancelable: true }))
+      insert?.focus()
+      expect(rendered.$('#elce-content-catalog-tab-profile')).not.toBeNull()
       insert?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
-    expect((rendered.$(`#elce-question-prompt-${questionId}`) as HTMLTextAreaElement).value).toBe('{{profile:profile-audience}}')
-    expect(controller.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === questionId)?.question?.prompt).toBe('{{profile:profile-audience}}')
+    const promptHost = rendered.$(`#elce-question-prompt-${questionId}-editor-host`) as HTMLElement | null
+    expect(promptHost?.querySelector('[data-elce-profile-property="profile-audience"]')?.textContent).toBe('Public')
+    expect(controller.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === questionId)?.question?.prompt).toMatchObject({
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'profileLabel', attrs: { profilePropertyId: 'profile-audience' } }] }],
+    })
+
+    const cardMessageId = `elce-card-message-${card.id}`
+    const cardMessage = rendered.$(`#${cardMessageId}`) as HTMLTextAreaElement | null
+    if (cardMessage === null) throw new Error('Le Message de la Carte doit rester un champ simple avant insertion.')
+    await rendered.act(() => {
+      cardMessage.focus()
+      cardMessage.setSelectionRange(cardMessage.value.length, cardMessage.value.length)
+    })
+    await vi.waitFor(() => expect(rendered.$('#elce-profile-token-insertion-date-today-0')).not.toBeNull())
+    await rendered.act(() => {
+      const insertDate = rendered.$('#elce-profile-token-insertion-date-today-0') as HTMLButtonElement | null
+      insertDate?.dispatchEvent(new Event('pointerdown', { bubbles: true, cancelable: true }))
+      insertDate?.focus()
+      expect(rendered.$('#elce-content-catalog-tab-profile')).not.toBeNull()
+      insertDate?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(rendered.$(`#${cardMessageId}-editor-host`)?.querySelector('[data-elce-date-kind="today"]')).not.toBeNull()
+    expect(controller.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === card.id)?.card?.message).toMatchObject({
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'localDateLabel', attrs: { kind: 'today', offsetDays: 0 } }] }],
+    })
+
+    const cardMessageEditor = rendered.$(`#${cardMessageId}-editor`) as HTMLElement
+    const selectionDetail: InlineTextLabelSelectionEventDetail = {
+      targetId: cardMessageEditor.id,
+      selection: { position: 1, label: { kind: 'local-date', dateKind: 'today', offsetDays: 0 } },
+    }
+    await rendered.act(() => cardMessageEditor.dispatchEvent(new CustomEvent(INLINE_TEXT_LABEL_SELECTION_EVENT, {
+      bubbles: true,
+      detail: selectionDetail,
+    })))
+    await vi.waitFor(() => expect(rendered.$('#elce-profile-token-insertion-selected-label-editor')).not.toBeNull())
+    expect((rendered.$('#elce-profile-token-insertion-selected-label-date-kind') as HTMLSelectElement).value)
+      .toBe('today')
 
     await rendered.act(() => (rendered.$('#elce-preview-open') as HTMLButtonElement).focus())
     await vi.waitFor(() => expect(rendered.$('#elce-content-catalog-tab-profile')).toBeNull())

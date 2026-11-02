@@ -20,6 +20,8 @@ import { anchorNameFor } from '../../anchor/anchor-position'
 import { renderAppearanceTrigger } from '../../appearance/appearance-trigger'
 import { appearanceClassNameForTarget } from '../../../builders/scene-style/appearance-class-names.ts'
 import { createAppearanceTargetStyleSheet } from '../../../player/appearance-scene-style-sheet.ts'
+import { renderInlineTextField } from '../inline-text/inline-text-field'
+import { plainTextFromValue } from '../../../domain/inline-text/inline-text-value'
 
 export interface RemixSectionEditorBindings {
   readonly adapters: Map<string, SectionTiptapAdapter>
@@ -62,15 +64,14 @@ export function renderRemixSectionEditor(
       id={`elce-section-heading-${bdc.id}`}
       className="elce-section-heading"
     >
-      <input
-        id={`elce-section-title-${bdc.id}`}
-        className="elce-section-title-input"
-        aria-label="Titre de section"
-        placeholder="Titre"
-        value={section.title}
-        data-elce-profile-token-target="true"
-        mix={on<HTMLInputElement, 'input'>('input', (event) => state.adapters.get(bdc.id)?.updateTitle(event.currentTarget.value))}
-      />
+      {renderInlineTextField({
+        id: `elce-section-title-${bdc.id}`,
+        className: 'elce-section-title-input',
+        ariaLabel: 'Titre de section',
+        placeholder: 'Titre',
+        value: section.title,
+        onChange: (value) => state.adapters.get(bdc.id)?.updateTitle(value),
+      })}
       <div
         id={`elce-section-header-actions-${bdc.id}`}
         className="elce-bdc-header-actions"
@@ -78,7 +79,7 @@ export function renderRemixSectionEditor(
         {renderAppearanceTrigger({
           id: `elce-section-style-${bdc.id}`,
           target: { kind: 'bdc', bdcId: bdc.id },
-          label: `Ouvrir le style de la section ${section.title.trim() || ''}`,
+          label: `Ouvrir le style de la section ${plainTextFromValue(section.title).trim() || ''}`,
           onOpen: state.onOpenAppearanceTarget,
           className: 'elce-appearance-trigger elce-bdc-style-trigger',
         })}
@@ -105,6 +106,10 @@ export function renderRemixSectionEditor(
           bdcId: bdc.id,
           section,
           profileProperties: current.view.documentModel.data.profile.properties,
+          pages: current.view.documentModel.scenarioPageIds.flatMap((pageId) => {
+            const target = current.view.documentModel.pages.find((candidate) => candidate.id === pageId)
+            return target === undefined ? [] : [target]
+          }),
           anchorOptions: {
             createFileDropTarget: (file) => actions.createSectionFileDropTarget(file, current.view.selectedPage?.id ?? page.id),
             createCatalogDropTarget: (reference) => actions.createSectionCatalogDropTarget(
@@ -282,7 +287,7 @@ function renderAnchorCardEditor(
       {renderAppearanceTrigger({
         id: `elce-anchor-card-style-${card.id}`,
         target: { kind: 'bdc', bdcId: card.id },
-        label: `Ouvrir le style de la carte ${card.card?.title.trim() || ''}`,
+        label: `Ouvrir le style de la carte ${card.card == null ? '' : plainTextFromValue(card.card.title).trim()}`,
         onOpen: onOpenAppearanceTarget,
         className: 'elce-appearance-trigger elce-anchor-appearance-trigger',
       })}

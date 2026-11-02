@@ -4,7 +4,7 @@ import TextAlign from '@tiptap/extension-text-align'
 import Subscript from '@tiptap/extension-subscript'
 import Superscript from '@tiptap/extension-superscript'
 import { SECTION_EDITOR_HEADING_LEVELS } from '../../../config/document-config'
-import type { RichTextDocument } from '../../../domain/document/document-types'
+import type { ElceTextValue, RichTextDocument } from '../../../domain/document/document-types'
 import type { ElceSectionChange } from '../../../domain/anchor/anchor-types'
 import { ELCE_ANCHOR_TRANSACTION_META } from '../anchor/elce-anchor-extension'
 import type { ElceAnchorTransaction } from '../anchor/anchor-types'
@@ -73,7 +73,7 @@ export function readAnchorChange(transaction: { getMeta: (key: string) => unknow
 }
 
 /** Converts one Tiptap update into the existing typed Section change. */
-export function sectionChangeFromTransaction(editor: Editor, transaction: { getMeta: (key: string) => unknown }, title: string): ElceSectionChange {
+export function sectionChangeFromTransaction(editor: Editor, transaction: { getMeta: (key: string) => unknown }, title: ElceTextValue): ElceSectionChange {
   const content = editor.getJSON() as RichTextDocument
   const markup = editor.getHTML()
   const anchorChange = readAnchorChange(transaction)

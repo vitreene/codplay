@@ -4,8 +4,14 @@ import type { EditorActionsFacade } from '../../facades/editor-actions-facade'
 import type { EditorViewModel } from '../../selectors/editor-view-model'
 import type { ChapterId, PageId } from '../../../domain/document/document-types'
 import type { AppearanceTarget, PagePlacement } from '../../../domain/commands/document-command-types'
+import type { InlineTextLabelSelection } from '../../editor/profile/profile-token-events'
 
 export type ResponsivePanel = 'outline' | 'properties' | null
+export type WorkspacePanelName = Exclude<ResponsivePanel, null>
+export interface WorkspacePanelVisibility {
+  readonly outline: boolean
+  readonly properties: boolean
+}
 export type SidePanelTab = 'contents' | 'style'
 export type DraggedScenarioEntry = ScenarioEntry | null
 
@@ -14,15 +20,18 @@ export interface EditorWorkspaceViewProps {
   readonly actions: EditorActionsFacade
   readonly pageEditorHost: RemixNode
   readonly responsivePanel: ResponsivePanel
+  readonly panelVisibility?: WorkspacePanelVisibility
   readonly sidePanelTab: SidePanelTab
   readonly appearanceTarget: AppearanceTarget
   readonly summarySettingsOpen: boolean
   readonly profileTokenTargetId: string | null
+  readonly selectedInlineLabel: InlineTextLabelSelection | null
   readonly authoringError: string | null
   readonly dropTarget: string | null
   readonly visible: boolean
   readonly editable?: boolean
   readonly onSetResponsivePanel: (panel: ResponsivePanel, triggerId?: string) => void
+  readonly onSetPanelVisibility?: (panel: WorkspacePanelName, open: boolean) => void
   readonly onSetSidePanelTab: (tab: SidePanelTab) => void
   readonly onOpenAppearanceTarget: (target: AppearanceTarget, triggerId: string) => void
   readonly onSetSummarySettingsOpen: (open: boolean) => void

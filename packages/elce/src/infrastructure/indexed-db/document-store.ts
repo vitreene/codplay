@@ -53,6 +53,12 @@ export class IndexedDbDocumentStore implements ElceDocumentStore {
         await transactionDone
         throw new Error(`Version de document Elcé non supportée : ${String(stored.version)}`)
       }
+      case 7: {
+        const document = ElceDocument.fromJSON(stored)
+        saveProjectDocument(transaction, document)
+        await transactionDone
+        return document
+      }
       case ELCE_DOCUMENT_VERSION:
         await transactionDone
         return ElceDocument.fromJSON(stored as unknown as ElceDocumentData)

@@ -105,7 +105,7 @@ describe('Sommaire et profils auteur', () => {
     const title = rendered.$('#elce-summary-title') as HTMLInputElement
     await rendered.act(() => {
       title.value = 'Sommaire modifié'
-      title.dispatchEvent(new Event('blur', { bubbles: true }))
+      title.dispatchEvent(new Event('input', { bubbles: true }))
     })
     expect(controller.getSnapshot().context.document.data.summary.title).toBe('Sommaire modifié')
 

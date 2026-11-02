@@ -1,9 +1,10 @@
 import { BDC_TYPE, SCENARIO_ENTRY_KIND } from '../../config/document-config'
 import { ElceDocument } from '../document/document-model'
-import type { Bdc, Page, RichTextNode } from '../document/document-types'
+import type { Bdc, ElceTextValue, Page, RichTextNode } from '../document/document-types'
 import type { ScenarioEntry } from '../scenario/scenario-entry-types'
 import type { ProfileValue } from './summary-profile-types'
 import { bdcMatchesProfile } from './profile-rules'
+import { plainTextFromValue } from '../inline-text/inline-text-value'
 
 /** Builds the immutable document projection consumed by the Elcé reader. */
 export function projectReaderDocument(
@@ -11,7 +12,17 @@ export function projectReaderDocument(
   profileValues: Readonly<Record<string, ProfileValue>>,
   profileEnabled: boolean,
 ): ElceDocument {
+  const projectionInstant = new Date()
   const scenarioPageIds = new Set(document.scenarioPageIds)
+  const pageTitles = new Map(document.pages.map((page) => {
+    const value = typeof page.name === 'string'
+      ? resolveProfileText(page.name, profileValues)
+      : {
+        ...page.name,
+        content: projectRichTextNodes(page.name.content, new Set(), profileValues, projectionInstant),
+      }
+    return [page.id, plainTextFromValue(value)] as const
+  }))
   const scenarioBdcIds = new Set(document.bdcs
     .filter((bdc) => {
       const pageId = rootPageId(document, bdc)
@@ -47,13 +58,21 @@ export function projectReaderDocument(
         }
         const section = bdc.section === null ? null : {
           ...bdc.section,
-          title: resolveProfileTokens(bdc.section.title, profileValues),
+          title: resolveTextValue(bdc.section.title, profileValues, projectionInstant, pageTitles, scenarioPageIds),
           content: {
             ...bdc.section.content,
-            content: projectRichTextNodes(bdc.section.content.content, retainedAnchors),
+            content: projectRichTextNodes(bdc.section.content.content, retainedAnchors, profileValues, projectionInstant, pageTitles, scenarioPageIds),
           },
           markup: projectAnchorMarkup(
-            resolveProfileMarkup(resolveProfileTokens(bdc.section.markup, profileValues), profileValues),
+            resolvePageLinkMarkup(
+              resolveLocalDateMarkup(
+                resolveProfileMarkup(resolveProfileTokens(bdc.section.markup, profileValues), profileValues),
+                projectionInstant,
+              ),
+              bdc.id,
+              pageTitles,
+              scenarioPageIds,
+            ),
             retainedAnchors,
           ),
         }
@@ -64,7 +83,7 @@ export function projectReaderDocument(
       }
       default:
         retainedBdcIds.add(bdcId)
-        projectedById.set(bdcId, resolveBdcText(bdc, profileValues))
+        projectedById.set(bdcId, resolveBdcText(bdc, profileValues, projectionInstant, pageTitles, scenarioPageIds))
         return projectedById.get(bdcId)
     }
   }
@@ -76,7 +95,7 @@ export function projectReaderDocument(
     const bdcIds = page.bdcIds.flatMap((bdcId) => projectBdc(bdcId)?.id ?? [])
     if (bdcIds.length > 0) retainedPages.set(page.id, {
       ...page,
-      name: resolveProfileTokens(page.name, profileValues),
+      name: resolveTextValue(page.name, profileValues, projectionInstant, pageTitles, scenarioPageIds),
       bdcIds,
     })
   }
@@ -85,7 +104,7 @@ export function projectReaderDocument(
     const pageIds = chapter.pageIds.filter((pageId) => retainedPages.has(pageId))
     return pageIds.length === 0 ? [] : [{
       ...chapter,
-      name: resolveProfileTokens(chapter.name, profileValues),
+      name: resolveTextValue(chapter.name, profileValues, projectionInstant, pageTitles, scenarioPageIds),
       pageIds,
     }]
   })
@@ -126,8 +145,8 @@ export function projectReaderDocument(
     ...document.data,
     summary: {
       ...document.data.summary,
-      title: resolveProfileTokens(document.data.summary.title, profileValues),
-      description: resolveProfileTokens(document.data.summary.description, profileValues),
+      title: resolveTextValue(document.data.summary.title, profileValues, projectionInstant, pageTitles, scenarioPageIds),
+      description: resolveTextValue(document.data.summary.description, profileValues, projectionInstant, pageTitles, scenarioPageIds),
     },
     chapters,
     pages,
@@ -154,7 +173,13 @@ function assertReadingTargetsRetained(
 }
 
 /** Resolves profile references in every authored text field without changing IDs. */
-function resolveBdcText(bdc: Bdc, values: Readonly<Record<string, ProfileValue>>): Bdc {
+function resolveBdcText(
+  bdc: Bdc,
+  values: Readonly<Record<string, ProfileValue>>,
+  instant: Date,
+  pageTitles: ReadonlyMap<string, string>,
+  scenarioPageIds: ReadonlySet<string>,
+): Bdc {
   const question = bdc.question
   const card = bdc.card
   const graph = bdc.statisticalGraph
@@ -163,35 +188,55 @@ function resolveBdcText(bdc: Bdc, values: Readonly<Record<string, ProfileValue>>
     ...bdc,
     ...(question == null ? {} : { question: {
       ...question,
-      title: resolveProfileTokens(question.title, values),
-      prompt: resolveProfileTokens(question.prompt, values),
-      ...(question.validationLabel === undefined ? {} : { validationLabel: resolveProfileTokens(question.validationLabel, values) }),
-      answers: question.answers.map((answer) => ({ ...answer, label: resolveProfileTokens(answer.label, values) })),
+      title: resolveTextValue(question.title, values, instant, pageTitles, scenarioPageIds),
+      prompt: resolveTextValue(question.prompt, values, instant, pageTitles, scenarioPageIds),
+      ...(question.validationLabel === undefined ? {} : { validationLabel: resolveTextValue(question.validationLabel, values, instant, pageTitles, scenarioPageIds) }),
+      answers: question.answers.map((answer) => ({ ...answer, label: resolveTextValue(answer.label, values, instant, pageTitles, scenarioPageIds) })),
     } }),
     ...(card == null ? {} : { card: {
       ...card,
-      overline: resolveProfileTokens(card.overline, values),
-      title: resolveProfileTokens(card.title, values),
-      description: resolveProfileTokens(card.description, values),
-      message: resolveProfileTokens(card.message, values),
-      note: resolveProfileTokens(card.note, values),
-      caption: resolveProfileTokens(card.caption, values),
+      overline: resolveTextValue(card.overline, values, instant, pageTitles, scenarioPageIds),
+      title: resolveTextValue(card.title, values, instant, pageTitles, scenarioPageIds),
+      description: resolveTextValue(card.description, values, instant, pageTitles, scenarioPageIds),
+      message: resolveTextValue(card.message, values, instant, pageTitles, scenarioPageIds),
+      note: resolveTextValue(card.note, values, instant, pageTitles, scenarioPageIds),
+      caption: resolveTextValue(card.caption, values, instant, pageTitles, scenarioPageIds),
     } }),
     ...(graph == null ? {} : { statisticalGraph: {
       ...graph,
-      overline: resolveProfileTokens(graph.overline, values),
-      title: resolveProfileTokens(graph.title, values),
-      categoryAxisLabel: resolveProfileTokens(graph.categoryAxisLabel, values),
-      seriesAxisLabel: resolveProfileTokens(graph.seriesAxisLabel, values),
-      editorialText: resolveProfileTokens(graph.editorialText, values),
-      categories: graph.categories.map((item) => ({ ...item, label: resolveProfileTokens(item.label, values) })),
-      series: graph.series.map((item) => ({ ...item, label: resolveProfileTokens(item.label, values) })),
+      overline: resolveTextValue(graph.overline, values, instant, pageTitles, scenarioPageIds),
+      title: resolveTextValue(graph.title, values, instant, pageTitles, scenarioPageIds),
+      categoryAxisLabel: resolveTextValue(graph.categoryAxisLabel, values, instant, pageTitles, scenarioPageIds),
+      seriesAxisLabel: resolveTextValue(graph.seriesAxisLabel, values, instant, pageTitles, scenarioPageIds),
+      editorialText: resolveTextValue(graph.editorialText, values, instant, pageTitles, scenarioPageIds),
+      categories: graph.categories.map((item) => ({ ...item, label: resolveTextValue(item.label, values, instant, pageTitles, scenarioPageIds) })),
+      series: graph.series.map((item) => ({ ...item, label: resolveTextValue(item.label, values, instant, pageTitles, scenarioPageIds) })),
     } }),
     ...(result == null ? {} : { evaluationResult: {
-      success: { ...result.success, message: resolveProfileTokens(result.success.message, values) },
-      failure: { ...result.failure, message: resolveProfileTokens(result.failure.message, values) },
+      success: { ...result.success, message: resolveTextValue(result.success.message, values, instant, pageTitles, scenarioPageIds) },
+      failure: { ...result.failure, message: resolveTextValue(result.failure.message, values, instant, pageTitles, scenarioPageIds) },
     } }),
   }
+}
+
+/** Resolves profile and local-date atoms without mutating the source value. */
+function resolveTextValue(
+  value: ElceTextValue,
+  values: Readonly<Record<string, ProfileValue>>,
+  instant: Date,
+  pageTitles: ReadonlyMap<string, string>,
+  scenarioPageIds: ReadonlySet<string>,
+): ElceTextValue {
+  if (typeof value === 'string') return resolveProfileText(value, values)
+  return {
+    ...value,
+    content: projectRichTextNodes(value.content, new Set(), values, instant, pageTitles, scenarioPageIds),
+  }
+}
+
+/** Resolves profile tokens as plain text for downstream text-safe renderers. */
+function resolveProfileText(value: string, values: Readonly<Record<string, ProfileValue>>): string {
+  return value.replace(/\{\{profile:([^{}]+)\}\}/g, (_match, propertyId: string) => profileValueText(values[propertyId]))
 }
 
 /** Resolves `{{profile:property-id}}` tokens as escaped text. */
@@ -206,11 +251,88 @@ function resolveProfileMarkup(markup: string, values: Readonly<Record<string, Pr
 }
 
 /** Removes only anchor nodes whose corresponding media BDC was filtered out. */
-function projectRichTextNodes(nodes: readonly RichTextNode[], retainedAnchors: ReadonlySet<string>): readonly RichTextNode[] {
+function projectRichTextNodes(
+  nodes: readonly RichTextNode[],
+  retainedAnchors: ReadonlySet<string>,
+  profileValues: Readonly<Record<string, ProfileValue>> = {},
+  instant: Date = new Date(),
+  pageTitles: ReadonlyMap<string, string> = new Map(),
+  scenarioPageIds: ReadonlySet<string> = new Set(),
+): readonly RichTextNode[] {
   return nodes.flatMap((node) => {
     if (node.type === 'elceAnchor' && typeof node.attrs?.bdcId === 'string' && !retainedAnchors.has(node.attrs.bdcId)) return []
-    return [{ ...node, ...(node.content === undefined ? {} : { content: projectRichTextNodes(node.content, retainedAnchors) }) }]
+    if (node.type === 'profileLabel') {
+      return [{
+        type: 'text',
+        text: profileValueText(profileValues[String(node.attrs?.profilePropertyId ?? '')]),
+        ...(node.marks === undefined ? {} : { marks: node.marks }),
+      }]
+    }
+    if (node.type === 'localDateLabel') {
+      return [{
+        type: 'text',
+        text: resolveLocalDateLabel(node.attrs, instant),
+        ...(node.marks === undefined ? {} : { marks: node.marks }),
+      }]
+    }
+    if (node.type === 'pageLinkLabel') {
+      const pageId = String(node.attrs?.pageId ?? '')
+      const pageTitle = pageTitles.get(pageId)
+      const customLabel = typeof node.attrs?.label === 'string' ? node.attrs.label : null
+      return [{
+        ...node,
+        attrs: {
+          ...node.attrs,
+          resolvedLabel: customLabel ?? pageTitle ?? String(node.attrs?.fallbackLabel ?? pageId),
+          targetAvailable: pageTitle !== undefined && scenarioPageIds.has(pageId),
+        },
+      }]
+    }
+    return [{ ...node, ...(node.content === undefined ? {} : { content: projectRichTextNodes(node.content, retainedAnchors, profileValues, instant, pageTitles, scenarioPageIds) }) }]
   })
+}
+
+/** Replaces serialized date atoms in Section HTML with escaped local values. */
+function resolveLocalDateMarkup(markup: string, instant: Date): string {
+  return markup.replace(/<span\b(?=[^>]*\bdata-elce-date-kind\s*=\s*(["'])(.*?)\1)[^>]*>[\s\S]*?<\/span>/gi,
+    (span, _quote: string, rawKind: string) => {
+      const offset = /\bdata-elce-date-offset\s*=\s*(["'])(-?\d+)\1/i.exec(span)?.[2]
+      const kind = rawKind === 'time' || rawKind === 'relative' ? rawKind : 'today'
+      const text = resolveLocalDateLabel({ kind, offsetDays: Number(offset ?? 0) }, instant)
+      return span.replace(/>([\s\S]*)<\/span>$/i, `>${escapeHtmlText(text)}</span>`)
+    })
+}
+
+/** Replaces serialized page-link atoms with safe labels or stable CodPlay targets. */
+function resolvePageLinkMarkup(
+  markup: string,
+  bdcId: string,
+  pageTitles: ReadonlyMap<string, string>,
+  scenarioPageIds: ReadonlySet<string>,
+): string {
+  let linkIndex = 0
+  return markup.replace(/<span\b(?=[^>]*\bdata-elce-page-id\s*=\s*(["'])(.*?)\1)[^>]*>[\s\S]*?<\/span>/gi,
+    (span, _quote: string, pageId: string) => {
+      const currentIndex = linkIndex
+      linkIndex += 1
+      const fallback = textFromHtml(span.replace(/^<span\b[^>]*>/i, '').replace(/<\/span>$/i, ''))
+      const customLabel = readHtmlAttribute(span, 'data-elce-page-label')
+      const label = customLabel ?? pageTitles.get(pageId) ?? fallback
+      if (!pageTitles.has(pageId) || !scenarioPageIds.has(pageId)) return escapeHtmlText(label)
+      const partId = `${bdcId}:inline-link:${currentIndex}:link`
+      return `<span id="${escapeHtmlText(partId)}-host"><!-- data-part="${escapeHtmlText(partId)}" --></span>`
+    })
+}
+
+/** Reads and decodes one quoted generated HTML attribute. */
+function readHtmlAttribute(markup: string, name: string): string | null {
+  const match = markup.match(new RegExp(`\\b${name}\\s*=\\s*(["'])(.*?)\\1`, 'i'))
+  return match?.[2] === undefined ? null : textFromHtml(match[2])
+}
+
+/** Decodes only standard text escapes used by Tiptap's generated markup. */
+function textFromHtml(value: string): string {
+  return value.replaceAll('&quot;', '"').replaceAll('&#39;', "'").replaceAll('&gt;', '>').replaceAll('&lt;', '<').replaceAll('&amp;', '&')
 }
 
 /** Removes matching serialized anchor spans without modifying the author document. */
@@ -243,6 +365,22 @@ function rootPageId(document: ElceDocument, bdc: Bdc): string | null {
 /** Converts a value to text and escapes it for CodPlay's authored HTML content. */
 function profileValueText(value: ProfileValue | undefined): string {
   return Array.isArray(value) ? value.join(', ') : value === undefined ? '' : String(value)
+}
+
+/** Formats one date atom from the stable instant shared by its projection. */
+function resolveLocalDateLabel(
+  attributes: Readonly<Record<string, string | number | boolean | null>> | undefined,
+  instant: Date,
+): string {
+  const kind = attributes?.kind
+  if (kind === 'time') return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(instant)
+  const date = new Date(instant)
+  if (kind === 'relative') {
+    const offsetDays = typeof attributes?.offsetDays === 'number' ? Math.trunc(attributes.offsetDays) : 0
+    date.setDate(date.getDate() + offsetDays)
+  }
+  if (Number.isNaN(date.getTime())) return ''
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'short' }).format(date)
 }
 
 /** Escapes user-authored profile values before they enter generated HTML. */

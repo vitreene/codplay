@@ -9,6 +9,7 @@ import {
 import type { CarouselAspectRatioId } from '../../../config/document-config-types'
 import type { CarouselAspectRatio } from '../../../domain/carousel/carousel-types'
 import type { Bdc } from '../../../domain/document/document-types'
+import { plainTextFromValue } from '../../../domain/inline-text/inline-text-value'
 import { on, type Handle, type RemixNode } from 'remix/ui'
 
 import type { ElceCarouselEditorProps } from '../../facades/carousel/carousel-facade-types'
@@ -409,7 +410,7 @@ function renderSelectedCard(
           {renderAppearanceTrigger({
             id: `elce-carousel-card-style-${selected.bdc.id}`,
             target: { kind: 'bdc', bdcId: selected.bdc.id },
-            label: `Ouvrir le style de la carte ${selected.bdc.card?.title.trim() || ''}`,
+            label: `Ouvrir le style de la carte ${selected.bdc.card == null ? '' : plainTextFromValue(selected.bdc.card.title).trim()}`,
             onOpen: props.onOpenAppearanceTarget,
             className: 'elce-appearance-trigger elce-bdc-style-trigger',
           })}

@@ -2,6 +2,7 @@ import { Trash2 } from 'lucide-static'
 import { on, type RemixNode } from 'remix/ui'
 
 import type { Bdc } from '../../../domain/document/document-types'
+import { plainTextFromValue } from '../../../domain/inline-text/inline-text-value'
 import type { AppearanceTarget } from '../../../domain/commands/document-command-types'
 import type { ElceCardEditorActions } from '../../facades/card/card-facade-types'
 import type { EditorViewModel } from '../../selectors/editor-view-model'
@@ -40,7 +41,7 @@ export function renderRemixCardEditor(
         {renderAppearanceTrigger({
           id: `elce-card-style-${bdc.id}`,
           target: { kind: 'bdc', bdcId: bdc.id },
-          label: `Ouvrir le style de la carte ${bdc.card.title.trim() || ''}`,
+          label: `Ouvrir le style de la carte ${plainTextFromValue(bdc.card.title).trim() || ''}`,
           onOpen: onOpenAppearanceTarget,
           className: 'elce-appearance-trigger elce-bdc-style-trigger',
         })}

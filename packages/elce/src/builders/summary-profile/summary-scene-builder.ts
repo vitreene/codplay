@@ -2,9 +2,17 @@ import type { PersoDoc, SceneDoc, StoryDoc } from 'codplay/scene/types'
 import { ELCE_EVENTS } from '../../config/document-config'
 import type { ElceResolvedPlayerSettings } from '../../domain/editor-settings/editor-settings-types'
 import type { ElceDocument } from '../../domain/document/document-model'
+import type { ElceTextValue } from '../../domain/document/document-types'
+import { plainTextFromValue } from '../../domain/inline-text/inline-text-value'
+import { createInlineTextSceneParts, wrapInlineTextSceneParts } from '../inline-text/inline-text-scene'
 
 export type SummaryPresentation = 'menu' | 'root'
 export type SummaryChapterReadingStatus = 'locked' | 'read' | 'partial' | 'unread'
+
+interface InlineMarkupProjection {
+  readonly markup: string
+  readonly persos: readonly PersoDoc<string>[]
+}
 
 /** Builds an Elcé-owned CodPlay scene for either presentation of the same summary. */
 export function buildSummaryScene(
@@ -17,9 +25,12 @@ export function buildSummaryScene(
   const prefix = `${document.id}:summary:${presentation}`
   const entries = buildSummaryEntries(document)
   const rootGroups = presentation === 'root' ? createRootSummaryGroups(document, entries) : []
-  const entryMarkup = presentation === 'root'
+  const entryProjection = presentation === 'root'
     ? createRootEntryListMarkup(prefix, rootGroups, summary.displayMode === 'pages')
     : createEntryListMarkup(document, prefix, entries)
+  const descriptionProjection = presentation === 'root'
+    ? createInlineMarkup(summary.description, `${prefix}-description`, 'p', 'elce-summary__description')
+    : { markup: '', persos: [] as readonly PersoDoc<string>[] }
   const entryPersos = presentation === 'root'
     ? rootGroups.flatMap((group) => [
       ...(group.chapterEntry === undefined ? [] : [createEntryPerso(prefix, group.chapterEntry, 'root')]),
@@ -43,7 +54,7 @@ export function buildSummaryScene(
       summary.description,
       summary.showAtRoot,
       entries.map((entry) => entry.pageId),
-      entryMarkup,
+      entryProjection,
       drawerMotion,
     )
     : []
@@ -66,11 +77,13 @@ export function buildSummaryScene(
         initial: {
           move: '@root',
           className: presentation === 'root' ? 'elce-summary elce-summary--root' : 'elce-player-menu-scene',
-          markup: createSummaryMarkup(prefix, summary.description, entryMarkup, presentation),
+          markup: createSummaryMarkup(prefix, descriptionProjection.markup, entryProjection.markup, presentation),
         },
         ...(presentation === 'menu' ? { actions: { [ELCE_EVENTS.PRESENTATION_MENU]: {} } } : {}),
       },
       ...menuPersos,
+      ...(presentation === 'root' ? entryProjection.persos : []),
+      ...descriptionProjection.persos,
       ...chapterStatusPersos,
       ...entryPersos,
       ...(presentation === 'root' && summary.backgroundMediaId !== null && mediaSources[summary.backgroundMediaId] !== undefined
@@ -83,7 +96,7 @@ export function buildSummaryScene(
 
 export type SummaryEntry = Readonly<{
   readonly id: string
-  readonly title: string
+  readonly title: ElceTextValue
   readonly pageId: string
   readonly kind: 'chapter' | 'page'
   readonly parentChapterId: string | null
@@ -91,7 +104,7 @@ export type SummaryEntry = Readonly<{
 
 type SummaryRootGroup = Readonly<{
   readonly id: string
-  readonly chapterTitle: string | null
+  readonly chapterTitle: ElceTextValue | null
   readonly chapterEntry?: SummaryEntry
   readonly pages: readonly SummaryEntry[]
 }>
@@ -165,7 +178,7 @@ function createRootSummaryGroups(
 /** Writes the semantic summary frame and stable entry hosts. */
 function createSummaryMarkup(
   prefix: string,
-  description: string,
+  descriptionMarkup: string,
   entries: string,
   presentation: SummaryPresentation,
 ): string {
@@ -174,7 +187,6 @@ function createSummaryMarkup(
       <!-- data-part="${prefix}:drawer:host" -->
     </div>`
   }
-  const descriptionMarkup = description.length === 0 ? '' : `<p id="${prefix}-description" class="elce-summary__description">${escapeHtmlText(description)}</p>`
   return `<main id="${prefix}-root" class="elce-summary elce-summary--root" aria-label="Sommaire du document">
     <div id="${prefix}-background-host" class="elce-summary__background-host"><!-- data-part="${prefix}:background" --></div>
     <div id="${prefix}-content" class="elce-summary__content">
@@ -187,11 +199,11 @@ function createSummaryMarkup(
 /** Creates the menu drawer, its controls, and the external summary list host. */
 function createMenuDrawerPersos(
   documentId: string,
-  title: string,
-  description: string,
+  title: ElceTextValue,
+  description: ElceTextValue,
   showSummaryLink: boolean,
   pageIds: readonly string[],
-  entries: string,
+  entryProjection: InlineMarkupProjection,
   drawerMotion: ElceResolvedPlayerSettings['navigation']['summaryDrawerMotion'],
 ): readonly PersoDoc<string>[] {
   const prefix = `${documentId}:summary:menu`
@@ -200,9 +212,8 @@ function createMenuDrawerPersos(
   const panelTarget = `${prefix}:drawer:panel`
   const closeTarget = `${prefix}:drawer:close`
   const summaryTarget = `${prefix}:drawer:summary-link`
-  const descriptionMarkup = description.length === 0
-    ? ''
-    : `<p id="${documentId}-menu-description" class="elce-player-menu__description">${escapeHtmlText(description)}</p>`
+  const titleProjection = createInlineMarkup(title, `${documentId}-menu-title`, 'h2', 'elce-player-menu__title')
+  const descriptionProjection = createInlineMarkup(description, `${documentId}-menu-description`, 'p', 'elce-player-menu__description')
   const openDrawer = {
     attr: { 'data-open': 'true', 'aria-hidden': 'false' },
     style: { opacity: drawerMotion.open.opacity },
@@ -257,11 +268,11 @@ function createMenuDrawerPersos(
         markup: `<aside id="${documentId}-menu-panel-root" class="elce-player-menu-panel">
           <!-- data-part="${closeTarget}" -->
           <nav id="${documentId}-menu-root" class="elce-player-menu" aria-label="Chapitres et pages du document">
-            <h2 id="${documentId}-menu-title" class="elce-player-menu__title">${escapeHtmlText(title)}</h2>
-            ${descriptionMarkup}
+            ${titleProjection.markup}
+            ${descriptionProjection.markup}
             <!-- data-part="${summaryTarget}" -->
             <div id="${documentId}-menu-scroll" class="elce-player-menu__scroll">
-              <ol id="${prefix}-entries" class="elce-player-menu__entries">${entries}</ol>
+              <ol id="${prefix}-entries" class="elce-player-menu__entries">${entryProjection.markup}</ol>
             </div>
           </nav>
         </aside>`,
@@ -276,6 +287,9 @@ function createMenuDrawerPersos(
     },
     createMenuClosePerso(documentId, closeTarget),
     ...(showSummaryLink ? [createMenuSummaryPerso(documentId, summaryTarget)] : []),
+    ...titleProjection.persos,
+    ...descriptionProjection.persos,
+    ...entryProjection.persos,
   ]
 }
 
@@ -324,13 +338,19 @@ function createRootEntryListMarkup(
   prefix: string,
   groups: readonly SummaryRootGroup[],
   showPageTitles: boolean,
-): string {
-  return groups.map((group) => {
-    const chapterMarkup = group.chapterTitle === null
-      ? `<span id="${prefix}-chapter-spacer-${group.id}" class="elce-summary__chapter-spacer" aria-hidden="true"></span>`
-      : group.chapterEntry === undefined
-        ? `<h2 id="${prefix}-chapter-heading-${group.id}" class="elce-summary__chapter-title elce-summary__chapter-title--with-status">${createChapterStatusHostMarkup(prefix, group.id)}${escapeHtmlText(group.chapterTitle)}</h2>`
-        : `<h2 id="${prefix}-chapter-heading-${group.id}" class="elce-summary__chapter-title"><!-- data-part="${prefix}:entry:${group.chapterEntry.id}" --></h2>`
+): InlineMarkupProjection {
+  const persos: PersoDoc<string>[] = []
+  const markup = groups.map((group) => {
+    let chapterMarkup: string
+    if (group.chapterTitle === null) {
+      chapterMarkup = `<span id="${prefix}-chapter-spacer-${group.id}" class="elce-summary__chapter-spacer" aria-hidden="true"></span>`
+    } else if (group.chapterEntry === undefined) {
+      const title = createInlineMarkup(group.chapterTitle, `${prefix}-chapter-title-${group.id}`, 'span')
+      persos.push(...title.persos)
+      chapterMarkup = `<h2 id="${prefix}-chapter-heading-${group.id}" class="elce-summary__chapter-title elce-summary__chapter-title--with-status">${createChapterStatusHostMarkup(prefix, group.id)}${title.markup}</h2>`
+    } else {
+      chapterMarkup = `<h2 id="${prefix}-chapter-heading-${group.id}" class="elce-summary__chapter-title"><!-- data-part="${prefix}:entry:${group.chapterEntry.id}" --></h2>`
+    }
     const pagesMarkup = showPageTitles && group.pages.length > 0
       ? `<ol id="${prefix}-chapter-pages-${group.id}" class="elce-summary__chapter-pages">${group.pages.map((entry) => createEntryMarkup(prefix, entry, 'root')).join('')}</ol>`
       : ''
@@ -341,6 +361,7 @@ function createRootEntryListMarkup(
     ].filter(Boolean).join(' ')
     return `<li id="${prefix}-chapter-row-${group.id}" class="${rowClassName}">${chapterMarkup}${pagesMarkup}</li>`
   }).join('')
+  return { markup, persos }
 }
 
 /** Creates the status icon mount point beside a static chapter heading. */
@@ -406,12 +427,13 @@ function createEntryListMarkup(
   document: ElceDocument,
   prefix: string,
   entries: readonly SummaryEntry[],
-): string {
+): InlineMarkupProjection {
+  const persos: PersoDoc<string>[] = []
   if (document.data.summary.displayMode === 'chapters') {
-    return entries.map((entry) => createEntryMarkup(prefix, entry, 'menu')).join('')
+    return { markup: entries.map((entry) => createEntryMarkup(prefix, entry, 'menu')).join(''), persos }
   }
   const pagesById = new Map(document.pages.map((page) => [page.id, page]))
-  return document.data.scenarioEntries.map((scenarioEntry) => {
+  const markup = document.data.scenarioEntries.map((scenarioEntry) => {
     if (scenarioEntry.kind === 'page') {
       const entry = entries.find((candidate) => candidate.id === scenarioEntry.pageId)
       return entry === undefined ? '' : createEntryMarkup(prefix, entry, 'menu')
@@ -427,17 +449,21 @@ function createEntryListMarkup(
     const listClass = 'elce-player-menu__pages'
     const groupClass = 'elce-player-menu__group'
     const titleClass = 'elce-player-menu__group-title'
+    const title = createInlineMarkup(chapter.name, `${prefix}-chapter-heading-${chapter.id}`, 'h2', titleClass)
+    persos.push(...title.persos)
     return `<li id="${prefix}-chapter-${chapter.id}" class="${groupClass}">
-      <h2 id="${prefix}-chapter-heading-${chapter.id}" class="${titleClass}">${escapeHtmlText(chapter.name)}</h2>
+      ${title.markup}
       <ol id="${prefix}-chapter-pages-${chapter.id}" class="${listClass}">${chapterPages}</ol>
     </li>`
   }).join('')
+  return { markup, persos }
 }
 
 /** Creates a root summary link or a menu button on the existing Sighty page event. */
 function createEntryPerso(prefix: string, entry: SummaryEntry, presentation: SummaryPresentation): PersoDoc<string> {
   const rootLink = presentation === 'root'
   const chapter = entry.kind === 'chapter'
+  const title = plainTextFromValue(entry.title)
   const className = rootLink
     ? `elce-summary__entry-link elce-summary__entry-link--${entry.kind}`
     : chapter ? 'elce-player-menu__chapter-button' : 'elce-player-menu__page-button'
@@ -447,7 +473,7 @@ function createEntryPerso(prefix: string, entry: SummaryEntry, presentation: Sum
     type: 'tag',
     initial: {
       tag: rootLink ? 'a' : 'button',
-      content: entry.title,
+      content: title,
       className,
       attr: rootLink
         ? {
@@ -457,9 +483,9 @@ function createEntryPerso(prefix: string, entry: SummaryEntry, presentation: Sum
           'data-active': 'false',
           ...(entry.kind === 'chapter' ? { 'data-reading-status': 'unread' } : {}),
           'aria-disabled': 'false',
-          'aria-label': entry.title,
+          'aria-label': title,
         }
-        : { type: 'button', 'data-page-id': entry.pageId, 'data-locked': 'false', 'data-active': 'false', 'aria-disabled': 'false', 'aria-label': entry.title },
+        : { type: 'button', 'data-page-id': entry.pageId, 'data-locked': 'false', 'data-active': 'false', 'aria-disabled': 'false', 'aria-label': title },
       move: { target: `${prefix}:entry:${entry.id}` },
     },
     emit: {
@@ -474,11 +500,11 @@ function createEntryPerso(prefix: string, entry: SummaryEntry, presentation: Sum
           'data-active': 'false',
           'data-locked': 'false',
           'aria-disabled': 'false',
-          'aria-label': entry.title,
+          'aria-label': title,
           ...(rootLink ? {} : { disabled: false }),
         },
       },
-      ...(rootLink && chapter ? createChapterStatusActions(entry.id, entry.title, entry.pageId) : {}),
+      ...(rootLink && chapter ? createChapterStatusActions(entry.id, title, entry.pageId) : {}),
     },
   }
 }
@@ -495,6 +521,22 @@ function createBackgroundImage(prefix: string, source: string): PersoDoc<string>
       move: { target: `${prefix}:background` },
     },
   }
+}
+
+/** Creates safe static markup or ordered CodPlay targets for one text value. */
+function createInlineMarkup(
+  value: ElceTextValue,
+  id: string,
+  tag: string,
+  className?: string,
+): InlineMarkupProjection {
+  if (plainTextFromValue(value).length === 0) return { markup: '', persos: [] }
+  if (typeof value === 'string') {
+    const classAttribute = className === undefined ? '' : ` class="${escapeHtmlText(className)}"`
+    return { markup: `<${tag} id="${escapeHtmlText(id)}"${classAttribute}>${escapeHtmlText(value)}</${tag}>`, persos: [] }
+  }
+  const parts = createInlineTextSceneParts(value, id)
+  return { markup: wrapInlineTextSceneParts(parts, id, tag, className), persos: parts.persos }
 }
 
 /** Escapes author text before embedding it in CodPlay scene markup. */

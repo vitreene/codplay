@@ -1,5 +1,8 @@
 import { STATISTICAL_GRAPH_RENDERING } from '../../config/document-config'
 import type { StatisticalGraphContent } from './statistical-graph-types'
+import type { ElceTextValue } from '../document/document-types'
+import { plainTextFromValue } from '../inline-text/inline-text-value'
+import { isRichTextDocument } from '../inline-text/inline-text-value'
 
 /** Creates the initial 5-by-3 grid, counting its header row and column. */
 export function createDefaultStatisticalGraphContent(): StatisticalGraphContent {
@@ -42,7 +45,7 @@ export function setStatisticalGraphCell(
 export function setStatisticalGraphCategoryLabel(
   content: StatisticalGraphContent,
   categoryId: string,
-  label: string,
+  label: ElceTextValue,
 ): StatisticalGraphContent {
   return {
     ...content,
@@ -54,7 +57,7 @@ export function setStatisticalGraphCategoryLabel(
 export function setStatisticalGraphSeriesLabel(
   content: StatisticalGraphContent,
   seriesId: string,
-  label: string,
+  label: ElceTextValue,
 ): StatisticalGraphContent {
   return {
     ...content,
@@ -148,7 +151,7 @@ export function setStatisticalGraphGridCell(
   content: StatisticalGraphContent,
   rowIndex: number,
   columnIndex: number,
-  rawValue: string,
+  rawValue: ElceTextValue,
   headings?: Partial<Pick<StatisticalGraphContent, 'columnLabelsEnabled' | 'rowLabelsEnabled'>>,
 ): StatisticalGraphContent {
   const next = setStatisticalGraphGridCellValue(content, rowIndex, columnIndex, rawValue)
@@ -160,7 +163,7 @@ function setStatisticalGraphGridCellValue(
   content: StatisticalGraphContent,
   rowIndex: number,
   columnIndex: number,
-  rawValue: string,
+  rawValue: ElceTextValue,
 ): StatisticalGraphContent {
   if (!Number.isInteger(rowIndex) || rowIndex < 0 || !Number.isInteger(columnIndex) || columnIndex < 0) return content
   const hasColumnLabels = content.columnLabelsEnabled ?? true
@@ -175,15 +178,16 @@ function setStatisticalGraphGridCellValue(
     return setCategoryLabelAtIndex(content, rowIndex - Number(hasColumnLabels), rawValue)
   }
   if (categoryIndex < 0 || seriesIndex < 0) return content
+  const plainValue = plainTextFromValue(rawValue)
   if ((categoryIndex >= content.categories.length || seriesIndex >= content.series.length)
-    && (rawValue.trim().length === 0 || parseStatisticalGraphNumber(rawValue) === null)) return content
+    && (plainValue.trim().length === 0 || parseStatisticalGraphNumber(plainValue) === null)) return content
 
   const expanded = ensureGraphDimensions(content, categoryIndex + 1, seriesIndex + 1)
   const category = expanded.categories[categoryIndex]
   const series = expanded.series[seriesIndex]
   return category === undefined || series === undefined
     ? content
-    : setStatisticalGraphCell(expanded, category.id, series.id, rawValue)
+    : setStatisticalGraphCell(expanded, category.id, series.id, plainValue)
 }
 
 /** Replaces the grid using enabled labels and the pasted data dimensions. */
@@ -266,7 +270,10 @@ export function assertStatisticalGraphContent(content: StatisticalGraphContent):
     throw new Error('Un graphe en secteurs transposé doit choisir une catégorie.')
   }
   for (const text of [content.overline, content.title, content.categoryAxisLabel, content.seriesAxisLabel, content.editorialText]) {
-    if (typeof text !== 'string') throw new Error('Les textes du graphe doivent être des chaînes.')
+    if (typeof text !== 'string' && !isRichTextDocument(text)) throw new Error('Les textes du graphe doivent être des chaînes ou des documents enrichis.')
+  }
+  for (const label of [...content.categories.map((category) => category.label), ...content.series.map((series) => series.label)]) {
+    if (typeof label !== 'string' && !isRichTextDocument(label)) throw new Error('Les libellés du graphe doivent être des chaînes ou des documents enrichis.')
   }
 }
 
@@ -286,16 +293,16 @@ function createGraphId(prefix: string): string {
 }
 
 /** Sets a series heading by its grid index and creates that series if needed. */
-function setSeriesLabelAtIndex(content: StatisticalGraphContent, index: number, label: string): StatisticalGraphContent {
-  if (index < 0 || (index >= content.series.length && label.trim().length === 0)) return content
+function setSeriesLabelAtIndex(content: StatisticalGraphContent, index: number, label: ElceTextValue): StatisticalGraphContent {
+  if (index < 0 || (index >= content.series.length && plainTextFromValue(label).trim().length === 0)) return content
   const expanded = ensureGraphDimensions(content, content.categories.length, index + 1)
   const series = expanded.series[index]
   return series === undefined ? content : setStatisticalGraphSeriesLabel(expanded, series.id, label)
 }
 
 /** Sets a category heading by its grid index and creates that category if needed. */
-function setCategoryLabelAtIndex(content: StatisticalGraphContent, index: number, label: string): StatisticalGraphContent {
-  if (index < 0 || (index >= content.categories.length && label.trim().length === 0)) return content
+function setCategoryLabelAtIndex(content: StatisticalGraphContent, index: number, label: ElceTextValue): StatisticalGraphContent {
+  if (index < 0 || (index >= content.categories.length && plainTextFromValue(label).trim().length === 0)) return content
   const expanded = ensureGraphDimensions(content, index + 1, content.series.length)
   const category = expanded.categories[index]
   return category === undefined ? content : setStatisticalGraphCategoryLabel(expanded, category.id, label)

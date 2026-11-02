@@ -1,4 +1,4 @@
-import type { BdcId, ChapterId, MediaId, PageId } from '../document/document-types'
+import type { BdcId, ChapterId, ElceTextValue, MediaId, PageId } from '../document/document-types'
 
 export type ProfilePropertyId = string
 export type ProfileChoiceId = string
@@ -64,8 +64,8 @@ export interface ReadingConstraint {
 }
 
 export interface SummarySettings {
-  readonly title: string
-  readonly description: string
+  readonly title: ElceTextValue
+  readonly description: ElceTextValue
   readonly backgroundMediaId: MediaId | null
   readonly showInMenu: boolean
   readonly showAtRoot: boolean

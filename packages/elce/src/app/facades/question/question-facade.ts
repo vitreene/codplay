@@ -4,7 +4,7 @@ import { createStableId, type ElceDocument } from '../../../domain/document/docu
 import { ElceMediaResourceService } from '../../../domain/media/media-resource-service'
 import type { ElceQuestionFacadeOptions } from './question-facade-types'
 import { ElceQuestionService } from '../../../domain/question/question-service'
-import type { BdcId, PageId } from '../../../domain/document/document-types'
+import type { BdcId, ElceTextValue, PageId } from '../../../domain/document/document-types'
 import type { QuestionType } from '../../../domain/question/question-types'
 
 /** Routes Question authoring intents to immutable document commands and XState. */
@@ -32,12 +32,12 @@ export class ElceQuestionFacade {
   }
 
   /** Updates the optional title. */
-  public setTitle(bdcId: BdcId, question: NonNullable<ElceDocument['data']['bdcs'][number]['question']>, title: string): void {
+  public setTitle(bdcId: BdcId, question: NonNullable<ElceDocument['data']['bdcs'][number]['question']>, title: ElceTextValue): void {
     this.update(bdcId, this.questionService.setTitle(question, title))
   }
 
   /** Updates the question prompt. */
-  public setPrompt(bdcId: BdcId, question: NonNullable<ElceDocument['data']['bdcs'][number]['question']>, prompt: string): void {
+  public setPrompt(bdcId: BdcId, question: NonNullable<ElceDocument['data']['bdcs'][number]['question']>, prompt: ElceTextValue): void {
     this.update(bdcId, this.questionService.setPrompt(question, prompt))
   }
 
@@ -45,13 +45,13 @@ export class ElceQuestionFacade {
   public setValidationLabel(
     bdcId: BdcId,
     question: NonNullable<ElceDocument['data']['bdcs'][number]['question']>,
-    label: string,
+    label: ElceTextValue,
   ): void {
     this.update(bdcId, this.questionService.setValidationLabel(question, label))
   }
 
   /** Updates one response label. */
-  public setAnswerLabel(bdcId: BdcId, question: NonNullable<ElceDocument['data']['bdcs'][number]['question']>, answerId: string, label: string): void {
+  public setAnswerLabel(bdcId: BdcId, question: NonNullable<ElceDocument['data']['bdcs'][number]['question']>, answerId: string, label: ElceTextValue): void {
     this.update(bdcId, this.questionService.setAnswerLabel(question, answerId, label))
   }
 

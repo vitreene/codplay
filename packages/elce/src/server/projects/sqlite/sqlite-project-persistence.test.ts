@@ -20,6 +20,7 @@ import {
 } from '../../../config/document-config'
 import { applyDocumentCommand, assertDocumentInvariants, createStatisticalGraphCarouselBdcCommand } from '../../../domain/commands/document-commands'
 import { createInitialDocument, ElceDocument } from '../../../domain/document/document-model'
+import type { RichTextDocument } from '../../../domain/document/document-types'
 import { INITIAL_PROJECT_TEST_STATE, type ProjectTestState } from '../../../domain/summary-profile/test-state-types'
 import type { ElceDocument as ElceDocumentClass } from '../../../domain/document/document-model'
 import { ElceProjectApiClient } from '../../../infrastructure/project-api/project-api-client'
@@ -43,11 +44,19 @@ describe('SQLite project persistence through the Remix API', () => {
     temporaryDirectory = undefined
   })
 
-  it('migrates a fresh database and round-trips the v7 scenario and BDC relations', async () => {
+  it('migrates a fresh database and round-trips the v9 scenario and BDC relations', async () => {
     database = await openProjectDatabase(':memory:')
     const persistence = new SqliteProjectPersistence(database)
     const router = createElceApiRouter(persistence)
-    const document = createRelationalFixture()
+    const source = createRelationalFixture()
+    const document = new ElceDocument({
+      ...source.toJSON(),
+      pages: source.pages.map((page, index) => index === 0
+        ? { ...page, allowEarlyExit: true }
+        : index === 1
+          ? { ...page, allowEarlyExit: false }
+          : page),
+    })
 
     const created = await router.fetch(jsonRequest('POST', '/api/projects', document.toJSON()))
     expect(created.status).toBe(201)
@@ -69,6 +78,77 @@ describe('SQLite project persistence through the Remix API', () => {
     expect(restored.data.summary).toEqual(document.data.summary)
     expect(restored.data.profile).toEqual(document.data.profile)
     assertDocumentInvariants(restored)
+  })
+
+  it('saves and reloads rich Card labels with page and local date labels', async () => {
+    database = await openProjectDatabase(':memory:')
+    const persistence = new SqliteProjectPersistence(database)
+    const router = createElceApiRouter(persistence)
+    const source = createRelationalFixture()
+    const richMessage: RichTextDocument = {
+      type: 'doc',
+      content: [{
+        type: 'paragraph',
+        content: [
+          { type: 'text', text: 'Voir ' },
+          {
+            type: 'pageLinkLabel',
+            attrs: { pageId: 'page-quiz', label: 'la question', fallbackLabel: 'Page quiz', presentation: 'button' },
+          },
+          { type: 'text', text: ' le ' },
+          { type: 'localDateLabel', attrs: { kind: 'today', offsetDays: 0 } },
+        ],
+      }],
+    }
+    const document = new ElceDocument({
+      ...source.toJSON(),
+      id: 'project-rich-text-roundtrip',
+      bdcs: source.bdcs.map((bdc) => bdc.id !== 'bdc-card-photo' || bdc.card == null
+        ? bdc
+        : { ...bdc, card: { ...bdc.card, message: richMessage } }),
+    })
+    assertDocumentInvariants(document)
+
+    const created = await router.fetch(jsonRequest('POST', '/api/projects', document.toJSON()))
+    expect(created.status).toBe(201)
+    const opened = await router.fetch(new Request(`http://elce.test/api/projects/${document.id}`))
+    expect(opened.status).toBe(200)
+    const body = await opened.json() as { document: ReturnType<ElceDocumentClass['toJSON']> }
+    const restored = ElceDocument.fromJSON(body.document)
+
+    expect(restored.data.version).toBe(9)
+    expect(restored.bdcs.find((bdc) => bdc.id === 'bdc-card-photo')?.card?.message).toEqual(richMessage)
+  })
+
+  it('migrates existing v8 projects and preserves automatic page settings as unset', async () => {
+    database = createSqliteDatabase({ filename: ':memory:', foreignKeys: true })
+    const migrations = await loadMigrations(fileURLToPath(new URL('./migrations/', import.meta.url)))
+    await database.migrate(migrations, { to: '20261025120000_rebuild_appearance_class_system' })
+    const initial = createInitialDocument()
+    await database.exec(rawSql(`
+      INSERT INTO projects (
+        project_id, name, format_version, revision, created_at, updated_at,
+        default_intro_transition_ref, default_outro_transition_ref, summary_json, profile_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      'project-v8-page-setting', 'Ancien projet', 8, 0, '2026-10-31', '2026-10-31',
+      'fade', 'fade', JSON.stringify(initial.data.summary), JSON.stringify(initial.data.profile),
+    ]))
+    await database.exec(rawSql(
+      'INSERT INTO pages (project_id, page_id, name, page_type, appearance_json) VALUES (?, ?, ?, ?, ?)',
+      ['project-v8-page-setting', 'page-old', 'Page', 'flux', null],
+    ))
+
+    await database.migrate(migrations)
+
+    const migrated = await database.exec(rawSql(
+      'SELECT format_version FROM projects WHERE project_id = ?', ['project-v8-page-setting'],
+    ))
+    const page = await database.exec(rawSql(
+      'SELECT allow_early_exit FROM pages WHERE project_id = ?', ['project-v8-page-setting'],
+    ))
+    expect(migrated.rows?.[0]?.format_version).toBe(9)
+    expect(page.rows?.[0]?.allow_early_exit).toBeNull()
   })
 
   it('adds the default page continuation mode without overwriting an existing choice', async () => {

@@ -4,7 +4,7 @@ import { createActor } from 'xstate'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { render } from 'remix/ui/test'
-import { BDC_TYPE, MEDIA_TYPE } from '../../../config/document-config'
+import { BDC_TYPE, MEDIA_TYPE, PAGE_LOCATION, PAGE_TYPE } from '../../../config/document-config'
 import { ElceEditorSettingsResolver } from '../../../domain/editor-settings/editor-settings-resolver'
 import { EditorContextProvider } from '../../remix/editor-context'
 import { controllerMachine } from '../../controller/controller-machine'
@@ -75,6 +75,8 @@ describe('Remix production Section editor', () => {
     controller.start()
     controller.send({ type: 'editor.access.activate' })
     const actions = new EditorActionsFacade(controller)
+    const page = controller.getSnapshot().context.document.pages[0]
+    if (page === undefined) throw new Error('La page initiale de test doit exister.')
     const profileProperty: ProfileProperty = {
       id: 'profile-audience',
       name: 'audience',
@@ -87,9 +89,21 @@ describe('Remix production Section editor', () => {
       ...controller.getSnapshot().context.document.data.profile,
       properties: [profileProperty],
     })
+    actions.createPage({ kind: PAGE_LOCATION.SCENARIO }, PAGE_TYPE.FLUX)
+    const pageB = controller.getSnapshot().context.document.pages.find((candidate) => candidate.id !== page.id)
+    if (pageB === undefined) throw new Error('La seconde page du scénario doit être créée.')
+    actions.createStandaloneCard(page.id)
+    actions.selectPage(page.id)
+    const card = controller.getSnapshot().context.document.bdcs.find((bdc) => bdc.type === BDC_TYPE.CARD)
+    if (card === undefined) throw new Error('La Carte de test doit être créée.')
+    const scenarioPages = controller.getSnapshot().context.document.scenarioPageIds.flatMap((pageId) => {
+      const scenarioPage = controller.getSnapshot().context.document.pages.find((candidate) => candidate.id === pageId)
+      return scenarioPage === undefined ? [] : [scenarioPage]
+    })
     const subscribeSpy = vi.spyOn(controller, 'subscribe')
     const rendered = render(<div id="elce-section-test-host">
-      {renderProfileTokenInsertion('elce-profile-test-tools', [profileProperty], 'elce-editor-content-bdc-section-1')}
+      {renderProfileTokenInsertion('elce-profile-test-tools', [profileProperty], 'elce-editor-content-bdc-section-1', scenarioPages)}
+      {renderProfileTokenInsertion('elce-card-date-tools', [profileProperty], `elce-card-message-${card.id}`, scenarioPages)}
       <EditorContextProvider
         controller={controller}
         actions={actions}
@@ -116,6 +130,8 @@ describe('Remix production Section editor', () => {
     expect(controller.getSnapshot().context.document.bdcs[0]?.section?.title).toBe('Titre édité')
     expect(getEditor(rendered.$('.ProseMirror'))).toBe(editor)
     expect(editor.view.dom).toBe(editorDom)
+    const pageLinkInsert = vi.fn()
+    editorDom.addEventListener('elce:profile-token-insert', (event) => pageLinkInsert((event as CustomEvent).detail))
 
     await rendered.act(() => {
       editor.commands.setTextSelection({ from: 1, to: 13 })
@@ -134,13 +150,39 @@ describe('Remix production Section editor', () => {
       const end = editor.state.doc.content.size - 1
       editor.commands.focus()
       editor.commands.setTextSelection(end)
-      const insert = rendered.$('#elce-profile-test-tools-profile-audience')
+      const insert = rendered.$('#elce-profile-test-tools-profile-profile-audience')
       insert?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
       insert?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     const sectionAfterProfileLabel = controller.getSnapshot().context.document.bdcs[0]?.section
     expect(JSON.stringify(sectionAfterProfileLabel?.content)).toContain('"profilePropertyId":"profile-audience"')
     expect(sectionAfterProfileLabel?.markup).toContain('data-elce-profile-property="profile-audience"')
+
+    const pagePresentation = rendered.$('#elce-profile-test-tools-page-presentation') as HTMLSelectElement
+    pagePresentation.value = 'button'
+    const pageLinkButton = rendered.$(`#elce-profile-test-tools-page-${pageB.id}`)
+    expect(pageLinkButton).not.toBeNull()
+    await rendered.act(() => {
+      const end = editor.state.doc.content.size - 1
+      editor.commands.focus()
+      editor.commands.setTextSelection(end)
+      pageLinkButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(pageLinkInsert).toHaveBeenCalledWith(expect.objectContaining({ kind: 'page-link', pageId: pageB.id, presentation: 'button' }))
+    const sectionAfterPageLink = controller.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === 'bdc-section-1')?.section
+    expect(JSON.stringify(sectionAfterPageLink?.content)).toContain(`"pageId":"${pageB.id}"`)
+    expect(JSON.stringify(sectionAfterPageLink?.content)).toContain('"presentation":"button"')
+    expect(sectionAfterPageLink?.markup).toContain(`data-elce-page-id="${pageB.id}"`)
+    expect(sectionAfterPageLink?.markup).toContain('data-elce-page-presentation="button"')
+
+    await rendered.act(() => {
+      rendered.$('#elce-card-date-tools-date-today-0')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    const cardMessage = controller.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === card.id)?.card?.message
+    expect(cardMessage).toMatchObject({
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'localDateLabel', attrs: { kind: 'today', offsetDays: 0 } }] }],
+    })
 
     const posAtCoords = vi.spyOn(editor.view, 'posAtCoords').mockReturnValue({ pos: 1, inside: -1 })
     const file = new File(['image bytes'], 'photo.png', { type: 'image/png' })

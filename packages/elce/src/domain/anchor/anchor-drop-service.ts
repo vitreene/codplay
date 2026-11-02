@@ -19,6 +19,7 @@ import type {
 } from '../catalog/catalog-types'
 import type { ElceAnchorDropTarget, ElceSectionChange } from './anchor-types'
 import type { Bdc, MediaMetadata, PageId } from '../document/document-types'
+import { plainTextFromValue } from '../inline-text/inline-text-value'
 import { statisticalGraphAnchorPaddingBottom } from '../../app/anchor/anchor-position'
 
 const mediaResourceService = new ElceMediaResourceService()
@@ -248,24 +249,24 @@ function createCatalogBdcDropTarget(
 function catalogBdcName(document: ElceDocument, bdc: Bdc): string {
   switch (bdc.type) {
     case BDC_TYPE.SECTION:
-      return bdc.section?.title.trim() || 'Texte'
+      return bdc.section === null ? 'Texte' : plainTextFromValue(bdc.section.title).trim() || 'Texte'
     case BDC_TYPE.CARD: {
       const cardText = [bdc.card?.title, bdc.card?.overline, bdc.card?.message, bdc.card?.description, bdc.card?.caption, bdc.card?.note]
-        .find((value) => value?.trim().length)
-      if (cardText !== undefined) return cardText.trim()
+        .find((value) => value !== undefined && plainTextFromValue(value).trim().length > 0)
+      if (cardText !== undefined) return plainTextFromValue(cardText).trim()
       const media = bdc.card?.mediaId === null || bdc.card?.mediaId === undefined
         ? undefined
         : document.medias.find((candidate) => candidate.id === bdc.card?.mediaId)
       return media?.name ?? 'Carte'
     }
     case BDC_TYPE.QUESTION:
-      return bdc.question?.title.trim() || 'Question'
+      return bdc.question === null ? 'Question' : plainTextFromValue(bdc.question.title).trim() || 'Question'
     case BDC_TYPE.EVALUATION_RESULT:
       return 'Résultat d’évaluation'
     case BDC_TYPE.CAROUSEL:
       return 'Carousel'
     case BDC_TYPE.STATISTICAL_GRAPH:
-      return bdc.statisticalGraph?.title.trim() || 'Graphe'
+      return bdc.statisticalGraph == null ? 'Graphe' : plainTextFromValue(bdc.statisticalGraph.title).trim() || 'Graphe'
     default:
       return assertNeverBdcType(bdc.type)
   }

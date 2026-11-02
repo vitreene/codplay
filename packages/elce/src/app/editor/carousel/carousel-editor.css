@@ -83,6 +83,7 @@
 .elce-carousel-editor__view-duration input,
 .elce-carousel-text-fields input,
 .elce-carousel-text-fields textarea,
+.elce-carousel-text-fields .elce-inline-text-field__editor,
 .elce-carousel-image-caption-fields > input {
   min-width: 0;
   padding: 0.45rem 0.55rem;
@@ -251,6 +252,10 @@
 .elce-carousel-text-fields textarea {
   min-height: 5.5rem;
   resize: vertical;
+}
+
+.elce-carousel-text-fields .elce-inline-text-field__editor--multiline {
+  min-height: 5.5rem;
 }
 
 .elce-carousel-text-fields small {

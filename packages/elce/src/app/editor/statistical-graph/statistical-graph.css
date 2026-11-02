@@ -58,6 +58,13 @@
   overflow: hidden;
 }
 
+.elce-statistical-graph__chart-shell {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .elce-statistical-graph__svg {
   display: block;
   width: 100%;
@@ -66,6 +73,32 @@
   min-height: 0;
   overflow: hidden;
   font-family: inherit;
+}
+
+.elce-statistical-graph__tick-label--rich,
+.elce-statistical-graph__axis-label--rich {
+  visibility: hidden;
+}
+
+.elce-statistical-graph__inline-label-overlay {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.elce-statistical-graph__inline-overlay-position {
+  position: absolute;
+  max-width: 32%;
+  color: inherit;
+  font-size: clamp(0.65rem, 1.2cqw, 0.75rem);
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.elce-statistical-graph__inline-overlay-position a,
+.elce-statistical-graph__inline-overlay-position button {
+  pointer-events: auto;
 }
 
 .elce-statistical-graph__grid-line {
@@ -391,6 +424,7 @@
 .elce-statistical-graph-editor__field input,
 .elce-statistical-graph-editor__field select,
 .elce-statistical-graph-editor__field textarea,
+.elce-statistical-graph-editor__field .elce-inline-text-field__editor,
 .elce-statistical-graph-editor__selected-cell-field input,
 .elce-statistical-graph-editor__grid input {
   box-sizing: border-box;
@@ -407,6 +441,10 @@
 .elce-statistical-graph-editor__field textarea {
   min-height: 4.25rem;
   resize: vertical;
+}
+
+.elce-statistical-graph-editor__field .elce-inline-text-field__editor--multiline {
+  min-height: 4.25rem;
 }
 
 .elce-statistical-graph-editor__grid-layout {

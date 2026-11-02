@@ -375,6 +375,7 @@ export const ELCE_SCENARIO = {
 export const ELCE_EVENTS = {
   RUNTIME_INITIALIZE: 'runtime:initialize',
   MENU_PREFIX: 'elce:menu:select:',
+  PAGE_LINK_PREFIX: 'elce:page-link:open:',
   MENU_DRAWER_OPEN: 'elce:menu:drawer:open',
   MENU_DRAWER_CLOSE: 'elce:menu:drawer:close',
   MENU_DRAWER_CLOSE_REQUEST: 'elce:menu:drawer:close-request',

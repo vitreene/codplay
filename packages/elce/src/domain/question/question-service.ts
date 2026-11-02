@@ -1,6 +1,7 @@
 import { QUESTION_DEFAULTS, QUESTION_TYPE, QUESTION_TYPE_CONFIG } from '../../config/document-config'
 import { createStableId } from '../document/document-model'
 import type { QuestionAnswer, QuestionContent, QuestionType } from './question-types'
+import type { ElceTextValue } from '../document/document-types'
 
 /** Owns Question defaults and answer editing rules independently of the view. */
 export class ElceQuestionService {
@@ -30,22 +31,22 @@ export class ElceQuestionService {
   }
 
   /** Updates the optional card title without changing the response set. */
-  public setTitle(question: QuestionContent, title: string): QuestionContent {
+  public setTitle(question: QuestionContent, title: ElceTextValue): QuestionContent {
     return { ...question, title }
   }
 
   /** Updates the required question prompt. */
-  public setPrompt(question: QuestionContent, prompt: string): QuestionContent {
+  public setPrompt(question: QuestionContent, prompt: ElceTextValue): QuestionContent {
     return { ...question, prompt }
   }
 
   /** Updates the label shown on the reader's Question validation button. */
-  public setValidationLabel(question: QuestionContent, validationLabel: string): QuestionContent {
+  public setValidationLabel(question: QuestionContent, validationLabel: ElceTextValue): QuestionContent {
     return { ...question, validationLabel }
   }
 
   /** Updates one answer label while keeping its identity and correctness. */
-  public setAnswerLabel(question: QuestionContent, answerId: string, label: string): QuestionContent {
+  public setAnswerLabel(question: QuestionContent, answerId: string, label: ElceTextValue): QuestionContent {
     return this.replaceAnswer(question, answerId, (answer) => ({ ...answer, label }))
   }
 

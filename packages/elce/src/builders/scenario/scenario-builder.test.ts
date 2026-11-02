@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { SceneDoc } from 'codplay/scene/types'
 import { BDC_LOCATION, BDC_TYPE, CHAPTER_TYPE, DEFAULT_PRESET_ID, ELCE_EVENTS, ELCE_SCENARIO, ELCE_SCENARIO_HANDLERS, PAGE_LOCATION, QUESTION_TYPE } from '../../config/document-config'
 import { ELCE_EDITOR_SETTINGS } from '../../config/editor-settings'
-import { applyDocumentCommand, createPageCommand } from '../../domain/commands/document-commands'
+import { applyDocumentCommand, createDefaultPageCommand, createEvaluationResultBdcCommand, createPageCommand } from '../../domain/commands/document-commands'
 import { createInitialDocument } from '../../domain/document/document-model'
 import { ElceQuestionService } from '../../domain/question/question-service'
 import type { ProjectTestState } from '../../domain/summary-profile/test-state-types'
@@ -328,8 +328,142 @@ describe('Elcé scenario builder', () => {
     expect(pageAccessGuard(accessInput)).toBe(false)
     expect(pageAccessGuard({
       ...accessInput,
+      event: { name: `${ELCE_EVENTS.PAGE_LINK_PREFIX}page-b` },
+    })).toBe(false)
+    expect(pageAccessGuard({
+      ...accessInput,
       context: { profileEnabled: true, finishedPages: ['page-a', 'page-c'] },
     })).toBe(true)
+  })
+
+  it('lets an authored page link leave its source early and open a sequentially locked destination', () => {
+    let document = createInitialDocument()
+    const sourcePage = document.pages[0]!
+    const sourceSection = document.bdcs.find((bdc) => bdc.id === sourcePage.bdcIds[0])!
+    if (sourceSection.section === null) throw new Error('The source page has no Section.')
+    document = applyDocumentCommand(document, {
+      type: 'chapter.create', chapterId: 'chapter-links', name: 'Chapitre liens',
+    })
+    document = applyDocumentCommand(document, createPageCommand({
+      pageId: 'page-link-middle', bdcId: 'bdc-section-middle',
+      placement: { kind: PAGE_LOCATION.CHAPTER, chapterId: 'chapter-links' },
+    }))
+    document = applyDocumentCommand(document, createPageCommand({
+      pageId: 'page-link-target', bdcId: 'bdc-section-target',
+      placement: { kind: PAGE_LOCATION.CHAPTER, chapterId: 'chapter-links' },
+    }))
+    document = applyDocumentCommand(document, {
+      type: 'bdc.section.update',
+      bdcId: sourceSection.id,
+      title: sourceSection.section.title,
+      markup: sourceSection.section.markup,
+      content: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{
+          type: 'pageLinkLabel',
+          attrs: {
+            pageId: 'page-link-target',
+            label: null,
+            fallbackLabel: 'Page cible',
+            presentation: 'text',
+          },
+        }] }],
+      },
+    })
+
+    const scenario = buildScenario(document, {})
+    const sourceInput = {
+      data: scenario.data ?? {},
+      sceneKey: 'scene-page-a' as const,
+      context: { finishedPages: [] },
+      state: {},
+    }
+    expect(pageExitGuard({
+      ...sourceInput,
+      event: { name: `${ELCE_EVENTS.PAGE_LINK_PREFIX}page-link-target` },
+    })).toBe(true)
+    expect(pageExitGuard({
+      ...sourceInput,
+      event: { name: ELCE_EVENTS.NAVIGATION_NEXT },
+    })).toBe(true)
+    expect(pageAccessGuard({
+      data: scenario.data ?? {},
+      sceneKey: 'scene-page-link-target',
+      event: { name: `${ELCE_EVENTS.MENU_PREFIX}page-link-target` },
+      context: { finishedPages: [] },
+      state: {},
+    })).toBe(false)
+    expect(pageAccessGuard({
+      data: scenario.data ?? {},
+      sceneKey: 'scene-page-link-target',
+      event: { name: `${ELCE_EVENTS.PAGE_LINK_PREFIX}page-link-target` },
+      context: { finishedPages: [] },
+      state: {},
+    })).toBe(true)
+
+    const blockedSource = applyDocumentCommand(document, {
+      type: 'page.early-exit.set', pageId: sourcePage.id, allowEarlyExit: false,
+    })
+    const blockedSourceScenario = buildScenario(blockedSource, {})
+    const blockedSourceExit = blockedSourceScenario.guards?.[ELCE_SCENARIO_HANDLERS.PAGE_EXIT] as typeof pageExitGuard
+    expect(blockedSourceExit({
+      ...sourceInput,
+      data: blockedSourceScenario.data ?? {},
+      event: { name: `${ELCE_EVENTS.PAGE_LINK_PREFIX}page-link-target` },
+    })).toBe(false)
+    expect(blockedSourceExit({
+      ...sourceInput,
+      data: blockedSourceScenario.data ?? {},
+      event: { name: `${ELCE_EVENTS.PAGE_LINK_PREFIX}page-link-target` },
+      context: { finishedPages: [sourcePage.id] },
+    })).toBe(true)
+
+    const noLinkDocument = applyDocumentCommand(createInitialDocument(), {
+      type: 'page.early-exit.set', pageId: 'page-a', allowEarlyExit: true,
+    })
+    const noLinkScenario = buildScenario(noLinkDocument, {})
+    const noLinkExit = noLinkScenario.guards?.[ELCE_SCENARIO_HANDLERS.PAGE_EXIT] as typeof pageExitGuard
+    expect(noLinkExit({
+      data: noLinkScenario.data ?? {},
+      sceneKey: 'scene-page-a',
+      event: { name: ELCE_EVENTS.NAVIGATION_NEXT },
+      context: { finishedPages: [] },
+      state: {},
+    })).toBe(true)
+  })
+
+  it('keeps Evaluation result pages behind their existing guard for a page-link event', () => {
+    let document = createInitialDocument()
+    document = applyDocumentCommand(document, {
+      type: 'chapter.create',
+      chapterId: 'chapter-evaluation-link',
+      name: 'Évaluation',
+      chapterType: CHAPTER_TYPE.EVALUATION,
+    })
+    const questionPage = createDefaultPageCommand(
+      document,
+      { kind: PAGE_LOCATION.CHAPTER, chapterId: 'chapter-evaluation-link' },
+      'Question',
+    )
+    document = applyDocumentCommand(document, questionPage)
+    const resultPage = createDefaultPageCommand(
+      document,
+      { kind: PAGE_LOCATION.CHAPTER, chapterId: 'chapter-evaluation-link' },
+      'Résultat',
+    )
+    document = applyDocumentCommand(document, resultPage)
+    document = applyDocumentCommand(document, createEvaluationResultBdcCommand(
+      'bdc-evaluation-link-result', resultPage.pageId, 1,
+    ))
+    const scenario = buildScenario(document, {})
+
+    expect(pageAccessGuard({
+      data: scenario.data ?? {},
+      sceneKey: `scene-${resultPage.pageId}`,
+      event: { name: `${ELCE_EVENTS.PAGE_LINK_PREFIX}${resultPage.pageId}` },
+      context: { finishedPages: [] },
+      state: {},
+    })).toBe(false)
   })
 
   it('opens subsequent pages freely while keeping visibility and chapter prerequisites active', () => {
@@ -443,6 +577,12 @@ describe('Elcé scenario builder', () => {
       data: scenario.data ?? {},
       sceneKey: 'scene-page-a',
       event: { name: `${ELCE_EVENTS.MENU_PREFIX}page-a` },
+      context: { profileEnabled: true, profileValues: { 'profile-region': 'student' } },
+    })).toBe(false)
+    expect(pageAccessGuard({
+      data: scenario.data ?? {},
+      sceneKey: 'scene-page-a',
+      event: { name: `${ELCE_EVENTS.PAGE_LINK_PREFIX}page-a` },
       context: { profileEnabled: true, profileValues: { 'profile-region': 'student' } },
     })).toBe(false)
     expect(pageAccessGuard({

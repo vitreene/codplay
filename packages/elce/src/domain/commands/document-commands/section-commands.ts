@@ -1,6 +1,6 @@
 import { BDC_TYPE } from '../../../config/document-config'
 import { ElceDocument } from '../../../domain/document/document-model'
-import type { Bdc, BdcId, PageId, RichTextDocument } from '../../../domain/document/document-types'
+import type { Bdc, BdcId, ElceTextValue, PageId, RichTextDocument } from '../../../domain/document/document-types'
 import { findBdc, fail, requireSectionData, withBdc } from './command-helpers'
 import { deleteBdc } from './bdc-commands'
 import { assertTransitionOverride } from './revelation-commands'
@@ -32,7 +32,7 @@ export function findAnchorSectionForIllustration(document: ElceDocument, bdc: Bd
 export function updateSectionContent(
   document: ElceDocument,
   sectionBdcId: BdcId,
-  title: string | undefined,
+  title: ElceTextValue | undefined,
   markup: string,
   content: RichTextDocument,
   keepUnreferencedBdcIds: readonly BdcId[] = [],

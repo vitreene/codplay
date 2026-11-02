@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { BDC_LOCATION, BDC_TYPE, CAROUSEL_PLAYBACK_MODE, CAROUSEL_TRANSITION, CHAPTER_TYPE, DEFAULT_PRESET_ID, ELCE_EVENTS, PAGE_LOCATION, PAGE_TYPE, QUESTION_TYPE } from '../config/document-config'
 import { applyDocumentCommand, createCardBdcCommand, createCarouselBdcCommand, createChapterCommand, createDefaultPageCommand, createEvaluationResultBdcCommand, createPageCommand, createQuestionBdcCommand, createSectionBdcCommand, createStandaloneCardBdcCommand, createStatisticalGraphBdcCommand, createStatisticalGraphCarouselBdcCommand } from '../domain/commands/document-commands'
 import { createInitialDocument } from '../domain/document/document-model'
+import { plainTextFromValue } from '../domain/inline-text/inline-text-value'
 import { ElceQuestionService } from '../domain/question/question-service'
 import { INITIAL_PROJECT_TEST_STATE } from '../domain/summary-profile/test-state-types'
 import type { ProfileDefinition } from '../domain/summary-profile/summary-profile-types'
@@ -83,6 +84,11 @@ describe('Elcé player composition', () => {
   it('contains vertical scroll chaining at the Flux scrollport boundary', () => {
     expect(ELCE_PLAYER_STYLE_SHEET)
       .toMatch(/\.elce-flux-scrollport\s*\{[^}]*overscroll-behavior-y:\s*contain;/s)
+  })
+
+  it('keeps inline button links separated from surrounding text', () => {
+    expect(ELCE_PLAYER_STYLE_SHEET)
+      .toMatch(/\.elce-inline-link--button\s*\{[^}]*margin-inline:\s*0\.5em;/s)
   })
 
   it('uses the full mobile width for chapters-only summary rows', () => {
@@ -1613,7 +1619,10 @@ describe('Elcé player composition', () => {
       ? undefined
       : testStates.at(-1)?.evaluationStates[evaluationChapterId]?.context.answers[precedingQuestionPageId]
     expect(answeredState).toMatchObject({
-      description: [answeredQuestion?.title, answeredQuestion?.prompt].filter((text) => text?.trim()).join(' '),
+      description: [answeredQuestion?.title, answeredQuestion?.prompt]
+        .map((text) => text === undefined ? '' : plainTextFromValue(text))
+        .filter((text) => text.trim().length > 0)
+        .join(' '),
     })
     expect(answeredState?.latencyMs).toEqual(expect.any(Number))
     expect(answeredState?.latencyMs).toBeGreaterThan(0)

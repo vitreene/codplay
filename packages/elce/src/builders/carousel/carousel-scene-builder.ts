@@ -97,6 +97,7 @@ export class ElceCarouselSceneBuilder {
     const lastCardBdcId = capsuleResult.children.at(-1)?.id
     const cardMountTarget = diapoRootId ?? capsulePartId
     const mediaPersos = [...viewBuilds.values()].flatMap((build) => build.mediaPersos)
+    const contentPersos = [...viewBuilds.values()].flatMap((build) => build.contentPersos)
     const expandableViews: readonly ViewportExpansionCarouselView[] = schedule.flatMap((entry) => {
       const viewBuild = viewBuilds.get(entry.bdc.id)
       return viewBuild?.mediaPersos
@@ -173,6 +174,7 @@ export class ElceCarouselSceneBuilder {
         ...(diapoRootId === undefined ? [] : [createDiapoNavigationHost(diapoRootId, rootId, navigationPartId)]),
         ...cardPersos,
         ...mediaPersos,
+        ...contentPersos,
         ...navigationPersos,
       ],
       eventimes: content.playbackMode === CAROUSEL_PLAYBACK_MODE.AUTOMATIC
@@ -424,7 +426,7 @@ function createCarouselCardPersos(
     },
     actions,
   }
-  return [cardRoot, ...cardBuild.contentPersos]
+  return [cardRoot]
 }
 
 /** Creates the CodPlay button that selects one Card BDC in either playback mode. */

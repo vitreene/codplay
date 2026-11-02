@@ -14,6 +14,8 @@ import type { Bdc } from '../../domain/document/document-types'
 import type { QuestionAnswer, QuestionContent } from '../../domain/question/question-types'
 import type { TestAnswerState } from '../../domain/summary-profile/test-state-types'
 import { appendClassToMarkupElement } from '../scene-style/scene-style-classes'
+import { plainTextFromValue } from '../../domain/inline-text/inline-text-value'
+import { createInlineTextSceneParts } from '../inline-text/inline-text-scene'
 
 const cardPresetBuilder = new ElceCardPresetBuilder()
 
@@ -27,21 +29,51 @@ type QuestionStoryState = Readonly<{
 export function buildQuestionCardPreset(
   rootId: string,
   partPrefix: string,
-  question: Pick<QuestionContent, 'title' | 'mediaId'>,
+  question: Pick<QuestionContent, 'title' | 'mediaId'> & Partial<Pick<QuestionContent, 'prompt' | 'answers'>>,
   appearanceClassName?: string,
 ): CardPresetBuild {
+  const titlePrefix = `${partPrefix}:inline:title`
+  const promptPrefix = `${partPrefix}:inline:prompt`
+  const promptValue = question.prompt ?? ''
+  const answers = question.answers ?? []
+  const inlineTitle = typeof question.title === 'string' ? null : createInlineTextSceneParts(question.title, titlePrefix)
+  const inlinePrompt = typeof promptValue === 'string' ? null : createInlineTextSceneParts(promptValue, promptPrefix)
+  const answerRows = answers.map((answer) => {
+    const labelPrefix = `${partPrefix}:inline:answer:${answer.id}`
+    const labelTarget = `${partPrefix}:answer:${answer.id}:label`
+    const inputTarget = `${partPrefix}:answer:${answer.id}:input`
+    const labelContent = typeof answer.label === 'string'
+      ? `<!-- data-part="${labelTarget}" -->`
+      : `<span id="${rootId}-answer-${answer.id}-label">${createInlineTextSceneParts(answer.label, labelPrefix).markup}</span>`
+    return `<div id="${rootId}-answer-${answer.id}" class="elce-question-answer-row">${labelContent}<!-- data-part="${inputTarget}" --></div>`
+  }).join('')
   const contentByZone = {
-    title: question.title.trim().length === 0
+    title: plainTextFromValue(question.title).trim().length === 0
       ? ''
-      : `<header id="${rootId}-title-host"><!-- data-part="${partPrefix}:title" --></header>`,
+      : inlineTitle === null
+        ? `<header id="${rootId}-title-host"><!-- data-part="${partPrefix}:title" --></header>`
+        : `<header id="${rootId}-title-host"><h2 id="${rootId}-title">${inlineTitle.markup}</h2></header>`,
     illustration: question.mediaId === null
       ? ''
       : `<div id="${rootId}-illustration" class="elce-question-illustration"><!-- data-part="${partPrefix}:illustration" --></div>`,
   }
   const card = cardPresetBuilder.build(DEFAULT_PRESET_ID.QUESTION, rootId, partPrefix, contentByZone)
+  const markup = card.markup
+    .replace(`<!-- data-part="${partPrefix}:question" -->`, inlinePrompt === null
+      ? `<!-- data-part="${partPrefix}:question" -->`
+      : `<legend id="${rootId}-prompt">${inlinePrompt.markup}</legend>`)
+    .replace(`<!-- data-part="${partPrefix}:answers" -->`, `<!-- data-part="${partPrefix}:answers" -->${answerRows}`)
+  const zonePartIds = Object.fromEntries([
+    ...Object.entries(card.zonePartIds),
+    ...answers.flatMap((answer) => [
+      [`answer:${answer.id}:label`, `${partPrefix}:answer:${answer.id}:label`] as const,
+      [`answer:${answer.id}:input`, `${partPrefix}:answer:${answer.id}:input`] as const,
+    ]),
+  ])
   return {
     ...card,
-    markup: appendClassToMarkupElement(card.markup, rootId, appearanceClassName ?? 'question bdc'),
+    zonePartIds,
+    markup: appendClassToMarkupElement(markup, rootId, appearanceClassName ?? 'question bdc'),
   }
 }
 
@@ -57,10 +89,14 @@ export function buildQuestionBdcStory(
   const question = bdc.question
   if (question === null) throw new Error(`Le bdc Question ${bdc.id} n’a pas de contenu.`)
   const prefix = `${pageId}:${bdc.id}`
-  const title = question.title.trim().length > 0
-    ? [createQuestionTextPerso(`${prefix}:title`, 'h2', question.title, requireQuestionZone(zones, 'title', bdc.id))]
-    : []
-  const prompt = createQuestionTextPerso(`${prefix}:prompt`, 'legend', question.prompt, requireQuestionZone(zones, 'question', bdc.id))
+  const title = plainTextFromValue(question.title).trim().length === 0
+    ? []
+    : typeof question.title === 'string'
+      ? [createQuestionTextPerso(`${prefix}:title`, 'h2', question.title, requireQuestionZone(zones, 'title', bdc.id))]
+      : createInlineTextSceneParts(question.title, `${prefix}:inline:title`).persos
+  const prompt = typeof question.prompt === 'string'
+    ? [createQuestionTextPerso(`${prefix}:prompt`, 'legend', question.prompt, requireQuestionZone(zones, 'question', bdc.id))]
+    : createInlineTextSceneParts(question.prompt, `${prefix}:inline:prompt`).persos
   const answersZone = requireQuestionZone(zones, 'answers', bdc.id)
   const instructions = createQuestionTextPerso(
     `${prefix}:instructions`,
@@ -71,9 +107,17 @@ export function buildQuestionBdcStory(
   )
   const resetEvent = ELCE_EVENTS.QUESTION_RESET
   const validationZone = requireQuestionZone(zones, 'validation', bdc.id)
-  const answerPersos = question.answers.map((answer) => createQuestionAnswerPerso(
-    pageId, bdc, prefix, answer, question, answersZone, initialAnswer,
-  ))
+  const answerPersos = question.answers.flatMap((answer) => {
+    const labelZone = requireQuestionZone(zones, `answer:${answer.id}:label`, bdc.id)
+    const inputZone = requireQuestionZone(zones, `answer:${answer.id}:input`, bdc.id)
+    const labelPersos = typeof answer.label === 'string'
+      ? [createQuestionTextPerso(`${prefix}:answer:${answer.id}:label`, 'span', answer.label, labelZone, 'elce-question-answer__label')]
+      : createInlineTextSceneParts(answer.label, `${prefix}:inline:answer:${answer.id}`).persos
+    return [
+      ...labelPersos,
+      createQuestionAnswerPerso(pageId, bdc, prefix, answer, question, inputZone, initialAnswer),
+    ]
+  })
   return {
     id: `${pageId}-${bdc.id}`,
     state: {
@@ -84,10 +128,10 @@ export function buildQuestionBdcStory(
         bdcId: bdc.id,
         prefix,
         questionType: question.type,
-        title: question.title,
-        prompt: question.prompt,
+        title: plainTextFromValue(question.title),
+        prompt: plainTextFromValue(question.prompt),
         answerIds: question.answers.map((answer) => answer.id),
-        answerLabels: question.answers.map((answer) => answer.label),
+        answerLabels: question.answers.map((answer) => plainTextFromValue(answer.label)),
         correctAnswerIds: question.answers.filter((answer) => answer.correct).map((answer) => answer.id),
         selection: QUESTION_TYPE_CONFIG[question.type].selection,
         ...(completionEventName === undefined ? {} : { completionEventName }),
@@ -106,14 +150,14 @@ export function buildQuestionBdcStory(
     ],
     persos: [
       ...title,
-      prompt,
+      ...prompt,
       instructions,
       ...answerPersos,
       createQuestionValidatePerso(
         bdc.id,
         prefix,
         validationZone,
-        question.validationLabel ?? QUESTION_DEFAULTS.VALIDATE_LABEL,
+        plainTextFromValue(question.validationLabel ?? QUESTION_DEFAULTS.VALIDATE_LABEL),
       ),
       createQuestionFeedbackPerso(bdc.id, prefix, validationZone, initialAnswer),
     ],
@@ -166,12 +210,13 @@ function createQuestionAnswerPerso(
       inputType: QUESTION_TYPE_CONFIG[question.type].inputType,
       name: `${prefix}:answer-group`,
       value: answer.id,
-      label: answer.label,
+      label: plainTextFromValue(answer.label),
       hint: '',
       checked: selected,
       disabled: submitted,
       ...(submitted ? { selectedAnswerIds: [...selectedAnswerIds], correctAnswerIds, disableAnswers: true, showCorrection: true } : {}),
       visualState,
+      className: 'elce-question-answer-input',
       selectionIcon: { className: 'elce-question-answer__selection' },
       correctionIcon: {
         className: 'elce-question-answer__correction',

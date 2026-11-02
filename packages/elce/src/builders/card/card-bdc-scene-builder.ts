@@ -1,11 +1,13 @@
 import type { PersoDoc } from 'codplay/scene/types'
 import { CARD_IMAGE_FIT, DEFAULT_PRESET_ID, MEDIA_TYPE } from '../../config/document-config'
 import type { CardImageFit, MediaType } from '../../config/document-config-types'
-import type { MediaId, PageId, Bdc, BdcId } from '../../domain/document/document-types'
+import type { MediaId, PageId, Bdc, BdcId, ElceTextValue } from '../../domain/document/document-types'
 import type { AppearanceClassNamesByTarget } from '../scene-style/appearance-class-names.ts'
 import { appearanceClassNameForBdc } from '../scene-style/appearance-class-names.ts'
 import { appendClassToMarkupElement } from '../scene-style/scene-style-classes'
 import { ElceCardPresetBuilder } from './card-preset-builder'
+import { plainTextFromValue } from '../../domain/inline-text/inline-text-value'
+import { createInlineTextSceneParts, wrapInlineTextSceneParts } from '../inline-text/inline-text-scene'
 
 export interface CardBdcSceneBuildInput {
   readonly pageId: PageId
@@ -38,7 +40,10 @@ export class ElceCardBdcSceneBuilder {
     const partId = `${pageId}:${containerBdcId}:card:${bdc.id}`
     const layout = cardPresetBuilder.build(bdc.presetId, rootId, partId)
     const photoMediaRoot = input.photoMediaRoot === true && bdc.presetId === DEFAULT_PRESET_ID.PHOTO
-    const markup = photoMediaRoot ? createPhotoMediaRootMarkup(rootId, partId) : layout.markup
+    const contentProjection = photoMediaRoot
+      ? { markup: layout.markup, persos: [] as readonly PersoDoc<string>[] }
+      : createCardContentProjection(bdc, layout, `${pageId}:${bdc.id}`)
+    const markup = photoMediaRoot ? createPhotoMediaRootMarkup(rootId, partId) : contentProjection.markup
     const appearanceClassName = appearanceClassNameForBdc(bdc.id, input.appearanceClassNamesByTarget)
     const imagePositionClassName = bdc.presetId === DEFAULT_PRESET_ID.TEXT_IMAGE
       ? `elce-card--image-position-${bdc.card.imagePosition}`
@@ -48,7 +53,7 @@ export class ElceCardBdcSceneBuilder {
       markup: appendClassToMarkupElement(markup, rootId, generatedClassNames),
       rootClassName: [layout.rootClassName, generatedClassNames].filter(Boolean).join(' '),
       zonePartIds: layout.zonePartIds,
-      contentPersos: createCardContentPersos(bdc, layout.zonePartIds, layout.zoneClassNames, `${pageId}:${bdc.id}`),
+      contentPersos: contentProjection.persos,
       mediaPersos: createCardMediaPersos(input, partId, bdc.card.imageFit),
       styleSheet: '',
     }
@@ -61,30 +66,48 @@ function createPhotoMediaRootMarkup(rootId: string, partId: string): string {
 }
 
 /** Creates text persos for the fields visible in the selected Card layout. */
-function createCardContentPersos(
+type CardTextZone = 'overline' | 'title' | 'description' | 'message' | 'note' | 'caption'
+
+/** Projects the current Card layout and expands rich values into ordered inline targets. */
+function createCardContentProjection(
   bdc: Bdc,
-  zonePartIds: Readonly<Record<string, string>>,
-  zoneClassNames: Readonly<Record<string, string>>,
+  layout: ReturnType<ElceCardPresetBuilder['build']>,
   prefix: string,
-): readonly PersoDoc<string>[] {
+): Readonly<{ markup: string; persos: readonly PersoDoc<string>[] }> {
   const card = bdc.card
   if (card == null) throw new Error(`Le bdc Carte ${bdc.id} ne contient pas ses champs.`)
+  let markup = layout.markup
+  const persos: PersoDoc<string>[] = []
+  const addField = (zone: CardTextZone, tag: string, value: ElceTextValue): void => {
+    const target = layout.zonePartIds[zone]
+    const className = layout.zoneClassNames[zone]
+    if (target === undefined || plainTextFromValue(value).length === 0) return
+    if (typeof value === 'string') {
+      persos.push(...createCardTextPersos(prefix, bdc.id, zone, tag, value, target, className))
+      return
+    }
+    const parts = createInlineTextSceneParts(value, `${prefix}:card:${bdc.id}:${zone}`)
+    const wrapper = wrapInlineTextSceneParts(parts, `${prefix}-card-${bdc.id}-${zone}`, tag, className)
+    markup = markup.replace(`<!-- data-part="${target}" -->`, wrapper)
+    persos.push(...parts.persos)
+  }
   switch (bdc.presetId) {
     case DEFAULT_PRESET_ID.TEXT_SHORT:
     case DEFAULT_PRESET_ID.TEXT_IMAGE:
-      return [
-        ...createCardTextPersos(prefix, bdc.id, 'overline', 'p', card.overline, zonePartIds.overline, zoneClassNames.overline),
-        ...createCardTextPersos(prefix, bdc.id, 'title', 'h2', card.title, zonePartIds.title, zoneClassNames.title),
-        ...createCardTextPersos(prefix, bdc.id, 'description', 'p', card.description, zonePartIds.description, zoneClassNames.description),
-        ...createCardTextPersos(prefix, bdc.id, 'message', 'p', card.message, zonePartIds.message, zoneClassNames.message),
-        ...createCardTextPersos(prefix, bdc.id, 'note', 'footer', card.note, zonePartIds.note, zoneClassNames.note),
-      ]
+      addField('overline', 'p', card.overline)
+      addField('title', 'h2', card.title)
+      addField('description', 'p', card.description)
+      addField('message', 'p', card.message)
+      addField('note', 'footer', card.note)
+      return { markup, persos }
     case DEFAULT_PRESET_ID.IMAGE_TITLE:
-      return createCardTextPersos(prefix, bdc.id, 'title', 'h2', card.title, zonePartIds.title, zoneClassNames.title)
+      addField('title', 'h2', card.title)
+      return { markup, persos }
     case DEFAULT_PRESET_ID.PHOTO:
-      return []
+      return { markup, persos }
     case DEFAULT_PRESET_ID.IMAGE_CAPTION:
-      return createCardTextPersos(prefix, bdc.id, 'caption', 'p', card.caption, zonePartIds.caption, zoneClassNames.caption)
+      addField('caption', 'p', card.caption)
+      return { markup, persos }
     default:
       throw new Error(`Layout de carte non pris en charge : ${bdc.presetId}`)
   }

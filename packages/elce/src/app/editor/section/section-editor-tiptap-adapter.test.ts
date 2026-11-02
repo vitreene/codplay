@@ -5,6 +5,8 @@ import { CARD_IMAGE_FIT, CAROUSEL_IMAGE_POSITION, DEFAULT_PRESET_ID } from '../.
 import { createInitialDocument } from '../../../domain/document/document-model'
 import type { SectionContent } from '../../../domain/document/document-types'
 import { SectionTiptapAdapter } from './section-editor-tiptap-adapter'
+import { INLINE_TEXT_LABEL_SELECTION_EVENT, INLINE_TEXT_LABEL_UPDATE_EVENT } from '../profile/profile-token-events'
+import type { InlineTextLabelSelectionEventDetail, InlineTextLabelUpdateDetail } from '../profile/profile-token-events'
 
 describe('SectionTiptapAdapter', () => {
   let adapter: SectionTiptapAdapter | undefined
@@ -28,6 +30,7 @@ describe('SectionTiptapAdapter', () => {
       bdcId: 'bdc-section-1',
       section,
       profileProperties: [],
+      pages: [],
       anchorOptions: {
         resolveCard: () => ({
           content: {
@@ -70,6 +73,80 @@ describe('SectionTiptapAdapter', () => {
       markup: expect.stringContaining('--elce-anchor-padding: 65.88888889%'),
     }), expect.any(Object))
   })
+
+  it('publishes a selected inline label and persists its edited attributes through the section callback', async () => {
+    const section = createSectionWithInlineLabel()
+    const onChange = vi.fn()
+    const host = document.createElement('div')
+    document.body.append(host)
+    adapter = new SectionTiptapAdapter(host, {
+      bdcId: 'bdc-section-1',
+      section,
+      profileProperties: [],
+      pages: [{ id: 'page-a', name: 'Page A', type: 'flux', chapterId: null, bdcIds: [] }],
+      anchorOptions: { resolveCard: () => null },
+      onChange,
+      onToolbarState: vi.fn(),
+    })
+    const selectionEvents: InlineTextLabelSelectionEventDetail[] = []
+    adapter.editor.view.dom.addEventListener(INLINE_TEXT_LABEL_SELECTION_EVENT, (event) => {
+      selectionEvents.push((event as CustomEvent<InlineTextLabelSelectionEventDetail>).detail)
+    })
+    adapter.editor.commands.setNodeSelection(1)
+
+    expect(selectionEvents.at(-1)).toEqual({
+      targetId: 'elce-editor-content-bdc-section-1',
+      selection: {
+        position: 1,
+        label: {
+          kind: 'page-link',
+          pageId: 'page-a',
+          label: null,
+          fallbackLabel: 'Page A',
+          presentation: 'text',
+        },
+      },
+    })
+
+    const update: InlineTextLabelUpdateDetail = {
+      position: 1,
+      expected: {
+        kind: 'page-link',
+        pageId: 'page-a',
+        label: null,
+        fallbackLabel: 'Page A',
+        presentation: 'text',
+      },
+      label: {
+        kind: 'page-link',
+        pageId: 'page-a',
+        label: 'Lire la page',
+        fallbackLabel: 'Page A',
+        presentation: 'button',
+      },
+    }
+    adapter.editor.view.dom.dispatchEvent(new CustomEvent(INLINE_TEXT_LABEL_UPDATE_EVENT, {
+      bubbles: true,
+      detail: update,
+    }))
+
+    expect(adapter.editor.getJSON()).toMatchObject({
+      content: [{ content: [{
+        type: 'pageLinkLabel',
+        attrs: { pageId: 'page-a', label: 'Lire la page', presentation: 'button' },
+      }] }],
+    })
+    expect(selectionEvents.at(-1)?.selection).toEqual({ position: 1, label: update.label })
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'content',
+      content: expect.objectContaining({
+        content: [expect.objectContaining({ content: [expect.objectContaining({
+          type: 'pageLinkLabel',
+          attrs: expect.objectContaining({ label: 'Lire la page', presentation: 'button' }),
+        })] })],
+      }),
+    }), expect.any(Object))
+  })
 })
 
 /** Creates the smallest valid Section containing a provisional anchor ratio. */
@@ -84,6 +161,23 @@ function createSectionWithAnchor(): SectionContent {
       content: [{ type: 'paragraph', content: [{
         type: 'elceAnchor',
         attrs: { bdcId: 'bdc-image-1', partId: 'page-a:bdc-image-1:anchor', paddingBottom: '12rem' },
+      }] }],
+    },
+  }
+}
+
+/** Creates a Section whose first inline atom can be selected for editing. */
+function createSectionWithInlineLabel(): SectionContent {
+  const document = createInitialDocument()
+  const sectionBdc = document.bdcs.find((bdc) => bdc.id === 'bdc-section-1')
+  if (sectionBdc?.section === null || sectionBdc?.section === undefined) throw new Error('La fixture doit contenir une Section.')
+  return {
+    ...sectionBdc.section,
+    content: {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{
+        type: 'pageLinkLabel',
+        attrs: { pageId: 'page-a', label: null, fallbackLabel: 'Page A', presentation: 'text' },
       }] }],
     },
   }

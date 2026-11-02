@@ -22,6 +22,9 @@ import { RemixCarouselEditor } from '../../editor/carousel/remix-carousel-editor
 import { mediaTypeFromMimeType } from '../../../domain/media/media-resource-service'
 import { renderRemixStatisticalGraphEditor } from '../../editor/statistical-graph/remix-statistical-graph-editor'
 import { renderAppearanceTrigger } from '../../appearance/appearance-trigger'
+import { setInlineTextFieldContext } from '../../editor/inline-text/inline-text-field'
+import { renderInlineTextField } from '../../editor/inline-text/inline-text-field'
+import { plainTextFromValue } from '../../../domain/inline-text/inline-text-value'
 
 interface RemixPageEditorProps {
   readonly onOpenAppearanceTarget: (target: AppearanceTarget, triggerId: string) => void
@@ -114,6 +117,13 @@ interface PageEditorRenderState {
 
 /** Renders the page title, author commands, and ordered BDC sequence. */
 function renderPageEditor(view: EditorViewModel, actions: EditorActionsFacade, state: PageEditorRenderState): RemixNode {
+  setInlineTextFieldContext(
+    view.documentModel.data.profile.properties,
+    view.documentModel.scenarioPageIds.flatMap((pageId) => {
+      const page = view.documentModel.pages.find((candidate) => candidate.id === pageId)
+      return page === undefined ? [] : [page]
+    }),
+  )
   const page = view.selectedPage
   const canCreateQuestion = pageAllowsQuestion(page)
     && !view.pageHasQuestion
@@ -226,28 +236,23 @@ function renderCreateButton(
 
 /** Renders the containing chapter and selected page titles with inline editing. */
 function renderPageChapterTitle(chapter: Chapter, actions: EditorActionsFacade): RemixNode {
-  return <h2
+  return <div
     id="elce-work-area-chapter-title"
     className="elce-work-area-chapter-title"
+    role="heading"
+    aria-level={2}
   >
     {renderChapterTypeMark(chapter)}
-    <input
-      id={`elce-chapter-title-${chapter.id}`}
-      className="elce-inline-title-input"
-      type="text"
-      aria-label={CHAPTER_TYPE_CONFIG[chapter.type].titleLabel}
-      title={CHAPTER_TYPE_CONFIG[chapter.type].editTitleLabel}
-      defaultValue={chapter.name}
-      data-elce-profile-token-target="true"
-      key={`${chapter.id}:${chapter.name}`}
-      mix={[
-        on<HTMLInputElement, 'blur'>('blur', (event) => commitInlineName(event.currentTarget, chapter.name, (name) => actions.renameChapter(chapter.id, name))),
-        on<HTMLInputElement, 'keydown'>('keydown', (event) => {
-          if (event.key === 'Enter') event.currentTarget.blur()
-        }),
-      ]}
-    />
-  </h2>
+    {renderInlineTextField({
+      id: `elce-chapter-title-${chapter.id}`,
+      className: 'elce-inline-title-input',
+      ariaLabel: CHAPTER_TYPE_CONFIG[chapter.type].titleLabel,
+      placeholder: CHAPTER_TYPE_CONFIG[chapter.type].editTitleLabel,
+      value: chapter.name,
+      deferPlainChanges: true,
+      onChange: (name) => actions.renameChapter(chapter.id, name),
+    })}
+  </div>
 }
 
 /** Renders a chapter type icon and any configured visible label. */
@@ -282,9 +287,11 @@ function renderPageTitle(
     id={`elce-work-area-page-heading-${page.id}`}
     className="elce-work-area-page-heading"
   >
-    <h1
+    <div
       id="elce-work-area-title"
       className="elce-work-area-page-title"
+      role="heading"
+      aria-level={1}
     >
       <span
         id={`elce-page-type-mark-${page.id}`}
@@ -293,40 +300,23 @@ function renderPageTitle(
       >
         {renderLucideIcon(getPageTypeIcon(page.type), `elce-page-type-icon-${page.id}`)}
       </span>
-      <input
-        id={`elce-page-title-${page.id}`}
-        className="elce-inline-title-input"
-        type="text"
-        aria-label="Titre de la page"
-        title="Modifier le titre de la page"
-        defaultValue={page.name}
-        data-elce-profile-token-target="true"
-        key={`${page.id}:${page.name}`}
-        mix={[
-          on<HTMLInputElement, 'blur'>('blur', (event) => commitInlineName(event.currentTarget, page.name, (name) => actions.renamePage(page.id, name))),
-          on<HTMLInputElement, 'keydown'>('keydown', (event) => {
-            if (event.key === 'Enter') event.currentTarget.blur()
-          }),
-        ]}
-      />
-    </h1>
+      {renderInlineTextField({
+        id: `elce-page-title-${page.id}`,
+        className: 'elce-inline-title-input',
+        ariaLabel: 'Titre de la page',
+        placeholder: 'Modifier le titre de la page',
+        value: page.name,
+        deferPlainChanges: true,
+        onChange: (name) => actions.renamePage(page.id, name),
+      })}
+    </div>
     {renderAppearanceTrigger({
       id: `elce-page-style-${page.id}`,
       target: { kind: 'page', pageId: page.id },
-      label: `Ouvrir le style de la page ${page.name}`,
+      label: `Ouvrir le style de la page ${plainTextFromValue(page.name)}`,
       onOpen: onOpenAppearanceTarget,
     })}
   </div>
-}
-
-/** Keeps inline title validation consistent with the existing page editor. */
-function commitInlineName(input: HTMLInputElement, previous: string, rename: (name: string) => void): void {
-  const next = input.value.trim()
-  if (next.length === 0) {
-    input.value = previous
-    return
-  }
-  if (next !== previous) rename(next)
 }
 
 /** Renders each direct BDC in document order with a native drag separator. */

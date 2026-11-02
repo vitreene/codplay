@@ -73,6 +73,8 @@ chapitre. Si la page appartient à un chapitre, son titre éditable apparaît
 au-dessus du titre de page, avec un espacement net entre les deux. L’icône de
 type de chapitre et son nom éditable partagent la même ligne. Une page à la
 racine du scénario ou dans le catalogue n’affiche pas de titre de chapitre.
+À côté du titre, le bouton de style de la page la cible dans le panneau droit
+et ouvre l’onglet « Style ».
 
 Cliquer le nom ou l’icône d’un chapitre sélectionne ce chapitre dans l’état
 XState et remplace le contenu central par sa vue de réglages. Pour un chapitre
@@ -99,24 +101,29 @@ la Section Tiptap insèrent la référence stable de la propriété dans leur fo
 respectif. Le bouton « Sommaire » du Scénario ouvre les réglages du Sommaire et
 du profil et utilise la même icône que « Test auteur » dans la popup de preview.
 
-À 1200 px et moins, la colonne « Contenus » est masquée et son bouton iconique
-sans fond ni contour apparaît au bord droit de la zone centrale.
-L’ouverture ajoute la colonne de contenus à droite et réduit la zone centrale,
-qui reste visible. À 800 px et moins, les deux panneaux latéraux sont masqués
-au départ ; leurs commandes iconiques sans fond ni contour encadrent la zone
-centrale. Ouvrir Scénario ajoute sa colonne à gauche ; ouvrir Contenus ajoute sa
-colonne à droite. Un seul panneau latéral peut être ouvert à la fois.
-Les commandes restent de vrais boutons accessibles, avec un nom décrivant
-l’action, `aria-expanded` et `aria-controls` ; Échap ferme le panneau et rend le
-focus à sa commande. Les panneaux occupent la grille et ne recouvrent pas la page
-centrale. Aucune surcouche ne masque la page ni ne piège le focus.
+Chaque colonne latérale peut être réduite indépendamment. La commande porte le
+nom accessible « Réduire le panneau Scénario » ou « Réduire le panneau
+Contenus » et utilise l’icône Lucide de repli du côté concerné (`PanelLeftClose`
+ou `PanelRightClose`). Dans les deux panneaux, la commande occupe la même
+position en haut à droite, au contact du bord du conteneur et au-dessus du
+contenu. Celle de Contenus reste dans sa rangée au-dessus des onglets.
+Après réduction, la commande de réouverture apparaît dans la barre d’actions, à
+gauche de « Prévisualiser » pour Scénario et à droite pour Contenus. Réduire une
+colonne rend sa largeur à la zone centrale et laisse l’autre colonne en place.
+Les panneaux restent dans la grille et ne recouvrent pas la page centrale.
 
-Entre 801 et 1200 px, Scénario reste dans la colonne gauche ; lorsque le panneau
-Contenus est ouvert, les trois colonnes restent côte à côte. À 800 px
-et moins, le panneau ouvert et la zone centrale occupent chacun une colonne ;
-quand les deux panneaux sont fermés, la zone centrale occupe toute la largeur.
-Au-delà de 1200 px, les trois colonnes restent visibles et les commandes
-responsive disparaissent. Le bandeau affiche uniquement le nom « Elcé ».
+À 1200 px et moins, Contenus est fermé par défaut et son bouton de réouverture
+apparaît au bord droit de la zone centrale. Entre 801 et 1200 px, Scénario reste
+à gauche ; Contenus peut s’ouvrir à droite, les trois colonnes restant côte à
+côte. À 800 px et moins, les deux panneaux sont fermés par défaut ; leurs
+boutons encadrent la zone centrale et un seul panneau peut être ouvert à la
+fois. Le panneau ouvert et la zone centrale partagent la largeur disponible ;
+quand les deux panneaux sont fermés, le centre utilise toute la largeur.
+
+Les commandes restent de vrais boutons accessibles, avec un nom décrivant
+l’action, `aria-expanded` et `aria-controls`. Entrée ou Espace active la
+commande ; Échap réduit le panneau et rend le focus à son bouton de réouverture.
+Le bandeau affiche uniquement le nom « Elcé ».
 
 La barre de commandes située au-dessus de la zone centrale garde « Prévisualiser »
 à toutes les largeurs. Les commandes des panneaux partagent cette barre quand
@@ -208,6 +215,25 @@ séparées.
   panneau ouvert prend sa propre colonne (137/205 px pour Scénario,
   205/137 px pour Contenus). Échap ferme le panneau et rend le
   focus au bouton. Le document ne déborde pas horizontalement.
+- Le 2 novembre 2026, Brave vérifie la réduction indépendante à 1280 px : chaque
+  réduction agrandit le centre de 640 à 944 px sans déplacer l’autre panneau.
+  À 800 px, les deux panneaux sont fermés par défaut ; ouvrir Contenus après
+  Scénario referme Scénario, et le document reste à 800 px sans débordement.
+  À 855 px, Entrée ouvre Contenus et place le focus sur sa commande de réduction ;
+  Échap le réduit et rend le focus à sa commande de réouverture. Le module
+  `workspace-panel-state.ts` et son contrôle sont servis sans 404. À 855 px avec
+  Scénario ouvert, Contenus reste dans la colonne de droite malgré le bouton
+  Scénario masqué ; Prévisualiser demeure centré. À 780 px, les trois commandes
+  restent respectivement à gauche, au centre et à droite ; à 1280 px, la preview
+  reste centrée lorsque les deux commandes latérales sont masquées.
+- Le 2 novembre 2026, Brave confirme que le bouton de style adjacent au titre
+  d’une page cible cette page et ouvre l’onglet « Style » du panneau droit.
+- Le 2 novembre 2026, Brave vérifie les commandes « Réduire le panneau
+  Scénario » et « Réduire le panneau Contenus », leurs icônes de repli latérales
+  et leur alignement au même coin supérieur droit, contre le bord du conteneur,
+  à 855 px. Dans Contenus, la commande est dans une rangée au-dessus des onglets.
+  Réduire puis rouvrir chaque panneau met à jour son état et restitue le focus à
+  la commande correspondante.
 - [`remix-section-production.test.tsx`](../src/app/editor/section/remix-section-production.test.tsx)
   vérifie l’édition Section et les parcours d’ancre/média dans le page editor
   de production.

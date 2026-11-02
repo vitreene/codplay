@@ -8,12 +8,21 @@ import { renderChapterSettings } from './chapter-settings'
 import { renderContentCatalogPanel } from './content-catalog-panel'
 import { renderScenarioPanel } from './scenario-panel'
 import { renderLucideIcon } from '../lucide-static-icon'
-import type { EditorWorkspaceViewProps } from './editor-workspace-types'
+import type { EditorWorkspaceViewProps, WorkspacePanelName, WorkspacePanelVisibility } from './editor-workspace-types'
 import type { ScenarioPanelProps } from './scenario-panel-types'
 import { renderSummaryProfileSettings } from './summary-profile-settings'
+import { setInlineTextFieldContext } from '../../editor/inline-text/inline-text-field'
+import { workspacePanelVisibilityFromResponsiveState } from './workspace-panel-state.ts'
 
 /** Composes the native Remix scenario, chapter-settings and catalog surfaces. */
 export function renderEditorWorkspace(props: EditorWorkspaceViewProps): RemixNode {
+  setInlineTextFieldContext(
+    props.view.documentModel.data.profile.properties,
+    props.view.documentModel.scenarioPageIds.flatMap((pageId) => {
+      const page = props.view.documentModel.pages.find((candidate) => candidate.id === pageId)
+      return page === undefined ? [] : [page]
+    }),
+  )
   const scenarioProps: ScenarioPanelProps = {
     workspace: props,
     onDragStartPage: (event, pageId) => beginPageDrag(event, { kind: SCENARIO_ENTRY_KIND.PAGE, pageId }, props.onSetDraggedEntry),
@@ -25,6 +34,8 @@ export function renderEditorWorkspace(props: EditorWorkspaceViewProps): RemixNod
     onDropPage: (event, placement) => dropPageEntry(event, placement, props),
     onDragLeave: (event) => dragLeaveSeparator(event, props.onSetDropTarget),
   }
+  const panelVisibility = props.panelVisibility
+    ?? workspacePanelVisibilityFromResponsiveState(props.responsivePanel, typeof window === 'undefined' ? 1280 : window.innerWidth)
   const center = props.summarySettingsOpen
     ? <div id="elce-summary-profile-settings-host" className="elce-remix-center-column">
       {renderSummaryProfileSettings({
@@ -53,9 +64,7 @@ export function renderEditorWorkspace(props: EditorWorkspaceViewProps): RemixNod
       })}
     </div>
 
-  const panelStateClass = props.responsivePanel === null
-    ? ''
-    : ` elce-main--${props.responsivePanel}-open`
+  const panelStateClass = ` elce-main--outline-${panelVisibility.outline ? 'open' : 'closed'} elce-main--properties-${panelVisibility.properties ? 'open' : 'closed'}`
 
   return <div
     id="elce-remix-editor-workspace"
@@ -78,11 +87,15 @@ export function renderEditorWorkspace(props: EditorWorkspaceViewProps): RemixNod
         view: props.view,
         actions: props.actions,
         responsivePanel: props.responsivePanel,
+        panelOpen: panelVisibility.properties,
+        onSetPanelVisibility: props.onSetPanelVisibility,
+        onSetResponsivePanel: props.onSetResponsivePanel,
         sidePanelTab: props.sidePanelTab,
         appearanceTarget: props.appearanceTarget,
         onSetSidePanelTab: props.onSetSidePanelTab,
         onOpenAppearanceTarget: props.onOpenAppearanceTarget,
         profileTokenTargetId: props.profileTokenTargetId,
+        selectedInlineLabel: props.selectedInlineLabel,
         dropTarget: props.dropTarget,
         onSetDropTarget: props.onSetDropTarget,
       })}
@@ -94,6 +107,8 @@ export function renderEditorWorkspace(props: EditorWorkspaceViewProps): RemixNod
 function renderWorkspaceAccess(
   props: Pick<EditorWorkspaceViewProps,
     | 'responsivePanel'
+    | 'panelVisibility'
+    | 'onSetPanelVisibility'
     | 'onSetResponsivePanel'
     | 'onPreview'
     | 'previewError'
@@ -103,6 +118,7 @@ function renderWorkspaceAccess(
     | 'exportNotice'
   >,
 ): RemixNode {
+  const panelVisibility = panelVisibilityForAccess(props)
   return <div
     id="elce-workspace-access-area"
     className="elce-workspace-access-area"
@@ -112,9 +128,9 @@ function renderWorkspaceAccess(
       className="elce-responsive-panel-access"
       aria-label="Commandes de l’éditeur"
     >
-      {renderPanelToggle('outline', props.responsivePanel, props.onSetResponsivePanel)}
+      {renderPanelToggle('outline', panelVisibility, props.onSetPanelVisibility, props.onSetResponsivePanel)}
       {renderPreviewButton(props.onPreview)}
-      {renderPanelToggle('properties', props.responsivePanel, props.onSetResponsivePanel)}
+      {renderPanelToggle('properties', panelVisibility, props.onSetPanelVisibility, props.onSetResponsivePanel)}
     </nav>
     {props.previewError === null ? null : <p
       id="elce-preview-open-error"
@@ -150,13 +166,14 @@ function renderPreviewButton(onPreview: () => void): RemixNode {
 
 /** Renders one unframed panel toggle while preserving its button semantics. */
 function renderPanelToggle(
-  panel: 'outline' | 'properties',
-  responsivePanel: EditorWorkspaceViewProps['responsivePanel'],
+  panel: WorkspacePanelName,
+  panelVisibility: WorkspacePanelVisibility,
+  setPanelVisibility: EditorWorkspaceViewProps['onSetPanelVisibility'],
   setResponsivePanel: EditorWorkspaceViewProps['onSetResponsivePanel'],
 ): RemixNode {
-  const isOpen = responsivePanel === panel
-  const panelLabel = panel === 'outline' ? 'le scénario' : 'le panneau latéral'
-  const label = `${isOpen ? 'Fermer' : 'Ouvrir'} ${panelLabel}`
+  const isOpen = panelVisibility[panel]
+  const panelLabel = panel === 'outline' ? 'le panneau Scénario' : 'le panneau Contenus'
+  const label = `Ouvrir ${panelLabel}`
   const id = panel === 'outline' ? 'elce-outline-toggle' : 'elce-properties-toggle'
   const targetId = panel === 'outline' ? 'elce-outline' : 'elce-properties'
   const icon = panel === 'outline' ? List : Images
@@ -171,10 +188,22 @@ function renderPanelToggle(
     title={label}
     aria-expanded={isOpen}
     aria-controls={targetId}
-    mix={on<HTMLButtonElement, 'click'>('click', () => setResponsivePanel(isOpen ? null : panel, id))}
+    hidden={isOpen}
+    mix={on<HTMLButtonElement, 'click'>('click', () => {
+      if (setPanelVisibility !== undefined) setPanelVisibility(panel, true)
+      else setResponsivePanel(panel, id)
+    })}
   >
     {renderLucideIcon(icon, `${id}-icon`)}
   </button>
+}
+
+/** Resolves the two panel controls using the app state or responsive fixture state. */
+function panelVisibilityForAccess(
+  props: Pick<EditorWorkspaceViewProps, 'panelVisibility' | 'responsivePanel'>,
+): WorkspacePanelVisibility {
+  return props.panelVisibility
+    ?? workspacePanelVisibilityFromResponsiveState(props.responsivePanel, typeof window === 'undefined' ? 1280 : window.innerWidth)
 }
 
 /** Starts a native page or chapter drag and stores its typed source. */

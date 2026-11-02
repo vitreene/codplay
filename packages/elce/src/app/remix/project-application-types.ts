@@ -2,7 +2,8 @@ import type { AppearanceTarget, PagePlacement } from '../../domain/commands/docu
 import type { ScormVersion } from '../../scorm/scorm-types'
 import type { EditorViewModel } from '../selectors/editor-view-model'
 import type { ElceAppContext } from '../controller/controller-types'
-import type { DraggedScenarioEntry, ResponsivePanel, SidePanelTab } from './workspace/editor-workspace-types'
+import type { DraggedScenarioEntry, ResponsivePanel, SidePanelTab, WorkspacePanelName, WorkspacePanelVisibility } from './workspace/editor-workspace-types'
+import type { InlineTextLabelSelection } from '../editor/profile/profile-token-events'
 
 export type ProjectApplicationView = Pick<
   ElceAppContext,
@@ -11,14 +12,17 @@ export type ProjectApplicationView = Pick<
 
 export interface ProjectApplicationWorkspaceState {
   readonly responsivePanel: ResponsivePanel
+  readonly panelVisibility: WorkspacePanelVisibility
   readonly sidePanelTab: SidePanelTab
   readonly appearanceTarget: AppearanceTarget
   readonly summarySettingsOpen: boolean
   readonly profileTokenTargetId: string | null
+  readonly selectedInlineLabel: InlineTextLabelSelection | null
   readonly authoringError: string | null
   readonly dropTarget: string | null
   readonly visible: boolean
   readonly setResponsivePanel: (panel: ResponsivePanel, triggerId?: string) => void
+  readonly setPanelVisibility: (panel: WorkspacePanelName, open: boolean) => void
   readonly setSidePanelTab: (tab: SidePanelTab) => void
   readonly openAppearanceTarget: (target: AppearanceTarget, triggerId: string) => void
   readonly setSummarySettingsOpen: (open: boolean) => void

@@ -1,6 +1,6 @@
 import type { DocumentCommand } from '../../../domain/commands/document-command-types'
 import type { ElceMediaImport } from '../../../domain/media/media-resource-types'
-import type { BdcId, PageId } from '../../../domain/document/document-types'
+import type { BdcId, ElceTextValue, PageId } from '../../../domain/document/document-types'
 import type { QuestionContent, QuestionType } from '../../../domain/question/question-types'
 
 export interface ElceQuestionFacadeOptions {
@@ -15,10 +15,10 @@ export interface ElceQuestionCreateOptions {
 
 export interface ElceQuestionEditorActions {
   readonly setType: (type: QuestionType) => void
-  readonly setTitle: (title: string) => void
-  readonly setPrompt: (prompt: string) => void
-  readonly setValidationLabel: (label: string) => void
-  readonly setAnswerLabel: (answerId: string, label: string) => void
+  readonly setTitle: (title: ElceTextValue) => void
+  readonly setPrompt: (prompt: ElceTextValue) => void
+  readonly setValidationLabel: (label: ElceTextValue) => void
+  readonly setAnswerLabel: (answerId: string, label: ElceTextValue) => void
   readonly setAnswerCorrect: (answerId: string, correct: boolean) => void
   readonly addAnswer: () => void
   readonly removeAnswer: (answerId: string) => void

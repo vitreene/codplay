@@ -9,11 +9,17 @@ import { renderProfileTokenInsertion } from '../../editor/profile/profile-token-
 import type { ContentCatalogPanelProps } from './catalog-panel-types'
 import { renderAppearancePanel } from '../../appearance/appearance-panel'
 import { renderAppearanceTrigger } from '../../appearance/appearance-trigger'
+import { renderWorkspacePanelReduceButton } from './workspace-panel-controls.tsx'
 
 /** Renders the available BDC and reusable media tabs in the existing right panel. */
 export function renderContentCatalogPanel(props: ContentCatalogPanelProps): RemixNode {
-  const { view, actions, responsivePanel, profileTokenTargetId, dropTarget, onSetDropTarget } = props
-  const canShowProfileTab = profileTokenTargetId !== null && view.documentModel.data.profile.properties.length > 0
+  const { view, actions, responsivePanel, profileTokenTargetId, selectedInlineLabel, dropTarget, onSetDropTarget } = props
+  const panelOpen = props.panelOpen ?? responsivePanel === 'properties'
+  const canShowProfileTab = profileTokenTargetId !== null
+  const linkablePages = view.documentModel.scenarioPageIds.flatMap((pageId) => {
+    const page = view.documentModel.pages.find((candidate) => candidate.id === pageId)
+    return page === undefined ? [] : [page]
+  })
   const onDragOverAvailableBdcs = (event: DragEvent): void => {
     const transfer = event.dataTransfer
     if (transfer === null) return
@@ -45,37 +51,51 @@ export function renderContentCatalogPanel(props: ContentCatalogPanelProps): Remi
   return <aside
     id="elce-properties"
     className="elce-panel elce-properties"
-    data-panel-open={responsivePanel === 'properties'}
+    data-panel-open={panelOpen}
     aria-labelledby={props.sidePanelTab === 'contents' ? 'elce-content-catalog-title' : 'elce-appearance-title'}
   >
     <div
-      id="elce-side-panel-tabs"
-      className="elce-side-panel-tabs"
-      role="tablist"
-      aria-label="Panneau latéral"
+      id="elce-properties-reduce-row"
+      className="elce-panel-reduce-row"
     >
-      <button
-        id="elce-side-panel-tab-contents"
-        className={props.sidePanelTab === 'contents' ? 'elce-side-panel-tab elce-side-panel-tab--active' : 'elce-side-panel-tab'}
-        type="button"
-        role="tab"
-        aria-selected={props.sidePanelTab === 'contents'}
-        aria-controls="elce-content-catalog"
-        mix={on<HTMLButtonElement, 'click'>('click', () => props.onSetSidePanelTab('contents'))}
+      {renderWorkspacePanelReduceButton('properties', () => {
+        if (props.onSetPanelVisibility !== undefined) props.onSetPanelVisibility('properties', false)
+        else props.onSetResponsivePanel(null, 'elce-properties-toggle')
+      })}
+    </div>
+    <div
+      id="elce-properties-topbar"
+      className="elce-properties-topbar"
+    >
+      <div
+        id="elce-side-panel-tabs"
+        className="elce-side-panel-tabs"
+        role="tablist"
+        aria-label="Panneau latéral"
       >
-        Contenus
-      </button>
-      <button
-        id="elce-side-panel-tab-style"
-        className={props.sidePanelTab === 'style' ? 'elce-side-panel-tab elce-side-panel-tab--active' : 'elce-side-panel-tab'}
-        type="button"
-        role="tab"
-        aria-selected={props.sidePanelTab === 'style'}
-        aria-controls="elce-appearance-tabpanel"
-        mix={on<HTMLButtonElement, 'click'>('click', () => props.onSetSidePanelTab('style'))}
-      >
-        Style
-      </button>
+        <button
+          id="elce-side-panel-tab-contents"
+          className={props.sidePanelTab === 'contents' ? 'elce-side-panel-tab elce-side-panel-tab--active' : 'elce-side-panel-tab'}
+          type="button"
+          role="tab"
+          aria-selected={props.sidePanelTab === 'contents'}
+          aria-controls="elce-content-catalog"
+          mix={on<HTMLButtonElement, 'click'>('click', () => props.onSetSidePanelTab('contents'))}
+        >
+          Contenus
+        </button>
+        <button
+          id="elce-side-panel-tab-style"
+          className={props.sidePanelTab === 'style' ? 'elce-side-panel-tab elce-side-panel-tab--active' : 'elce-side-panel-tab'}
+          type="button"
+          role="tab"
+          aria-selected={props.sidePanelTab === 'style'}
+          aria-controls="elce-appearance-tabpanel"
+          mix={on<HTMLButtonElement, 'click'>('click', () => props.onSetSidePanelTab('style'))}
+        >
+          Style
+        </button>
+      </div>
     </div>
     <section
       id="elce-content-catalog"
@@ -133,7 +153,7 @@ export function renderContentCatalogPanel(props: ContentCatalogPanelProps): Remi
           aria-controls="elce-catalog-profile"
           mix={on<HTMLButtonElement, 'click'>('click', () => actions.selectCatalogTab(CATALOG_TAB.PROFILE))}
         >
-          Profil
+          Variables
         </button> : null}
       </div>
       <section
@@ -219,13 +239,15 @@ export function renderContentCatalogPanel(props: ContentCatalogPanelProps): Remi
       <section
         id="elce-catalog-profile"
         className="elce-content-catalog-panel"
-        aria-label="Variables de profil"
+        aria-label="Variables et liens"
         hidden={view.catalogTab !== CATALOG_TAB.PROFILE || !canShowProfileTab}
       >
         {profileTokenTargetId === null ? null : renderProfileTokenInsertion(
           'elce-profile-token-insertion',
           view.documentModel.data.profile.properties,
           profileTokenTargetId,
+          linkablePages,
+          selectedInlineLabel,
         )}
       </section>
     </section>

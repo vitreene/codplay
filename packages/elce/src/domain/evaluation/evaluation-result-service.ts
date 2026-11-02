@@ -5,6 +5,7 @@ import {
 } from '../../config/document-config'
 import type { EvaluationResultAction, EvaluationResultBranch } from '../../config/document-config-types'
 import type { EvaluationResultBranchContent, EvaluationResultContent } from './evaluation-result-types'
+import { isRichTextDocument } from '../inline-text/inline-text-value'
 
 /** Owns the editable messages and button actions for both evaluation outcomes. */
 export class ElceEvaluationResultService {
@@ -20,11 +21,8 @@ export class ElceEvaluationResultService {
   public assertValid(content: EvaluationResultContent): void {
     for (const branch of Object.values(EVALUATION_RESULT_BRANCH)) {
       const value = content[branch]
-      switch (typeof value.message) {
-        case 'string':
-          break
-        default:
-          throw new Error(`Le message de la branche ${branch} doit être du texte.`)
+      if (typeof value.message !== 'string' && !isRichTextDocument(value.message)) {
+        throw new Error(`Le message de la branche ${branch} doit être du texte.`)
       }
       this.assertActionAllowed(branch, value.action)
     }

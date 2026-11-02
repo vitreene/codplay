@@ -14,6 +14,7 @@ import {
 import type {
   Bdc,
   Chapter,
+  ElceTextValue,
   ElceDocumentData,
   MediaMetadata,
   Page,
@@ -34,6 +35,7 @@ import type { MediaPersistence, StoreMediaFileResult, StoredMediaResource } from
 
 type ProjectDatabase = Pick<Database<'sqlite'>, 'exec'>
 type SqlRow = Record<string, unknown>
+const SQLITE_RICH_TEXT_PREFIX = '__elce-rich-text-v1__:'
 
 type NormalizedPlacement =
   | Readonly<{ kind: 'page'; pageId: string; position: number }>
@@ -369,7 +371,7 @@ export class SqliteProjectPersistence implements ProjectPersistence, MediaPersis
   }
 }
 
-/** Reconstructs the project summary and the v7 document from normalized rows. */
+/** Reconstructs the project summary and supports v7-v9 normalized rows. */
 async function readStoredProject(database: ProjectDatabase, projectId: string): Promise<StoredProject | null> {
   const projectRows = await queryRows(database, `
     SELECT project_id, name, format_version, revision,
@@ -380,7 +382,8 @@ async function readStoredProject(database: ProjectDatabase, projectId: string): 
   if (projectRows.length === 0) return null
 
   const projectRow = projectRows[0]!
-  if (numberValue(projectRow, 'format_version') !== 7) {
+  const version = numberValue(projectRow, 'format_version')
+  if (version !== 7 && version !== 8 && version !== 9) {
     throw new Error(`Version documentaire SQLite non prise en charge : ${String(projectRow.format_version)}`)
   }
   const document = await readDocument(database, projectRow)
@@ -390,7 +393,7 @@ async function readStoredProject(database: ProjectDatabase, projectId: string): 
   }
 }
 
-/** Reads the relational records and assembles their ElceDocument v7 value. */
+/** Reads the relational records and assembles their current ElceDocument value. */
 async function readDocument(database: ProjectDatabase, projectRow: SqlRow): Promise<ElceDocument> {
   const projectId = stringValue(projectRow, 'project_id')
   const [chapterRows, pageRows, scenarioRows, catalogPageRows, mediaRows, blockRows, placementRows,
@@ -433,9 +436,9 @@ async function readDocument(database: ProjectDatabase, projectRow: SqlRow): Prom
     statisticalGraphsByBlock,
     placementRows,
   ))
-  const data: ElceDocumentData = {
+  const data = {
     id: projectId,
-    version: 7,
+    version: numberValue(projectRow, 'format_version') as 7 | 8 | ElceDocumentData['version'],
     name: stringValue(projectRow, 'name'),
     ...optionalAppearance(projectRow),
     revelationDefaults: {
@@ -469,7 +472,7 @@ function chapterFromRow(row: SqlRow, scenarioRows: readonly SqlRow[]): Chapter {
   const type = stringValue(row, 'chapter_type') as Chapter['type']
   const base: Chapter = {
     id: stringValue(row, 'chapter_id'),
-    name: stringValue(row, 'name'),
+    name: decodeSqlText(stringValue(row, 'name')),
     type,
     pageIds: scenarioRows
       .filter((entry) => entry.parent_chapter_id === stringValue(row, 'chapter_id'))
@@ -499,13 +502,14 @@ function pageFromRow(row: SqlRow, scenarioRows: readonly SqlRow[], placementRows
   const scenarioEntry = scenarioRows.find((entry) => entry.page_id === pageId)
   return {
     id: pageId,
-    name: stringValue(row, 'name'),
+    name: decodeSqlText(stringValue(row, 'name')),
     type: stringValue(row, 'page_type') as Page['type'],
     chapterId: nullableText(scenarioEntry ?? {}, 'parent_chapter_id'),
     bdcIds: placementRows
       .filter((placement) => placement.page_id === pageId)
       .sort(byPosition)
       .map((placement) => stringValue(placement, 'content_block_id')),
+    ...optionalPageEarlyExit(row),
     ...optionalAppearance(row),
   }
 }
@@ -541,7 +545,7 @@ function bdcFromRows(
     parentBdcId: nullableText(placement, 'parent_content_block_id'),
     ...optionalAppearance(row),
     section: section === undefined ? null : {
-      title: nullableText(section, 'title') ?? '',
+      title: decodeSqlText(nullableText(section, 'title') ?? ''),
       markup: stringValue(section, 'markup_html'),
       content: JSON.parse(stringValue(section, 'content_json')) as RichTextDocument,
       revelation: {
@@ -552,15 +556,15 @@ function bdcFromRows(
     question: question === undefined ? null : {
       mediaId: nullableText(question, 'media_id'),
       type: stringValue(question, 'question_type') as NonNullable<Bdc['question']>['type'],
-      title: nullableText(question, 'title') ?? '',
-      prompt: stringValue(question, 'prompt'),
-      validationLabel: nullableText(question, 'validation_label') ?? QUESTION_DEFAULTS.VALIDATE_LABEL,
+      title: decodeSqlText(nullableText(question, 'title') ?? ''),
+      prompt: decodeSqlText(stringValue(question, 'prompt')),
+      validationLabel: decodeSqlText(nullableText(question, 'validation_label') ?? QUESTION_DEFAULTS.VALIDATE_LABEL),
       answers: answerRows
         .filter((answer) => answer.question_content_block_id === id)
         .sort(byPosition)
         .map((answer) => ({
           id: stringValue(answer, 'answer_id'),
-          label: stringValue(answer, 'label'),
+          label: decodeSqlText(stringValue(answer, 'label')),
           correct: numberValue(answer, 'is_correct') !== 0,
         })),
     },
@@ -589,12 +593,12 @@ function bdcFromRows(
     },
     card: card === undefined ? null : {
       mediaId: nullableText(card, 'media_id'),
-      overline: nullableText(card, 'overline') ?? '',
-      title: nullableText(card, 'title') ?? '',
-      description: nullableText(card, 'description') ?? '',
-      message: nullableText(card, 'message') ?? '',
-      note: nullableText(card, 'note') ?? '',
-      caption: nullableText(card, 'caption') ?? '',
+      overline: decodeSqlText(nullableText(card, 'overline') ?? ''),
+      title: decodeSqlText(nullableText(card, 'title') ?? ''),
+      description: decodeSqlText(nullableText(card, 'description') ?? ''),
+      message: decodeSqlText(nullableText(card, 'message') ?? ''),
+      note: decodeSqlText(nullableText(card, 'note') ?? ''),
+      caption: decodeSqlText(nullableText(card, 'caption') ?? ''),
       imagePosition: stringValue(card, 'image_position') as NonNullable<Bdc['card']>['imagePosition'],
       imageFit: stringValue(card, 'image_fit') as NonNullable<Bdc['card']>['imageFit'],
     },
@@ -617,11 +621,11 @@ function resultContentFromRows(id: string, rows: readonly SqlRow[]): Bdc['evalua
 
   return {
     success: {
-      message: nullableText(success, 'message') ?? '',
+      message: decodeSqlText(nullableText(success, 'message') ?? ''),
       action: nullableText(success, 'action') as NonNullable<Bdc['evaluationResult']>['success']['action'],
     },
     failure: {
-      message: nullableText(failure, 'message') ?? '',
+      message: decodeSqlText(nullableText(failure, 'message') ?? ''),
       action: nullableText(failure, 'action') as NonNullable<Bdc['evaluationResult']>['failure']['action'],
     },
   }
@@ -666,7 +670,7 @@ async function insertChapter(database: ProjectDatabase, projectId: string, chapt
   `, [
     projectId,
     chapter.id,
-    chapter.name,
+    nullableSerializedText(chapter.name),
     chapter.type,
     isEvaluation ? chapter.evaluationThreshold ?? DEFAULT_EVALUATION_SETTINGS.threshold : null,
     isEvaluation ? chapter.evaluationAttemptLimit ?? null : null,
@@ -677,8 +681,8 @@ async function insertChapter(database: ProjectDatabase, projectId: string, chapt
 /** Inserts a page identity; its scenario and BDC order are stored separately. */
 async function insertPage(database: ProjectDatabase, projectId: string, page: Page): Promise<void> {
   await queryRows(database,
-    'INSERT INTO pages (project_id, page_id, name, page_type, appearance_json) VALUES (?, ?, ?, ?, ?)',
-    [projectId, page.id, page.name, page.type, serializeOptionalJson(page.appearance)])
+    'INSERT INTO pages (project_id, page_id, name, page_type, appearance_json, allow_early_exit) VALUES (?, ?, ?, ?, ?, ?)',
+    [projectId, page.id, nullableSerializedText(page.name), page.type, serializeOptionalJson(page.appearance), page.allowEarlyExit === undefined ? null : Number(page.allowEarlyExit)])
 }
 
 /** Persists root scenario order and each chapter’s page order in one relation. */
@@ -860,7 +864,7 @@ async function insertBdcDetail(database: ProjectDatabase, projectId: string, bdc
           project_id, content_block_id, title, content_json, markup_html,
           default_intro_transition_ref, default_outro_transition_ref
         ) VALUES (?, ?, ?, ?, ?, ?, ?)
-      `, [projectId, bdc.id, nullableTextValue(section.title), JSON.stringify(section.content), section.markup,
+      `, [projectId, bdc.id, nullableSerializedText(section.title), JSON.stringify(section.content), section.markup,
         section.revelation.intro, section.revelation.outro])
       return
     }
@@ -870,14 +874,14 @@ async function insertBdcDetail(database: ProjectDatabase, projectId: string, bdc
         INSERT INTO questions (
           project_id, content_block_id, media_id, question_type, title, prompt, validation_label
         ) VALUES (?, ?, ?, ?, ?, ?, ?)
-      `, [projectId, bdc.id, question.mediaId, question.type, nullableTextValue(question.title), question.prompt,
-        question.validationLabel ?? QUESTION_DEFAULTS.VALIDATE_LABEL])
+      `, [projectId, bdc.id, question.mediaId, question.type, nullableSerializedText(question.title), serializeSqlText(question.prompt),
+        serializeSqlText(question.validationLabel ?? QUESTION_DEFAULTS.VALIDATE_LABEL)])
       for (const [position, answer] of question.answers.entries()) {
         await queryRows(database, `
           INSERT INTO question_answers (
             project_id, question_content_block_id, answer_id, position, label, is_correct
           ) VALUES (?, ?, ?, ?, ?, ?)
-        `, [projectId, bdc.id, answer.id, position, answer.label, answer.correct ? 1 : 0])
+        `, [projectId, bdc.id, answer.id, position, serializeSqlText(answer.label), answer.correct ? 1 : 0])
       }
       return
     }
@@ -892,7 +896,7 @@ async function insertBdcDetail(database: ProjectDatabase, projectId: string, bdc
           INSERT INTO evaluation_result_branches (
             project_id, result_content_block_id, branch, message, action
           ) VALUES (?, ?, ?, ?, ?)
-        `, [projectId, bdc.id, branch, nullableTextValue(content.message), content.action])
+        `, [projectId, bdc.id, branch, nullableSerializedText(content.message), content.action])
       }
       return
     }
@@ -916,9 +920,9 @@ async function insertBdcDetail(database: ProjectDatabase, projectId: string, bdc
           project_id, content_block_id, media_id, overline, title, description,
           message, note, caption, image_position, image_fit
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [projectId, bdc.id, card.mediaId, nullableTextValue(card.overline), nullableTextValue(card.title),
-        nullableTextValue(card.description), nullableTextValue(card.message), nullableTextValue(card.note),
-        nullableTextValue(card.caption), card.imagePosition, card.imageFit])
+      `, [projectId, bdc.id, card.mediaId, nullableSerializedText(card.overline), nullableSerializedText(card.title),
+        nullableSerializedText(card.description), nullableSerializedText(card.message), nullableSerializedText(card.note),
+        nullableSerializedText(card.caption), card.imagePosition, card.imageFit])
       return
     }
     case BDC_TYPE.STATISTICAL_GRAPH: {
@@ -1014,6 +1018,36 @@ function nullableText(row: SqlRow, key: string): string | null {
   return value
 }
 
+/** Decodes promoted Tiptap JSON stored in an existing SQLite text column. */
+function decodeSqlText(value: string): ElceTextValue {
+  if (!value.startsWith(SQLITE_RICH_TEXT_PREFIX)) return value
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(value.slice(SQLITE_RICH_TEXT_PREFIX.length))
+  } catch {
+    throw new Error('Valeur Tiptap invalide en base.')
+  }
+  if (typeof parsed === 'string') return parsed
+  if (typeof parsed === 'object' && parsed !== null && 'type' in parsed && parsed.type === 'doc'
+    && 'content' in parsed && Array.isArray(parsed.content)) return parsed as RichTextDocument
+  throw new Error('Valeur Tiptap invalide en base.')
+}
+
+/** Encodes promoted rich text while leaving ordinary authored strings readable. */
+function serializeSqlText(value: ElceTextValue): string {
+  if (typeof value === 'string') {
+    return value.startsWith(SQLITE_RICH_TEXT_PREFIX)
+      ? `${SQLITE_RICH_TEXT_PREFIX}${JSON.stringify(value)}`
+      : value
+  }
+  return `${SQLITE_RICH_TEXT_PREFIX}${JSON.stringify(value)}`
+}
+
+/** Stores optional plain empty text as SQL NULL and preserves rich documents. */
+function nullableSerializedText(value: ElceTextValue): string | null {
+  return typeof value === 'string' && value.length === 0 ? null : serializeSqlText(value)
+}
+
 /** Serializes optional appearance settings as SQL NULL when a scope inherits all values. */
 function serializeOptionalJson(value: AppearanceSettings | undefined): string | null {
   if (value === undefined) return null
@@ -1044,6 +1078,21 @@ function nullableNumber(row: SqlRow, key: string): number | null {
   if (value === null || value === undefined) return null
   if (typeof value !== 'number' && typeof value !== 'bigint') throw new Error(`Valeur numérique invalide en base : ${key}`)
   return Number(value)
+}
+
+/** Reads a nullable SQLite boolean and rejects values outside its stored domain. */
+function nullableBoolean(row: SqlRow, key: string): boolean | undefined {
+  const value = row[key]
+  if (value === null || value === undefined) return undefined
+  if (value === 0 || value === 0n) return false
+  if (value === 1 || value === 1n) return true
+  throw new Error(`Valeur booléenne invalide en base : ${key}`)
+}
+
+/** Restores the optional page exit override from its nullable SQLite column. */
+function optionalPageEarlyExit(row: SqlRow): Readonly<{ allowEarlyExit?: boolean }> {
+  const value = nullableBoolean(row, 'allow_early_exit')
+  return value === undefined ? {} : { allowEarlyExit: value }
 }
 
 /** Reads a required numeric SQLite field. */

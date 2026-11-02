@@ -1,22 +1,23 @@
 import type { StatisticalGraphLayoutId, StatisticalGraphRendering } from '../../../config/document-config-types'
 import type { StatisticalGraphContent } from '../../../domain/statistical-graph/statistical-graph-types'
+import type { ElceTextValue } from '../../../domain/document/document-types'
 
 export type StatisticalGraphTextField = 'overline' | 'title' | 'categoryAxisLabel' | 'seriesAxisLabel' | 'editorialText'
 
 export interface StatisticalGraphEditorActions {
-  readonly setText: (field: StatisticalGraphTextField, value: string) => void
+  readonly setText: (field: StatisticalGraphTextField, value: ElceTextValue) => void
   readonly setRendering: (rendering: StatisticalGraphRendering) => void
   readonly setLayout: (layoutId: StatisticalGraphLayoutId) => void
   readonly setTranspose: (enabled: boolean) => void
   readonly setPieSeries: (seriesId: string) => void
   readonly setPieCategory: (categoryId: string) => void
-  readonly setCategoryLabel: (categoryId: string, label: string) => void
-  readonly setSeriesLabel: (seriesId: string, label: string) => void
+  readonly setCategoryLabel: (categoryId: string, label: ElceTextValue) => void
+  readonly setSeriesLabel: (seriesId: string, label: ElceTextValue) => void
   readonly setCell: (categoryId: string, seriesId: string, value: string) => void
   readonly setGridCell: (
     rowIndex: number,
     columnIndex: number,
-    value: string,
+    value: ElceTextValue,
     headings?: Partial<Pick<StatisticalGraphContent, 'columnLabelsEnabled' | 'rowLabelsEnabled'>>,
   ) => void
   readonly addCategory: () => void

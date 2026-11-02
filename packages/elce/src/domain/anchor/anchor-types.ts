@@ -1,4 +1,4 @@
-import type { BdcId, MediaMetadata } from '../document/document-types'
+import type { BdcId, ElceTextValue, MediaMetadata } from '../document/document-types'
 import type { ElceCatalogDropTarget, ElceCatalogMediaType } from '../catalog/catalog-types'
 import type { CardLayoutId } from '../../config/document-config-types'
 import type { CardContent } from '../card/card-types'
@@ -32,7 +32,7 @@ export type ElceAnchorCardPreview = Readonly<{
 
 /** Describes one serializable editor change handled by the anchor service. */
 export type ElceSectionChange = Readonly<{
-  readonly title: string
+  readonly title: ElceTextValue
   readonly content: import('../document/document-types').RichTextDocument
   readonly markup: string
 }> & (

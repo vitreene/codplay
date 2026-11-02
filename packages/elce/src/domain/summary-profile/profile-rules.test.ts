@@ -206,7 +206,7 @@ describe('Elcé profile rules', () => {
       `titre du chapitre ${source.chapters[0]?.id}`,
       `titre de la page ${source.pages[0]?.id}`,
       `titre de la Section ${sectionBdc.id}`,
-      `texte de la Section ${sectionBdc.id}`,
+      `texte de Section ${sectionBdc.id}`,
     ]))
     expect(() => applyDocumentCommand(document, {
       type: 'profile.definition.update',

@@ -3,7 +3,7 @@ import type { CardLayoutId } from '../../../config/document-config-types'
 import type { ElceCardEditorActions, ElceCardFacadeOptions } from './card-facade-types'
 import type { CardContent, CardTextField } from '../../../domain/card/card-types'
 import type { ElceCatalogReference } from '../../../domain/catalog/catalog-types'
-import type { Bdc, BdcId } from '../../../domain/document/document-types'
+import type { Bdc, BdcId, ElceTextValue } from '../../../domain/document/document-types'
 import { ElceMediaResourceService } from '../../../domain/media/media-resource-service'
 import { ElceCardService } from '../../../domain/card/card-service'
 
@@ -28,7 +28,7 @@ export class ElceCardFacade {
     }
     return {
       setCardLayout: (targetBdcId, layoutId: CardLayoutId) => this.dispatch({ type: 'bdc.card.layout.set', bdcId: targetBdcId, layoutId }),
-      setCardText: (targetBdcId, field: CardTextField, value: string) => {
+      setCardText: (targetBdcId, field: CardTextField, value: ElceTextValue) => {
         updateCard(targetBdcId, (current) => this.cardService.setTextField(current, field, value))
       },
       setCaption: (targetBdcId, value) => {

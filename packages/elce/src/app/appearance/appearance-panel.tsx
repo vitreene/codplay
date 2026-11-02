@@ -29,6 +29,8 @@ import {
   resolveAppearance,
 } from '../../domain/appearance/appearance-resolver'
 import { generateAppearanceColors } from '../../domain/appearance/appearance-color-generator'
+import { plainTextFromValue } from '../../domain/inline-text/inline-text-value'
+import { pageAllowsEarlyExit } from '../../domain/inline-text/page-early-exit.ts'
 
 interface AppearancePanelProps {
   readonly view: EditorViewModel
@@ -53,6 +55,9 @@ export function renderAppearancePanel(props: AppearancePanelProps): RemixNode {
   const targetLabel = appearanceTargetLabel(view, target)
   const localSettings = appearanceSettingsAt(document, target)
   const resolved = resolveAppearance(document, target)
+  const page = target.kind === 'page'
+    ? document.pages.find((candidate) => candidate.id === target.pageId)
+    : undefined
   const palette = getAppearancePalette(resolved.paletteId.value)
   const hasTextSurface = isTextBearingCard(view, target)
   const card = target.kind === 'bdc'
@@ -82,6 +87,25 @@ export function renderAppearancePanel(props: AppearancePanelProps): RemixNode {
     >
       {targetLabel}
     </p>
+    {page === undefined ? null : <div
+      id={`elce-page-early-exit-setting-${page.id}`}
+      className="elce-page-early-exit-setting"
+    >
+      <label
+        id={`elce-page-early-exit-label-${page.id}`}
+        htmlFor={`elce-page-early-exit-${page.id}`}
+      >
+        <input
+          id={`elce-page-early-exit-${page.id}`}
+          type="checkbox"
+          checked={pageAllowsEarlyExit(document, page)}
+          aria-label="Ignorer la contrainte de lecture"
+          mix={on<HTMLInputElement, 'change'>('change', (event) => actions.setPageEarlyExit(page.id, event.currentTarget.checked))}
+        />
+        <span id={`elce-page-early-exit-text-${page.id}`}>Ignorer la contrainte de lecture</span>
+      </label>
+      <small id={`elce-page-early-exit-note-${page.id}`}>Activé par défaut lorsqu’un lien interne figure sur la page.</small>
+    </div>}
     <div
       id="elce-appearance-fields"
       className="elce-appearance-fields"
@@ -512,12 +536,12 @@ function appearanceTargetLabel(view: EditorViewModel, target: AppearanceTarget):
   if (target.kind === 'page') {
     const index = view.documentModel.pages.findIndex((page) => page.id === target.pageId)
     const page = view.documentModel.pages[index]
-    return `Page · ${page?.name || `Page ${index + 1}`}`
+    return `Page · ${page === undefined ? `Page ${index + 1}` : plainTextFromValue(page.name)}`
   }
   const bdc = view.documentModel.bdcs.find((candidate) => candidate.id === target.bdcId)
   if (bdc === undefined) return 'Projet'
-  if (bdc.type === BDC_TYPE.SECTION) return `Section · ${bdc.section?.title.trim() || 'Sans titre'}`
-  if (bdc.type === BDC_TYPE.CARD) return `Carte · ${bdc.card?.title.trim() || 'Sans titre'}`
+  if (bdc.type === BDC_TYPE.SECTION) return `Section · ${bdc.section === null ? 'Sans titre' : plainTextFromValue(bdc.section.title).trim() || 'Sans titre'}`
+  if (bdc.type === BDC_TYPE.CARD) return `Carte · ${bdc.card == null ? 'Sans titre' : plainTextFromValue(bdc.card.title).trim() || 'Sans titre'}`
   switch (bdc.type) {
     case BDC_TYPE.CAROUSEL: return 'Carousel'
     case BDC_TYPE.QUESTION: return 'Question'

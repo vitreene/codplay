@@ -16,9 +16,15 @@ import { downloadElceScormPackage, requestElceScormPackage } from '../../export/
 import type { ScormVersion } from '../../scorm/scorm-types'
 import { renderEditorWorkspace } from './workspace/editor-workspace'
 import { RemixPageEditor } from './workspace/page-editor'
-import type { DraggedScenarioEntry, ResponsivePanel, SidePanelTab } from './workspace/editor-workspace-types'
+import { initialWorkspacePanelVisibility, resizedWorkspacePanelVisibility } from './workspace/workspace-panel-state.ts'
+import type { DraggedScenarioEntry, ResponsivePanel, SidePanelTab, WorkspacePanelName, WorkspacePanelVisibility } from './workspace/editor-workspace-types'
 import type { ProjectApplicationView, ProjectApplicationWorkspaceState } from './project-application-types'
 import type { AppearanceTarget } from '../../domain/commands/document-command-types'
+import {
+  INLINE_TEXT_LABEL_SELECTION_EVENT,
+  type InlineTextLabelSelection,
+  type InlineTextLabelSelectionEventDetail,
+} from '../editor/profile/profile-token-events'
 
 /** Renders project management and the native Remix authoring workspace. */
 export function ProjectApplication(handle: Handle) {
@@ -30,12 +36,14 @@ export function ProjectApplication(handle: Handle) {
   }
 
   let view = selectProjectView(controller.getSnapshot())
-  let responsivePanel: ResponsivePanel = null
+  let previousViewportWidth = typeof window === 'undefined' ? 1280 : window.innerWidth
+  let panelVisibility = initialWorkspacePanelVisibility(previousViewportWidth)
   let sidePanelTab: SidePanelTab = 'contents'
   let appearanceTarget: AppearanceTarget = { kind: 'document' }
   let appearanceProjectId = view.activeProject?.id ?? null
   let summarySettingsOpen = false
   let profileTokenTargetId: string | null = null
+  let selectedInlineLabel: InlineTextLabelSelection | null = null
   let authoringError: string | null = null
   let dropTarget: string | null = null
   let draggedEntry: DraggedScenarioEntry = null
@@ -44,27 +52,41 @@ export function ProjectApplication(handle: Handle) {
   let exportKind: 'sighty' | 'scorm' | null = null
   let exportError: string | null = null
   let exportNotice: string | null = null
-  let returnFocusId: string | null = null
   let popupPreviewHost: PopupPreviewHost | null = null
 
-  const setResponsivePanel = (panel: ResponsivePanel, triggerId?: string): void => {
-    if (panel !== null) returnFocusId = triggerId ?? returnFocusId
-    const focusId = panel === null ? returnFocusId : null
-    responsivePanel = panel
-    if (panel === null) returnFocusId = null
-    void handle.update().then(() => {
-      if (panel === null && focusId !== null) document.getElementById(focusId)?.focus()
-    })
+  /** Opens or closes a panel and moves focus to its newly available control. */
+  const setPanelVisibility = (panel: WorkspacePanelName, open: boolean): void => {
+    const width = typeof window === 'undefined' ? 1280 : window.innerWidth
+    const nextVisibility = open && width <= 800
+      ? { outline: panel === 'outline', properties: panel === 'properties' }
+      : { ...panelVisibility, [panel]: open }
+    if (nextVisibility.outline === panelVisibility.outline && nextVisibility.properties === panelVisibility.properties) return
+    panelVisibility = nextVisibility
+    const focusId = open
+      ? panel === 'outline' ? 'elce-outline-reduce' : 'elce-properties-reduce'
+      : panel === 'outline' ? 'elce-outline-toggle' : 'elce-properties-toggle'
+    void handle.update().then(() => document.getElementById(focusId)?.focus())
+  }
+  /** Adapts legacy responsive panel requests to the independent panel state. */
+  const setResponsivePanel = (panel: ResponsivePanel, _triggerId?: string): void => {
+    if (panel !== null) {
+      setPanelVisibility(panel, true)
+      return
+    }
+    const panelToClose = typeof window !== 'undefined' && window.innerWidth <= 800
+      ? panelVisibility.outline ? 'outline' : panelVisibility.properties ? 'properties' : null
+      : panelVisibility.properties ? 'properties' : panelVisibility.outline ? 'outline' : null
+    if (panelToClose !== null) setPanelVisibility(panelToClose, false)
   }
   const setSidePanelTab = (tab: SidePanelTab): void => {
     if (sidePanelTab === tab) return
     sidePanelTab = tab
     void handle.update()
   }
-  const openAppearanceTarget = (target: AppearanceTarget, triggerId: string): void => {
+  const openAppearanceTarget = (target: AppearanceTarget, _triggerId: string): void => {
     appearanceTarget = target
     sidePanelTab = 'style'
-    setResponsivePanel('properties', triggerId)
+    setPanelVisibility('properties', true)
   }
   const setDropTarget = (targetId: string | null): void => {
     if (dropTarget === targetId) return
@@ -80,6 +102,7 @@ export function ProjectApplication(handle: Handle) {
   const setProfileTokenTarget = (targetId: string | null): void => {
     if (profileTokenTargetId === targetId) return
     profileTokenTargetId = targetId
+    if (selectedInlineLabel?.targetId !== targetId) selectedInlineLabel = null
     if (targetId === null && view.editor.catalogTab === CATALOG_TAB.PROFILE) {
       actions.selectCatalogTab(CATALOG_TAB.AVAILABLE_BDCS)
     }
@@ -182,8 +205,25 @@ export function ProjectApplication(handle: Handle) {
       view = nextView
       void handle.update()
     })
+    /** Closes the active panel on Escape while preserving editor history shortcuts. */
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape' && responsivePanel !== null) setResponsivePanel(null)
+      if (event.key === 'Escape') {
+        const focusedPanel = event.target instanceof Element
+          ? event.target.closest('#elce-outline') !== null ? 'outline'
+            : event.target.closest('#elce-properties') !== null ? 'properties'
+              : null
+          : null
+        const width = window.innerWidth
+        const fallbackPanel = width <= 800
+          ? panelVisibility.outline ? 'outline' : panelVisibility.properties ? 'properties' : null
+          : width <= 1200 && panelVisibility.properties ? 'properties' : null
+        const panelToClose = focusedPanel !== null && panelVisibility[focusedPanel] ? focusedPanel : fallbackPanel
+        if (panelToClose !== null) {
+          event.preventDefault()
+          setPanelVisibility(panelToClose, false)
+          return
+        }
+      }
       if (!(event.metaKey || event.ctrlKey) || event.altKey || event.key.toLowerCase() !== 'z') return
       if (view.activeProject === null || view.projectStatus !== 'active' || view.editAccess !== 'active') return
       event.preventDefault()
@@ -202,9 +242,30 @@ export function ProjectApplication(handle: Handle) {
           setProfileTokenTarget(target.id)
           return
         }
-        if (event.target.closest('#elce-properties, #elce-properties-toggle') !== null) return
+        if (isInlineTextContextTarget(event.target)) return
       }
       setProfileTokenTarget(null)
+    }
+    /** Opens the Variables editor when a Tiptap label atom becomes selected. */
+    const handleInlineTextLabelSelection = (event: Event): void => {
+      const detail = (event as CustomEvent<InlineTextLabelSelectionEventDetail>).detail
+      if (detail === undefined) return
+      if (detail.selection === null) {
+        if (selectedInlineLabel?.targetId !== detail.targetId) return
+        selectedInlineLabel = null
+        void handle.update()
+        return
+      }
+      setProfileTokenTarget(detail.targetId)
+      selectedInlineLabel = {
+        targetId: detail.targetId,
+        position: detail.selection.position,
+        label: detail.selection.label,
+      }
+      sidePanelTab = 'contents'
+      if (view.editor.catalogTab !== CATALOG_TAB.PROFILE) actions.selectCatalogTab(CATALOG_TAB.PROFILE)
+      setPanelVisibility('properties', true)
+      void handle.update()
     }
     /** Clears the insertion context when the author clicks outside its field and panel. */
     const handleProfileTokenPointerDown = (event: PointerEvent): void => {
@@ -213,25 +274,23 @@ export function ProjectApplication(handle: Handle) {
         return
       }
       if (event.target.closest('[data-elce-profile-token-target="true"]') !== null
-        || event.target.closest('#elce-properties, #elce-properties-toggle') !== null) return
+        || isInlineTextContextTarget(event.target)) return
       setProfileTokenTarget(null)
     }
     document.addEventListener('click', closeProjectMenuOnOutsideClick, true)
+    /** Applies the established panel defaults when a responsive breakpoint changes. */
     const handleResize = (): void => {
-      switch (responsivePanel) {
-        case 'outline':
-          if (window.innerWidth > 800) setResponsivePanel(null)
-          return
-        case 'properties':
-          if (window.innerWidth > 1200) setResponsivePanel(null)
-          return
-        case null:
-          return
-      }
+      const nextWidth = window.innerWidth
+      const nextVisibility = resizedWorkspacePanelVisibility(panelVisibility, previousViewportWidth, nextWidth)
+      previousViewportWidth = nextWidth
+      if (nextVisibility.outline === panelVisibility.outline && nextVisibility.properties === panelVisibility.properties) return
+      panelVisibility = nextVisibility
+      void handle.update()
     }
     document.addEventListener('keydown', handleKeyDown, true)
     document.addEventListener('input', handleInput)
     document.addEventListener('focusin', handleProfileTokenFocusIn, true)
+    document.addEventListener(INLINE_TEXT_LABEL_SELECTION_EVENT, handleInlineTextLabelSelection)
     document.addEventListener('pointerdown', handleProfileTokenPointerDown, true)
     window.addEventListener('resize', handleResize)
     const dispose = (): void => {
@@ -239,6 +298,7 @@ export function ProjectApplication(handle: Handle) {
       document.removeEventListener('keydown', handleKeyDown, true)
       document.removeEventListener('input', handleInput)
       document.removeEventListener('focusin', handleProfileTokenFocusIn, true)
+      document.removeEventListener(INLINE_TEXT_LABEL_SELECTION_EVENT, handleInlineTextLabelSelection)
       document.removeEventListener('pointerdown', handleProfileTokenPointerDown, true)
       document.removeEventListener('click', closeProjectMenuOnOutsideClick, true)
       window.removeEventListener('resize', handleResize)
@@ -248,15 +308,18 @@ export function ProjectApplication(handle: Handle) {
   })
 
   return () => renderApplication(view, actions, {
-    responsivePanel,
+    responsivePanel: responsivePanelFromVisibility(panelVisibility, typeof window === 'undefined' ? 1280 : window.innerWidth),
+    panelVisibility,
     sidePanelTab,
     appearanceTarget,
     summarySettingsOpen,
     profileTokenTargetId,
+    selectedInlineLabel,
     authoringError,
     dropTarget,
     visible: view.activeProject !== null && view.projectStatus === 'active' && view.editAccess === 'active',
     setResponsivePanel,
+    setPanelVisibility,
     setSidePanelTab,
     openAppearanceTarget,
     setSummarySettingsOpen,
@@ -548,15 +611,18 @@ function renderApplication(
         ? <RemixPageEditor onOpenAppearanceTarget={workspace.openAppearanceTarget} />
         : null,
       responsivePanel: workspace.responsivePanel,
+      panelVisibility: workspace.panelVisibility,
       sidePanelTab: workspace.sidePanelTab,
       appearanceTarget: workspace.appearanceTarget,
       summarySettingsOpen: workspace.summarySettingsOpen,
       profileTokenTargetId: workspace.profileTokenTargetId,
+      selectedInlineLabel: workspace.selectedInlineLabel,
       authoringError: workspace.authoringError,
       dropTarget: workspace.dropTarget,
       visible: projectVisible,
       editable: editorVisible,
       onSetResponsivePanel: workspace.setResponsivePanel,
+      onSetPanelVisibility: workspace.setPanelVisibility,
       onSetSidePanelTab: workspace.setSidePanelTab,
       onOpenAppearanceTarget: workspace.openAppearanceTarget,
       onSetSummarySettingsOpen: workspace.setSummarySettingsOpen,
@@ -574,6 +640,19 @@ function renderApplication(
       onMoveChapter: workspace.moveChapter,
     })}
   </div>
+}
+
+/** Projects visible panels to the legacy exclusive state used by responsive controls. */
+function responsivePanelFromVisibility(
+  visibility: WorkspacePanelVisibility,
+  width: number,
+): ResponsivePanel {
+  if (width <= 800) {
+    if (visibility.outline) return 'outline'
+    if (visibility.properties) return 'properties'
+    return null
+  }
+  return width <= 1200 && visibility.properties ? 'properties' : null
 }
 
 /** Renders the export action at the right edge of the project title bar. */
@@ -770,6 +849,13 @@ function projectRows(view: ProjectApplicationView, actions: EditorActionsFacade,
       </button>
     </li>
   })
+}
+
+/** Keeps the insertion target while focus moves through its companion tools. */
+function isInlineTextContextTarget(target: Element): boolean {
+  return target.closest(
+    '#elce-properties, #elce-properties-toggle, .elce-inline-text-field__toolbar, .elce-inline-text-catalog',
+  ) !== null
 }
 
 /** Selects the page-independent sync label from the XState project view. */

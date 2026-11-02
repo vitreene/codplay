@@ -71,6 +71,24 @@ de code ou de contrat SCORM n’est réalisé par cette préparation.
 | 8 | Page Diapo | En cours — Carousel par défaut, alternatives Quiz/Carte autonome et signal de fin vérifiés dans le player réel et Brave. Réduction de la profondeur DOM du Carousel Diapo implémentée et vérifiée le 7 octobre 2026 : cinq éléments jusqu’à `img.cp-img-inner` dans Safari, navigation aux points, replay de page stable ; 160 tests, typecheck et build Elcé passent. La voix facultative et son effet sur les durées restent à traiter. Le BDC séquence réunissant plusieurs types reste une proposition à évaluer. | Ajouter le type de page sans défilement et son builder distinct. Une Diapo porte un seul BDC direct : la création propose un Carousel ; l’auteur peut le supprimer et le remplacer par un BDC Question/Quiz ou un BDC Carte autonome réutilisant le modèle Carte du Carousel. Le Carousel porte la séquence de ses cartes. Plusieurs contenus de types différents et leur temporalité ne sont pas simulés par une composition locale ; évaluer séparément la proposition de BDC séquence. La fin fonctionnelle de Diapo publie le même événement que la fin de défilement d’une Page : `elce:page:finished` avec `pageId`, visibilité `public`, par le marqueur `emit.observe` partagé avec Flux ou par l’action de validation du Quiz. Le traitement Sighty existant met à jour le verrouillage global de la navigation ; l’événement ne déclenche pas lui-même la navigation. La Diapo garde son affichage sans défilement. Ne pas utiliser `scene:end` pour cet achèvement et ne pas modifier CodPlay. Le comportement vocal et ses règles de répartition de durée restent à appliquer selon le plan ci-dessous. |
 | 9 | Acceptation finale du POC | En cours — fenêtre distincte, suivi automatique de l’éditeur, arrêt par navigation dans la preview et reprise par retour à la page éditée vérifiés dans Brave le 30 octobre ; médias, typecheck, 523 tests et build passent. Correction de la preview orpheline vérifiée le 26 octobre : elle ne charge plus le document local par défaut, termine l’état de chargement et demande de rouvrir depuis l’éditeur ; une nouvelle preview rend le document v7. Le même jour, Brave a vérifié la récupération après une session restée sans instantané malgré un éditeur ouvert : recliquer sur « Prévisualiser » réutilise la popup et charge la page active avec une nouvelle session. Le 26 octobre, le libellé « Test auteur » a aussi été réintégré à l’adaptation responsive : masqué sur mobile, visible sur ordinateur, sans débordement. La suite Elcé passe 483 tests sur 484 ; le test SQLite restant est bloqué par `listen EPERM`. Lors d’une sélection, Brave signale qu’un descendant garde le focus au moment où le tiroir reçoit `aria-hidden` ; ce transfert reste à corriger. L’incohérence ARIA observée au passage de 800 à 801 px est reportée à une évolution CodPlay indépendante de la matérialisation. L’intégration du focus reste en attente d’une décision sur l’état accessible du menu de bureau après retrait de son adaptateur impératif. | Rejouer les parcours auteur et player, y compris mobile, chargement après fermeture et lecture en fenêtre distincte. Conserver la modale intégrée désactivée afin de comparer les deux choix pendant le POC. La synchronisation automatique débrayable est appliquée et décrite dans la spécification preview ; conserver les autres acceptations de la tranche ouvertes. Définir comment le menu reste accessible sur ordinateur sans logique DOM impérative, puis appliquer les actions de focus CodPlay et rejouer les vérifications concernées, le typecheck, les tests, le build et le navigateur. Le défaut 800/801 reste différé ; ne pas le résoudre par un patch local Elcé ou HTML. Documenter seulement les comportements effectivement vérifiés. |
 
+**Alignement responsive des commandes de panneau — appliqué et vérifié le 2 novembre 2026.**
+Les commandes Scénario, Prévisualiser et Contenus restent respectivement dans
+les première, deuxième et troisième colonnes de la barre, même lorsque l’une
+des commandes latérales est masquée. Les colonnes explicites évitent que le
+masquage de Scénario fasse glisser Contenus vers le centre. Brave vérifie le
+bord droit de Contenus et le centrage de Prévisualiser à 855 px, les trois
+positions à 780 px, et le centrage de Prévisualiser avec les deux commandes
+masquées à 1280 px. `editor-workspace.test.tsx` passe ses six tests.
+
+**Réduction des panneaux — appliquée et vérifiée le 2 novembre 2026.** Les
+commandes portent les noms accessibles « Réduire le panneau Scénario » et
+« Réduire le panneau Contenus » et utilisent `PanelLeftClose`/`PanelRightClose`.
+Elles sont alignées au même coin supérieur droit, contre le bord de leur
+conteneur et au-dessus du contenu ; celle de Contenus a sa rangée au-dessus des
+onglets. À 855 px, Brave confirme les libellés et les icônes, la
+réduction/réouverture des deux panneaux et la restitution du focus. Voir la
+[spécification de l’éditeur](../specs/organization-editor-spec.md).
+
 **Éditeur central de page — appliqué et vérifié le 22 octobre 2026.** La
 rangée d’actions de création précède maintenant les titres ; le titre de page
 est plus affirmé et distinct du titre de chapitre. `workspace/page-editor.test.tsx`
@@ -436,6 +454,42 @@ intégration dépendante ; les travaux indépendants continuent.
   spécifique qui impose `display:flex` au Scénario pendant l’édition ; le panneau
   fermé restait donc dans la grille et repoussait la zone centrale. Le sélecteur
   de masquage est maintenant limité au panneau latéral fermé dans l’espace auteur.
+
+### Panneaux latéraux escamotables au bureau — réalisation validée
+
+Les colonnes « Scénario » et « Contenus » peuvent être rabattues séparément,
+car leur présence simultanée réduit trop la largeur d’édition. Chaque colonne
+ouverte porte sa commande de réduction en haut à droite. Quand une colonne est
+réduite, son bouton de réouverture apparaît dans la barre d’actions qui contient
+« Prévisualiser » : Scénario à gauche, Contenus à droite. Les panneaux restent
+dans la grille ; leur réduction rend leur largeur à la zone centrale et ne crée
+pas de superposition.
+
+Les règles responsives déjà vérifiées restent en vigueur : Contenus est fermé
+par défaut à 1200 px et moins ; à 800 px et moins les deux panneaux sont fermés
+au départ et un seul peut être ouvert. Les boutons de réouverture restent de
+part et d’autre de « Prévisualiser » quand le panneau correspondant est fermé.
+Les contrôles gardent un nom accessible, `aria-expanded`, `aria-controls` et un
+retour du focus vers la commande de réouverture après réduction.
+
+**État au 2 novembre 2026 :** les commandes séparées, l’exclusivité à 800 px et
+moins et le transfert du focus sont appliqués. Le 404 initial de
+`workspace-panel-state.ts` venait d’imports locaux sans extension dans les
+modules Remix ; les imports explicites corrigent le chargement. Brave reçoit
+304 pour les deux modules de panneau. À 1280 px, réduire l’une ou l’autre colonne
+rend 304 px au centre sans déplacer l’autre ; à 800 px, ouvrir un panneau réduit
+l’autre et le document ne déborde pas. À 855 px, Entrée et Espace ouvrent
+Contenus, Échap le réduit et rend le focus à sa commande de réouverture.
+L’éditeur a d’abord reçu `edit_access_occupied` depuis un ancien onglet de test ;
+la fermeture de cet onglet a libéré l’accès, ensuite obtenu avec une réponse 200.
+La spécification Organisation décrit maintenant le comportement vérifié.
+
+**Acceptation :** à plus de 1200 px, réduire chaque colonne séparément puis la
+rouvrir depuis son bouton autour de « Prévisualiser » ; vérifier que le centre
+occupe l’espace libéré et que l’autre colonne ne bouge pas. Refaire aux largeurs
+801–1200 px et 800 px et moins, en vérifiant les règles responsives existantes,
+l’ouverture exclusive sur petit écran, le clavier et l’absence de débordement.
+Mettre à jour la spécification Organisation après validation intégrée.
 
 ### Placement du bouton d’export Sighty — décision acceptée
 
@@ -1500,6 +1554,7 @@ passent. Le parcours navigateur réseau et sa validation mobile restent à faire
 
 - [Plan Sommaire et profils](2026-10-14-elce-sommaire-profils-plan.md) : étapes,
   acceptation et points restant à vérifier.
+- [Plan variables et liens internes](2026-10-30-elce-variables-et-liens-internes-plan.md) : promotion paresseuse des champs en Tiptap, résolution dans la preview et navigation par les gardes existantes.
 - [Spécification Sommaire et profils](../specs/summary-profile-spec.md) :
   comportements intégrés et vérifiés.
 - [Notes d’enquête](../notes/2026-10-14-sommaire-profils-contraintes.md) et

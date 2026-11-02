@@ -167,7 +167,9 @@ export class ElcePlayerComposition {
         setAccessibleState(true)
         return
       }
-      if (event.name === ELCE_EVENTS.MENU_DRAWER_CLOSE || event.name.startsWith(ELCE_EVENTS.MENU_PREFIX)) {
+      if (event.name === ELCE_EVENTS.MENU_DRAWER_CLOSE
+        || event.name.startsWith(ELCE_EVENTS.MENU_PREFIX)
+        || event.name.startsWith(ELCE_EVENTS.PAGE_LINK_PREFIX)) {
         view.requestAnimationFrame(() => setAccessibleState(false, true))
       }
     }

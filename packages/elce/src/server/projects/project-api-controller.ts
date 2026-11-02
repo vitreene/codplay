@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { assertDocumentInvariants } from '../../domain/commands/document-commands'
 import { ELCE_DOCUMENT_VERSION, ElceDocument } from '../../domain/document/document-model'
-import type { ElceDocumentData } from '../../domain/document/document-types'
 import type { ProjectPersistence, ProjectSummary } from './project-persistence'
 import { lostProjectEditGrant, missingProjectEditGrant, projectEditGrantFrom } from './project-edit-grant'
 
@@ -212,7 +211,7 @@ async function readJsonBody(request: Request): Promise<JsonBody> {
   }
 }
 
-/** Rehydrates and validates a v7 document using the existing domain invariants. */
+/** Rehydrates v7-v9 input and validates it with the current domain invariants. */
 function parseDocument(value: unknown): ParsedDocument {
   if (!isDocumentData(value)) return { kind: 'invalid', reason: 'invalid_document_shape' }
 
@@ -238,11 +237,11 @@ function errorFrames(error: unknown): readonly string[] {
 }
 
 /** Narrows untrusted JSON to the required top-level document fields. */
-function isDocumentData(value: unknown): value is ElceDocumentData {
+function isDocumentData(value: unknown): value is Record<string, unknown> {
   return isRecord(value)
     && typeof value.id === 'string'
     && typeof value.name === 'string'
-    && value.version === ELCE_DOCUMENT_VERSION
+    && (value.version === 7 || value.version === ELCE_DOCUMENT_VERSION)
 }
 
 /** Extracts the project name from a rename request body. */

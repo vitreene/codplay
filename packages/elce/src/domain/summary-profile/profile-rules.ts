@@ -1,7 +1,7 @@
 import type { ElceDocument } from '../document/document-model'
 import { MEDIA_TYPE } from '../../config/document-config'
 import { mediaTypeFromMimeType } from '../media/media-resource-service'
-import type { Bdc, ChapterId, PageId, RichTextNode } from '../document/document-types'
+import type { Bdc, ChapterId, ElceTextValue, PageId, RichTextNode } from '../document/document-types'
 import type { ProfileCondition, ProfileConstraint, ProfileConditionRow, ProfileProperty, ProfileValue, ReadingConstraint } from './summary-profile-types'
 
 /** Validates the project-owned summary and profile definitions. */
@@ -311,7 +311,11 @@ export function assertNoReadingCycle(constraints: readonly ReadingConstraint[], 
 /** Finds one inline Tiptap profile-label node with a stable property reference. */
 function collectProfileReferences(document: ElceDocument): Map<string, string[]> {
   const references = new Map<string, string[]>()
-  const addText = (value: string, usage: string): void => {
+  const addText = (value: ElceTextValue, usage: string): void => {
+    if (typeof value !== 'string') {
+      addRichText(value.content, usage)
+      return
+    }
     for (const match of value.matchAll(/\{\{profile:([^{}]+)\}\}/g)) addReference(match[1]!, usage)
   }
   const addReference = (id: string, usage: string): void => {
@@ -319,13 +323,13 @@ function collectProfileReferences(document: ElceDocument): Map<string, string[]>
     usages.push(usage)
     references.set(id, usages)
   }
-  const addRichText = (nodes: readonly RichTextNode[], bdcId: string): void => {
+  const addRichText = (nodes: readonly RichTextNode[], usage: string): void => {
     for (const node of nodes) {
       if (node.type === 'profileLabel' && typeof node.attrs?.profilePropertyId === 'string') {
-        addReference(node.attrs.profilePropertyId, `étiquette dans la Section ${bdcId}`)
+        addReference(node.attrs.profilePropertyId, `étiquette dans ${usage}`)
       }
-      if (node.type === 'text' && typeof node.text === 'string') addText(node.text, `texte de la Section ${bdcId}`)
-      if (node.content !== undefined) addRichText(node.content, bdcId)
+      if (node.type === 'text' && typeof node.text === 'string') addText(node.text, `texte de ${usage}`)
+      if (node.content !== undefined) addRichText(node.content, usage)
     }
   }
 
@@ -340,12 +344,12 @@ function collectProfileReferences(document: ElceDocument): Map<string, string[]>
 /** Collects profile references from every BDC text field exposed by the reader. */
 function addBdcProfileReferences(
   bdc: Bdc,
-  addText: (value: string, usage: string) => void,
+  addText: (value: ElceTextValue, usage: string) => void,
   addRichText: (nodes: readonly RichTextNode[], bdcId: string) => void,
 ): void {
   if (bdc.section !== null) {
     addText(bdc.section.title, `titre de la Section ${bdc.id}`)
-    addRichText(bdc.section.content.content, bdc.id)
+    addRichText(bdc.section.content.content, `Section ${bdc.id}`)
   }
   if (bdc.card != null) {
     for (const field of ['overline', 'title', 'description', 'message', 'note', 'caption'] as const) {

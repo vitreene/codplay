@@ -77,8 +77,13 @@ describe('appearance panel targets', () => {
         .toBe('crimson-dm-sans')
       expect((rendered.$('#elce-appearance-density-select') as HTMLSelectElement | null)?.value).toBe('normal')
       expect(rendered.$('#elce-appearance-preset-select') !== null).toBe(target.kind === 'document')
+      expect(rendered.$(`#elce-page-early-exit-${page.id}`) !== null).toBe(target.kind === 'page')
       if (target.kind === 'document') {
         expect((rendered.$('#elce-appearance-preset-select') as HTMLSelectElement).value).toBe('classic')
+      }
+      if (target.kind === 'page') {
+        expect(rendered.$(`#elce-page-early-exit-text-${page.id}`)?.textContent)
+          .toBe('Ignorer la contrainte de lecture')
       }
       expect(rendered.$('#elce-appearance-target-context')?.textContent).not.toMatch(/hérit|hérite/i)
 
@@ -112,6 +117,24 @@ describe('appearance panel targets', () => {
     await projectResetPanel.act(() => frameReset.click())
     expect(controller.getSnapshot().context.document.data.appearance?.frame).toBeUndefined()
     projectResetPanel.cleanup()
+
+    const pageReadingPanel = render(<div id="appearance-page-reading-test-root">
+      {renderAppearancePanel({
+        view: selectEditorViewModel(controller.getSnapshot()),
+        actions,
+        target: { kind: 'page', pageId: page.id },
+      })}
+    </div>)
+    const pageReadingToggle = pageReadingPanel.$(`#elce-page-early-exit-${page.id}`) as HTMLInputElement | null
+    if (pageReadingToggle === null) throw new Error('The page Style panel has no reading-constraint checkbox.')
+    expect(pageReadingToggle.checked).toBe(false)
+    await pageReadingPanel.act(() => {
+      pageReadingToggle.checked = true
+      pageReadingToggle.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(controller.getSnapshot().context.document.pages.find((candidate) => candidate.id === page.id)?.allowEarlyExit)
+      .toBe(true)
+    pageReadingPanel.cleanup()
 
     const textCard = documentModel.bdcs.find((bdc) => bdc.type === BDC_TYPE.CARD)
     const textCardParent = textCard?.parentBdcId === null || textCard?.parentBdcId === undefined

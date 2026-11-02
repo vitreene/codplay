@@ -8,6 +8,8 @@ import { on, type RemixNode } from 'remix/ui'
 
 import { renderLucideIcon } from '../../remix/lucide-static-icon'
 import { renderAppearanceTrigger } from '../../appearance/appearance-trigger'
+import { renderInlineTextField } from '../inline-text/inline-text-field'
+import type { ElceTextValue } from '../../../domain/document/document-types'
 
 const resultService = new ElceEvaluationResultService()
 
@@ -81,15 +83,14 @@ function renderResultBranch(
     >
       {branchConfig.label}
     </legend>
-    <textarea
-      id={`elce-evaluation-result-message-${bdcId}-${branch}`}
-      aria-label={branchConfig.messagePlaceholder}
-      placeholder={branchConfig.messagePlaceholder}
-      rows={2}
-      value={content[branch].message}
-      data-elce-profile-token-target="true"
-      mix={on<HTMLTextAreaElement, 'input'>('input', (event) => updateMessage(content, branch, event.currentTarget.value, onChange))}
-    />
+    {renderInlineTextField({
+      id: `elce-evaluation-result-message-${bdcId}-${branch}`,
+      ariaLabel: branchConfig.messagePlaceholder,
+      placeholder: branchConfig.messagePlaceholder,
+      multiline: true,
+      value: content[branch].message,
+      onChange: (message) => updateMessage(content, branch, message, onChange),
+    })}
     <select
       id={`elce-evaluation-result-action-${bdcId}-${branch}`}
       aria-label={`${branchConfig.label} : ${branchConfig.actionLabel}`}
@@ -121,7 +122,7 @@ function renderResultBranch(
 function updateMessage(
   content: EvaluationResultContent,
   branch: EvaluationResultBranch,
-  message: string,
+  message: ElceTextValue,
   onChange: (content: EvaluationResultContent) => void,
 ): void {
   onChange(resultService.updateBranch(content, branch, { ...content[branch], message }))

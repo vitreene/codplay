@@ -7,6 +7,7 @@ import type { QuestionEditorProps } from './question-editor-types'
 import { renderRemixMediaPicker } from '../media/remix-media-picker'
 import { renderLucideIcon } from '../../remix/lucide-static-icon'
 import { renderAppearanceTrigger } from '../../appearance/appearance-trigger'
+import { renderInlineTextField } from '../inline-text/inline-text-field'
 
 const ANSWER_DRAG_MIME_TYPE = 'application/x-elce-question-answer+json'
 
@@ -69,35 +70,32 @@ export function renderRemixQuestionEditor(props: QuestionEditorProps): RemixNode
         id={`elce-question-content-${bdcId}`}
         className="elce-question-content"
       >
-        <input
-          id={`elce-question-title-${bdcId}`}
-          className="elce-question-title"
-          aria-label="Titre facultatif de la question"
-          placeholder="Titre"
-          value={question.title}
-          data-elce-profile-token-target="true"
-          mix={on<HTMLInputElement, 'input'>('input', (event) => actions.setTitle(event.currentTarget.value))}
-        />
-        <textarea
-          id={`elce-question-prompt-${bdcId}`}
-          className="elce-question-prompt"
-          aria-label="Question"
-          placeholder="Écrire la question…"
-          rows={2}
-          value={question.prompt}
-          data-elce-profile-token-target="true"
-          mix={on<HTMLTextAreaElement, 'input'>('input', (event) => actions.setPrompt(event.currentTarget.value))}
-        />
-        <input
-          id={`elce-question-validation-label-${bdcId}`}
-          className="elce-question-validation-label"
-          type="text"
-          aria-label="Texte du bouton de validation"
-          placeholder="Texte du bouton de validation"
-          value={question.validationLabel ?? QUESTION_DEFAULTS.VALIDATE_LABEL}
-          data-elce-profile-token-target="true"
-          mix={on<HTMLInputElement, 'input'>('input', (event) => actions.setValidationLabel(event.currentTarget.value))}
-        />
+        {renderInlineTextField({
+          id: `elce-question-title-${bdcId}`,
+          className: 'elce-question-title',
+          ariaLabel: 'Titre facultatif de la question',
+          placeholder: 'Titre',
+          value: question.title,
+          onChange: actions.setTitle,
+        })}
+        {renderInlineTextField({
+          id: `elce-question-prompt-${bdcId}`,
+          className: 'elce-question-prompt',
+          ariaLabel: 'Question',
+          placeholder: 'Écrire la question…',
+          multiline: true,
+          value: question.prompt,
+          onChange: actions.setPrompt,
+        })}
+        {renderInlineTextField({
+          id: `elce-question-validation-label-${bdcId}`,
+          className: 'elce-question-validation-label',
+          ariaLabel: 'Texte du bouton de validation',
+          placeholder: 'Texte du bouton de validation',
+          value: question.validationLabel ?? QUESTION_DEFAULTS.VALIDATE_LABEL,
+          allowPageLinks: false,
+          onChange: actions.setValidationLabel,
+        })}
         {typeConfig.note.length > 0
           ? <p
             id={`elce-question-multiple-note-${bdcId}`}
@@ -198,14 +196,13 @@ function renderQuestionAnswer(
     >
       {renderLucideIcon(GripVertical, `elce-question-answer-drag-icon-${answer.id}`)}
     </button>
-    <input
-      id={`elce-question-answer-label-${answer.id}`}
-      aria-label={`Réponse ${answerNumber}`}
-      placeholder={`Réponse ${answerNumber}`}
-      value={answer.label}
-      data-elce-profile-token-target="true"
-      mix={on<HTMLInputElement, 'input'>('input', (event) => actions.setAnswerLabel(answer.id, event.currentTarget.value))}
-    />
+    {renderInlineTextField({
+      id: `elce-question-answer-label-${answer.id}`,
+      ariaLabel: `Réponse ${answerNumber}`,
+      placeholder: `Réponse ${answerNumber}`,
+      value: answer.label,
+      onChange: (value) => actions.setAnswerLabel(answer.id, value),
+    })}
     <button
       id={`elce-question-answer-correct-${answer.id}`}
       className={answer.correct ? 'elce-bdc-icon-button elce-question-answer-correct is-correct' : 'elce-bdc-icon-button elce-question-answer-correct'}

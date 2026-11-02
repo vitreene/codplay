@@ -1,6 +1,8 @@
 import { CAROUSEL_CONFIG } from '../../config/document-config'
 import type { CardImageFit, CarouselImagePosition } from '../../config/document-config-types'
 import type { CardContent, CardTextField } from './card-types'
+import type { ElceTextValue } from '../document/document-types'
+import { countTextValueCharacters } from '../inline-text/inline-text-value'
 
 /** Owns the shared data fields used by every Card layout. */
 export class ElceCardService {
@@ -23,7 +25,7 @@ export class ElceCardService {
   }
 
   /** Changes one text field without consulting or changing the selected layout. */
-  public setTextField(content: CardContent, field: CardTextField, value: string): CardContent {
+  public setTextField(content: CardContent, field: CardTextField, value: ElceTextValue): CardContent {
     return { ...content, [field]: value }
   }
 
@@ -39,7 +41,7 @@ export class ElceCardService {
 
   /** Validates Card fields even when their current layout does not project them. */
   public assertValid(content: CardContent): void {
-    if (content.message.length > CAROUSEL_CONFIG.textShortMessageMaxLength) {
+    if (countTextValueCharacters(content.message) > CAROUSEL_CONFIG.textShortMessageMaxLength) {
       throw new Error(`Le message d’une carte est limité à ${CAROUSEL_CONFIG.textShortMessageMaxLength} caractères.`)
     }
   }

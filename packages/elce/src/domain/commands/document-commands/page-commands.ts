@@ -1,6 +1,7 @@
 import { BDC_LOCATION, BDC_TYPE, CHAPTER_TYPE, CHAPTER_TYPE_CONFIG, DEFAULT_EVALUATION_SETTINGS, DEFAULT_PRESET_ID, PAGE_LOCATION, PAGE_TYPE, SCENARIO_ENTRY_KIND } from '../../../config/document-config'
 import { ElceDocument, nextPageName } from '../../../domain/document/document-model'
-import type { Bdc, Chapter, ChapterId, Page, PageId } from '../../../domain/document/document-types'
+import type { Bdc, Chapter, ChapterId, ElceTextValue, Page, PageId } from '../../../domain/document/document-types'
+import { plainTextFromValue } from '../../../domain/inline-text/inline-text-value'
 import type { DocumentCommand } from '../document-command-types'
 import { fail, withPage, placePage, placeBdc, findChapter, scenarioEntryIndexForChapter, indexAtEndOrRequested, insertAt, findPage, removeValue, removeScenarioPageEntry } from './command-helpers'
 import { createBdc, sectionForBdc, questionForBdc, deleteBdc } from './bdc-commands'
@@ -142,18 +143,31 @@ export function deletePage(document: ElceDocument, pageId: PageId): ElceDocument
 }
 
 /** Renames one page without changing its placement or content. */
-export function renamePage(document: ElceDocument, pageId: PageId, requestedName: string): ElceDocument {
+export function renamePage(document: ElceDocument, pageId: PageId, requestedName: ElceTextValue): ElceDocument {
   const page = findPage(document, pageId)
-  const name = requestedName.trim()
-  if (name.length === 0) fail(`Le nom de la page ne peut pas être vide : ${pageId}`)
+  const name = typeof requestedName === 'string' ? requestedName.trim() : requestedName
+  if (plainTextFromValue(name).trim().length === 0) fail(`Le nom de la page ne peut pas être vide : ${pageId}`)
   return withPage(document, { ...page, name })
 }
 
+/** Stores or clears the author's page-level early-exit override. */
+export function setPageEarlyExit(
+  document: ElceDocument,
+  command: Extract<DocumentCommand, { type: 'page.early-exit.set' }>,
+): ElceDocument {
+  const page = findPage(document, command.pageId)
+  if (command.allowEarlyExit === null) {
+    const { allowEarlyExit: _allowEarlyExit, ...pageWithoutOverride } = page
+    return withPage(document, pageWithoutOverride)
+  }
+  return withPage(document, { ...page, allowEarlyExit: command.allowEarlyExit })
+}
+
 /** Renames one chapter without changing its type or page order. */
-export function renameChapter(document: ElceDocument, chapterId: ChapterId, requestedName: string): ElceDocument {
+export function renameChapter(document: ElceDocument, chapterId: ChapterId, requestedName: ElceTextValue): ElceDocument {
   const chapter = findChapter(document, chapterId)
-  const name = requestedName.trim()
-  if (name.length === 0) fail(`Le nom du chapitre ne peut pas être vide : ${chapterId}`)
+  const name = typeof requestedName === 'string' ? requestedName.trim() : requestedName
+  if (plainTextFromValue(name).trim().length === 0) fail(`Le nom du chapitre ne peut pas être vide : ${chapterId}`)
   return new ElceDocument({
     ...document.data,
     chapters: document.chapters.map((candidate) => candidate.id === chapter.id

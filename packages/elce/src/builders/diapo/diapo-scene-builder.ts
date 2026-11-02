@@ -85,7 +85,7 @@ export function buildDiapoScene(
           appearanceClassNameForBdc(bdc.id, options.appearanceClassNamesByTarget),
         )
         markup = graphBuild.markup
-        pagePersos = graphBuild.mediaPersos
+        pagePersos = [...graphBuild.mediaPersos, ...graphBuild.contentPersos]
         styleSheets = [graphBuild.styleSheet]
         bottomPartMarkup = `<!-- data-part="${page.id}:bottom" -->`
         pageBottomMarker = createPageBottomMarkerPerso({

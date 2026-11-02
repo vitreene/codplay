@@ -33,6 +33,9 @@ export interface RichTextDocument {
   readonly content: readonly RichTextNode[]
 }
 
+/** Text value kept plain until an inline label or allowed formatting is used. */
+export type ElceTextValue = string | RichTextDocument
+
 export interface RevelationTransitionDefaults {
   readonly intro: RevelationTransitionRef
   readonly outro: RevelationTransitionRef
@@ -44,7 +47,7 @@ export interface RevelationTransitionOverrides {
 }
 
 export interface SectionContent {
-  readonly title: string
+  readonly title: ElceTextValue
   readonly markup: string
   readonly content: RichTextDocument
   readonly revelation: RevelationTransitionOverrides
@@ -52,7 +55,7 @@ export interface SectionContent {
 
 export interface Chapter {
   readonly id: ChapterId
-  readonly name: string
+  readonly name: ElceTextValue
   readonly type: ChapterType
   readonly pageIds: readonly PageId[]
   readonly evaluationThreshold?: number
@@ -62,10 +65,11 @@ export interface Chapter {
 
 export interface Page {
   readonly id: PageId
-  readonly name: string
+  readonly name: ElceTextValue
   readonly type: PageType
   readonly chapterId: ChapterId | null
   readonly bdcIds: readonly BdcId[]
+  readonly allowEarlyExit?: boolean
   readonly appearance?: AppearanceSettings
 }
 
@@ -94,7 +98,7 @@ export interface MediaMetadata {
 
 export interface ElceDocumentData {
   readonly id: string
-  readonly version: 7
+  readonly version: 9
   readonly name: string
   readonly appearance?: AppearanceSettings
   readonly revelationDefaults: RevelationTransitionDefaults

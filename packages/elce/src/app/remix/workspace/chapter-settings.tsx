@@ -7,6 +7,7 @@ import type { Chapter } from '../../../domain/document/document-types'
 import type { EditorActionsFacade } from '../../facades/editor-actions-facade'
 import { renderLucideIcon } from '../lucide-static-icon'
 import type { RemixChapterSettingsProps } from './chapter-settings-types'
+import { renderInlineTextField } from '../../editor/inline-text/inline-text-field'
 
 /** Renders the selected chapter title and its author settings in Remix. */
 export function renderChapterSettings({ chapter, actions }: RemixChapterSettingsProps): RemixNode {
@@ -15,22 +16,15 @@ export function renderChapterSettings({ chapter, actions }: RemixChapterSettings
     className="elce-work-area-chapter-title elce-work-area-chapter-title--active"
   >
     {renderChapterTypeIcon(chapter)}
-    <input
-      id={`elce-remix-chapter-name-${chapter.id}`}
-      className="elce-inline-title-input"
-      type="text"
-      aria-label={CHAPTER_TYPE_CONFIG[chapter.type].titleLabel}
-      title={CHAPTER_TYPE_CONFIG[chapter.type].editTitleLabel}
-      defaultValue={chapter.name}
-      data-elce-profile-token-target="true"
-      key={`${chapter.id}:${chapter.name}`}
-      mix={[
-        on<HTMLInputElement, 'blur'>('blur', (event) => commitChapterName(event.currentTarget, chapter, actions)),
-        on<HTMLInputElement, 'keydown'>('keydown', (event) => {
-          if (event.key === 'Enter') event.currentTarget.blur()
-        }),
-      ]}
-    />
+    {renderInlineTextField({
+      id: `elce-remix-chapter-name-${chapter.id}`,
+      className: 'elce-inline-title-input',
+      ariaLabel: CHAPTER_TYPE_CONFIG[chapter.type].titleLabel,
+      placeholder: CHAPTER_TYPE_CONFIG[chapter.type].editTitleLabel,
+      value: chapter.name,
+      deferPlainChanges: true,
+      onChange: (name) => actions.renameChapter(chapter.id, name),
+    })}
   </div>
 
   switch (chapter.type) {
@@ -166,16 +160,6 @@ function renderChapterTypeIcon(chapter: Chapter): RemixNode {
     default:
       return assertNever(chapter.type)
   }
-}
-
-/** Commits a non-empty chapter name through the existing XState command facade. */
-function commitChapterName(input: HTMLInputElement, chapter: Chapter, actions: EditorActionsFacade): void {
-  const name = input.value.trim()
-  if (name === '' || name === chapter.name) {
-    input.value = chapter.name
-    return
-  }
-  actions.renameChapter(chapter.id, name)
 }
 
 /** Commits a positive attempt limit or restores the current unlimited/default value. */

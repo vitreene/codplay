@@ -1,6 +1,6 @@
 import { BDC_LOCATION, BDC_TYPE, PAGE_LOCATION } from '../../config/document-config'
 import type { BdcType, CardLayoutId, EvaluationRetryScope, PageType, StatisticalGraphLayoutId } from '../../config/document-config-types'
-import type { BdcId, Chapter, ChapterId, MediaId, MediaMetadata, PageId, RevelationTransitionDefaults, RevelationTransitionOverrides, RichTextDocument } from '../../domain/document/document-types'
+import type { BdcId, Chapter, ChapterId, ElceTextValue, MediaId, MediaMetadata, PageId, RevelationTransitionDefaults, RevelationTransitionOverrides, RichTextDocument } from '../../domain/document/document-types'
 import type { QuestionContent } from '../../domain/question/question-types'
 import type { EvaluationResultContent } from '../../domain/evaluation/evaluation-result-types'
 import type { CarouselContent } from '../../domain/carousel/carousel-types'
@@ -64,7 +64,7 @@ export type DocumentCommand =
       name: string
       chapterType?: Chapter['type']
     }>
-  | Readonly<{ type: 'chapter.rename'; chapterId: ChapterId; name: string }>
+  | Readonly<{ type: 'chapter.rename'; chapterId: ChapterId; name: ElceTextValue }>
   | Readonly<{
       type: 'chapter.evaluation.settings.update'
       chapterId: ChapterId
@@ -74,7 +74,8 @@ export type DocumentCommand =
   | Readonly<{ type: 'chapter.move'; chapterId: ChapterId; index?: number }>
   | Readonly<{ type: 'chapter.delete'; chapterId: ChapterId }>
   | (Readonly<{ type: 'page.create' }> & CreatePageCommandInput)
-  | Readonly<{ type: 'page.rename'; pageId: PageId; name: string }>
+  | Readonly<{ type: 'page.rename'; pageId: PageId; name: ElceTextValue }>
+  | Readonly<{ type: 'page.early-exit.set'; pageId: PageId; allowEarlyExit: boolean | null }>
   | Readonly<{ type: 'page.move'; pageId: PageId; placement: PagePlacement }>
   | Readonly<{ type: 'page.remove'; pageId: PageId }>
   | Readonly<{ type: 'page.delete'; pageId: PageId }>
@@ -93,7 +94,7 @@ export type DocumentCommand =
   | Readonly<{
       type: 'bdc.section.update'
       bdcId: BdcId
-      title: string
+      title: ElceTextValue
       markup: string
       content: RichTextDocument
   }>

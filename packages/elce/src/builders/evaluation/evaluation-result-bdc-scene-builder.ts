@@ -2,7 +2,9 @@ import type { PersoDoc, StoryDoc } from 'codplay/scene/types'
 import { ELCE_EVENTS, EVALUATION_RESULT_BRANCH, EVALUATION_RESULT_CONFIG } from '../../config/document-config'
 import type { EvaluationResultAction, EvaluationResultBranch } from '../../config/document-config-types'
 import type { Bdc, Page } from '../../domain/document/document-types'
+import { plainTextFromValue } from '../../domain/inline-text/inline-text-value'
 import { ElceCardPresetBuilder } from '../card/card-preset-builder'
+import { createInlineTextSceneParts, wrapInlineTextSceneParts } from '../inline-text/inline-text-scene'
 
 export type EvaluationResultBdcSceneBuild = Readonly<{
   readonly mountPartId: string
@@ -45,8 +47,11 @@ function createEvaluationResultBranchStory(
 ): StoryDoc<string> {
   const branchPrefix = `${prefix}:${branch}`
   const rootId = `${page.id}-${bdc.id}-${branch}`
+  const messageParts = typeof content.message === 'string'
+    ? null
+    : createInlineTextSceneParts(content.message, `${branchPrefix}:inline-message`)
   const card = cardPresetBuilder.build(bdc.presetId, rootId, branchPrefix, {
-    branch: resultBranchMarkup(rootId, branchPrefix, branch),
+    branch: resultBranchMarkup(rootId, branchPrefix, branch, messageParts),
   })
   const eventName = branch === EVALUATION_RESULT_BRANCH.SUCCESS
     ? ELCE_EVENTS.EVALUATION_RESULT_SUCCESS
@@ -67,7 +72,7 @@ function createEvaluationResultBranchStory(
           [eventName]: { move: { target: mountPartId } },
         },
       },
-      ...resultBranchPersos(page, bdc, branch, content, card.zonePartIds, branchPrefix),
+      ...resultBranchPersos(page, bdc, branch, content, card.zonePartIds, branchPrefix, messageParts),
     ],
   }
 }
@@ -77,12 +82,16 @@ function resultBranchMarkup(
   rootId: string,
   partPrefix: string,
   branch: EvaluationResultBranch,
+  messageParts: ReturnType<typeof createInlineTextSceneParts> | null,
 ): string {
   const label = EVALUATION_RESULT_CONFIG[branch].label
+  const messageMarkup = messageParts === null
+    ? `<!-- data-part="${partPrefix}:${branch}-message" -->`
+    : wrapInlineTextSceneParts(messageParts, `${rootId}-message`, 'p')
   return `
     <section id="${rootId}-section" class="elce-evaluation-result__branch elce-evaluation-result__branch--${branch}">
       <h2 id="${rootId}-title">${label}</h2>
-      <!-- data-part="${partPrefix}:${branch}-message" -->
+      ${messageMarkup}
       <!-- data-part="${partPrefix}:${branch}-action" -->
     </section>
   `
@@ -96,6 +105,7 @@ function resultBranchPersos(
   content: NonNullable<Bdc['evaluationResult']>['success'],
   zones: Readonly<Record<string, string>>,
   prefix: string,
+  messageParts: ReturnType<typeof createInlineTextSceneParts> | null,
 ): readonly PersoDoc<string>[] {
   const messageZone = zones[`${branch}-message`]
   const actionZone = zones[`${branch}-action`]
@@ -106,12 +116,14 @@ function resultBranchPersos(
   const actionPersos = label === undefined || content.action === null
     ? []
     : [createEvaluationResultActionPerso(page, bdc, branch, content.action, label, actionZone, prefix)]
-  const messagePersos = content.message.length === 0
+  const messagePersos = plainTextFromValue(content.message).length === 0
     ? []
-    : [{
+    : messageParts !== null
+      ? messageParts.persos
+      : [{
       id: `${bdc.id}-${branch}-message`,
       type: 'tag',
-      initial: { tag: 'p', content: content.message, move: { target: messageZone } },
+      initial: { tag: 'p', content: plainTextFromValue(content.message), move: { target: messageZone } },
     } satisfies PersoDoc<string>]
   return [...messagePersos, ...actionPersos]
 }

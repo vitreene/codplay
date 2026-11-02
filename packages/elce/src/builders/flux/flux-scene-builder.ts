@@ -21,6 +21,8 @@ import { ElceStatisticalGraphSceneBuilder } from '../statistical-graph/statistic
 import { addViewportExpansionToScene } from '../viewport-expansion/viewport-expansion-builder.ts'
 import { appendClassToMarkupElement, sceneClassRule, sceneStyleClassName } from '../scene-style/scene-style-classes'
 import { appearanceClassNameForBdc, appearanceClassNameForPage } from '../scene-style/appearance-class-names.ts'
+import { plainTextFromValue } from '../../domain/inline-text/inline-text-value'
+import { createInlineTextSceneParts, wrapInlineTextSceneParts } from '../inline-text/inline-text-scene'
 
 type FluxBdcMount = Readonly<{
   readonly bdc: Bdc
@@ -34,7 +36,7 @@ type FluxBdcMount = Readonly<{
   readonly carouselBuild?: CarouselSceneBuild
   readonly evaluationResultStories?: readonly StoryDoc<string>[]
   readonly cardBuild?: CardBdcSceneBuild
-  readonly graphVisualPersos?: readonly PersoDoc<string>[]
+  readonly graphPersos?: readonly PersoDoc<string>[]
 }>
 
 const anchorRatioService = new ElceAnchorRatioService()
@@ -115,6 +117,7 @@ function buildFluxPageScene(page: Page, bdcs: readonly Bdc[], options: FluxScene
           illustration,
           graphBuild.markup,
           graphBuild.mediaPersos,
+          graphBuild.contentPersos,
           graphBuild.rootClassName,
           target.partId,
           scrollPortId,
@@ -385,7 +388,7 @@ function createBdcMount(
         anchored: false,
         markup: graphBuild.markup,
         zonePartIds: {},
-        graphVisualPersos: graphBuild.mediaPersos,
+        graphPersos: [...graphBuild.mediaPersos, ...graphBuild.contentPersos],
         styleSheet: graphBuild.styleSheet,
       }
     }
@@ -453,7 +456,7 @@ function createMediaPersos(
     case BDC_TYPE.CAROUSEL:
       return []
     case BDC_TYPE.STATISTICAL_GRAPH:
-      return mount.graphVisualPersos ?? []
+      return mount.graphPersos ?? []
     default:
       return assertNeverBdcType(mount.bdc.type)
   }
@@ -542,6 +545,7 @@ function createFluxGraphPersos(
   bdc: Bdc,
   markup: string,
   visualPersos: readonly PersoDoc<string>[],
+  contentPersos: readonly PersoDoc<string>[],
   rootClassName: string,
   targetPartId: string,
   scrollPortId: string,
@@ -584,7 +588,7 @@ function createFluxGraphPersos(
       [leaveEvent]: createRevelationAction(outroRef, EVENT_ACTION.outro),
     },
   }
-  return [root, ...visualPersos]
+  return [root, ...visualPersos, ...contentPersos]
 }
 
 /** Mounts the question's reusable illustration media into its configured card zone. */
@@ -624,20 +628,86 @@ function createQuestionMediaPerso(
 
 function createSectionStory(page: Page, bdc: Bdc, articlePartId: string): StoryDoc<string> {
   const headingId = `${page.id}-${bdc.id}-title`
+  const section = bdc.section
+  const headingPersos = section === null || section === undefined || isEmptyText(section.title)
+    ? []
+    : typeof section.title === 'string'
+      ? [{
+        id: headingId,
+        type: 'tag',
+        initial: {
+          tag: 'h2',
+          content: section.title,
+          move: { target: articlePartId },
+        },
+      } satisfies PersoDoc<string>]
+      : (() => {
+        const parts = createInlineTextSceneParts(section.title, `${bdc.id}:title:inline`)
+        return [{
+          id: headingId,
+          type: 'layout',
+          initial: {
+            move: { target: articlePartId },
+            markup: wrapInlineTextSceneParts(parts, headingId, 'h2'),
+          },
+        } satisfies PersoDoc<string>, ...parts.persos]
+      })()
   return {
     id: `${page.id}-${bdc.id}`,
-    persos: bdc.section?.title
-      ? [{
-          id: headingId,
-          type: 'tag',
-          initial: {
-            tag: 'h2',
-            content: bdc.section.title,
-            move: { target: articlePartId },
-          },
-        }]
-      : [],
+    persos: [
+      ...headingPersos,
+      ...sectionPageLinks(section?.content.content ?? [], bdc.id),
+    ],
   }
+}
+
+/** Builds clickable Elcé page links for the Section's projected inline labels. */
+function sectionPageLinks(nodes: readonly import('../../domain/document/document-types').RichTextNode[], bdcId: string): readonly PersoDoc<string>[] {
+  const links = nodes.flatMap((node) => [
+    ...(node.type === 'pageLinkLabel' ? [node] : []),
+    ...(node.content === undefined ? [] : sectionPageLinksNodes(node.content)),
+  ])
+  return links.flatMap((node, index) => {
+    if (node.attrs?.targetAvailable !== true) return []
+    const pageId = String(node.attrs.pageId ?? '')
+    const label = String(node.attrs.resolvedLabel ?? node.attrs.fallbackLabel ?? pageId)
+    const presentation = node.attrs.presentation === 'button' ? 'button' : 'text'
+    const isTextLink = presentation === 'text'
+    const marks = (node.marks ?? []).map((mark) => mark.type)
+      .filter((mark) => mark === 'bold' || mark === 'italic')
+      .map((mark) => `elce-inline-link--${mark}`)
+    const target = `${bdcId}:inline-link:${index}:link`
+    return [{
+      id: `${bdcId}-inline-link-${index}`,
+      type: 'tag',
+      initial: {
+        tag: isTextLink ? 'a' : 'button',
+        content: label,
+        attr: isTextLink ? { href: '#', 'aria-label': label, 'data-page-id': pageId } : { type: 'button', 'aria-label': label, 'data-page-id': pageId },
+        className: ['elce-inline-link', `elce-inline-link--${presentation}`, ...marks].join(' '),
+        move: { target },
+      },
+      emit: {
+        click: {
+          ...(isTextLink ? { preventDefault: true } : {}),
+          event: { name: `${ELCE_EVENTS.PAGE_LINK_PREFIX}${pageId}`, visibility: 'public' },
+        },
+      },
+    } satisfies PersoDoc<string>]
+  })
+}
+
+/** Recursively collects page-link labels without counting block containers. */
+function sectionPageLinksNodes(nodes: readonly import('../../domain/document/document-types').RichTextNode[]): import('../../domain/document/document-types').RichTextNode[] {
+  return nodes.flatMap((node) => [
+    ...(node.type === 'pageLinkLabel' ? [node] : []),
+    ...(node.content === undefined ? [] : sectionPageLinksNodes(node.content)),
+  ])
+}
+
+/** Checks whether an authored text value has no visible characters. */
+function isEmptyText(value: import('../../domain/document/document-types').ElceTextValue): boolean {
+  return plainTextFromValue(value).trim().length === 0
 }
 
 function createImagePerso(

@@ -1419,4 +1419,74 @@ export const ELCE_PLAYER_STYLE_SHEET = `
   padding: 2rem;
   color: var(--elce-appearance-muted);
 }
+
+.elce-inline-link--text {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.15em;
+  cursor: pointer;
+}
+
+.elce-inline-link--button {
+  display: inline-block;
+  margin-inline: 0.5em;
+  padding: 0.15em 0.55em;
+  border: 1px solid var(--elce-appearance-accent);
+  border-radius: 0.35em;
+  color: var(--elce-appearance-accent-foreground);
+  background: var(--elce-appearance-accent);
+  font: inherit;
+  line-height: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.elce-inline-link--bold {
+  font-weight: 700;
+}
+
+.elce-inline-link--italic {
+  font-style: italic;
+}
+
+.elce-statistical-graph__chart-shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.elce-statistical-graph__tick-label--rich,
+.elce-statistical-graph__axis-label--rich {
+  visibility: hidden;
+}
+
+.elce-statistical-graph__inline-label-overlay {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.elce-statistical-graph__inline-overlay-position {
+  position: absolute;
+  max-width: 32%;
+  color: inherit;
+  font-size: clamp(0.65rem, 1.2cqw, 0.75rem);
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.elce-statistical-graph__inline-overlay-position a,
+.elce-statistical-graph__inline-overlay-position button {
+  pointer-events: auto;
+}
+
+.elce-inline-link:focus-visible {
+  outline: 2px solid var(--elce-appearance-accent);
+  outline-offset: 2px;
+}
 `

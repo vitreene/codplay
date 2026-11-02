@@ -77,6 +77,7 @@ describe('Remix production page editor', () => {
     const titleRow = rendered.$('#elce-work-area-title-row')
     expect(titleRow?.children[0]?.id).toBe('elce-work-area-actions')
     expect(titleRow?.children[1]?.id).toBe('elce-work-area-titles')
+    expect(rendered.$('.elce-page-early-exit-setting')).toBeNull()
     expect(pageBdcOrder(rendered)).toEqual(initialBdcOrder)
     await actOnRemix(rendered, () => rendered.$('#elce-card-create')?.click())
     documentModel = controller.getSnapshot().context.document
@@ -551,6 +552,7 @@ describe('Remix production page editor', () => {
         appearanceTarget: { kind: 'document' },
         summarySettingsOpen: false,
         profileTokenTargetId: null,
+        selectedInlineLabel: null,
         authoringError: null,
         dropTarget: null,
         visible: true,

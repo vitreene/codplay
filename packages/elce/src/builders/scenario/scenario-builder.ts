@@ -18,6 +18,8 @@ import {
 } from '../../config/document-config'
 import type { ElceDocument } from '../../domain/document/document-model'
 import type { Chapter, Page } from '../../domain/document/document-types'
+import { plainTextFromValue } from '../../domain/inline-text/inline-text-value'
+import { pageAllowsEarlyExit } from '../../domain/inline-text/page-early-exit.ts'
 import {
   BDC_TYPE,
   CHAPTER_TYPE,
@@ -90,7 +92,7 @@ type ElceRuntimeData = Readonly<{
   previewStartPageId: string
   evaluationResultPageIds: readonly string[]
   chapterIds: readonly string[]
-  pages: Readonly<Record<string, Readonly<{ chapterId: string | null; bdcIds: readonly string[] }>>>
+  pages: Readonly<Record<string, Readonly<{ chapterId: string | null; bdcIds: readonly string[]; allowEarlyExit: boolean }>>>
   chapters: Readonly<Record<string, ElceRuntimeChapter>>
   bdcTypes: Readonly<Record<string, string>>
   summary: Pick<SummarySettings,
@@ -250,7 +252,7 @@ function createScenarioRuntimeData(input: Readonly<{
   const { document } = input
   return {
     pageIds: input.pageIds,
-    pageNames: Object.fromEntries(document.pages.map((page) => [page.id, page.name])),
+    pageNames: Object.fromEntries(document.pages.map((page) => [page.id, plainTextFromValue(page.name)])),
     pagePaths: input.pagePaths,
     questionBdcByPage: input.questionBdcByPage,
     previewStartPageId: input.previewStartPageId,
@@ -259,10 +261,11 @@ function createScenarioRuntimeData(input: Readonly<{
     pages: Object.fromEntries(document.pages.map((page) => [page.id, {
       chapterId: page.chapterId,
       bdcIds: page.bdcIds,
+      allowEarlyExit: pageAllowsEarlyExit(document, page),
     }])),
     chapters: Object.fromEntries(document.chapters.map((chapter) => [chapter.id, {
       id: chapter.id,
-      name: chapter.name,
+      name: plainTextFromValue(chapter.name),
       type: chapter.type,
       pageIds: chapter.pageIds,
       ...(chapter.evaluationThreshold === undefined ? {} : { evaluationThreshold: chapter.evaluationThreshold }),
@@ -273,7 +276,7 @@ function createScenarioRuntimeData(input: Readonly<{
       .filter((bdc) => bdc.type === BDC_TYPE.QUESTION || bdc.type === BDC_TYPE.EVALUATION_RESULT)
       .map((bdc) => [bdc.id, bdc.type])),
     summary: {
-      title: document.data.summary.title,
+      title: plainTextFromValue(document.data.summary.title),
       showAtRoot: document.data.summary.showAtRoot,
       endChapterDestination: document.data.summary.endChapterDestination,
       pageContinuationMode: document.data.summary.pageContinuationMode,
@@ -592,6 +595,10 @@ function createScenarioActions(
       go: { path: pagePathFromTable(pagePaths, pageId) },
       action: ELCE_SCENARIO_HANDLERS.REFRESH_EVALUATION_RESULT,
     }
+    actions[pageLinkEvent(pageId)] = {
+      go: { path: pagePathFromTable(pagePaths, pageId) },
+      action: ELCE_SCENARIO_HANDLERS.REFRESH_EVALUATION_RESULT,
+    }
   }
   return actions
 }
@@ -630,6 +637,7 @@ export function pageAccessGuard(input: SightyConditionContext<ElceSceneKey>): bo
   const previewStartPageId = scormChapter?.pageIds[0] ?? runtime.previewStartPageId
   if (pageId === previewStartPageId) return true
   if (runtime.summary.pageContinuationMode === 'free' && !runtime.evaluationResultPageIds.includes(pageId)) return true
+  if (event?.name === pageLinkEvent(pageId) && !runtime.evaluationResultPageIds.includes(pageId)) return true
   const previewStartIndex = accessPageIds.indexOf(previewStartPageId)
   const prefixStartIndex = pageIndex > previewStartIndex && !runtime.evaluationResultPageIds.includes(pageId)
     ? previewStartIndex
@@ -710,6 +718,10 @@ export function pageExitGuard(input: SightyConditionContext<ElceSceneKey>): bool
       case ELCE_EVENTS.MENU_SUMMARY:
         return false
       default:
+        if (event?.name?.startsWith(ELCE_EVENTS.PAGE_LINK_PREFIX) === true) {
+          const targetPageId = event.name.slice(ELCE_EVENTS.PAGE_LINK_PREFIX.length)
+          return scormChapter.pageIds.includes(targetPageId) && canLeavePage(runtime, pageId, context)
+        }
         if (event?.name?.startsWith(ELCE_EVENTS.MENU_PREFIX) === true) {
           return scormChapter.pageIds.includes(event.name.slice(ELCE_EVENTS.MENU_PREFIX.length))
         }
@@ -724,6 +736,10 @@ export function pageExitGuard(input: SightyConditionContext<ElceSceneKey>): bool
     case ELCE_EVENTS.MENU_SUMMARY:
       return runtime.summary.permanentAccess || isPageComplete(pageId, context, runtime.questionBdcByPage)
     default:
+      if (event?.name?.startsWith(ELCE_EVENTS.PAGE_LINK_PREFIX) === true) {
+        const targetPageId = event.name.slice(ELCE_EVENTS.PAGE_LINK_PREFIX.length)
+        return runtime.pageIds.includes(targetPageId) && canLeavePage(runtime, pageId, context)
+      }
       return event?.name?.startsWith(ELCE_EVENTS.MENU_PREFIX) === true
   }
 }
@@ -1148,7 +1164,9 @@ async function refreshPresentation(context: SightyActionContext<ElceSceneKey, El
     name: ELCE_EVENTS.PRESENTATION_NAVIGATION_NEXT,
     data: { attr: presentation.nextAttributes },
   }, { scope: 'story', storyId: 'main' })
-  if (context.event.name === ELCE_EVENTS.MENU_SUMMARY || context.event.name.startsWith(ELCE_EVENTS.MENU_PREFIX)) {
+  if (context.event.name === ELCE_EVENTS.MENU_SUMMARY
+    || context.event.name.startsWith(ELCE_EVENTS.MENU_PREFIX)
+    || context.event.name.startsWith(ELCE_EVENTS.PAGE_LINK_PREFIX)) {
     await closeMenuDrawer(context)
   }
 }
@@ -1218,7 +1236,7 @@ async function createPresentation(
   const previousAllowed = previousPageAllowed || previousScormChapterAllowed
   return {
     title: activeSceneKey === ELCE_SCENARIO.SUMMARY_SCENE
-      ? runtime.summary.title
+      ? plainTextFromValue(runtime.summary.title)
       : activeSceneKey === ELCE_SCENARIO.PROFILE_FORM_SCENE || activeSceneKey === ELCE_SCENARIO.PROFILE_COMPLETE_SCENE
         ? 'Profil'
         : page === undefined || page === ELCE_SCENARIO.EMPTY_PAGE ? 'Aucune page' : runtime.pageNames[page] ?? page,
@@ -1293,7 +1311,7 @@ async function createMenuClassPatch(
         )
     const chapterAllowed = !profileEnabled || entry.kind !== 'chapter'
       || runtimeChapterVisibilityAllowsAccess(runtime, entry.id, profileValues)
-    return { id: entry.pageId, title: entry.title, allowed: pageAllowed && chapterAllowed }
+    return { id: entry.pageId, title: plainTextFromValue(entry.title), allowed: pageAllowed && chapterAllowed }
   }))
   const classes = ['elce-player-menu-state']
   return {
@@ -1503,8 +1521,10 @@ function canLeavePage(
   pageId: string,
   context: Readonly<Record<string, unknown>>,
 ): boolean {
-  if (runtime.summary.pageContinuationMode !== 'free' && !isPageComplete(pageId, context, runtime.questionBdcByPage)) return false
   const page = runtime.pages[pageId]
+  if (runtime.summary.pageContinuationMode !== 'free'
+    && page?.allowEarlyExit !== true
+    && !isPageComplete(pageId, context, runtime.questionBdcByPage)) return false
   if (page === undefined || page.chapterId === null) return true
   const chapter = runtime.chapters[page.chapterId]
   switch (chapter?.type) {
@@ -1815,6 +1835,11 @@ function pagePathFromTable(pagePaths: Readonly<Record<string, string>>, pageId: 
 /** Formats the public menu selection event for one page. */
 function menuEvent(pageId: string): string {
   return `${ELCE_EVENTS.MENU_PREFIX}${pageId}`
+}
+
+/** Formats the public inline-link event for one page. */
+function pageLinkEvent(pageId: string): string {
+  return `${ELCE_EVENTS.PAGE_LINK_PREFIX}${pageId}`
 }
 
 /** Formats the private presentation event sent to one menu button perso. */

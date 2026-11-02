@@ -22,7 +22,7 @@ import type {
 } from '../../domain/commands/document-command-types'
 import type { EvaluationResultContent } from '../../domain/evaluation/evaluation-result-types'
 import { createStableId, type ElceDocument } from '../../domain/document/document-model'
-import type { Bdc, BdcId, ChapterId, PageId, RevelationTransitionDefaults } from '../../domain/document/document-types'
+import type { Bdc, BdcId, ChapterId, ElceTextValue, PageId, RevelationTransitionDefaults } from '../../domain/document/document-types'
 import type { ElceSectionChange, ElceAnchorDropTarget } from '../../domain/anchor/anchor-types'
 import type { ElceCatalogDropTarget, ElceCatalogReference } from '../../domain/catalog/catalog-types'
 import type { QuestionContent } from '../../domain/question/question-types'
@@ -262,12 +262,17 @@ export class EditorActionsFacade {
   }
 
   /** Renames a page through the document command boundary. */
-  public renamePage(pageId: PageId, name: string): void {
+  public renamePage(pageId: PageId, name: ElceTextValue): void {
     this.apply({ type: 'page.rename', pageId, name })
   }
 
+  /** Sets or clears one page's early-exit override through document history. */
+  public setPageEarlyExit(pageId: PageId, allowEarlyExit: boolean | null): void {
+    this.apply({ type: 'page.early-exit.set', pageId, allowEarlyExit })
+  }
+
   /** Renames a chapter through the document command boundary. */
-  public renameChapter(chapterId: ChapterId, name: string): void {
+  public renameChapter(chapterId: ChapterId, name: ElceTextValue): void {
     this.apply({ type: 'chapter.rename', chapterId, name })
   }
 

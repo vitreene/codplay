@@ -148,6 +148,22 @@ accès sans exiger la fin des pages précédentes. Il conserve les gardes de
 Visibilité et les prérequis de chapitre. Les pages de résultat d’Évaluation
 restent verrouillées jusqu’à ce que le parcours requis pour leur résultat soit
 terminé ; le seuil d’évaluation reste appliqué.
+
+Chaque page propose aussi « Ignorer la contrainte de lecture » dans l’onglet
+« Style » du panneau droit, lorsque la page est la cible de ce panneau. Le
+réglage s’applique à la page source : lorsqu’il est actif, Suivant et un lien
+interne peuvent la quitter sans attendre sa fin fonctionnelle. Il est disponible
+même sans lien. Si `allowEarlyExit` n’a pas de choix explicite, le réglage est
+actif par défaut quand un lien interne figure dans les BDC de la page ou de ses
+BDC enfants ; il est désactivé par défaut sinon. Un choix explicite par page
+remplace ce défaut. Le réglage ne modifie pas la progression enregistrée.
+
+Le clic sur un lien interne permet d’ouvrir sa destination même si elle est
+verrouillée par l’ordre séquentiel. Cette exception concerne uniquement ce
+verrou de progression : les règles de Visibilité, les prérequis de chapitre,
+les exigences de profil et les résultats d’Évaluation restent appliqués. Le
+lien ne marque pas la destination comme lue. Le réglage de la page source et
+l’accès exceptionnel à la destination sont deux gardes distinctes.
 Si le lecteur reçoit une page de départ verrouillée, il ouvre le Sommaire racine
 quand celui-ci est activé ; sinon il démarre sur la première page accessible.
 La composition lecteur vérifie que `chapters` n’émet que des entrées de chapitre
@@ -175,15 +191,43 @@ du Sommaire, des chapitres et des pages, et dans les textes des Sections,
 Cartes, Questions, Graphes et BDC Résultat. Une valeur absente sans défaut
 produit une chaîne vide ; le texte injecté est échappé pour le HTML.
 
+Un lien de page inline peut être présenté comme texte souligné ou comme bouton.
+Le bouton garde une marge extérieure minimale de `0.5em` sur chaque côté,
+dans l’éditeur comme dans le lecteur, afin de le séparer du texte voisin. Cette
+marge est visuelle et n’ajoute aucun caractère aux données auteur.
+
 ## Configuration et insertion dans l’éditeur
 
-Le panneau latéral droit s’intitule « Contenus ». Son onglet « Profil » apparaît
-uniquement lorsqu’une propriété de profil existe et qu’un champ textuel déclaré
-compatible a le focus. Les champs simples insèrent `{{profile:<id>}}` à la
-sélection ; l’éditeur de Section insère le nœud Tiptap `profileLabel` au caret.
-L’identifiant stable de propriété est conservé dans les deux cas. Le panneau
-contient l’unique contrôle d’insertion : aucune barre globale ni bouton par
-champ ne duplique cette action.
+Le panneau latéral droit s’intitule « Contenus ». Son onglet « Variables »
+apparaît lorsqu’un champ textuel compatible a le focus. Il regroupe les
+propriétés de profil disponibles, les liens vers les pages de scénario permis
+par le champ et les dates locales. Les champs simples insèrent
+`{{profile:<id>}}` à la sélection ; l’éditeur de Section insère le nœud Tiptap
+`profileLabel` au caret. L’identifiant stable de propriété est conservé dans
+les deux cas.
+
+Le groupe « Liens vers les pages » utilise un sélecteur de destination, un
+libellé facultatif, un choix de présentation et un seul bouton d’insertion ; ce
+bouton reste désactivé tant qu’aucune destination n’est choisie. « Dates
+locales » propose la date du jour, l’heure locale et une date relative avec son
+décalage en jours. Les champs et les commandes d’insertion partagent la même
+largeur, hauteur, typographie, bordure, couleur de fond et forme. Les groupes et
+leurs commandes gardent un espacement régulier ; l’action désactivée se
+distingue visuellement. Les commandes d’insertion restent accessibles par clic
+et glisser-déposer, sans barre globale ni bouton par champ.
+
+Un clic sur une étiquette Tiptap déjà posée sélectionne son nœud, ouvre
+« Variables » et sélectionne l’onglet « Modifier », distinct de « Créer ». Le
+formulaire d’édition n’affiche que les attributs du type sélectionné : pour un
+lien vers une page, sa cible, son libellé, sa présentation et « Mettre à jour
+l’étiquette » ; pour un profil ou une date, les seuls champs propres à ce type.
+« Créer » garde le catalogue complet des propriétés de profil, des pages et des
+dates. L’auteur peut passer d’un onglet à l’autre sans appliquer de changement.
+« Mettre à jour l’étiquette » applique une transaction sur le nœud qui
+correspond encore aux attributs affichés, puis conserve sa sélection pour que
+le panneau reste ouvert. Le changement passe par le `onChange` déjà utilisé par
+le champ ou par la Section ; sélectionner un autre contenu ferme l’édition de
+l’étiquette.
 
 Le bouton « Sommaire » de l’arborescence ouvre les réglages du Sommaire et du
 profil. Il partage l’icône Lucide List avec le bouton « Test auteur » de la
@@ -296,10 +340,41 @@ dernière valeur serveur et interdit à la fenêtre périmée de l’écraser.
   verrouillage, l’obligation de terminer tous les chapitres requis et le mode
   `free`, qui libère la progression ordinaire sans contourner Visibilité ni
   prérequis ; il vérifie aussi que le seuil d’Évaluation reste appliqué.
+- Le même fichier vérifie la sortie anticipée autorisée depuis la page source,
+  l’ouverture par lien d’une destination séquentiellement verrouillée, et le
+  maintien des gardes de Visibilité, de chapitre et de résultat d’Évaluation.
+  [`page-early-exit.test.ts`](../src/domain/inline-text/page-early-exit.test.ts)
+  couvre le défaut dérivé de la présence d’un lien, les choix explicites et les
+  pages sans lien ; [`appearance-panel.test.tsx`](../src/app/appearance/appearance-panel.test.tsx)
+  vérifie le réglage dans Style et l’envoi de sa commande, et
+  [`page-editor.test.tsx`](../src/app/remix/workspace/page-editor.test.tsx)
+  confirme son absence dans la zone centrale.
+- Le 2 novembre 2026, Brave confirme sur « Test Elcé — liens et date » que le
+  bouton de style de la page ouvre le panneau droit sur « Style », où apparaît
+  « Ignorer la contrainte de lecture ». La case est active par défaut sur la
+  page qui contient un lien interne ; la zone centrale n’en affiche pas.
+- [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
+  vérifie la marge de `0.5em` du bouton inline dans le lecteur. Brave confirme
+  la même marge dans l’éditeur et dans la preview du document de test.
 - [`profile-token-insertion.test.tsx`](../src/app/editor/profile/profile-token-insertion.test.tsx),
   [`profile-label-extension.test.ts`](../src/app/editor/profile/profile-label-extension.test.ts)
   et [`remix-section-production.test.tsx`](../src/app/editor/section/remix-section-production.test.tsx)
   couvrent l’insertion et la sérialisation des étiquettes.
+- [`inline-text-field.test.tsx`](../src/app/editor/inline-text/inline-text-field.test.tsx),
+  [`section-editor-tiptap-adapter.test.ts`](../src/app/editor/section/section-editor-tiptap-adapter.test.ts)
+  et [`profile-token-insertion.test.tsx`](../src/app/editor/profile/profile-token-insertion.test.tsx)
+  couvrent la sélection transmise au panneau, les formulaires profil/lien/date,
+  la séparation « Créer »/« Modifier » et la transaction éditée dans les champs
+  Tiptap et la Section. Le parcours Brave du 2 novembre 2026 confirme le clic
+  sur un lien dans une Section, l’onglet d’édition séparé avec seulement ses
+  champs, la mise à jour locale et le maintien du formulaire après validation.
+  Le serveur de test a répondu HTTP 400 à l’enregistrement du document ; la
+  persistance synchronisée reste à valider.
+- Le 2 novembre 2026, Brave vérifie le catalogue « Variables et liens » dans
+  « Test Elcé — liens et date » à 855 px : champs et commandes d’insertion ont
+  la même hauteur de 36 px, typographie de 12,16 px, bordure et rayon. Les
+  contrôles sont pleine largeur, leurs espacements sont réguliers et l’insertion
+  de lien sans cible est visiblement désactivée.
 - [`editor-workspace.test.tsx`](../src/app/remix/workspace/editor-workspace.test.tsx)
   et [`project-application.test.tsx`](../src/app/remix/project-application.test.tsx)
   couvrent l’onglet Profil contextuel, l’insertion dans un champ simple et sa

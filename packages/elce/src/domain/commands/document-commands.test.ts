@@ -646,6 +646,14 @@ describe('Elcé document commands', () => {
     }
   })
 
+  it('upgrades v8 documents while leaving the automatic page setting unset', () => {
+    const current = createInitialDocument()
+    const restored = ElceDocument.fromJSON({ ...current.toJSON(), version: 8 })
+
+    expect(restored.data.version).toBe(9)
+    expect(restored.pages[0]?.allowEarlyExit).toBeUndefined()
+  })
+
   it('moves a standalone page before and after chapter entries in the root sequence', () => {
     const withRootPage = applyDocumentCommand(createInitialDocument(), createPageCommand({
       pageId: 'page-root',

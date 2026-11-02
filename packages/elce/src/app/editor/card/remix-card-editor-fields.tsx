@@ -19,6 +19,8 @@ import type { Bdc, BdcId } from '../../../domain/document/document-types'
 import type { ElceCardEditorActions } from '../../facades/card/card-facade-types'
 import { cardLayoutAcceptsFile, cardLayoutAcceptsMedia, cardToolbarClassName, parseCardMediaReference } from './card-editor-rules'
 import { renderLucideIcon } from '../../remix/lucide-static-icon'
+import { countTextValueCharacters } from '../../../domain/inline-text/inline-text-value'
+import { renderInlineTextField } from '../inline-text/inline-text-field'
 
 export interface RemixCardEditorFieldsProps {
   readonly bdc: Bdc
@@ -236,14 +238,13 @@ function renderCardContent(
         className="elce-carousel-image-caption-fields"
       >
         {renderCardMediaEditor(bdcId, presetId, card, mediaById, actions, idPrefix, imageAspectRatio, allowMultipleMediaFiles, importMediaFiles)}
-        <input
-          id={`${idPrefix}-caption-${bdcId}`}
-          placeholder="Légende facultative"
-          aria-label="Légende"
-          value={card.caption}
-          data-elce-profile-token-target="true"
-          mix={on<HTMLInputElement, 'input'>('input', (event) => actions.setCaption(bdcId, event.currentTarget.value))}
-        />
+        {renderInlineTextField({
+          id: `${idPrefix}-caption-${bdcId}`,
+          placeholder: 'Légende facultative',
+          ariaLabel: 'Légende',
+          value: card.caption,
+          onChange: (value) => actions.setCaption(bdcId, value),
+        })}
       </div>
     case DEFAULT_PRESET_ID.IMAGE_TITLE:
       return <div
@@ -251,14 +252,13 @@ function renderCardContent(
         className="elce-carousel-text-fields"
       >
         {renderCardMediaEditor(bdcId, presetId, card, mediaById, actions, idPrefix, imageAspectRatio, allowMultipleMediaFiles, importMediaFiles)}
-        <input
-          id={`${idPrefix}-title-${bdcId}`}
-          placeholder="Titre"
-          aria-label="Titre"
-          value={card.title}
-          data-elce-profile-token-target="true"
-          mix={on<HTMLInputElement, 'input'>('input', (event) => actions.setCardText(bdcId, 'title', event.currentTarget.value))}
-        />
+        {renderInlineTextField({
+          id: `${idPrefix}-title-${bdcId}`,
+          placeholder: 'Titre',
+          ariaLabel: 'Titre',
+          value: card.title,
+          onChange: (value) => actions.setCardText(bdcId, 'title', value),
+        })}
       </div>
     case DEFAULT_PRESET_ID.TEXT_IMAGE:
       return <div
@@ -288,29 +288,27 @@ function renderShortTextFields(bdcId: BdcId, card: CardContent, actions: ElceCar
   >
     {[
       ...fields.map(({ field, label }) => field === 'message'
-        ? <textarea
-          key={field}
-          id={`${idPrefix}-${field}-${bdcId}`}
-          placeholder={label}
-          aria-label={label}
-          maxLength={CAROUSEL_CONFIG.textShortMessageMaxLength}
-          value={card[field]}
-          data-elce-profile-token-target="true"
-          mix={on<HTMLTextAreaElement, 'input'>('input', (event) => actions.setCardText(bdcId, field, event.currentTarget.value))}
-        />
-        : <input
-          key={field}
-          id={`${idPrefix}-${field}-${bdcId}`}
-          placeholder={label}
-          aria-label={label}
-          value={card[field]}
-          data-elce-profile-token-target="true"
-          mix={on<HTMLInputElement, 'input'>('input', (event) => actions.setCardText(bdcId, field, event.currentTarget.value))}
-        />),
+        ? renderInlineTextField({
+          id: `${idPrefix}-${field}-${bdcId}`,
+          placeholder: label,
+          ariaLabel: label,
+          multiline: true,
+          maxLength: CAROUSEL_CONFIG.textShortMessageMaxLength,
+          allowBoldItalic: true,
+          value: card[field],
+          onChange: (value) => actions.setCardText(bdcId, field, value),
+        })
+        : renderInlineTextField({
+          id: `${idPrefix}-${field}-${bdcId}`,
+          placeholder: label,
+          ariaLabel: label,
+          value: card[field],
+          onChange: (value) => actions.setCardText(bdcId, field, value),
+        })),
       <small
         id={`${idPrefix}-message-count-${bdcId}`}
       >
-        {`${card.message.length} / ${CAROUSEL_CONFIG.textShortMessageMaxLength}`}
+        {`${countTextValueCharacters(card.message)} / ${CAROUSEL_CONFIG.textShortMessageMaxLength}`}
       </small>,
     ]}
   </div>

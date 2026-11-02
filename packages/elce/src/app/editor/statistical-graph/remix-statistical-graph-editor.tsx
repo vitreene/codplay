@@ -3,10 +3,12 @@ import { Columns3, Eye, Pencil, Rows3, Trash2, X } from 'lucide-static'
 import { ElceStatisticalGraphSceneBuilder } from '../../../builders/statistical-graph/statistical-graph-scene-builder'
 import { BDC_TYPE, DEFAULT_PRESET_ID, STATISTICAL_GRAPH_RENDERING } from '../../../config/document-config'
 import type { StatisticalGraphLayoutId, StatisticalGraphRendering } from '../../../config/document-config-types'
-import type { Bdc } from '../../../domain/document/document-types'
+import type { Bdc, ElceTextValue } from '../../../domain/document/document-types'
 import type { StatisticalGraphContent } from '../../../domain/statistical-graph/statistical-graph-types'
 import type { StatisticalGraphEditorActions } from '../../facades/statistical-graph/statistical-graph-facade-types'
 import { renderLucideIcon } from '../../remix/lucide-static-icon'
+import { renderInlineTextField } from '../inline-text/inline-text-field'
+import { plainTextFromValue } from '../../../domain/inline-text/inline-text-value'
 
 const renderingOptions = [
   { value: STATISTICAL_GRAPH_RENDERING.BAR, label: 'Barres' },
@@ -58,6 +60,9 @@ export function renderRemixStatisticalGraphEditor(
       content,
       bdc.presetId,
       `elce-statistical-graph-preview-${bdc.id}`,
+      undefined,
+      undefined,
+      false,
     )
     style.textContent = graphBuild.styleSheet
     preview.innerHTML = graphBuild.markup
@@ -242,35 +247,26 @@ function renderTextField(
   bdcId: string,
   label: string,
   field: 'overline' | 'title' | 'categoryAxisLabel' | 'seriesAxisLabel' | 'editorialText',
-  value: string,
+  value: ElceTextValue,
   actions: StatisticalGraphEditorActions,
   multiline = false,
 ): RemixNode {
   const id = `elce-statistical-graph-${field}-${bdcId}`
-  return <label
+  return <div
     id={`${id}-label`}
     className={multiline
       ? 'elce-statistical-graph-editor__field elce-statistical-graph-editor__field--wide'
       : 'elce-statistical-graph-editor__field'}
   >
-    {label}
-    {multiline
-      ? <textarea
-        id={id}
-        aria-label={label}
-        value={value}
-        data-elce-profile-token-target="true"
-        mix={on<HTMLTextAreaElement, 'input'>('input', (event) => actions.setText(field, event.currentTarget.value))}
-      />
-      : <input
-        id={id}
-        type="text"
-        aria-label={label}
-        value={value}
-        data-elce-profile-token-target="true"
-        mix={on<HTMLInputElement, 'input'>('input', (event) => actions.setText(field, event.currentTarget.value))}
-      />}
-  </label>
+    <label id={`${id}-caption`} htmlFor={id}>{label}</label>
+    {renderInlineTextField({
+      id,
+      ariaLabel: label,
+      value,
+      multiline,
+      onChange: (nextValue) => actions.setText(field, nextValue),
+    })}
+  </div>
 }
 
 /** Selects the one data series used by a sector chart. */
@@ -291,7 +287,7 @@ function renderPieSeriesSelect(bdcId: string, content: StatisticalGraphContent, 
         value={series.id}
         selected={series.id === content.pieSeriesId}
       >
-        {series.label || 'Série sans nom'}
+        {plainTextFromValue(series.label) || 'Série sans nom'}
       </option>)}
     </select>
   </label>
@@ -315,7 +311,7 @@ function renderPieCategorySelect(bdcId: string, content: StatisticalGraphContent
         value={category.id}
         selected={category.id === (content.pieCategoryId ?? content.categories[0]?.id)}
       >
-        {category.label || 'Catégorie sans nom'}
+        {plainTextFromValue(category.label) || 'Catégorie sans nom'}
       </option>)}
     </select>
   </label>
@@ -540,14 +536,17 @@ function renderGridEditor(bdcId: string, content: StatisticalGraphContent, actio
                   data-grid-cell="true"
                   className={selected.rowIndex === 0 && selected.columnIndex === columnIndex ? 'elce-statistical-graph-editor__grid-cell--selected' : undefined}
                 >
-                  <input
-                    id={`elce-statistical-graph-series-label-${bdcId}-${seriesIndex}`}
-                    type="text"
-                    aria-label={`Nom de la série ${seriesIndex + 1}`}
-                    value={value}
-                    data-elce-profile-token-target="true"
-                    mix={[onGridFocus(position), onGridInput(position), onGridKeydown(position)]}
-                  />
+                  {renderInlineTextField({
+                    id: `elce-statistical-graph-series-label-${bdcId}-${seriesIndex}`,
+                    ariaLabel: `Nom de la série ${seriesIndex + 1}`,
+                    value,
+                    onFocus: () => selectPosition(position, plainTextFromValue(value)),
+                    onKeyDown: (event) => moveSelection(event, position),
+                    onChange: (nextValue) => {
+                      selectPosition(position, plainTextFromValue(nextValue))
+                      actions.setGridCell(position.rowIndex, position.columnIndex, nextValue)
+                    },
+                  })}
                 </th>
               })}
             </tr>
@@ -566,18 +565,17 @@ function renderGridEditor(bdcId: string, content: StatisticalGraphContent, actio
                   scope="row"
                   data-grid-cell="true"
                 >
-                  <input
-                    id={`elce-statistical-graph-category-label-${bdcId}-${categoryIndex}`}
-                    type="text"
-                    aria-label={`Nom de la catégorie ${categoryIndex + 1}`}
-                    value={category?.label ?? ''}
-                    data-elce-profile-token-target="true"
-                    mix={[
-                      onGridFocus({ rowIndex, columnIndex: 0 }),
-                      onGridInput({ rowIndex, columnIndex: 0 }),
-                      onGridKeydown({ rowIndex, columnIndex: 0 }),
-                    ]}
-                  />
+                  {renderInlineTextField({
+                    id: `elce-statistical-graph-category-label-${bdcId}-${categoryIndex}`,
+                    ariaLabel: `Nom de la catégorie ${categoryIndex + 1}`,
+                    value: category?.label ?? '',
+                    onFocus: () => selectPosition({ rowIndex, columnIndex: 0 }, plainTextFromValue(category?.label ?? '')),
+                    onKeyDown: (event) => moveSelection(event, { rowIndex, columnIndex: 0 }),
+                    onChange: (nextValue) => {
+                      selectPosition({ rowIndex, columnIndex: 0 }, plainTextFromValue(nextValue))
+                      actions.setGridCell(rowIndex, 0, nextValue)
+                    },
+                  })}
                 </th> : null}
                 {Array.from({ length: columnCount - headerColumnOffset }, (_unusedColumn, columnOffset) => {
                   const columnIndex = columnOffset + headerColumnOffset
@@ -633,9 +631,9 @@ function gridCellValue(
   const headerColumnOffset = Number(hasRowLabels)
   if (hasColumnLabels && rowIndex === 0) {
     if (hasRowLabels && columnIndex === 0) return ''
-    return content.series[columnIndex - headerColumnOffset]?.label ?? ''
+    return plainTextFromValue(content.series[columnIndex - headerColumnOffset]?.label ?? '')
   }
-  if (hasRowLabels && columnIndex === 0) return content.categories[rowIndex - headerRowOffset]?.label ?? ''
+  if (hasRowLabels && columnIndex === 0) return plainTextFromValue(content.categories[rowIndex - headerRowOffset]?.label ?? '')
   const category = content.categories[rowIndex - headerRowOffset]
   const series = content.series[columnIndex - headerColumnOffset]
   if (category === undefined || series === undefined) return ''

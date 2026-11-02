@@ -125,9 +125,9 @@ describe('Elcé reader projection', () => {
 
     const reader = projectReaderDocument(document, { [audience.id]: '<élève>' }, false)
 
-    expect(reader.data.summary.title).toBe('Bonjour &lt;élève&gt;')
-    expect(reader.chapters[0]?.name).toBe('Niveau &lt;élève&gt;')
-    expect(reader.pages.find((page) => source.scenarioPageIds.includes(page.id))?.name).toBe('Page &lt;élève&gt;')
+    expect(reader.data.summary.title).toBe('Bonjour <élève>')
+    expect(reader.chapters[0]?.name).toBe('Niveau <élève>')
+    expect(reader.pages.find((page) => source.scenarioPageIds.includes(page.id))?.name).toBe('Page <élève>')
   })
 
   it('removes filtered Carousel children and resolves stable profile tokens in text', () => {

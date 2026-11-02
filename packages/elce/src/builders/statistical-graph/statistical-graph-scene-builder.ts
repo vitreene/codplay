@@ -1,16 +1,37 @@
 import { BDC_TYPE, STATISTICAL_GRAPH_RENDERING } from '../../config/document-config'
-import type { Bdc } from '../../domain/document/document-types'
+import type { Bdc, ElceTextValue } from '../../domain/document/document-types'
 import type { StatisticalGraphContent } from '../../domain/statistical-graph/statistical-graph-types'
 import type { PersoDoc } from 'codplay/scene/types'
 import { VIEWPORT_EXPANSION_CONTENT_ATTR } from '../viewport-expansion/viewport-expansion-builder.ts'
 import { sceneClassRule, sceneStyleClassName } from '../scene-style/scene-style-classes'
+import { plainTextFromValue } from '../../domain/inline-text/inline-text-value'
+import { createInlineTextSceneParts, wrapInlineTextSceneParts } from '../inline-text/inline-text-scene'
 
 export interface StatisticalGraphSceneBuild {
   readonly markup: string
   readonly rootClassName: string
-  readonly contentPersos: readonly []
+  readonly contentPersos: readonly PersoDoc<string>[]
   readonly mediaPersos: readonly PersoDoc<string>[]
   readonly styleSheet: string
+}
+
+interface GraphInlineMarkup {
+  readonly markup: string
+  readonly persos: readonly PersoDoc<string>[]
+}
+
+type PlainGraphCategory = Omit<StatisticalGraphContent['categories'][number], 'label'> & { readonly label: string }
+type PlainGraphSeries = Omit<StatisticalGraphContent['series'][number], 'label'> & { readonly label: string }
+type PlainGraphContent = Omit<StatisticalGraphContent,
+  'overline' | 'title' | 'categoryAxisLabel' | 'seriesAxisLabel' | 'editorialText' | 'categories' | 'series'
+> & {
+  readonly overline: string
+  readonly title: string
+  readonly categoryAxisLabel: string
+  readonly seriesAxisLabel: string
+  readonly editorialText: string
+  readonly categories: readonly PlainGraphCategory[]
+  readonly series: readonly PlainGraphSeries[]
 }
 
 const graphColors = ['#326c64', '#c27b3a', '#5376a2', '#a64f4f', '#7a6599', '#7f8f45', '#4c8491', '#bd6688']
@@ -37,26 +58,37 @@ export class ElceStatisticalGraphSceneBuilder {
     rootId: string,
     partId?: string,
     appearanceClassName?: string,
+    interactiveLabels = true,
   ): StatisticalGraphSceneBuild {
     const titleId = `${rootId}-svg-title`
     const tableFitRules: string[] = []
-    const renderingContent = transposeStatisticalGraphContent(content)
-    const title = content.title.trim() || 'Graphe'
-    const visibleTitle = content.title.trim().length > 0
-      ? `<h2 id="${rootId}-heading" class="elce-statistical-graph__title">${escapeHtml(content.title)}</h2>`
+    const plainContent = flattenGraphText(content)
+    const renderingContent = transposeStatisticalGraphContent(plainContent)
+    const renderingRichContent = transposeStatisticalGraphContent(content)
+    const title = plainContent.title.trim() || 'Graphe'
+    const contentPersos: PersoDoc<string>[] = []
+    const titleMarkup = graphInlineMarkup(content.title, `${rootId}-heading-content`, 'h2', 'elce-statistical-graph__title', interactiveLabels)
+    const overlineMarkup = graphInlineMarkup(content.overline, `${rootId}-overline-content`, 'p', 'elce-statistical-graph__overline', interactiveLabels)
+    const editorialMarkup = graphEditorialMarkup(content.editorialText, `${rootId}-editorial`, interactiveLabels)
+    contentPersos.push(...titleMarkup.persos, ...overlineMarkup.persos, ...editorialMarkup.persos)
+    const visibleTitle = plainContent.title.trim().length > 0
+      ? titleMarkup.markup.replace(`${rootId}-heading-content`, `${rootId}-heading`)
       : `<h2 id="${rootId}-heading" class="elce-statistical-graph__title elce-statistical-graph__visually-hidden">${escapeHtml(title)}</h2>`
-    const overline = content.overline.trim().length === 0
+    const overline = plainContent.overline.trim().length === 0
       ? ''
-      : `<p id="${rootId}-overline" class="elce-statistical-graph__overline">${escapeHtml(content.overline)}</p>`
+      : overlineMarkup.markup.replace(`${rootId}-overline-content`, `${rootId}-overline`)
+    const chartProjection = renderingContent.rendering === STATISTICAL_GRAPH_RENDERING.TABLE
+      ? renderVisibleTable(renderingContent, renderingRichContent, rootId, tableFitRules, contentPersos, interactiveLabels)
+      : renderSvgChart(renderingContent, renderingRichContent, rootId, titleId, contentPersos, interactiveLabels)
     const chart = renderingContent.rendering === STATISTICAL_GRAPH_RENDERING.TABLE
-      ? renderVisibleTable(renderingContent, rootId, tableFitRules)
-      : `${renderSvgChart(renderingContent, rootId, titleId)}${renderAccessibleTable(renderingContent, rootId, tableFitRules)}`
+      ? chartProjection
+      : `${chartProjection}${renderAccessibleTable(renderingContent, rootId, tableFitRules)}`
     const layoutClass = layoutId === 'statistical-graph-side-by-side'
       ? 'elce-statistical-graph--side-by-side'
       : 'elce-statistical-graph--above-text'
-    const textPanel = content.editorialText.trim().length === 0
+    const textPanel = plainContent.editorialText.trim().length === 0
       ? ''
-      : `<div id="${rootId}-editorial" class="elce-statistical-graph__editorial">${renderParagraphs(content.editorialText, `${rootId}-editorial`)}</div>`
+      : editorialMarkup.markup
     const rootPart = partId === undefined ? '' : `<!-- data-part="${escapeHtml(partId)}:root" -->`
     const visualPartId = partId === undefined ? undefined : `${partId}:visual`
     const visualMarkup = visualPartId === undefined
@@ -71,7 +103,7 @@ export class ElceStatisticalGraphSceneBuilder {
     return {
       markup,
       rootClassName: `elce-statistical-graph${appearanceClass}`,
-      contentPersos: [],
+      contentPersos,
       mediaPersos,
       styleSheet: [
         ...(renderingContent.rendering === STATISTICAL_GRAPH_RENDERING.TABLE ? [] : [graphColorStyleSheet()]),
@@ -106,7 +138,7 @@ function createViewportGraphPerso(
 }
 
 /** Creates a render-only graph projection with categories and series swapped. */
-function transposeStatisticalGraphContent(content: StatisticalGraphContent): StatisticalGraphContent {
+function transposeStatisticalGraphContent<T extends StatisticalGraphContent | PlainGraphContent>(content: T): T {
   if (content.transposeEnabled === false) return content
   return {
     ...content,
@@ -121,11 +153,32 @@ function transposeStatisticalGraphContent(content: StatisticalGraphContent): Sta
       seriesId: entry.categoryId,
       value: entry.value,
     })),
+  } as T
+}
+
+/** Resolves rich graph labels to plain reader text for the chart's SVG and table. */
+function flattenGraphText(content: StatisticalGraphContent): PlainGraphContent {
+  return {
+    ...content,
+    overline: plainTextFromValue(content.overline),
+    title: plainTextFromValue(content.title),
+    categoryAxisLabel: plainTextFromValue(content.categoryAxisLabel),
+    seriesAxisLabel: plainTextFromValue(content.seriesAxisLabel),
+    editorialText: plainTextFromValue(content.editorialText),
+    categories: content.categories.map((category) => ({ ...category, label: plainTextFromValue(category.label) })),
+    series: content.series.map((series) => ({ ...series, label: plainTextFromValue(series.label) })),
   }
 }
 
 /** Renders an SVG chart with density-limited axis labels and compact series cues. */
-function renderSvgChart(content: StatisticalGraphContent, rootId: string, titleId: string): string {
+function renderSvgChart(
+  content: PlainGraphContent,
+  richContent: StatisticalGraphContent,
+  rootId: string,
+  titleId: string,
+  persos: PersoDoc<string>[],
+  interactiveLabels: boolean,
+): string {
   const descriptionId = `${rootId}-description`
   const title = content.title.trim() || 'Graphe'
   const transpositionDescription = content.transposeEnabled !== false
@@ -133,19 +186,20 @@ function renderSvgChart(content: StatisticalGraphContent, rootId: string, titleI
     : ''
   const axisLabel = content.categoryAxisLabel.trim().length === 0
     ? ''
-    : `<text id="${rootId}-category-axis-label" class="elce-statistical-graph__axis-label" x="500" y="486" text-anchor="middle">${escapeHtml(content.categoryAxisLabel)}</text>`
+    : `<text id="${rootId}-category-axis-label" class="elce-statistical-graph__axis-label${!interactiveLabels || typeof richContent.categoryAxisLabel === 'string' ? '' : ' elce-statistical-graph__axis-label--rich'}" x="500" y="486" text-anchor="middle">${escapeHtml(content.categoryAxisLabel)}</text>`
   const seriesLabel = content.seriesAxisLabel.trim().length === 0
     ? ''
-    : `<text id="${rootId}-series-axis-label" class="elce-statistical-graph__axis-label" x="20" y="235" text-anchor="middle" transform="rotate(-90 20 235)">${escapeHtml(content.seriesAxisLabel)}</text>`
+    : `<text id="${rootId}-series-axis-label" class="elce-statistical-graph__axis-label${!interactiveLabels || typeof richContent.seriesAxisLabel === 'string' ? '' : ' elce-statistical-graph__axis-label--rich'}" x="20" y="235" text-anchor="middle" transform="rotate(-90 20 235)">${escapeHtml(content.seriesAxisLabel)}</text>`
   const graphic = content.rendering === STATISTICAL_GRAPH_RENDERING.PIE
     ? renderPie(content, rootId)
-    : renderCartesian(content, rootId)
-  const legend = renderLegend(content, rootId)
-  return `<div id="${rootId}-chart-frame" class="elce-statistical-graph__chart-frame"><svg id="${rootId}-svg" class="elce-statistical-graph__svg" viewBox="0 0 1000 500" role="img" aria-labelledby="${titleId} ${descriptionId}" preserveAspectRatio="xMidYMid meet"><title id="${titleId}">${escapeHtml(title)}</title><desc id="${descriptionId}">${renderingDescription(content.rendering)}.${transpositionDescription} Le tableau détaillé des données suit le graphique.</desc>${graphic}${content.rendering === STATISTICAL_GRAPH_RENDERING.PIE ? '' : axisLabel}${content.rendering === STATISTICAL_GRAPH_RENDERING.PIE ? '' : seriesLabel}</svg>${legend}</div>`
+    : renderCartesian(content, richContent, rootId, interactiveLabels)
+  const legend = renderLegend(content, richContent, rootId, persos, interactiveLabels)
+  const overlay = renderSvgInlineLabelOverlay(content, richContent, rootId, persos, interactiveLabels)
+  return `<div id="${rootId}-chart-frame" class="elce-statistical-graph__chart-frame"><div id="${rootId}-chart-shell" class="elce-statistical-graph__chart-shell"><svg id="${rootId}-svg" class="elce-statistical-graph__svg" viewBox="0 0 1000 500" role="img" aria-labelledby="${titleId} ${descriptionId}" preserveAspectRatio="xMidYMid meet"><title id="${titleId}">${escapeHtml(title)}</title><desc id="${descriptionId}">${renderingDescription(content.rendering)}.${transpositionDescription} Le tableau détaillé des données suit le graphique.</desc>${graphic}${content.rendering === STATISTICAL_GRAPH_RENDERING.PIE ? '' : axisLabel}${content.rendering === STATISTICAL_GRAPH_RENDERING.PIE ? '' : seriesLabel}</svg>${overlay}</div>${legend}</div>`
 }
 
 /** Draws grouped bars or lines from the same sparse values used by the data table. */
-function renderCartesian(content: StatisticalGraphContent, rootId: string): string {
+function renderCartesian(content: PlainGraphContent, richContent: StatisticalGraphContent, rootId: string, interactiveLabels: boolean): string {
   const allValues = content.values.map((entry) => entry.value)
   const scale = Math.max(1, ...allValues.map((value) => Math.abs(value)))
   const minimum = Math.min(0, ...allValues.map((value) => value / scale))
@@ -169,14 +223,16 @@ function renderCartesian(content: StatisticalGraphContent, rootId: string): stri
     if (index % density !== 0 && index !== content.categories.length - 1) return []
     const x = left + (width * (index + 0.5)) / content.categories.length
     const y = top + height + 24
-    return [`<text id="${rootId}-category-label-${index}" class="elce-statistical-graph__tick-label" x="${round(x)}" y="${round(y)}" text-anchor="middle">${escapeHtml(category.label)}</text>`]
+    const richCategory = richContent.categories.find((candidate) => candidate.id === category.id)
+    const richClassName = !interactiveLabels || richCategory === undefined || typeof richCategory.label === 'string' ? '' : ' elce-statistical-graph__tick-label--rich'
+    return [`<text id="${rootId}-category-label-${index}" class="elce-statistical-graph__tick-label${richClassName}" x="${round(x)}" y="${round(y)}" text-anchor="middle">${escapeHtml(category.label)}</text>`]
   }).join('')
   return `<g id="${rootId}-cartesian-plot" class="elce-statistical-graph__plot">${grid}${baseline}${plotted}${labels}</g>`
 }
 
 /** Renders one colored group of bars per category, including negative values. */
 function renderBars(
-  content: StatisticalGraphContent,
+  content: PlainGraphContent,
   rootId: string,
   left: number,
   top: number,
@@ -204,7 +260,7 @@ function renderBars(
 
 /** Renders connected data points for each series, leaving gaps for missing values. */
 function renderLines(
-  content: StatisticalGraphContent,
+  content: PlainGraphContent,
   rootId: string,
   left: number,
   top: number,
@@ -248,7 +304,7 @@ function renderLines(
 }
 
 /** Renders the selected positive pie series as SVG sectors with proportional angles. */
-function renderPie(content: StatisticalGraphContent, rootId: string): string {
+function renderPie(content: PlainGraphContent, rootId: string): string {
   const values = content.categories.map((category) => ({
     category,
     value: content.values.find((entry) => entry.categoryId === category.id && entry.seriesId === content.pieSeriesId)?.value ?? 0,
@@ -278,7 +334,13 @@ function pieSectorPath(centerX: number, centerY: number, radius: number, start: 
 }
 
 /** Renders concise, density-limited series or category color keys. */
-function renderLegend(content: StatisticalGraphContent, rootId: string): string {
+function renderLegend(
+  content: PlainGraphContent,
+  richContent: StatisticalGraphContent,
+  rootId: string,
+  persos: PersoDoc<string>[],
+  interactiveLabels: boolean,
+): string {
   const isPie = content.rendering === STATISTICAL_GRAPH_RENDERING.PIE
   const legendLabel = isPie
     ? content.transposeEnabled !== false ? 'Séries' : 'Catégories'
@@ -291,11 +353,61 @@ function renderLegend(content: StatisticalGraphContent, rootId: string): string 
   if (namedEntries.length === 0) return ''
   const density = labelDensity(namedEntries.length)
   const selectedEntries = namedEntries.filter((_entry, index) => index % density === 0 || index === namedEntries.length - 1)
-  return `<ul id="${rootId}-legend" class="elce-statistical-graph__legend" aria-label="${legendLabel}">${selectedEntries.map((entry) => `<li id="${rootId}-legend-${entry.id}" class="elce-statistical-graph__legend-item"><span id="${rootId}-legend-mark-${entry.id}" class="elce-statistical-graph__legend-mark ${graphLegendColorClassName(entry.colorIndex)}"></span><span id="${rootId}-legend-label-${entry.id}" class="elce-statistical-graph__legend-label">${escapeHtml(entry.label)}</span></li>`).join('')}</ul>`
+  const labels = selectedEntries.map((entry) => {
+    const richLabel = isPie
+      ? richContent.categories.find((candidate) => candidate.id === entry.id)?.label
+      : richContent.series.find((candidate) => candidate.id === entry.id)?.label
+    const labelId = `${rootId}-legend-label-${entry.id}`
+    const labelMarkup = !interactiveLabels || richLabel === undefined || typeof richLabel === 'string'
+      ? `<span id="${labelId}" class="elce-statistical-graph__legend-label">${escapeHtml(entry.label)}</span>`
+      : graphInlineMarkup(richLabel, labelId, 'span', 'elce-statistical-graph__legend-label')
+    if (interactiveLabels && richLabel !== undefined && typeof richLabel !== 'string' && typeof labelMarkup !== 'string') persos.push(...labelMarkup.persos)
+    const renderedLabel = typeof labelMarkup === 'string' ? labelMarkup : labelMarkup.markup
+    return `<li id="${rootId}-legend-${entry.id}" class="elce-statistical-graph__legend-item"><span id="${rootId}-legend-mark-${entry.id}" class="elce-statistical-graph__legend-mark ${graphLegendColorClassName(entry.colorIndex)}"></span>${renderedLabel}</li>`
+  }).join('')
+  return `<ul id="${rootId}-legend" class="elce-statistical-graph__legend" aria-label="${legendLabel}">${labels}</ul>`
+}
+
+/** Places accessible HTML link targets over rich labels drawn inside the SVG. */
+function renderSvgInlineLabelOverlay(
+  content: PlainGraphContent,
+  richContent: StatisticalGraphContent,
+  rootId: string,
+  persos: PersoDoc<string>[],
+  interactiveLabels: boolean,
+): string {
+  if (!interactiveLabels || content.rendering === STATISTICAL_GRAPH_RENDERING.PIE) return ''
+  const labels: string[] = []
+  const addLabel = (value: ElceTextValue, id: string, left: number, top: number, transform: string): void => {
+    if (typeof value === 'string') return
+    const projection = graphInlineMarkup(value, id, 'span', 'elce-statistical-graph__inline-overlay-label')
+    if (projection.markup.length === 0) return
+    labels.push(`<div id="${id}-position" class="elce-statistical-graph__inline-overlay-position" style="left:${left}%;top:${top}%;transform:${transform}">${projection.markup}</div>`)
+    persos.push(...projection.persos)
+  }
+  addLabel(richContent.categoryAxisLabel, `${rootId}-category-axis-inline`, 50, 97.2, 'translate(-50%, -50%)')
+  addLabel(richContent.seriesAxisLabel, `${rootId}-series-axis-inline`, 2, 47, 'translate(-50%, -50%) rotate(-90deg)')
+  const density = labelDensity(content.categories.length)
+  content.categories.forEach((category, index) => {
+    if (index % density !== 0 && index !== content.categories.length - 1) return
+    const richCategory = richContent.categories.find((candidate) => candidate.id === category.id)
+    if (richCategory === undefined) return
+    const x = 82 + (880 * (index + 0.5)) / content.categories.length
+    addLabel(richCategory.label, `${rootId}-category-inline-${index}`, x / 10, 90.4, 'translate(-50%, -50%)')
+  })
+  if (labels.length === 0) return ''
+  return `<div id="${rootId}-inline-label-overlay" class="elce-statistical-graph__inline-label-overlay">${labels.join('')}</div>`
 }
 
 /** Bounds the visible Table to populated rows and the last populated column. */
-function renderVisibleTable(content: StatisticalGraphContent, rootId: string, tableFitRules: string[]): string {
+function renderVisibleTable(
+  content: PlainGraphContent,
+  richContent: StatisticalGraphContent,
+  rootId: string,
+  tableFitRules: string[],
+  persos: PersoDoc<string>[],
+  interactiveLabels: boolean,
+): string {
   const populatedCategoryIds = new Set(content.values.map((entry) => entry.categoryId))
   const seriesIndexById = new Map(content.series.map((series, index) => [series.id, index]))
   const lastPopulatedSeriesIndex = content.values.reduce(
@@ -307,24 +419,40 @@ function renderVisibleTable(content: StatisticalGraphContent, rootId: string, ta
     categories: content.categories.filter((category) => populatedCategoryIds.has(category.id)),
     series: content.series.slice(0, lastPopulatedSeriesIndex + 1),
   }
-  return `${renderAxisCaptions(content, rootId)}${renderTable(visibleContent, rootId, 'elce-statistical-graph__table', tableFitRules)}`
+  return `${renderAxisCaptions(richContent, rootId, persos, interactiveLabels)}${renderTable(visibleContent, rootId, 'elce-statistical-graph__table', tableFitRules, richContent, persos, interactiveLabels)}`
 }
 
 /** Renders the required semantic alternative after an SVG chart. */
-function renderAccessibleTable(content: StatisticalGraphContent, rootId: string, tableFitRules: string[]): string {
+function renderAccessibleTable(content: PlainGraphContent, rootId: string, tableFitRules: string[]): string {
   return renderTable(content, `${rootId}-accessible`, 'elce-statistical-graph__table elce-statistical-graph__table--visually-hidden', tableFitRules)
 }
 
 /** Creates a correctly scoped data table from the normalized graph matrix. */
-function renderTable(content: StatisticalGraphContent, rootId: string, className: string, tableFitRules: string[]): string {
+function renderTable(
+  content: PlainGraphContent,
+  rootId: string,
+  className: string,
+  tableFitRules: string[],
+  richContent?: StatisticalGraphContent,
+  persos?: PersoDoc<string>[],
+  interactiveLabels = true,
+): string {
   const title = content.title.trim() || 'Graphe'
   const isVisible = !className.includes('--visually-hidden')
+  const renderLabel = (value: string, richValue: ElceTextValue | undefined, id: string): string => {
+    if (!interactiveLabels || !isVisible || richValue === undefined || typeof richValue === 'string' || persos === undefined) return escapeHtml(value)
+    const projection = graphInlineMarkup(richValue, id, 'span')
+    persos.push(...projection.persos)
+    return projection.markup
+  }
   const denseClass = !isVisible || Math.max(content.series.length, content.categories.length) < 12
     ? ''
     : ' elce-statistical-graph__table--dense'
-  const header = `<tr id="${rootId}-head-row"><th id="${rootId}-corner" class="elce-statistical-graph__row-heading" scope="col" title="${escapeHtml(content.categoryAxisLabel)}">${escapeHtml(content.categoryAxisLabel)}</th>${content.series.map((series, index) => `<th id="${rootId}-series-${index}" scope="col" title="${escapeHtml(series.label)}">${escapeHtml(series.label)}</th>`).join('')}</tr>`
+  const richSeriesById = new Map(richContent?.series.map((series) => [series.id, series.label]) ?? [])
+  const richCategoriesById = new Map(richContent?.categories.map((category) => [category.id, category.label]) ?? [])
+  const header = `<tr id="${rootId}-head-row"><th id="${rootId}-corner" class="elce-statistical-graph__row-heading" scope="col" title="${escapeHtml(content.categoryAxisLabel)}">${renderLabel(content.categoryAxisLabel, richContent?.categoryAxisLabel, `${rootId}-corner-label`)}</th>${content.series.map((series, index) => `<th id="${rootId}-series-${index}" scope="col" title="${escapeHtml(series.label)}">${renderLabel(series.label, richSeriesById.get(series.id), `${rootId}-series-label-${index}`)}</th>`).join('')}</tr>`
   const body = content.categories.map((category, categoryIndex) => {
-    const rowHeading = `<th id="${rootId}-category-${categoryIndex}" class="elce-statistical-graph__row-heading" scope="row" title="${escapeHtml(category.label)}">${escapeHtml(category.label)}</th>`
+    const rowHeading = `<th id="${rootId}-category-${categoryIndex}" class="elce-statistical-graph__row-heading" scope="row" title="${escapeHtml(category.label)}">${renderLabel(category.label, richCategoriesById.get(category.id), `${rootId}-category-label-${categoryIndex}`)}</th>`
     const cells = content.series.map((series, seriesIndex) => {
       const value = content.values.find((entry) => entry.categoryId === category.id && entry.seriesId === series.id)
       const formattedValue = value === undefined ? '' : formatValue(value.value)
@@ -333,12 +461,13 @@ function renderTable(content: StatisticalGraphContent, rootId: string, className
     return `<tr id="${rootId}-category-row-${categoryIndex}">${rowHeading}${cells}</tr>`
   }).join('')
   const fitClassName = renderTableFitClassName(content, rootId, isVisible, tableFitRules)
-  return `<table id="${rootId}-table" class="${className}${denseClass}${fitClassName === '' ? '' : ` ${fitClassName}`}"><caption id="${rootId}-caption" class="elce-statistical-graph__table-caption">${escapeHtml(title)}</caption><thead id="${rootId}-thead">${header}</thead><tbody id="${rootId}-tbody">${body}</tbody></table>`
+  const caption = renderLabel(title, richContent?.title, `${rootId}-caption-label`)
+  return `<table id="${rootId}-table" class="${className}${denseClass}${fitClassName === '' ? '' : ` ${fitClassName}`}"><caption id="${rootId}-caption" class="elce-statistical-graph__table-caption">${caption}</caption><thead id="${rootId}-thead">${header}</thead><tbody id="${rootId}-tbody">${body}</tbody></table>`
 }
 
 /** Creates a class rule with the text dimensions used to fit the visible table. */
 function renderTableFitClassName(
-  content: StatisticalGraphContent,
+  content: PlainGraphContent,
   rootId: string,
   isVisible: boolean,
   tableFitRules: string[],
@@ -360,14 +489,57 @@ function renderTableFitClassName(
 }
 
 /** Keeps separate axis labels visible when the HTML table is selected. */
-function renderAxisCaptions(content: StatisticalGraphContent, rootId: string): string {
-  const category = content.categoryAxisLabel.trim().length === 0
+function renderAxisCaptions(
+  content: StatisticalGraphContent,
+  rootId: string,
+  persos: PersoDoc<string>[],
+  interactiveLabels: boolean,
+): string {
+  const category = plainTextFromValue(content.categoryAxisLabel).trim().length === 0
     ? ''
-    : `<p id="${rootId}-table-category-axis" class="elce-statistical-graph__table-axis">${escapeHtml(content.categoryAxisLabel)}</p>`
-  const series = content.seriesAxisLabel.trim().length === 0
+    : graphInlineMarkup(content.categoryAxisLabel, `${rootId}-table-category-axis`, 'p', 'elce-statistical-graph__table-axis', interactiveLabels)
+  const series = plainTextFromValue(content.seriesAxisLabel).trim().length === 0
     ? ''
-    : `<p id="${rootId}-table-series-axis" class="elce-statistical-graph__table-axis">${escapeHtml(content.seriesAxisLabel)}</p>`
-  return `<div id="${rootId}-table-axis-captions" class="elce-statistical-graph__table-axis-captions">${category}${series}</div>`
+    : graphInlineMarkup(content.seriesAxisLabel, `${rootId}-table-series-axis`, 'p', 'elce-statistical-graph__table-axis', interactiveLabels)
+  if (category !== '' && interactiveLabels) persos.push(...category.persos)
+  if (series !== '' && interactiveLabels) persos.push(...series.persos)
+  return `<div id="${rootId}-table-axis-captions" class="elce-statistical-graph__table-axis-captions">${category === '' ? '' : category.markup}${series === '' ? '' : series.markup}</div>`
+}
+
+/** Creates one safe Graph text projection and its Elcé inline-link targets. */
+function graphInlineMarkup(
+  value: ElceTextValue,
+  id: string,
+  tag: string,
+  className?: string,
+  interactiveLabels = true,
+): GraphInlineMarkup {
+  if (!interactiveLabels && typeof value !== 'string') {
+    const classAttribute = className === undefined ? '' : ` class="${escapeHtml(className)}"`
+    return { markup: `<${tag} id="${escapeHtml(id)}"${classAttribute}>${escapeHtml(plainTextFromValue(value))}</${tag}>`, persos: [] }
+  }
+  if (typeof value === 'string') {
+    const classAttribute = className === undefined ? '' : ` class="${escapeHtml(className)}"`
+    return { markup: `<${tag} id="${escapeHtml(id)}"${classAttribute}>${escapeHtml(value)}</${tag}>`, persos: [] }
+  }
+  const parts = createInlineTextSceneParts(value, id)
+  return { markup: wrapInlineTextSceneParts(parts, id, tag, className), persos: parts.persos }
+}
+
+/** Preserves Graph editorial paragraphs while projecting rich labels inline. */
+function graphEditorialMarkup(value: ElceTextValue, id: string, interactiveLabels: boolean): GraphInlineMarkup {
+  if (typeof value === 'string' || !interactiveLabels) {
+    const plainValue = plainTextFromValue(value)
+    return {
+      markup: `<div id="${id}" class="elce-statistical-graph__editorial">${renderParagraphs(plainValue, id)}</div>`,
+      persos: [],
+    }
+  }
+  const parts = createInlineTextSceneParts(value, id)
+  return {
+    markup: wrapInlineTextSceneParts(parts, id, 'div', 'elce-statistical-graph__editorial'),
+    persos: parts.persos,
+  }
 }
 
 /** Keeps the editorial text as separate paragraphs without interpreting markup. */
