@@ -1,12 +1,13 @@
-import { ElceDocument } from '../../domain/document/document-model'
-import type { ElceDocumentData, MediaId } from '../../domain/document/document-types'
+import { LearningDocument } from '../../mods/learning/document/learning-document'
+import type { LearningDocumentData } from '../../mods/learning/document/learning-document-types'
+import type { MediaId } from '../../core/document/content-document-types'
 import { exportElceSightyPackage } from '../../export/elce-scenario-exporter'
 
 const DOCUMENT_FIELD = 'document'
 const MEDIA_FIELD_PREFIX = 'media:'
 
 export type ElceSightyPackageExporter = (
-  document: ElceDocumentData,
+  document: LearningDocumentData,
   mediaBytesById: ReadonlyMap<MediaId, Uint8Array>,
 ) => Promise<Uint8Array>
 
@@ -33,9 +34,9 @@ export class SightyExportApiController {
       return exportError('invalid_export_document', 'Le document Elcé est absent du formulaire.', 400)
     }
 
-    let document: ElceDocument
+    let document: LearningDocument
     try {
-      document = ElceDocument.fromJSON(JSON.parse(documentText) as ElceDocumentData)
+      document = LearningDocument.fromJSON(JSON.parse(documentText) as LearningDocumentData)
       if (!Array.isArray(document.medias)) throw new Error('La liste des médias est invalide.')
     } catch (error) {
       return exportError('invalid_export_document', errorMessage(error), 400)

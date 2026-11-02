@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { INITIAL_PROJECT_TEST_STATE } from '../domain/summary-profile/test-state-types'
+import { INITIAL_PROJECT_TEST_STATE } from '../mods/learning/reading/learning-test-state-types'
 import { decodeScormReaderState, encodeScormReaderState, initialScormReaderState, suspendDataLimit } from './scorm-state-codec'
 
 describe('SCORM reader state codec', () => {

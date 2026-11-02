@@ -156,13 +156,19 @@ supprimer leur BDC de la page. Supprimer une Section supprime aussi les Cartes
 ancrées qui lui appartiennent, sans supprimer les ressources média. Si la
 page devient vide, la barre permet toujours de créer Texte ou Quiz.
 
-Les champs de titre gardent leur saisie dans le DOM pendant l’édition. Le
-changement est envoyé au contrôleur XState à la perte de focus ou avec Entrée,
-par `document.apply` et la commande `page.rename` ou `chapter.rename`. Les
-espaces de bord sont retirés ; si le nom est vide, l’ancienne valeur est remise
-dans le champ et aucune commande n’est envoyée. Le modèle met à jour son nom
-sans changer les identifiants, l’ordre, l’affectation ou les BDC. La liste à
-gauche lit les noms actualisés depuis le document détenu par XState.
+Les champs de titre envoient au contrôleur XState chaque nouvelle valeur non
+vide pendant la saisie, par `document.apply` et la commande `page.rename` ou
+`chapter.rename`. La liste du Scénario lit le nom actualisé depuis le document
+détenu par XState. Avec la Preview synchronisée, son titre de page ou son
+sommaire reçoit aussi les changements immédiatement, sans changer la page
+affichée. Les frappes d’un même champ forment une seule étape d’historique.
+
+Un espace final reste provisoirement dans le champ pendant que l’auteur
+continue sa saisie ; il est envoyé avec le mot suivant ou normalisé au blur.
+Les espaces de bord sont retirés au blur. Si le brouillon est vide ou composé
+d’espaces, le champ retrouve sa dernière valeur valide et aucune commande de
+renommage n’est envoyée. Le modèle met à jour son nom sans changer les
+identifiants, l’ordre, l’affectation ou les BDC.
 
 Dans Remix, `ProjectApplication` compose le Scénario, les réglages centraux du
 chapitre, le catalogue et `RemixPageEditor` depuis le sélecteur
@@ -237,7 +243,7 @@ séparées.
 - [`remix-section-production.test.tsx`](../src/app/editor/section/remix-section-production.test.tsx)
   vérifie l’édition Section et les parcours d’ancre/média dans le page editor
   de production.
-- [`controller-machine.test.ts`](../src/app/controller/controller-machine.test.ts)
+- [`controller-machine.test.ts`](../src/mods/learning/integration/controller-machine.test.ts)
   vérifie que l’événement `page.create` conserve le placement explicitement
   demandé et sélectionne la page produite, et que la sélection de chapitre
   passe par le contrôleur puis se ferme lors de la sélection d’une page.
@@ -304,6 +310,16 @@ séparées.
   tentatives illimitées et la reprise de toutes les questions. Le projet de
   validation est supprimé ensuite.
 - À 1408 px, les trois colonnes restent visibles.
+- [`learning-project-application.test.tsx`](../src/mods/learning/authoring/learning-project-application.test.tsx)
+  vérifie qu’un titre de page met à jour le modèle et la ligne du Scénario
+  pendant la saisie, qu’un brouillon vide ne renomme pas le modèle, que le blur
+  restaure la valeur valide et qu’une Annuler regroupe les frappes en une
+  étape. [`chapter-settings.test.tsx`](../src/mods/learning/authoring/chapter-settings.test.tsx)
+  vérifie la mise à jour immédiate du titre de chapitre. Le 2 novembre 2026,
+  Brave sur la copie isolée confirme que les titres de page et de chapitre se
+  reflètent immédiatement dans la Preview synchronisée et le sommaire, que la
+  page affichée reste la même et que les brouillons vides sont restaurés au
+  blur.
 - Le 4 octobre, Safari MCP a sélectionné une page Flux d’Évaluation, ajouté le
   BDC Résultat avec son icône BadgeCheck puis supprimé le bloc temporaire depuis
   sa corbeille. Le retrait a conservé la séquence précédente de la page.

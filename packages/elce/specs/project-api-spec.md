@@ -3,8 +3,10 @@
 ## Rôle
 
 Le routeur Fetch Remix expose les opérations du catalogue local des projets.
-Un projet correspond à un `ElceDocument` v7 : son identifiant et son nom sont
-ceux du document. Le navigateur crée le document initial ; le serveur reçoit
+Les projets existants peuvent conserver un document v7, v8 ou v9. Le navigateur
+lit ces formats ; `LearningDocument.fromJSON()` migre les formats v7 et v8 en
+v9 dans l’éditeur. Les créations et remplacements envoyés par l’éditeur utilisent
+le format courant v9. Le navigateur crée le document initial ; le serveur reçoit
 ensuite sa valeur structurée et la persiste. Le routeur ne crée pas un second
 document initial.
 
@@ -41,20 +43,26 @@ port. Le prévol `OPTIONS` autorise les méthodes `GET`, `POST`, `PUT`, `PATCH`,
 `DELETE` et les en-têtes `Content-Type`, `If-Match`, `X-Elce-Page-Id` et
 `X-Elce-Edit-Grant`. Il expose `ETag` à l’éditeur ainsi que `Content-Disposition`
 et `X-Elce-Scorm-Filename` pour l’export SCORM. En mode réseau, l’origine
-exacte de la preview peut lire le document et son état test, lire ses médias,
-et écrire uniquement l’état test. Les mutations du document et des médias,
-l’index des projets et les droits d’édition restent refusés depuis cette
-origine. Le prévol réseau autorise `GET` et `HEAD` pour les lectures du
-document, et `GET`, `HEAD` et `PUT` pour l’état test.
+exacte de la preview peut lire le document, l’état test initial et les médias,
+mais n’effectue aucune mutation. Les écritures du document, des médias et de
+l’état test, l’index des projets et les droits d’édition restent refusés depuis
+cette origine. Le prévol réseau autorise seulement `GET` et `HEAD` pour les
+lectures du document et de l’état test ; un prévol `PUT /test-state` est refusé.
+
+Chaque réponse API destinée à une origine locale autorisée, y compris une
+réponse média diffusée par FileStorage, inclut `Access-Control-Allow-Origin`
+avec l’origine de la requête et `Vary: Origin`. Le prévol seul ne suffit pas :
+le navigateur doit aussi pouvoir lire les octets média par `fetch`, notamment
+lorsqu’une copie indépendante récupère les médias du projet source.
 
 ## Requêtes et réponses
 
 | Méthode et chemin | Requête | Réponse |
 | --- | --- | --- |
-| `POST /api/exports/sighty` | `multipart/form-data` : `document` JSON v7 et un fichier `media:<id>` par média référencé | `200 application/zip`, `Content-Disposition: attachment; filename="<nom>.sighty.zip"`, `Cache-Control: no-store` ; aucune persistance |
+| `POST /api/exports/sighty` | `multipart/form-data` : `document` JSON v7, v8 ou v9 et un fichier `media:<id>` par média référencé | `200 application/zip`, `Content-Disposition: attachment; filename="<nom>.sighty.zip"`, `Cache-Control: no-store` ; aucune persistance |
 | `POST /api/exports/scorm` | `multipart/form-data` : `sightyPackage` ZIP, `documentName`, `version` (`1.2`, `2004v3` ou `2004v4`) et `monoSco` (`true` ou `false`) | `200 application/zip`, nom stable dans `Content-Disposition` et `X-Elce-Scorm-Filename`, nombre de packages dans `X-Elce-Scorm-Package-Count`, `Cache-Control: no-store` ; aucune persistance |
 | `GET /api/projects` | — | `200 { "projects": [{ "id", "name", "revision" }] }` |
-| `POST /api/projects` | `ElceDocumentData` v7 en JSON | `201 { "project": { "id", "name", "revision": 0 } }` et `ETag: "0"` |
+| `POST /api/projects` | `ElceDocumentData` v9 en JSON | `201 { "project": { "id", "name", "revision": 0 } }` et `ETag: "0"` |
 | `GET /api/projects/:projectId` | — | `200 { "project", "document" }` et l’ETag de la révision courante |
 | `POST /api/projects/:projectId/edit-access` | `{ "pageId": string, "force"?: true }` | `200 { "grantId": string, "recovered": boolean }` ; une répétition normale par la page détentrice retrouve son droit ; `force: true` le remplace |
 | `GET /api/projects/:projectId/edit-access` | En-têtes de droit | `200 { "held": boolean }` |
@@ -62,22 +70,30 @@ document, et `GET`, `HEAD` et `PUT` pour l’état test.
 | `DELETE /api/projects/:projectId/edit-access` | En-têtes de droit | `204` si la paire courante a libéré le droit |
 | `PATCH /api/projects/:projectId` | `{ "name": string }` et en-têtes de droit | `200 { "project" }`, avec le nom mis à jour, la révision suivante et son ETag |
 | `DELETE /api/projects/:projectId` | En-têtes de droit | `204` |
-| `PUT /api/projects/:projectId/document` | `ElceDocumentData` v7, `If-Match: "<revision>"` et en-têtes de droit | `200 { "project" }` et l’ETag de la nouvelle révision |
+| `PUT /api/projects/:projectId/document` | `ElceDocumentData` v9, `If-Match: "<revision>"` et en-têtes de droit | `200 { "project" }` et l’ETag de la nouvelle révision |
 | `GET /api/projects/:projectId/test-state` | — | `200 { "state" }` et un ETag de révision indépendant |
 | `PUT /api/projects/:projectId/test-state` | `{ "state": ProjectTestState }`, `If-Match: "<revision>"` | `200 { "state" }` et l’ETag suivant ; `412` si périmé |
 | `PUT /api/projects/:projectId/media/:mediaId` | Octets du média en corps brut et en-têtes de droit | `201 { "media": { "id", "url" } }`, ou `204` si les octets sont déjà enregistrés sous cette ressource |
 | `GET /api/projects/:projectId/media/:mediaId` | — | Fichier média avec son type MIME et sa taille |
 
-Le corps JSON transporté est le document v7 structuré produit par
-`ElceDocument.toJSON()`. L’adaptateur de persistance le projette vers les
-tables ; le JSON riche de Tiptap et le contenu complet du BDC Graphe sont les
-deux champs JSON en base. Les autres BDC, dont Question/Réponses, conservent
-leurs projections relationnelles.
+Les corps JSON de création et de remplacement sont les documents v9 structurés
+produits par `LearningDocument.toJSON()`. La route d’export Sighty peut aussi
+lire les formats v7 et v8 et les reconstitue avant l’export. La persistance
+projette le document vers les tables ; le JSON riche de Tiptap et le contenu
+complet du BDC Graphe sont les deux champs JSON en base. Les autres BDC, dont
+Question/Réponses, conservent leurs projections relationnelles.
 
 L’état auteur lu par `GET /test-state` est initialisé à `{ schemaVersion: 1 }`
 et à la révision `0` lorsqu’aucune ligne n’existe encore. Son premier `PUT`
 crée la ligne. Cette ressource ne demande pas le droit d’édition documentaire
 et n’incrémente pas la révision du projet.
+
+La route `PUT /test-state` sert aux contextes auteur qui enregistrent
+explicitement cet état. La preview est en lecture seule : elle peut charger
+l’état initial en `GET`, mais garde les réponses, le profil, la progression,
+les évaluations et la navigation de consultation dans sa session mémoire et ne
+les transmet jamais au serveur. Ce comportement vaut pour le popup local comme
+pour la preview réseau ; la fermeture du popup détruit l’état de consultation.
 
 Les documents reçus passent par `ElceDocument.fromJSON()` puis
 `assertDocumentInvariants()`. Le corps d’un remplacement doit porter le même
@@ -105,7 +121,7 @@ spécifiques :
 
 | Statut | Code | Sens |
 | --- | --- | --- |
-| `400` | `invalid_request` | JSON, document v7, identifiant ou nom de type invalide ; un `PUT /document` ajoute le diagnostic décrit ci-dessous |
+| `400` | `invalid_request` | JSON, document v9, identifiant ou nom de type invalide ; un `PUT /document` ajoute le diagnostic décrit ci-dessous |
 | `404` | `project_not_found` | Le projet demandé n’existe pas |
 | `409` | `project_already_exists` | L’identifiant du document existe déjà |
 | `409` | `edit_access_occupied` / `edit_access_lost` | Une autre page détient le projet, ou la paire envoyée n’est plus courante |
@@ -140,9 +156,11 @@ attente afin de pouvoir l’inspecter ou la récupérer.
 
 `SqliteProjectPersistence` implémente `ProjectPersistence` avec
 `remix/data-table/sqlite`. À l’ouverture, `openProjectDatabase()` applique les
-migrations SQL chargées avec `loadMigrations()` de Remix. Les migrations créent
-les tables relationnelles du modèle v7 ; aucune table ne contient le document
-Elcé entier en JSON. `sections.content_json` garde le JSON Tiptap et
+migrations SQL chargées avec `loadMigrations()` de Remix. Les tables relationnelles
+stockent les champs du modèle ; la colonne `format_version` permet de lire les
+documents v7, v8 et v9, et les migrations ajoutent les colonnes des versions
+ultérieures. Aucune table ne contient le document Elcé entier en JSON.
+`sections.content_json` garde le JSON Tiptap et
 `sections.markup_html` son export HTML. `statistical_graphs` garde le contenu
 complet du Graphe dans `content_json` ; les tables `graph_categories`,
 `graph_series` et `graph_values` sont supprimées. Question/Réponses conserve
@@ -217,7 +235,9 @@ FileStorage. La réponse déclare `Cache-Control: public, max-age=31536000,
 immutable`. L’aide Remix fournit les réponses conditionnelles et les requêtes
 `Range` pour les types média non compressibles ; Elcé n’implémente pas de
 gestionnaire `Range` parallèle. Le test HTTP vérifie une réponse `206` et son
-`Content-Range` pour une vidéo.
+`Content-Range` pour une vidéo. [`sqlite-project-persistence.test.ts`](../src/mods/learning/persistence/server/sqlite/learning-sqlite-project-persistence.test.ts)
+vérifie également les en-têtes CORS et `Vary: Origin` sur une réponse média
+complète.
 
 La suppression d’une ressource du document ou du projet supprime aussi les
 fichiers qui ne sont plus référencés. Le nettoyage protège les clés d’uploads
@@ -238,12 +258,18 @@ octets. Le contrat d’assemblage et de téléchargement figure dans la
 
 ## Vérification
 
-`ProjectApiController` délègue les lectures et mutations documentaires à
-`ProjectPersistence`; `ProjectTestStateApiController` traite l’état test séparé.
-Les tests couvrent les opérations API avec le dépôt isolé, puis avec SQLite
-Remix en mémoire. Une base fichier est fermée puis rouverte ; les projets
-restent lisibles et le document v7 conserve ses relations et ordres. La
-révision périmée est refusée sans perdre les métadonnées de stockage média.
+[`ProjectApiController`](../src/core/server/projects/project-api-controller.ts)
+délègue les lectures et mutations documentaires à la persistance commune
+[`ProjectPersistence`](../src/core/server/projects/project-persistence.ts).
+L’état test est traité par
+[`LearningTestStateApiController`](../src/mods/learning/persistence/server/learning-test-state-api-controller.ts)
+et ses routes Learning. Le routeur HTTP et la politique de preview sont des
+services communs dans `core/server/http/` ; la composition du routeur et le
+stockage SQLite restent possédés par Learning. Les tests couvrent les
+opérations API avec le dépôt isolé, puis avec SQLite Remix en mémoire. Une base
+fichier est fermée puis rouverte ; les projets restent lisibles et le document
+v9 conserve ses relations et ordres. La révision périmée est refusée sans
+perdre les métadonnées de stockage média.
 
 `createElceHttpServer()` assemble le listener Node, le routeur Fetch Remix,
 SQLite et FileStorage. Le test intégré envoie un vrai `POST`, des `PUT` média
@@ -252,11 +278,20 @@ le cache HTTP, la lecture partielle vidéo, le nettoyage après fusion de média
 et la suppression du projet. Il vérifie aussi le prévol depuis l’origine
 éditeur `http://localhost:5175` et le refus d’une origine distante.
 
-`ElceProjectApiClient` adapte les opérations de catalogue et de document
-utilisées par l’application : lister, créer, lire, renommer, supprimer,
-enregistrer le document et transférer un média. Ses tests vérifient les chemins
-HTTP, les méthodes, les corps, les ETags, la remontée de l’identifiant média
-canonique en cas de doublon et la propagation du diagnostic documentaire.
+`ProjectHttpTransport` dans `core/persistence/project-api/` possède la résolution
+des URL, `fetch`, les erreurs HTTP et la lecture des ETags. Le client générique
+`ProjectApiClient<TDocument, TSerialized>` reçoit un `ProjectDocumentCodec` et
+gère les opérations projet et média. `LearningProjectApiClient` injecte le codec
+Learning ; le client d’état de test Learning réutilise le même transport tout
+en gardant une révision indépendante du document.
+
+Les propriétaires sont [`ProjectApiClient`](../src/core/persistence/project-api/project-api-client.ts),
+[`ProjectHttpTransport`](../src/core/persistence/project-api/project-http-transport.ts),
+[`LearningProjectApiClient`](../src/mods/learning/persistence/learning-project-api-client.ts)
+et [`LearningTestStateApiClient`](../src/mods/learning/persistence/learning-test-state-api-client.ts).
+
+Les tests vérifient les chemins HTTP, les méthodes, les corps, les ETags, la
+remontée de l’identifiant média canonique en cas de doublon et la propagation du diagnostic documentaire.
 Ils vérifient aussi le renouvellement du bail et l’envoi du forçage. Les tests
 API vérifient les catégories de rejet `PUT /document`, la corrélation entre la
 réponse et le log, ainsi que l’absence de contenu documentaire dans ce log ;
@@ -273,16 +308,20 @@ vide attendue. L’arrêt du lanceur a libéré les deux ports.
 
 La migration Graphe et son aller-retour, y compris la conservation de
 Question/Réponses, sont vérifiés par
-[`sqlite-project-persistence.test.ts`](../src/server/projects/sqlite/sqlite-project-persistence.test.ts).
+[`sqlite-project-persistence.test.ts`](../src/mods/learning/persistence/server/sqlite/learning-sqlite-project-persistence.test.ts).
 La couverture API est dans
-[`api-router.test.ts`](../src/server/api-router.test.ts) et la couverture
+[`api-router.test.ts`](../src/mods/learning/integration/api-router.test.ts) et la couverture
 relationnelle dans
-[`sqlite-project-persistence.test.ts`](../src/server/projects/sqlite/sqlite-project-persistence.test.ts).
+[`sqlite-project-persistence.test.ts`](../src/mods/learning/persistence/server/sqlite/learning-sqlite-project-persistence.test.ts).
 La couverture de l’adaptateur navigateur est dans
-[`project-api-client.test.ts`](../src/infrastructure/project-api/project-api-client.test.ts).
-Les routes sont enregistrées dans
-[`api-router.ts`](../src/server/api-router.ts) ; les contrôleurs média et leur
-frontière de persistance sont dans `src/server/media/`.
+[`project-api-client.test.ts`](../src/core/persistence/project-api/project-api-client.test.ts)
+et [`project-api-client.test.ts`](../src/mods/learning/integration/project-api-client.test.ts).
+Les routes sont assemblées dans
+[`learning-api-router.ts`](../src/mods/learning/composition/server/learning-api-router.ts)
+et [`server-composition.ts`](../src/mods/learning/composition/server/server-composition.ts).
+Les routes d’état test et la persistance SQLite correspondante sont dans
+`src/mods/learning/persistence/server/` ; les contrôleurs média et leur
+frontière de persistance commune sont dans `src/core/server/media/`.
 
 Le test SQLite vérifie qu’une deuxième page reçoit `409`, qu’un ancien droit
 ne peut plus enregistrer après transfert, et que le droit persiste après
@@ -295,4 +334,7 @@ détenu par une autre page et qu’une copie obtient son propre droit.
 
 Le 13 octobre 2026, Brave a vérifié depuis l’origine LAN de la preview que la
 lecture de `GET /api/projects/elce-document` répond `200`, tandis que
-`GET /api/projects` et le prévol `PUT` du document répondent `403`.
+`GET /api/projects` et le prévol `PUT` du document répondent `403`. Safari MCP,
+le 28 octobre 2026, a aussi validé une réponse dans une preview popup et
+constaté zéro requête `PUT /test-state` après validation ; cette observation
+confirme que l’état de consultation n’est pas écrit par le serveur.

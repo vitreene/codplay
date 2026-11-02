@@ -7,8 +7,8 @@ import type {
   ScormScore,
   ScormVersion,
 } from '@codplay/sighty-scorm'
-import type { EvaluationAnswer, EvaluationMachineState } from '../domain/evaluation/evaluation-machine-types'
-import { applyEvaluationThreshold } from '../domain/evaluation/evaluation-machine'
+import type { EvaluationAnswer, EvaluationMachineState } from '../mods/learning/evaluation/domain/learning-evaluation-machine-types'
+import { applyEvaluationThreshold } from '../mods/learning/evaluation/domain/learning-evaluation-machine'
 import { decodeScormReaderState, encodeScormReaderState, initialScormReaderState } from './scorm-state-codec'
 import type {
   ElceScormProgressSink,

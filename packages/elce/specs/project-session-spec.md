@@ -86,18 +86,22 @@ de contenus de l’éditeur.
   internes.
 - [`editor-actions-facade.ts`](../src/app/facades/editor-actions-facade.ts)
   expose les intentions de gestion au même acteur XState.
-- [`controller-machine.ts`](../src/app/controller/controller-machine.ts)
+- [`controller-machine.ts`](../src/core/controller/controller-machine.ts)
   sérialise les opérations et installe le document reçu avant de demander son
   verrou.
-- [`project-session-coordinator.ts`](../src/app/projects/project-session-coordinator.ts)
-  coordonne les ressources navigateur et les appels d’infrastructure.
+- [`project-session-coordinator.ts`](../src/core/projects/project-session-coordinator.ts)
+  coordonne les ressources navigateur et les appels d’infrastructure à travers
+  `DocumentStore`, `ProjectApiClient` et les services documentaires injectés.
+  [`learning-project-session-coordinator.ts`](../src/mods/learning/persistence/learning-project-session-coordinator.ts)
+  fournit ces services pour le document Learning ; l’ancien chemin `app/` est
+  un ré-export de compatibilité.
 
 ## Vérification
 
 - Les tests XState couvrent le démarrage sans création implicite, l’installation
   d’un document avant le verrou et la conservation du document et de l’accès
   courant lorsqu’une opération échoue.
-- [`project-operations.test.ts`](../src/app/controller/project-operations.test.ts)
+- [`project-operations.test.ts`](../src/mods/learning/integration/project-operations.test.ts)
   traverse l’acteur XState, le raccord de persistance locale et le coordinateur
   de synchronisation : une commande Section en cours est enregistrée avant
   l’ouverture d’un autre projet, puis un conflit serveur ou une erreur réseau

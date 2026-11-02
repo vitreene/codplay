@@ -1,6 +1,11 @@
 # Elcé — plan de construction
 
-**Statut : fixe — ordre accepté ; réalisation du POC en cours.**
+**Statut : cadre fixe ; bilan révisé le 28 octobre 2026.** Le séquencement
+initial n’est plus un relevé fiable de l’avancement : le socle auteur, le player
+et la plupart des modules prévus sont réalisés et documentés. Le tableau
+ci-dessous remplace les anciens statuts génériques « En cours ». Les
+spécifications liées décrivent le comportement vérifié ; les plans dédiés
+portent les validations encore ouvertes.
 
 ## Cadre retenu
 
@@ -56,7 +61,7 @@ reprise en projet éditable. Le socle est le document actuel ; les propositions
 de format, de périmètre et de publication restent **A relire**. Aucun changement
 de code ou de contrat SCORM n’est réalisé par cette préparation.
 
-## Ordre et critères de sortie
+## État actuel des tranches
 
 | Ordre | Tranche | État | Critère de sortie |
 | --- | --- | --- | --- |

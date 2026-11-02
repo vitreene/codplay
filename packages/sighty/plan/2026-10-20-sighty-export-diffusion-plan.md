@@ -481,10 +481,10 @@ le contexte d’appel, et le journal est observé par l’hôte via
 de scène ; les scènes quiz utilisent l’événement de reset générique et leur
 `pageId` déjà présent dans l’état local. Le contrat Sighty reste inchangé.
 
-`onTestStateChange` est un rappel de l’hôte Elcé utilisé par l’aperçu pour la
-persistance auteur ; l’export de diffusion ne sérialise pas cette fonction et
-ne persiste pas la progression. Il ne doit pas subsister comme capture dans
-les handlers livrés.
+`onTestStateChange` permet à l’hôte Elcé de garder l’état de lecture dans la
+session de preview ; il ne sauvegarde pas cet état sur le serveur. L’export de
+diffusion ne sérialise pas cette fonction et ne persiste pas la progression.
+Il ne doit pas subsister comme capture dans les handlers livrés.
 
 ### Porte d’implémentation
 
@@ -577,7 +577,8 @@ du scénario issue du document va dans `scenario.data`, les paramètres propres
 imports de projet. Les handlers et fonctions de scène sont top-level dans les
 groupes auteur désignés par `scenarioFunctions` et `sceneFunctions`.
 
-`onTestStateChange` sert uniquement à la persistance de la preview : l’export
+`onTestStateChange` permet à l’hôte Elcé de garder l’état de lecture dans la
+session de preview ; il ne sauvegarde pas cet état sur le serveur. L’export
 construit le scénario sans cette option, donc ses closures ne sont pas livrées.
 Les actions exportées conservent les effets prévus par Sighty, tels que la mise
 à jour du contexte et l’envoi d’événements. Les actions Demo 5 observent leur

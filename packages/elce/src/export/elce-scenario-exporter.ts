@@ -4,8 +4,9 @@ import { dirname, extname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { zipSync } from 'fflate'
 import type { Zippable } from 'fflate'
-import { ElceDocument } from '../domain/document/document-model'
-import type { ElceDocumentData, MediaId, MediaMetadata } from '../domain/document/document-types'
+import { LearningDocument } from '../mods/learning/document/learning-document'
+import type { LearningDocumentData } from '../mods/learning/document/learning-document-types'
+import type { MediaId, MediaMetadata } from '../core/document/content-document-types'
 import { scenarioExportMediaIds } from './scenario-export-media'
 import {
   appearanceFontAssetsForDocument,
@@ -16,19 +17,19 @@ import type { AppearanceFontAsset } from '../player/appearance-font-assets'
 const ELCE_PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const EXPORT_WORK_DIRECTORY = resolve(ELCE_PACKAGE_ROOT, '.elce-export')
 const SIGHTY_EXPORT_CLI = fileURLToPath(import.meta.resolve('@codplay/sighty/tools/scenario-export/cli.mjs'))
-const PLAYER_SCENARIO_MODULE = resolve(ELCE_PACKAGE_ROOT, 'src/player/elce-player-composition.ts')
-const DOCUMENT_MODULE = resolve(ELCE_PACKAGE_ROOT, 'src/domain/document/document-model.ts')
+const PLAYER_SCENARIO_MODULE = resolve(ELCE_PACKAGE_ROOT, 'src/mods/learning/reading/learning-player.ts')
+const DOCUMENT_MODULE = resolve(ELCE_PACKAGE_ROOT, 'src/mods/learning/document/learning-document.ts')
 const SCENARIO_FUNCTIONS_MODULE = resolve(ELCE_PACKAGE_ROOT, 'src/builders/scenario/scenario-functions.ts')
 const SCENE_FUNCTIONS_MODULE = resolve(ELCE_PACKAGE_ROOT, 'src/builders/scene-functions/scene-functions.ts')
 const ENGINE_CONFIG_MODULE = resolve(ELCE_PACKAGE_ROOT, 'src/player/elce-player-engine.ts')
 
 /** Converts one current Elcé document and its media bytes into a Sighty package ZIP. */
 export async function exportElceSightyPackage(
-  documentData: ElceDocumentData,
+  documentData: LearningDocumentData,
   mediaBytesById: ReadonlyMap<MediaId, Uint8Array>,
 ): Promise<Uint8Array> {
   const workingDirectory = process.env.INIT_CWD ?? process.cwd()
-  const document = ElceDocument.fromJSON(documentData)
+  const document = LearningDocument.fromJSON(documentData)
   const appearanceFontAssets = appearanceFontAssetsForDocument(document)
   const appearanceThemeCssPaths = appearanceThemeCssAssetPathsForDocument(document)
   const mediaPathsById = new Map<MediaId, Readonly<{ media: MediaMetadata; relativePath: string }>>()
@@ -131,17 +132,17 @@ async function normalizeTemporaryScenarioPath(
 /** Creates the temporary module consumed by the existing Sighty CLI. */
 function createScenarioModule(
   temporaryDirectory: string,
-  documentData: ElceDocumentData,
+  documentData: LearningDocumentData,
   mediaSources: Readonly<Record<string, string>>,
 ): string {
   return [
-    `import { ElceDocument } from ${JSON.stringify(relativeModulePath(temporaryDirectory, DOCUMENT_MODULE))};`,
+    `import { LearningDocument } from ${JSON.stringify(relativeModulePath(temporaryDirectory, DOCUMENT_MODULE))};`,
     `import { createElcePlayerScenario } from ${JSON.stringify(relativeModulePath(temporaryDirectory, PLAYER_SCENARIO_MODULE))};`,
     `export * as scenarioFunctions from ${JSON.stringify(relativeModulePath(temporaryDirectory, SCENARIO_FUNCTIONS_MODULE))};`,
     `export * as sceneFunctions from ${JSON.stringify(relativeModulePath(temporaryDirectory, SCENE_FUNCTIONS_MODULE))};`,
     `const documentData = JSON.parse(${JSON.stringify(JSON.stringify(documentData))});`,
     `const mediaSources = JSON.parse(${JSON.stringify(JSON.stringify(mediaSources))});`,
-    'export const scenario = createElcePlayerScenario({ document: ElceDocument.fromJSON(documentData), mediaSources }, "./");',
+    'export const scenario = createElcePlayerScenario({ document: LearningDocument.fromJSON(documentData), mediaSources }, "./");',
     '',
   ].join('\n')
 }

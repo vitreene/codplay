@@ -1,10 +1,12 @@
 # Elcé — variables et liens internes
 
-**Statut : En cours — insertion, rendu, lien interne et sortie anticipée sont
-implémentés et validés sur le parcours retenu ; les autres champs, gestes et
-formats d’acceptation restent à couvrir. L’édition d’une étiquette sélectionnée
-est raccordée et testée dans l’éditeur ; l’enregistrement serveur reste à
-valider, car l’API de test a répondu HTTP 400.**
+**Statut : En cours — insertion, rendu, sortie anticipée et navigation des
+liens de Section sont implémentés et vérifiés dans la copie intégrée. La
+modification d’un libellé est aussi enregistrée puis relue depuis l’API et après
+rechargement de l’éditeur. Le HTTP 400 observé lors d’un essai antérieur ne se
+reproduit pas avec le parcours intégré actuel ; sa réponse d’origine n’était pas
+disponible, donc sa cause exacte reste inconnue. Les autres champs, gestes et
+formats d’acceptation restent à couvrir.**
 
 ## État d’implémentation — 2026-11-02
 
@@ -17,11 +19,13 @@ valider, car l’API de test a répondu HTTP 400.**
 - Les champs simples restent natifs jusqu’à une insertion d’étiquette ; Message
   Carte peut aussi être promu par les commandes Gras et Italique. Sa limite de
   caractères compte les atomes comme prévu.
-- Les builders Carte, Question, Résultat, Section, Sommaire et Graphe projettent
-  les valeurs résolues en contenu sûr et les liens de page en événements Elcé.
-  Les labels du Graphe utilisent les ancres HTML existantes ; les libellés SVG
-  interactifs sont superposés en HTML dans le builder Elcé, sans changement du
-  cœur CodPlay.
+- Les builders Carte, Question, Résultat, Sommaire et Graphe projettent les
+  liens de page en événements Elcé. Dans une Section, la contribution Learning
+  remplace le span éditorial par le slot exact du perso interactif ; le scénario
+  route son événement vers la page cible en conservant les gardes. Le lecteur
+  réel et Brave vérifient l’ouverture et le retour. Les labels du Graphe
+  utilisent les ancres HTML existantes ; les libellés SVG interactifs sont
+  superposés en HTML dans le builder Elcé, sans changement du cœur CodPlay.
 - Le réglage « Ignorer la contrainte de lecture » est disponible dans l’onglet
   Style du panneau droit de la page ciblée, avec ou sans lien. La valeur
   automatique s’active quand la page contient un lien interne ; le choix
@@ -37,6 +41,12 @@ valider, car l’API de test a répondu HTTP 400.**
   lien avant la fin fonctionnelle de la page source. L’acceptation globale reste
   partielle : les autres champs, gestes d’édition, cas de migration et export
   restent à couvrir.
+- Reprise dans la copie intégrée : sur « Test Elcé — liens et date », Brave
+  affiche la date locale, confirme `margin-inline: 0.5em` sur le bouton de
+  Section et vérifie sa navigation. Un changement du libellé dans l’onglet
+  « Modifier l’étiquette sélectionnée » est synchronisé à la révision 6 ; le
+  document relu par l’API et le rechargement de l’éditeur conservent ce libellé
+  dans le nœud Tiptap et le markup.
 
 ## Objectif
 

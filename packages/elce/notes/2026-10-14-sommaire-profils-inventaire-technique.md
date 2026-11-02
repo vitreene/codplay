@@ -19,7 +19,7 @@ vérifiés sont dans la
 | Collecte du profil | `input`, `Perso.emit` et story CodPlay | Un Formulaire enfant valide tous les champs, puis transmet les valeurs au contexte lecteur. |
 | Valeurs et étiquettes | Contexte Sighty, contenu Tiptap et service HTML | Des références stables sont résolues lors de la projection de lecture ; le document auteur reste inchangé. |
 | Progression et réponses de test | Player Elcé, machines Question et Évaluation | L’état de test est distinct du document et restauré dans les contrôles concernés. |
-| Persistance et preview | API projets, routeur HTTP, SQLite et popup | Une route et une ligne serveur distinctes portent l’état du test ; la preview réseau peut les lire et les enregistrer. |
+| Persistance et preview | API projets, routeur HTTP, SQLite et popup | Une route et une ligne serveur distinctes portent l’état test ; la preview lit l’état initial et garde ses changements en session, sans écriture serveur. |
 
 ## Repères de code et contrats
 

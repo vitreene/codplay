@@ -8,6 +8,11 @@ peut le remplacer par un BDC Carte autonome, un BDC Question (Quiz) ou un
 Graphe. Les cartes et Graphes d’un Carousel réutilisent leurs BDC
 Elcé dans une page Flux.
 
+Le type d’options communes expose `buildAdditionalBdc` sans importer Learning.
+La composition Learning l’utilise pour le BDC Résultat et vérifie son chapitre
+d’Évaluation ; un type sans constructeur ni contribution reçoit un refus
+explicite.
+
 ## Scène et lecture
 
 `ElcePlayerComposition` envoie une page Flux à `buildFluxScene` et une Diapo à
@@ -97,15 +102,15 @@ Le test du builder couvre les illustrations image et vidéo de Question ; le
 test de composition et Safari couvrent le cycle de sortie/retour d’une vidéo
 Carte le 14 octobre 2026.
 
-- [`diapo-scene-builder.test.ts`](../src/builders/diapo/diapo-scene-builder.test.ts)
+- [`diapo-scene-builder.test.ts`](../src/mods/learning/integration/diapo-scene-builder.test.ts)
   vérifie les types de BDC acceptés, la story unique du Carousel Diapo, sa
   racine `scroll-container`, le placement direct des cartes et de la
   navigation, la racine Photo sans `article`, l’événement public, le marqueur
   de la dernière Carte et les commentaires d’insertion sans attribut
   `data-part` sur les éléments.
-- [`statistical-graph-placements.test.ts`](../src/builders/statistical-graph/statistical-graph-placements.test.ts)
+- [`statistical-graph-placements.test.ts`](../src/mods/learning/integration/statistical-graph-placements.test.ts)
   vérifie le montage du Graphe comme BDC direct d’une Diapo.
-- [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
+- [`elce-player-composition.test.ts`](../src/mods/learning/reading/learning-player.test.ts)
   vérifie le chemin player réel avec Sighty/CodPlay : le marqueur Carte et le
   Quiz émettent `elce:page:finished`, et la dernière vue d’un Carousel manuel
   publie le même nom et `{ pageId }`. Il vérifie également qu’une image liée à

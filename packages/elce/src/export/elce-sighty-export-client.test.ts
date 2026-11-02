@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { BDC_TYPE } from '../config/document-config'
+import { BDC_TYPE } from '../mods/learning/learning-definition'
 import { applyDocumentCommand } from '../domain/commands/document-commands'
-import { createInitialDocument, ElceDocument } from '../domain/document/document-model'
+import { learningDocumentService } from '../mods/learning/document/learning-document-service'
+import { LearningDocument } from '../mods/learning/document/learning-document'
 import { requestElceSightyPackage } from './elce-sighty-export-client'
 
 describe('Elcé Sighty export client', () => {
@@ -42,8 +43,8 @@ describe('Elcé Sighty export client', () => {
 })
 
 /** Creates a fixture whose direct scene references one media file. */
-function documentWithReferencedMedia(size: number): ElceDocument {
-  let document = applyDocumentCommand(createInitialDocument(), {
+function documentWithReferencedMedia(size: number): LearningDocument {
+  let document = applyDocumentCommand(learningDocumentService.createInitialDocument(), {
     type: 'media.add',
     media: { id: 'media-client', name: 'visuel.svg', mimeType: 'image/svg+xml', size, caption: '' },
   })

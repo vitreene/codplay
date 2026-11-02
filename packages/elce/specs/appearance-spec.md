@@ -54,9 +54,10 @@ message ajoutent respectivement les rôles `elce-card__overline` et
 `elce-card__message` ; les classes `elce-card__description` et
 `elce-card__caption` servent aussi aux styles de l’aperçu auteur. Les zones
 restent distinguées par leurs `data-part` et identifiants, pas par des classes
-spécifiques à chaque preset. Leurs définitions communes sont dans
-[`presets.ts`](../src/config/presets.ts), avec la vérification dans
-[`card-preset-builder.test.ts`](../src/builders/card/card-preset-builder.test.ts).
+spécifiques à chaque preset. Leurs définitions Carte sont dans
+[`card-presets.ts`](../src/resources/bdcs/card/card-presets.ts), avec la
+vérification dans
+[`card-preset-builder.test.ts`](../src/core/presets/card-preset-builder.test.ts).
 Ces règles s’appliquent au texte documentaire des BDC et au titre de page ;
 aucun contrôle auteur de largeur ou de taille n’est ajouté. Les déclarations
 restent en unités relatives. La calibration visuelle des fontes, contenus et
@@ -111,6 +112,12 @@ libellé d’origine. Chaque contrôle montre sa valeur effective ; son action
 `frame` suit cette même cascade : une valeur active sur le projet s’applique
 aux pages et BDC descendants, sauf exception locale, et le reset rétablit la
 valeur de l’ancêtre.
+
+`resolveAppearance` et `resolveAppearanceContrastContext` reçoivent
+`ResourceDocumentData` et une cible. Ils résolvent la même cascade sans dépendre
+de `LearningDocument` ;
+[`appearance-resolver.test.ts`](../src/domain/appearance/appearance-resolver.test.ts)
+le vérifie avec une vue de données de ressource.
 
 Une couleur peut référencer un rôle sémantique d’une palette ou conserver une
 valeur personnalisée fixe. Le fond n’enregistre pas `transparent` : le choix
@@ -235,7 +242,7 @@ inchangées.
 
 La preview ne rajoute ni marge ni bord autour de `.elce-player-stage`, règle
 portée par [`app-layout.css`](../src/app/layout/app-layout.css) et
-[`popup-player.css`](../src/app/player/popup-player.css) : son cadre fait partie
+[`popup-player.css`](../src/core/preview/popup-player.css) : son cadre fait partie
 de la surface auteur. Le slot `.elce-player-layout__content`, stylé dans
 [`elce-player-style.ts`](../src/player/elce-player-style.ts), conserve toujours
 `1rem` de padding intérieur, y compris sur fond transparent.

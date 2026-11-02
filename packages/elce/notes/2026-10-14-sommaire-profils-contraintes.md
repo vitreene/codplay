@@ -392,11 +392,11 @@ actif et que la page éditée est exclue, signaler cette exclusion et donner acc
 page interdite. Ce mode auteur ne définit pas le comportement de consultation
 du lecteur.
 
-Décision acceptée : l’état de test auteur est stocké sur le serveur, séparé du
-document, et l’aperçu réseau peut le lire et l’enregistrer par une route dédiée.
-Le schéma et la révision serveur sont intégrés comme formats internes pour
-relecture ultérieure ; leur comportement vérifié est décrit dans la
-spécification Sommaire et profils.
+Décision mise à jour le 27 octobre : l’état de test reste stocké sur le serveur
+dans un enregistrement séparé du document, mais la preview ne sauvegarde aucune
+modification de consultation. Elle peut lire l’état initial ; son prévol
+`PUT` réseau est refusé. Le schéma, la révision et les permissions vérifiées
+sont décrits dans la [spécification Sommaire et profils](../specs/summary-profile-spec.md).
 Les réponses déclaratives du profil ne peuvent pas prouver des droits
 d’administration : les futures ACL doivent utiliser les permissions de
 l’utilisateur fourni.

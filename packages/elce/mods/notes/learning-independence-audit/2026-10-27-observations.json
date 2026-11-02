@@ -1,0 +1,101 @@
+{
+  "revision": "64e925517e19888dc76d7d872cd4ef79cb5fc88c",
+  "date": "2026-10-27",
+  "scope": "Elce production TS/TSX source; literal local import graph; diagnostic probes, not independent-resource certification",
+  "imports": {
+    "files": 196,
+    "internalDeclarations": 944,
+    "typeOnlyDeclarations": 483,
+    "valueDeclarations": 461,
+    "resolvedExternalDeclarations": 156,
+    "builtinNodeDeclarations": 22,
+    "stronglyConnectedComponents": {
+      "all": [
+        [
+          "domain/card/card-types.ts",
+          "domain/carousel/carousel-types.ts",
+          "domain/document/document-types.ts",
+          "domain/question/question-types.ts",
+          "domain/scenario/scenario-entry-types.ts",
+          "domain/summary-profile/summary-profile-types.ts"
+        ]
+      ],
+      "value": []
+    }
+  },
+  "catalogProbe": {
+    "restoredSourceReused": true,
+    "firstSubmitted": false,
+    "cachedRestorationSubmitted": false,
+    "freshRestorationSubmitted": true,
+    "resetSourceReused": true,
+    "cachedResetSubmitted": true
+  },
+  "previewDomProbe": {
+    "first": {
+      "checked": [
+        false,
+        false
+      ],
+      "disabled": [
+        false,
+        false
+      ]
+    },
+    "restoredWithCache": {
+      "checked": [
+        false,
+        false
+      ],
+      "disabled": [
+        false,
+        false
+      ]
+    },
+    "restoredFresh": {
+      "checked": [
+        true,
+        false
+      ],
+      "disabled": [
+        true,
+        true
+      ]
+    },
+    "firstAnswered": {
+      "checked": [
+        true,
+        false
+      ],
+      "disabled": [
+        true,
+        true
+      ]
+    },
+    "resetWithCache": {
+      "checked": [
+        true,
+        false
+      ],
+      "disabled": [
+        true,
+        true
+      ]
+    },
+    "resetFresh": {
+      "checked": [
+        false,
+        false
+      ],
+      "disabled": [
+        false,
+        false
+      ]
+    }
+  },
+  "focusedVerification": {
+    "files": 16,
+    "tests": 132,
+    "passed": true
+  }
+}

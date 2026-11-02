@@ -1,14 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createElceApiRouter } from '../api-router'
-import type { ProjectPersistence } from '../projects/project-persistence'
+import { createLearningApiRouter } from '../../mods/learning/composition/server/learning-api-router'
+import type { ProjectPersistence } from '../../core/server/projects/project-persistence'
+import type { LearningDocument } from '../../mods/learning/document/learning-document'
+import type { LearningTestStatePersistence } from '../../mods/learning/persistence/server/learning-test-state-persistence'
 import { ScormExportApiController } from './scorm-export-api-controller'
 
 describe('SCORM export API route', () => {
   it('passes the existing Sighty ZIP and modal choices to the SCORM CLI adapter', async () => {
     const archive = new Uint8Array([80, 75, 3, 4])
     const exporter = vi.fn(async () => ({ archive, packageCount: 1 }))
-    const router = createElceApiRouter(
-      {} as ProjectPersistence,
+    const router = createLearningApiRouter(
+      {} as ProjectPersistence<LearningDocument> & LearningTestStatePersistence,
       undefined,
       undefined,
       new ScormExportApiController(exporter, () => new Date('2026-10-22T12:00:00.000Z')),
@@ -35,8 +37,8 @@ describe('SCORM export API route', () => {
 
   it('rejects unsupported edition and mono-SCO values before packaging', async () => {
     const exporter = vi.fn()
-    const router = createElceApiRouter(
-      {} as ProjectPersistence,
+    const router = createLearningApiRouter(
+      {} as ProjectPersistence<LearningDocument> & LearningTestStatePersistence,
       undefined,
       undefined,
       new ScormExportApiController(exporter),
@@ -63,9 +65,9 @@ describe('SCORM export API route', () => {
     const persistence = {
       createProject: writes,
       saveDocument: writes,
-    } as unknown as ProjectPersistence
+    } as unknown as ProjectPersistence<LearningDocument> & LearningTestStatePersistence
     const exporter = vi.fn(async () => ({ archive, packageCount: 1 }))
-    const router = createElceApiRouter(
+    const router = createLearningApiRouter(
       persistence,
       undefined,
       undefined,

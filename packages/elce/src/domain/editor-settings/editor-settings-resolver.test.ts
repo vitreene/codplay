@@ -1,15 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { CAROUSEL_TRANSITION } from '../../config/document-config'
+import type { ContentPage } from '../../core/document/content-document-types'
+import type { ResourceBdc } from '../../resources/document/resource-document-types'
+import { SECTION_BDC_TYPE, SECTION_PRESET_ID } from '../../resources/bdcs/section/section-config'
+import { CAROUSEL_TRANSITION } from '../../resources/revelation/revelation-config'
 import { ELCE_EDITOR_SETTINGS } from '../../config/editor-settings'
 import { applyDocumentCommand, createCarouselBdcCommand } from '../commands/document-commands'
-import { createInitialDocument } from '../document/document-model'
+import { learningDocumentService } from '../../mods/learning/document/learning-document-service'
 import { ElceEditorSettingsResolver } from './editor-settings-resolver'
 
 describe('ElceEditorSettingsResolver', () => {
   const resolver = new ElceEditorSettingsResolver()
 
   it('returns grouped hidden player settings to scene construction', () => {
-    const document = createInitialDocument()
+    const document = learningDocumentService.createInitialDocument()
     expect(resolver.resolvePlayer()).toBe(ELCE_EDITOR_SETTINGS.player)
     expect(resolver.resolvePage(
       document.pages[0]!,
@@ -18,8 +21,44 @@ describe('ElceEditorSettingsResolver', () => {
     ).player).toBe(ELCE_EDITOR_SETTINGS.player)
   })
 
+  it('resolves resource page and BDC data without a Learning document', () => {
+    const page: ContentPage = {
+      id: 'resource-page',
+      name: 'Page ressource',
+      type: 'flux',
+      chapterId: null,
+      bdcIds: ['resource-section'],
+    }
+    const section: ResourceBdc = {
+      id: 'resource-section',
+      type: SECTION_BDC_TYPE,
+      presetId: SECTION_PRESET_ID,
+      pageId: page.id,
+      parentBdcId: null,
+      section: {
+        title: 'Section',
+        markup: '',
+        content: { type: 'doc', content: [] },
+        revelation: { intro: CAROUSEL_TRANSITION.SWIPE_LEFT, outro: null },
+      },
+      question: null,
+      carousel: null,
+      card: null,
+      statisticalGraph: null,
+    }
+
+    expect(resolver.resolvePage(
+      page,
+      [section],
+      { intro: CAROUSEL_TRANSITION.FADE, outro: CAROUSEL_TRANSITION.SWIPE_DOWN },
+    ).revelation.byBdcId[section.id]).toEqual({
+      intro: CAROUSEL_TRANSITION.SWIPE_LEFT,
+      outro: CAROUSEL_TRANSITION.SWIPE_DOWN,
+    })
+  })
+
   it('resolves project, parent, Carousel and placement values field by field', () => {
-    const initial = createInitialDocument()
+    const initial = learningDocumentService.createInitialDocument()
     const page = initial.pages[0]!
     const section = initial.bdcs.find((bdc) => bdc.type === 'section')!
     const withCarousel = applyDocumentCommand(initial, createCarouselBdcCommand('carousel-test', page.id, 1, 'card-test'))

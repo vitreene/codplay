@@ -3,15 +3,19 @@
 Date : 16 octobre 2026.
 
 Note d’étude sur la définition, la gestion et l’enregistrement de l’état
-de lecture. Les orientations ci-dessous ne sont pas encore implémentées.
-Cette note ne décide ni renommage, ni API, ni modification de code.
+de lecture ; ce document n’est pas un plan de travail. La proposition plus
+large de pilotage de l’état par Sighty reste à décider dans le [plan Mods](../plan/2026-10-20-elce-mods-reconfiguration-plan.md),
+décision D8. La séparation entre contenu édité et état de consultation dans la
+preview est appliquée et vérifiée dans les spécifications Preview, Question et
+Sommaire/profils.
 
 ## Un état de lecture, deux contextes d’usage
 
 L’utilisateur précise qu’il n’existe pas de situation métier « test » :
 le lecteur s’exécute dans un contexte **auteur** ou **diffusion**. La collecte
-du profil, la progression, les réponses et les tentatives d’Évaluation sont
-des données de lecture. Leur nature ne dépend pas du contexte d’usage.
+du profil, la navigation, la progression, les réponses et les tentatives
+d’Évaluation sont des données de lecture. Leur nature ne dépend pas du contexte
+d’usage.
 
 Les noms actuels `ProjectTestState`, `onTestStateChange` et
 `ProjectTestStateSession` reflètent le contexte auteur dans lequel leur
@@ -23,6 +27,21 @@ les contraintes ou modifier le document puis réconcilier la progression.
 Ces possibilités doivent être distinguées de l’état commun qu’elles
 affectent ; elles ne justifient pas de qualifier toute la lecture de test.
 Le vocabulaire futur reste à choisir après clarification des responsabilités.
+
+## Contenu édité et état de consultation
+
+Les composants et leur configuration sont créés et modifiés par l’auteur ;
+ils appartiennent au contenu qui sert à construire la lecture. L’état de
+consultation — navigation, profil, progression, réponses et Évaluation —
+décrit le parcours d’un lecteur. Dans la preview, il reste dans la session,
+séparément des composants, des sources de scène et du cache des ressources ;
+il n’est jamais enregistré sur le serveur. Son cycle de vie est distinct de
+celui du contenu édité et de ses productions réutilisables.
+
+Le lecteur utilise ces deux ensembles ensemble : il garde l’état courant à part
+et le présente dans les composants sans l’intégrer au cache des ressources. Le
+raccord vérifié utilise les builders de scène neutres et le rafraîchissement
+Sighty existant ; aucun changement du runtime Sighty n’est requis.
 
 ## Circuit actuellement observé
 
@@ -37,18 +56,18 @@ Les fichiers suivants précisent sa répartition concrète :
 | [test-state-types.ts](../../src/domain/summary-profile/test-state-types.ts) | Valeur sérialisable : version, activation/validation du profil, valeurs, pages terminées, réponses et états d’Évaluation. |
 | [scenario-builder.ts](../../src/builders/scenario/scenario-builder.ts) | Les actions Sighty actualisent le contexte, appliquent les transitions métier et notifient `onTestStateChange`. |
 | [player-composition-types.ts](../../src/player/player-composition-types.ts) | La composition reçoit une valeur initiale et le callback exposé au conteneur. |
-| [popup-player.tsx](../../src/app/player/popup-player.tsx) | Ouvre la session de persistance, reçoit les états, déclenche leur sauvegarde et gère le résultat. Ses commandes de reset modifient aussi directement l’instantané avant sauvegarde/reconstruction. |
-| [project-test-state-session.ts](../../src/app/player/project-test-state-session.ts) | Charge la valeur serveur, sérialise les écritures et traite les révisions et conflits. |
+| [popup-player.tsx](../../src/app/player/popup-player.tsx) | Lit l’état test initial, reçoit les changements dans l’instantané de session et reconstruit le lecteur selon la commande ; les resets modifient aussi cet instantané. La preview ne déclenche aucune écriture serveur. |
+| [project-test-state-session.ts](../../src/app/player/project-test-state-session.ts) | Charge l’état serveur initial ; l’API conserve son compare-and-swap pour ses clients d’écriture, mais la preview n’envoie pas de `PUT`. |
 
-La popup ne se limite donc pas aujourd’hui à présenter le lecteur. La
-gestion métier est partagée entre actions du scénario et conteneur : les
-réponses et fins de page passent par Sighty, tandis que des remises à zéro
-et opérations de persistance sont conduites depuis la popup.
+La popup présente le lecteur et garde son état de session. La gestion métier
+reste partagée entre actions du scénario et conteneur : les réponses et fins de
+page passent par Sighty, tandis que les commandes de reset sont conduites
+depuis la popup. Aucun de ces changements de preview n’est envoyé au serveur.
 
-La soumission du profil appelle actuellement le callback puis dépend du
-conteneur pour reconstruire la projection. Plusieurs autres actions
-notifient sans attendre la sauvegarde. Ces raccords doivent être examinés
-ensemble ; déplacer seulement un appel d’écriture ne règle pas leur cycle.
+La soumission du profil appelle le callback puis dépend du conteneur pour
+reconstruire la projection. Le callback actualise l’instantané en mémoire ; il
+ne lance pas une sauvegarde serveur. Ce raccord de session est distinct de la
+question plus large de propriété Sighty suivie en D8.
 
 ## Responsabilité demandée
 
@@ -95,18 +114,19 @@ restauration, la réconciliation et les resets métier doivent donc être
 raccordés explicitement aux ports et cycles disponibles. Aucune nouvelle
 phase ou méthode du moteur n’est supposée acquise.
 
-La répartition demandée est une évolution à étudier par rapport au circuit
-actuel. Elle ne doit pas être présentée comme une divergence de code avec
-une spécification qui exige déjà cette répartition : les contrats vérifiés
-décrivent encore l’organisation actuelle.
+La proposition de faire piloter par Sighty le chargement, les resets et toute
+persistance durable reste à étudier par rapport au circuit actuel. La
+spécification preview décrit déjà le contrat appliqué : l’état de consultation
+reste en session et n’est pas écrit depuis la preview.
 
 ## Conséquences de la répartition étudiée
 
-La répartition concerne le chargement initial, la restauration, les resets,
+La question D8 concerne le chargement initial, la restauration, les resets,
 la soumission du profil et la réconciliation après modification du document.
-Elle doit distinguer l’état logique courant, l’état confirmé par la destination
-et les changements en attente, en réutilisant révisions et conflits existants.
-Les resets du profil et de la progression conservent leurs effets distincts.
+Pour tout contexte autorisé à persister, elle doit préciser l’état logique,
+les révisions et les conflits. La preview n’a ni écriture en attente ni état
+serveur confirmé après ses interactions. Les resets du profil et de la
+progression gardent leurs effets distincts.
 
 Les décisions relatives à ce raccord sont réunies dans
 le [plan de reconfiguration](../plan/2026-10-20-elce-mods-reconfiguration-plan.md),
@@ -117,5 +137,6 @@ Le nom des types et fonctions vient après cette clarification. Renommer
 `onTestStateChange` sans retirer à la popup ses responsabilités laisserait
 le problème architectural intact.
 
-Cette note résulte de la lecture des contrats et des raccords cités. Aucun
-code modifié et aucune validation d’intégration exécutée pour sa rédaction.
+La séparation du cache preview est implémentée et vérifiée ; les spécifications
+liées consignent les tests et l’essai Safari. Les autres propositions D8 de
+cette note restent à décider dans le plan Mods.

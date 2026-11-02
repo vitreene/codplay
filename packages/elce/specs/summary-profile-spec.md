@@ -177,9 +177,11 @@ et, à 390 px, une seule colonne de 318 px sans dépassement horizontal. La mêm
 preview confirme que l’icône reste entièrement dans la zone visible (x=47–72 px
 dans un viewport de 390 px). Un test de composition couvre aussi les placements
 des icônes dans les titres statiques et les liens.
-Les tests sont dans [la composition lecteur](../src/player/elce-player-composition.test.ts),
-[le scénario lecteur](../src/builders/scenario/scenario-builder.test.ts) et
-[les réglages du Sommaire](../src/app/remix/workspace/summary-profile-settings.test.tsx).
+Les tests sont dans [le lecteur Learning](../src/mods/learning/reading/learning-player.test.ts),
+[le scénario Learning](../src/mods/learning/reading/learning-scenario-builder.test.ts),
+[les réglages du Sommaire](../src/mods/learning/authoring/summary-profile-settings.test.tsx)
+et [la feuille de style du lecteur](../src/mods/learning/reading/learning-player-style.test.ts),
+qui verrouille aussi la grille deux colonnes et le survol sans soulignement.
 
 Les routes vers le Sommaire racine et la scène de transition Profil ciblent
 l’entrée de scène sous le slot contenu, pas le conteneur qui déclare ce slot.
@@ -195,6 +197,13 @@ Un lien de page inline peut être présenté comme texte souligné ou comme bout
 Le bouton garde une marge extérieure minimale de `0.5em` sur chaque côté,
 dans l’éditeur comme dans le lecteur, afin de le séparer du texte voisin. Cette
 marge est visuelle et n’ajoute aucun caractère aux données auteur.
+
+Dans une Section, le markup sérialisé de l’étiquette de lien est une projection
+éditoriale, pas la cible interactive du lecteur. La contribution Learning
+remplace chaque étiquette de page disponible par le slot CodPlay associé au
+perso lien qu’elle produit. Le scénario route l’événement de ce perso vers la
+page cible, en appliquant les gardes de lecture prévues ci-dessus. Une cible
+indisponible reste un libellé texte.
 
 ## Configuration et insertion dans l’éditeur
 
@@ -282,15 +291,12 @@ s’activent qu’avec au moins deux chapitres et un chapitre sélectionné ; un
 page cochée seule ne les active pas. Chaque famille peut rester inchangée
 pendant que l’autre est modifiée.
 
-Le registre central des flags globaux Elcé se trouve dans
-`src/config/feature-flags.ts`, sous `ELCE_FEATURE_FLAGS` ; les prochains flags
-globaux de cette portée s’ajoutent à ce registre. Il ne contient que des choix
-de configuration globaux, pas des données du document. Le flag
-`ELCE_FEATURE_FLAGS.summaryProfileEditing` est activé par défaut. Désactivé, il
-ne rend que les réglages généraux du Sommaire ; l’édition des propriétés de
-profil et des contraintes disparaît. Les propriétés et règles déjà enregistrées
-dans le document sont conservées. Le bouton « Enregistrer » revient au scénario ;
-ce flag global de configuration ne constitue pas encore une ACL.
+La composition auteur Learning déclare `summaryProfileEditing` activé dans
+`src/mods/learning/authoring/learning-authoring-config.ts`. Désactivé, il ne
+rend que les réglages généraux du Sommaire ; l’édition des propriétés de profil
+et des contraintes disparaît. Les propriétés et règles déjà enregistrées dans
+le document sont conservées. Le bouton « Enregistrer » revient au scénario ;
+ce choix de composition ne constitue pas une ACL.
 
 ## État test auteur et serveur
 
@@ -305,12 +311,15 @@ incrémente atomiquement la révision puis renvoie l’état et son nouvel ETag.
 révision périmée reçoit `412 revision_mismatch` sans écraser la valeur serveur.
 Cette révision est indépendante de celle du document.
 
-La preview réseau de l’origine exacte du lecteur peut lire et écrire cette
-route. Elle peut aussi lire le document et ses médias, mais ses mutations du
-document et des médias restent refusées. L’éditeur et sa popup utilisent la
-même ligne de test ; le lecteur réseau téléphone la lit et enregistre les
-réponses et la progression. La popup locale peut démarrer une session non
-persistée si le serveur est hors ligne.
+La preview réseau de l’origine exacte du lecteur peut lire cette route, mais
+son prévol `PUT` est refusé. Elle peut aussi lire le document et ses médias,
+mais aucune de ces ressources n’est modifiée depuis la preview. Le lecteur
+charge éventuellement l’état test existant au démarrage ; les modifications
+de profil, les réponses, la progression, les évaluations et la navigation
+restent dans la session mémoire de preview, sans `PUT` au serveur. Cela vaut
+pour le popup local comme pour la preview réseau. Fermer le popup détruit cet
+état de consultation ; une nouvelle preview repart de l’état test initial
+disponible côté serveur.
 
 Les deux remises à zéro sont distinctes : la remise à zéro du profil vide ses
 valeurs et rouvre le formulaire sans effacer les réponses ou la progression ;
@@ -322,20 +331,21 @@ types et choix actuels. Une réponse Question reste valide lorsque seuls les
 libellés changent ; elle est écartée si l’identité des choix ou la correction
 change. L’état d’Évaluation conserve les réponses encore compatibles, réouvre
 les questions manquantes et recalcule l’issue quand toutes les réponses
-restantes sont valides. Une modification concurrente du test recharge la
-dernière valeur serveur et interdit à la fenêtre périmée de l’écraser.
+restantes sont valides. La réconciliation faite par la preview reste locale.
+L’API conserve son compare-and-swap : une modification concurrente refuse un
+`PUT` périmé sans écraser la valeur serveur.
 
 ## Preuves de validation
 
-- [`profile-rules.test.ts`](../src/domain/summary-profile/profile-rules.test.ts)
+- [`learning-profile-service.test.ts`](../src/mods/learning/profile/domain/learning-profile-service.test.ts)
   couvre valeurs par défaut, références, usages, types, conditions, cycles à
   plusieurs dépendances et dépendances « Précédent », ainsi que le comportement
   verrouillé.
-- [`reader-projection.test.ts`](../src/domain/summary-profile/reader-projection.test.ts)
+- [`learning-reader-projection-service.test.ts`](../src/mods/learning/profile/reading/learning-reader-projection-service.test.ts)
   couvre masquage, maintien des pages verrouillées, refus d’un prérequis
   multichapitre filtré, projection des ancres, résolution des étiquettes et
   maintien du document auteur.
-- [`scenario-builder.test.ts`](../src/builders/scenario/scenario-builder.test.ts)
+- [`learning-scenario-builder.test.ts`](../src/mods/learning/reading/learning-scenario-builder.test.ts)
   couvre les présentations menu/racine, l’ordre des routes, les gardes de
   verrouillage, l’obligation de terminer tous les chapitres requis et le mode
   `free`, qui libère la progression ordinaire sans contourner Visibilité ni
@@ -349,6 +359,15 @@ dernière valeur serveur et interdit à la fenêtre périmée de l’écraser.
   vérifie le réglage dans Style et l’envoi de sa commande, et
   [`page-editor.test.tsx`](../src/app/remix/workspace/page-editor.test.tsx)
   confirme son absence dans la zone centrale.
+- [`flux-scene-builder.test.ts`](../src/mods/learning/integration/flux-scene-builder.test.ts)
+  vérifie que la Section projette l’étiquette sérialisée vers le slot exact de
+  son perso interactif ; [`learning-player.test.ts`](../src/mods/learning/reading/learning-player.test.ts)
+  vérifie dans le lecteur Sighty/CodPlay le clic vers une destination verrouillée
+  par l’ordre séquentiel et le retour à la page source. Brave confirme ce
+  parcours dans « Test Elcé — liens et date » sur la copie intégrée isolée, le
+  2 novembre 2026. Modifier le libellé de ce lien dans l’onglet dédié de
+  « Variables et liens » est enregistré par l’API ; le GET suivant et le
+  rechargement de l’éditeur conservent le nœud Tiptap et son markup.
 - Le 2 novembre 2026, Brave confirme sur « Test Elcé — liens et date » que le
   bouton de style de la page ouvre le panneau droit sur « Style », où apparaît
   « Ignorer la contrainte de lecture ». La case est active par défaut sur la
@@ -402,27 +421,30 @@ dernière valeur serveur et interdit à la fenêtre périmée de l’écraser.
   suite démarre sur `endpage` et enregistre `free`. Avec le flag d’édition du
   profil désactivé, il vérifie que seuls les réglages du Sommaire restent et
   que les propriétés et règles du document sont conservées.
-- [`controller-machine.test.ts`](../src/app/controller/controller-machine.test.ts)
+- [`controller-machine.test.ts`](../src/mods/learning/integration/controller-machine.test.ts)
   vérifie l’import et la déduplication d’une image de fond dans la file média.
 - [`document-commands.test.ts`](../src/domain/commands/document-commands.test.ts)
   vérifie l’attachement d’une image et le refus d’une vidéo comme fond.
-- [`page-editor.test.tsx`](../src/app/remix/workspace/page-editor.test.tsx)
+- [`learning-page-editor.test.tsx`](../src/mods/learning/authoring/learning-page-editor.test.tsx)
   vérifie que le Quiz conserve la sélection native et le dépôt de médias après
   le partage du contrôle.
-- [`test-state-reconciliation.test.ts`](../src/domain/summary-profile/test-state-reconciliation.test.ts)
+- [`learning-test-state-service.test.ts`](../src/mods/learning/reading/learning-test-state-service.test.ts)
   couvre la conservation ou l’invalidation ciblée des réponses.
-- [`project-test-state-session.test.ts`](../src/app/player/project-test-state-session.test.ts)
-  et [`popup-player.test.tsx`](../src/app/player/popup-player.test.tsx)
-  couvrent le chargement, les écritures, le mode local hors ligne et la
-  restitution dans le lecteur ; le second vérifie aussi l’icône partagée du
-  bouton « Test auteur ».
-- [`api-router.test.ts`](../src/server/api-router.test.ts),
-  [`network-preview-api-policy.test.ts`](../src/server/network-preview-api-policy.test.ts),
-  [`project-api-client.test.ts`](../src/infrastructure/project-api/project-api-client.test.ts)
-  et [`sqlite-project-persistence.test.ts`](../src/server/projects/sqlite/sqlite-project-persistence.test.ts)
+- [`project-test-state-session.test.ts`](../src/mods/learning/preview/learning-test-state-session.test.ts)
+  et [`popup-player.test.tsx`](../src/mods/learning/preview/learning-preview-view.test.tsx)
+  couvrent la session API, le mode local hors ligne et la restitution dans le
+  lecteur ; le second vérifie aussi l’icône partagée du bouton « Test auteur ».
+- [`api-router.test.ts`](../src/mods/learning/integration/api-router.test.ts),
+  [`network-preview-api-policy.test.ts`](../src/mods/learning/integration/network-preview-api-policy.test.ts),
+  [`project-api-client.test.ts`](../src/core/persistence/project-api/project-api-client.test.ts)
+  et [`sqlite-project-persistence.test.ts`](../src/mods/learning/persistence/server/sqlite/learning-sqlite-project-persistence.test.ts)
   couvrent les routes, la politique de preview, les ETags, le compare-and-swap
-  et la persistance SQLite.
-- [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
+  et la persistance SQLite. Le test d’intégration
+  [`popup-player-cache-integration.test.tsx`](../src/mods/learning/integration/learning-preview-session.test.tsx)
+  vérifie que le lecteur garde les interactions en session sans appeler
+  l’écriture d’état test. Safari MCP, le 27 octobre 2026, a aussi confirmé le
+  refus `403` du prévol `PUT` depuis l’origine réseau de preview.
+- [`elce-player-composition.test.ts`](../src/mods/learning/reading/learning-player.test.ts)
   exerce dans la composition réelle Sighty/CodPlay le changement de champ, le
   refus d’un formulaire incomplet, la soumission valide, la réouverture sur le
   Sommaire et le lien du menu vers ce Sommaire. Avec la page Sommaire activée et

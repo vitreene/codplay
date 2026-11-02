@@ -1,6 +1,1 @@
-import type { MediaMetadata } from '../document/document-types'
-
-export interface ElceMediaImport {
-  readonly file: File
-  readonly media: MediaMetadata
-}
+export type { ElceMediaImport } from '../../core/media/media-resource-types'

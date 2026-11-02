@@ -1,65 +1,31 @@
 import { createRouter } from 'remix/router'
 import { render } from 'remix/spa'
+import type { RemixNode } from 'remix/ui'
+import { POPUP_PREVIEW_PROJECT_PARAM, POPUP_PREVIEW_SESSION_PARAM } from '../../core/preview/popup-preview-messages'
 
-import type { Actor } from 'xstate'
-import { controllerMachine } from '../controller/controller-machine'
-import type { EditorActionsFacade } from '../facades/editor-actions-facade'
-import { PopupPlayer } from '../player/popup-player'
-import {
-  POPUP_PREVIEW_PAGE_PARAM,
-  POPUP_PREVIEW_PROJECT_PARAM,
-  POPUP_PREVIEW_SESSION_PARAM,
-} from '../player/popup-preview-messages'
-import { EditorContextProvider } from './editor-context'
-import { ProjectApplication } from './project-application'
+export interface ElceSpaRoots {
+  readonly authoringRoot: RemixNode | null
+  readonly previewRoot: RemixNode | null
+}
 
-/** Builds the browser route table for the editor. */
-export function createElceSpaRouter(
-  controller: Actor<typeof controllerMachine> | null,
-  actions: EditorActionsFacade | null,
-) {
-  const searchParams = new URLSearchParams(window.location.search)
-  const sessionId = searchParams.get(POPUP_PREVIEW_SESSION_PARAM)
-  const projectId = searchParams.get(POPUP_PREVIEW_PROJECT_PARAM)
-  const popupPlayer = projectId !== null && projectId.length > 0
-    ? <PopupPlayer
-      sessionId={null}
-      projectId={projectId}
-      startPageId={searchParams.get(POPUP_PREVIEW_PAGE_PARAM)}
-    />
-    : sessionId === null || sessionId.length === 0
-      ? null
-      : <PopupPlayer
-        sessionId={sessionId}
-        projectId={null}
-        startPageId={searchParams.get(POPUP_PREVIEW_PAGE_PARAM)}
-      />
+/** Builds the browser route table and selects the root for this request. */
+export function createElceSpaRouter(roots: ElceSpaRoots) {
+  const rootForUrl = (url: URL): RemixNode | null => url.searchParams.has(POPUP_PREVIEW_SESSION_PARAM)
+    || url.searchParams.has(POPUP_PREVIEW_PROJECT_PARAM)
+    ? roots.previewRoot
+    : roots.authoringRoot
   const router = createRouter({
     middleware: [render()],
-    defaultHandler({ render: renderRoute }) {
-      return renderRoute(<EditorContextProvider
-        controller={controller}
-        actions={actions}
-      >
-        {popupPlayer ?? <ProjectApplication />}
-      </EditorContextProvider>, { status: 404 })
+    defaultHandler({ render: renderRoute, url }) {
+      const root = rootForUrl(url)
+      return renderRoute(root ?? <p id="elce-remix-unavailable">Cette page Elcé est indisponible.</p>, { status: 404 })
     },
   })
 
-  router.get('/', ({ render: renderRoute }) => {
-    const children = <div
-      id="elce-remix-route-root"
-    >
-      {controller === null || actions === null
-        ? popupPlayer ?? <ProjectApplication />
-        : <ProjectApplication />}
-    </div>
-    return renderRoute(<EditorContextProvider
-      controller={controller}
-      actions={actions}
-    >
-      {children}
-    </EditorContextProvider>)
+  router.get('/', ({ render: renderRoute, url }) => {
+    const root = rootForUrl(url)
+    if (root === null) return renderRoute(<p id="elce-remix-unavailable">Cette page Elcé est indisponible.</p>, { status: 404 })
+    return renderRoute(root)
   })
 
   return router

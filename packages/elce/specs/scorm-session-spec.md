@@ -251,7 +251,7 @@ résultats dans un LMS réel qui persiste les valeurs CMI.
   des pages des autres chapitres, les gardes de complétion, les boutons de
   navigation aux limites de SCO et le refus de l’action inter-SCO sans page
   terminée ou identifiant cible stable.
-- [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
+- [`elce-player-composition.test.ts`](../src/mods/learning/reading/learning-player.test.ts)
   vérifie qu’une Question d’Évaluation jouée par le player Sighty/CodPlay
   produit une latence par réponse sans ajouter de timer.
 - [`scorm-player-runtime.test.ts`](../src/scorm/scorm-player-runtime.test.ts)

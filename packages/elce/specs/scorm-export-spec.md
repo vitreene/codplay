@@ -50,5 +50,5 @@ ces en-têtes aux origines locales de l’éditeur.
   manifeste et le lanceur, tout en conservant le chemin technique fondé sur
   son identifiant. Il vérifie aussi que le lanceur transmet au runtime la
   table des identifiants SCORM des chapitres.
-- [`sqlite-project-persistence.test.ts`](../src/server/projects/sqlite/sqlite-project-persistence.test.ts)
+- [`sqlite-project-persistence.test.ts`](../src/mods/learning/persistence/server/sqlite/learning-sqlite-project-persistence.test.ts)
   vérifie l’exposition CORS de l’en-tête de nom de fichier.

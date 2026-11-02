@@ -1,21 +1,10 @@
-import { CAROUSEL_TRANSITION } from './document-config'
+import { REVELATION_TRANSITION_PAIRS, DEFAULT_PROJECT_REVELATION } from '../resources/revelation/revelation-config'
 
 /** Groups hidden editor defaults and presentation rules in one place. */
 export const ELCE_EDITOR_SETTINGS = {
   revelation: {
-    projectDefaults: {
-      intro: CAROUSEL_TRANSITION.SWIPE_RIGHT,
-      outro: CAROUSEL_TRANSITION.SWIPE_RIGHT,
-    },
-    transitionPairs: {
-      [CAROUSEL_TRANSITION.CUT]: { intro: CAROUSEL_TRANSITION.CUT, outro: CAROUSEL_TRANSITION.CUT },
-      [CAROUSEL_TRANSITION.FADE]: { intro: CAROUSEL_TRANSITION.FADE, outro: CAROUSEL_TRANSITION.FADE },
-      [CAROUSEL_TRANSITION.SWIPE_LEFT]: { intro: CAROUSEL_TRANSITION.SWIPE_LEFT, outro: CAROUSEL_TRANSITION.SWIPE_LEFT },
-      [CAROUSEL_TRANSITION.SWIPE_RIGHT]: { intro: CAROUSEL_TRANSITION.SWIPE_RIGHT, outro: CAROUSEL_TRANSITION.SWIPE_RIGHT },
-      [CAROUSEL_TRANSITION.SWIPE_TOP]: { intro: CAROUSEL_TRANSITION.SWIPE_TOP, outro: CAROUSEL_TRANSITION.SWIPE_TOP },
-      [CAROUSEL_TRANSITION.SWIPE_DOWN]: { intro: CAROUSEL_TRANSITION.SWIPE_DOWN, outro: CAROUSEL_TRANSITION.SWIPE_DOWN },
-      [CAROUSEL_TRANSITION.ZOOM]: { intro: CAROUSEL_TRANSITION.ZOOM, outro: CAROUSEL_TRANSITION.ZOOM },
-    },
+    projectDefaults: DEFAULT_PROJECT_REVELATION,
+    transitionPairs: REVELATION_TRANSITION_PAIRS,
     flux: {
       cardObservationZone: { threshold: 0 },
       graphObservation: {

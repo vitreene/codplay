@@ -1,12 +1,12 @@
-import type { ElceDocument } from '../domain/document/document-model'
-import type { MediaId } from '../domain/document/document-types'
-import { createElcePlayerScenario } from '../player/elce-player-composition'
+import type { LearningDocument } from '../mods/learning/document/learning-document'
+import type { MediaId } from '../core/document/content-document-types'
+import { createElcePlayerScenario } from '../mods/learning/reading/learning-player'
 
 const MISSING_MEDIA_SOURCE_PREFIX = 'elce-export-missing://'
 
 /** Finds media referenced by the exact Sighty scene catalog used by preview and export. */
 export function scenarioExportMediaIds(
-  document: ElceDocument,
+  document: LearningDocument,
   availableMediaSources: Readonly<Record<MediaId, string>>,
 ): ReadonlySet<MediaId> {
   const sourceMediaIds = new Map<string, Set<MediaId>>()
