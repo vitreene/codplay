@@ -32,6 +32,34 @@ export class LearningTestStateApiClient {
     await this.transport.readResponseJson<TestStateResponse>(response)
     return this.transport.revisionFrom(response)
   }
+
+  /** Saves only a validated reader profile, leaving progress and answers untouched. */
+  public async saveProfile(
+    projectId: string,
+    profileValues: ProjectTestState['profileValues'],
+    revision: number,
+  ): Promise<number> {
+    const response = await this.transport.request(
+      `/api/projects/${encodeURIComponent(projectId)}/test-state/profile`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'If-Match': `"${revision}"` },
+        body: JSON.stringify({ profileValues }),
+      },
+    )
+    await this.transport.readResponseJson<TestStateResponse>(response)
+    return this.transport.revisionFrom(response)
+  }
+
+  /** Clears the saved reader profile without changing other test-state fields. */
+  public async clearProfile(projectId: string, revision: number): Promise<number> {
+    const response = await this.transport.request(
+      `/api/projects/${encodeURIComponent(projectId)}/test-state/profile`,
+      { method: 'DELETE', headers: { 'If-Match': `"${revision}"` } },
+    )
+    await this.transport.readResponseJson<TestStateResponse>(response)
+    return this.transport.revisionFrom(response)
+  }
 }
 
 export { ElceProjectApiError }

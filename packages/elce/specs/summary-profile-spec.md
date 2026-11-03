@@ -282,9 +282,13 @@ pas de prérequis. Le bouton unique
 « Enregistrer », placé en haut de l’écran, soumet ce formulaire et revient au
 scénario si la validation réussit. Il reste utilisable sans cible cochée lorsque
 les contraintes n’ont pas été modifiées ; une erreur de validation laisse
-l’écran ouvert. Les autres réglages de
-présentation et les propriétés sont déjà appliqués par leurs commandes
-documentaires. Les contrôles des deux familles restent présents sans cible
+l’écran ouvert. Les réglages de « Présentation du Sommaire » s’appliquent
+immédiatement par les commandes documentaires. À l’ouverture du panneau, chaque
+sélecteur affiche la valeur enregistrée dans le document, même si elle ne
+correspond pas à la première option. Les propriétés de profil restent en
+brouillon jusqu’à « Enregistrer » ; une propriété ajoutée reste présente à la
+réouverture du panneau après sa sauvegarde.
+Les contrôles des deux familles restent présents sans cible
 cochée, mais le formulaire commun les désactive. Une sélection active les
 contrôles de profil si une propriété existe. Les contrôles de lecture ne
 s’activent qu’avec au moins deux chapitres et un chapitre sélectionné ; une
@@ -312,14 +316,16 @@ révision périmée reçoit `412 revision_mismatch` sans écraser la valeur serv
 Cette révision est indépendante de celle du document.
 
 La preview réseau de l’origine exacte du lecteur peut lire cette route, mais
-son prévol `PUT` est refusé. Elle peut aussi lire le document et ses médias,
-mais aucune de ces ressources n’est modifiée depuis la preview. Le lecteur
-charge éventuellement l’état test existant au démarrage ; les modifications
-de profil, les réponses, la progression, les évaluations et la navigation
-restent dans la session mémoire de preview, sans `PUT` au serveur. Cela vaut
-pour le popup local comme pour la preview réseau. Fermer le popup détruit cet
-état de consultation ; une nouvelle preview repart de l’état test initial
-disponible côté serveur.
+son `PUT` de l’état complet reste refusé. Elle peut aussi lire le document et
+ses médias, qui ne sont pas modifiés depuis la preview.
+
+Dans le popup local, une soumission valide de la page Profil enregistre
+`profileSubmitted` et `profileValues` par `PUT /test-state/profile`. Cette
+route incrémente la même révision et ne remplace pas la progression ni les
+réponses. La prochaine prévisualisation recharge le profil soumis, saute la
+page Profil et résout ses valeurs dans le contenu. Les réponses, la
+progression, les évaluations et la navigation restent dans la session de
+consultation ; fermer le popup détruit ces changements non enregistrés.
 
 Les deux remises à zéro sont distinctes : la remise à zéro du profil vide ses
 valeurs et rouvre le formulaire sans effacer les réponses ou la progression ;

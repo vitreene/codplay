@@ -73,6 +73,7 @@ lorsqu’une copie indépendante récupère les médias du projet source.
 | `PUT /api/projects/:projectId/document` | `ElceDocumentData` v9, `If-Match: "<revision>"` et en-têtes de droit | `200 { "project" }` et l’ETag de la nouvelle révision |
 | `GET /api/projects/:projectId/test-state` | — | `200 { "state" }` et un ETag de révision indépendant |
 | `PUT /api/projects/:projectId/test-state` | `{ "state": ProjectTestState }`, `If-Match: "<revision>"` | `200 { "state" }` et l’ETag suivant ; `412` si périmé |
+| `PUT /api/projects/:projectId/test-state/profile` | `{ "profileValues": ProjectTestState["profileValues"] }`, `If-Match: "<revision>"` | Enregistre le profil soumis sans remplacer les autres champs de l’état ; `200 { "state" }` et l’ETag suivant ; `412` si périmé |
 | `PUT /api/projects/:projectId/media/:mediaId` | Octets du média en corps brut et en-têtes de droit | `201 { "media": { "id", "url" } }`, ou `204` si les octets sont déjà enregistrés sous cette ressource |
 | `GET /api/projects/:projectId/media/:mediaId` | — | Fichier média avec son type MIME et sa taille |
 
@@ -89,11 +90,13 @@ crée la ligne. Cette ressource ne demande pas le droit d’édition documentair
 et n’incrémente pas la révision du projet.
 
 La route `PUT /test-state` sert aux contextes auteur qui enregistrent
-explicitement cet état. La preview est en lecture seule : elle peut charger
-l’état initial en `GET`, mais garde les réponses, le profil, la progression,
-les évaluations et la navigation de consultation dans sa session mémoire et ne
-les transmet jamais au serveur. Ce comportement vaut pour le popup local comme
-pour la preview réseau ; la fermeture du popup détruit l’état de consultation.
+explicitement l’état complet. La preview réseau peut lire l’état, mais son
+écriture complète reste interdite. Après validation du formulaire, le popup
+local utilise `PUT /test-state/profile` pour enregistrer uniquement le profil
+et l’état soumis, avec le même compare-and-swap. Les réponses, la progression,
+les évaluations et la navigation de consultation restent en mémoire et ne sont
+pas enregistrées par cette route. Fermer le popup détruit ces changements
+non enregistrés.
 
 Les documents reçus passent par `ElceDocument.fromJSON()` puis
 `assertDocumentInvariants()`. Le corps d’un remplacement doit porter le même

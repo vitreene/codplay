@@ -6,6 +6,7 @@ import type { ChapterId, PageId } from '../../../core/document/content-document-
 import type { AppearanceTarget } from '../../../domain/appearance/appearance-target-types'
 import type { PagePlacement } from '../organization/learning-page-placement'
 import type { InlineTextLabelSelection } from '../profile/authoring/profile-token-events'
+import type { ProfileDefinition } from '../profile/domain/learning-profile-types'
 import type { EditorPanelName, EditorPanelVisibility } from '../../../core/authoring/layout/editor-frame'
 
 export type ResponsivePanel = 'outline' | 'properties' | null
@@ -23,6 +24,8 @@ export interface EditorWorkspaceViewProps {
   readonly sidePanelTab: SidePanelTab
   readonly appearanceTarget: AppearanceTarget
   readonly summarySettingsOpen: boolean
+  readonly profileDraft?: ProfileDefinition | null
+  readonly getProfileDraft?: () => ProfileDefinition | null
   readonly profileTokenTargetId: string | null
   readonly selectedInlineLabel: InlineTextLabelSelection | null
   readonly authoringError: string | null
@@ -34,6 +37,7 @@ export interface EditorWorkspaceViewProps {
   readonly onSetSidePanelTab: (tab: SidePanelTab) => void
   readonly onOpenAppearanceTarget: (target: AppearanceTarget, triggerId: string) => void
   readonly onSetSummarySettingsOpen: (open: boolean) => void
+  readonly onSetProfileDraft?: (profile: ProfileDefinition | null) => void
   readonly onSetAuthoringError: (error: string | null) => void
   readonly onSetDropTarget: (targetId: string | null) => void
   readonly onSetDraggedEntry: (entry: DraggedScenarioEntry) => void

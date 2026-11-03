@@ -61,11 +61,16 @@ function answerLocalCors(
   const origin = request.headers.origin
   const isLoopback = origin !== undefined && isLoopbackOrigin(origin)
   const isNetworkPreview = origin !== undefined && origin === networkPreviewOrigin
+  const pathname = new URL(request.url ?? '/', 'http://localhost').pathname
+  const isProfileStateRoute = /^\/api\/projects\/[^/]+\/test-state\/profile$/.test(pathname)
   const isAllowedOrigin = isLoopback || isNetworkPreview
   if (isAllowedOrigin && origin !== undefined) {
     response.setHeader('Access-Control-Allow-Origin', origin)
+    const allowedMethods = isProfileStateRoute
+      ? 'GET, HEAD, PUT, DELETE, OPTIONS'
+      : 'GET, HEAD, OPTIONS'
     response.setHeader('Access-Control-Allow-Methods', isNetworkPreview
-      ? 'GET, HEAD, OPTIONS'
+      ? allowedMethods
       : 'GET, POST, PUT, PATCH, DELETE, OPTIONS')
     response.setHeader('Access-Control-Allow-Headers', 'Content-Type, If-Match, X-Elce-Page-Id, X-Elce-Edit-Grant')
     response.setHeader('Access-Control-Expose-Headers', 'ETag, Content-Disposition, X-Elce-Scorm-Filename')
@@ -74,8 +79,10 @@ function answerLocalCors(
   }
   if (request.method !== 'OPTIONS') return false
   const requestedMethod = request.headers['access-control-request-method']
+  const allowedProfilePreflight = isProfileStateRoute
+    && (requestedMethod === 'PUT' || requestedMethod === 'DELETE')
   const allowedNetworkPreflight = isNetworkPreview
-    && (requestedMethod === 'GET' || requestedMethod === 'HEAD')
+    && (requestedMethod === 'GET' || requestedMethod === 'HEAD' || allowedProfilePreflight)
   response.writeHead(isLoopback || allowedNetworkPreflight ? 204 : 403)
   response.end()
   return true

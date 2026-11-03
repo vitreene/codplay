@@ -5,7 +5,7 @@ import { isPopupPreviewResponse, type PopupPreviewRequest } from '../../../core/
 import { createLearningDocumentStore } from '../persistence/learning-document-store'
 import type { LearningDocumentStore } from '../persistence/learning-document-store'
 import { LearningProjectApiClient } from '../persistence/learning-project-api-client'
-import { LearningTestStateApiClient } from '../persistence/learning-test-state-api-client'
+import { ElceProjectApiError, LearningTestStateApiClient } from '../persistence/learning-test-state-api-client'
 import { ProjectHttpTransport } from '../../../core/persistence/project-api/project-http-transport'
 import type { LearningDocument } from '../document/learning-document'
 import type { ProjectTestState } from '../reading/learning-test-state-types'
@@ -63,6 +63,7 @@ export class LearningPreviewSession {
   private synchronizeAgain = false
   private testStateNotice: string | null = null
   private testControlsOpen = false
+  private testStateRevision: number | null = null
   private requestId = 0
   private pendingRequest: PendingRequest | null
   private responseTimer: number | null = null
@@ -219,10 +220,10 @@ export class LearningPreviewSession {
     }
   }
 
-  /** Updates only the in-memory consultation snapshot, never the project API. */
+  /** Updates consultation state and persists only explicit profile operations. */
   public async updateConsultationState(
     state: ProjectTestState,
-    options: Readonly<{ rebuild?: boolean; resetSelection?: boolean }> = {},
+    options: Readonly<{ rebuild?: boolean; resetSelection?: boolean; profilePersistence?: 'save' | 'clear' }> = {},
   ): Promise<void> {
     const current = this.snapshot
     if (this.destroyed || current === null) return
@@ -233,6 +234,8 @@ export class LearningPreviewSession {
       : this.composition?.getCurrentPageId?.() ?? current.selectedPageId
     this.snapshot = { ...current, selectedPageId, testState: state }
     this.notify()
+    const profilePersistence = options.profilePersistence ?? (submittedNow ? 'save' : undefined)
+    if (profilePersistence !== undefined) await this.persistProfile(profilePersistence, state)
     if (rebuild) await this.presentSnapshot(this.snapshot, selectedPageId)
   }
 
@@ -241,7 +244,7 @@ export class LearningPreviewSession {
     if (this.snapshot === null) return
     const state = { ...this.snapshot.testState, profileSubmitted: false, profileValues: {} }
     this.testControlsOpen = false
-    void this.updateConsultationState(state, { rebuild: true, resetSelection: true })
+    void this.updateConsultationState(state, { rebuild: true, resetSelection: true, profilePersistence: 'clear' })
   }
 
   /** Clears page completion, Question answers, and Evaluation attempts only. */
@@ -337,6 +340,7 @@ export class LearningPreviewSession {
         return
       }
       const testState = learningTestStateService.reconcileProjectTestState(documentModel, testStateSession.state)
+      this.testStateRevision = testStateSession.isPersisted ? testStateSession.revision : null
       const snapshot = {
         documentModel,
         selectedPageId: selectedPageId !== null && documentModel.pages.some((page) => page.id === selectedPageId)
@@ -390,6 +394,40 @@ export class LearningPreviewSession {
       this.error = cause instanceof Error ? cause.message : 'La page éditée n’a pas pu être affichée.'
       this.finishRequest()
     })
+  }
+
+  /** Persists only the profile fields and retries once after a test-state conflict. */
+  private async persistProfile(action: 'save' | 'clear', state: ProjectTestState): Promise<void> {
+    const projectId = this.snapshot?.documentModel.id
+    if (projectId === undefined || this.testStateRevision === null) {
+      this.testStateNotice = 'Le profil reste dans cette session ; le serveur ne peut pas le conserver.'
+      this.notify()
+      return
+    }
+
+    try {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          this.testStateRevision = action === 'save'
+            ? await this.testStateApi.saveProfile(projectId, state.profileValues, this.testStateRevision)
+            : await this.testStateApi.clearProfile(projectId, this.testStateRevision)
+          this.testStateNotice = action === 'save'
+            ? 'Profil enregistré pour les prochaines prévisualisations.'
+            : 'Profil réinitialisé.'
+          this.notify()
+          return
+        } catch (error) {
+          if (!(error instanceof ElceProjectApiError) || error.status !== 412 || attempt > 0) throw error
+          const current = await this.testStateApi.readTestState(projectId)
+          this.testStateRevision = current.revision
+        }
+      }
+    } catch {
+      this.testStateNotice = action === 'save'
+        ? 'Le profil n’a pas pu être enregistré ; il pourra être redemandé à la prochaine prévisualisation.'
+        : 'Le profil n’a pas pu être réinitialisé sur le serveur.'
+      this.notify()
+    }
   }
 
   /** Finishes a request and sends one coalesced automatic request when needed. */

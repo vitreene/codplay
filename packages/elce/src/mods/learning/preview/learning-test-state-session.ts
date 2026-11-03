@@ -7,10 +7,12 @@ import type { LearningTestStateApiClient } from '../persistence/learning-test-st
 export class LearningTestStateSession {
   public readonly state: ProjectTestState
   public readonly isPersisted: boolean
+  public readonly revision: number
 
-  private constructor(state: ProjectTestState, isPersisted: boolean) {
+  private constructor(state: ProjectTestState, isPersisted: boolean, revision: number) {
     this.state = state
     this.isPersisted = isPersisted
+    this.revision = revision
   }
 
   /** Loads the server snapshot or creates the permitted local initial state. */
@@ -21,13 +23,13 @@ export class LearningTestStateSession {
   ): Promise<LearningTestStateSession> {
     try {
       const current = await api.readTestState(projectId)
-      return new LearningTestStateSession(current.state, true)
+      return new LearningTestStateSession(current.state, true, current.revision)
     } catch (error) {
       if (error instanceof ElceProjectApiError && error.status === 404) {
-        return new LearningTestStateSession(INITIAL_PROJECT_TEST_STATE, false)
+        return new LearningTestStateSession(INITIAL_PROJECT_TEST_STATE, false, 0)
       }
       if (options.allowOffline === true && error instanceof TypeError) {
-        return new LearningTestStateSession(INITIAL_PROJECT_TEST_STATE, false)
+        return new LearningTestStateSession(INITIAL_PROJECT_TEST_STATE, false, 0)
       }
       throw error
     }

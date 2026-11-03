@@ -14,10 +14,12 @@ import { renderEditorFrame } from '../../../core/authoring/layout/editor-frame'
 import type { DraggedScenarioEntry } from './learning-workspace-types'
 import { workspacePanelVisibilityFromResponsiveState } from './workspace-panel-state'
 import { createLearningTextFieldFeature } from '../inline-text/learning-inline-text-field'
+import type { ProfileDefinition } from '../profile/domain/learning-profile-types'
 
 /** Holds Learning-only workspace state that the shared project view does not own. */
 export class LearningWorkspaceState {
   public summarySettingsOpen = false
+  public profileDraft: ProfileDefinition | null = null
   public profileTokenTargetId: string | null = null
   public selectedInlineLabel = null as import('../profile/authoring/profile-token-events').InlineTextLabelSelection | null
   public draggedEntry: DraggedScenarioEntry = null
@@ -49,6 +51,9 @@ export function renderEditorWorkspace(props: EditorWorkspaceViewProps): RemixNod
         document: props.view.documentModel,
         mediaSources: props.view.mediaSources,
         actions: props.actions,
+        profileDraft: props.profileDraft,
+        getProfileDraft: props.getProfileDraft,
+        onProfileDraftChange: props.onSetProfileDraft,
         error: props.authoringError,
         onClose: () => props.onSetSummarySettingsOpen(false),
         onError: props.onSetAuthoringError,

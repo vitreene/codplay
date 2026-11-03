@@ -49,6 +49,7 @@ export function createLocalDateLabelExtension() {
     inline: true,
     atom: true,
     selectable: true,
+    draggable: true,
 
     addAttributes() {
       return {

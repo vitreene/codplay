@@ -29,6 +29,7 @@ export type ElcePresentation = Readonly<{
   readonly menuPageStates: readonly Readonly<{ id: string; title: string; active: boolean; allowed: boolean }>[]
   readonly chapterReadingStatuses: readonly Readonly<{ chapterId: string; status: 'locked' | 'read' | 'partial' | 'unread' }>[]
   readonly previousAttributes: Readonly<{ type: 'button'; disabled: boolean; hidden: boolean }>
+  readonly summaryButtonVisible: boolean
   readonly nextAttributes: Readonly<{ type: 'button'; disabled: boolean }>
   readonly navigationStatus: string
 }>

@@ -19,6 +19,7 @@ import type { DraggedScenarioEntry, ResponsivePanel, SidePanelTab, WorkspacePane
 import type { ProjectApplicationView, ProjectApplicationWorkspaceState } from './learning-project-application-types'
 import type { AppearanceTarget } from '../commands/learning-document-command-types'
 import { INLINE_TEXT_LABEL_SELECTION_EVENT, type InlineTextLabelSelectionEventDetail } from '../profile/authoring/profile-token-events'
+import type { ProfileDefinition } from '../profile/domain/learning-profile-types'
 import {
   initialWorkspacePanelVisibility,
   resizedWorkspacePanelVisibility,
@@ -97,7 +98,13 @@ export function LearningProjectApplication(handle: Handle) {
   }
   const setSummarySettingsOpen = (open: boolean): void => {
     learningWorkspaceState.summarySettingsOpen = open
+    learningWorkspaceState.profileDraft = null
     authoringError = null
+    void handle.update()
+  }
+  /** Keeps profile-property edits in the Summary panel until its Save action. */
+  const setProfileDraft = (profile: ProfileDefinition | null): void => {
+    learningWorkspaceState.profileDraft = profile
     void handle.update()
   }
   /** Keeps profile-variable insertion available only for the active text target. */
@@ -227,6 +234,7 @@ export function LearningProjectApplication(handle: Handle) {
       if (appearanceProjectId !== nextProjectId) {
         appearanceProjectId = nextProjectId
         appearanceTarget = { kind: 'document' }
+        learningWorkspaceState.profileDraft = null
       }
       view = nextView
       void handle.update()
@@ -301,6 +309,8 @@ export function LearningProjectApplication(handle: Handle) {
     sidePanelTab,
     appearanceTarget,
     summarySettingsOpen: learningWorkspaceState.summarySettingsOpen,
+    profileDraft: learningWorkspaceState.profileDraft,
+    getProfileDraft: () => learningWorkspaceState.profileDraft,
     profileTokenTargetId: learningWorkspaceState.profileTokenTargetId,
     selectedInlineLabel: learningWorkspaceState.selectedInlineLabel,
     authoringError,
@@ -311,6 +321,7 @@ export function LearningProjectApplication(handle: Handle) {
     setSidePanelTab,
     openAppearanceTarget,
     setSummarySettingsOpen,
+    setProfileDraft,
     setAuthoringError,
     setDropTarget,
     setDraggedEntry,
@@ -439,6 +450,8 @@ function renderApplication(
       sidePanelTab: workspace.sidePanelTab,
       appearanceTarget: workspace.appearanceTarget,
       summarySettingsOpen: workspace.summarySettingsOpen,
+      profileDraft: workspace.profileDraft,
+      getProfileDraft: workspace.getProfileDraft,
       profileTokenTargetId: workspace.profileTokenTargetId,
       selectedInlineLabel: workspace.selectedInlineLabel,
       authoringError: workspace.authoringError,
@@ -450,6 +463,7 @@ function renderApplication(
       onSetSidePanelTab: workspace.setSidePanelTab,
       onOpenAppearanceTarget: workspace.openAppearanceTarget,
       onSetSummarySettingsOpen: workspace.setSummarySettingsOpen,
+      onSetProfileDraft: workspace.setProfileDraft,
       onSetAuthoringError: workspace.setAuthoringError,
       onSetDropTarget: workspace.setDropTarget,
       onSetDraggedEntry: workspace.setDraggedEntry,

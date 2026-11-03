@@ -10,7 +10,7 @@ export type NetworkPreviewApiExtension = (
   previewOrigin: string,
 ) => boolean
 
-/** Allows LAN preview reads while keeping project state and resources read-only. */
+/** Allows LAN preview reads and profile-only test-state writes. */
 export function isNetworkPreviewApiRequestAllowed(
   request: NetworkPreviewApiRequest,
   previewOrigin: string,

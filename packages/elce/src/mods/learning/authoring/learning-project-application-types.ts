@@ -11,6 +11,7 @@ import type {
   WorkspacePanelVisibility,
 } from './learning-workspace-types'
 import type { InlineTextLabelSelection } from '../profile/authoring/profile-token-events'
+import type { ProfileDefinition } from '../profile/domain/learning-profile-types'
 
 export type ProjectApplicationView = Pick<
   LearningAppContext,
@@ -23,6 +24,8 @@ export interface ProjectApplicationWorkspaceState {
   readonly sidePanelTab: SidePanelTab
   readonly appearanceTarget: AppearanceTarget
   readonly summarySettingsOpen: boolean
+  readonly profileDraft: ProfileDefinition | null
+  readonly getProfileDraft: () => ProfileDefinition | null
   readonly profileTokenTargetId: string | null
   readonly selectedInlineLabel: InlineTextLabelSelection | null
   readonly authoringError: string | null
@@ -33,6 +36,7 @@ export interface ProjectApplicationWorkspaceState {
   readonly setSidePanelTab: (tab: SidePanelTab) => void
   readonly openAppearanceTarget: (target: AppearanceTarget, triggerId: string) => void
   readonly setSummarySettingsOpen: (open: boolean) => void
+  readonly setProfileDraft: (profile: ProfileDefinition | null) => void
   readonly setAuthoringError: (error: string | null) => void
   readonly setDropTarget: (targetId: string | null) => void
   readonly setDraggedEntry: (entry: DraggedScenarioEntry) => void

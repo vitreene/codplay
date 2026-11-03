@@ -9,6 +9,7 @@ export function createProfileLabelExtension(properties: readonly ProfileProperty
     inline: true,
     atom: true,
     selectable: true,
+    draggable: true,
 
     addAttributes() {
       return {

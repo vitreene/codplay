@@ -430,3 +430,20 @@ Les 14 tests ciblés dans `profile-token-insertion.test.tsx` et
 Dans Brave, le document de test montre l’onglet « Modifier » actif et uniquement
 les champs du lien sélectionné. Cette vérification n’a modifié ni le document
 ni sa synchronisation serveur.
+
+### Apparence et déplacement des variables posées — implémentée localement,
+acceptation en attente
+
+Dans l’éditeur Tiptap, les étiquettes de profil et de date affichent leur
+libellé entre `{{` et `}}`, avec la couleur d’accent Elcé. Leur texte ne peut
+pas être sélectionné comme du texte. Les nœuds restent sélectionnables par
+clic afin de conserver l’ouverture de leur éditeur dans l’onglet droit, et
+peuvent être déplacés par glisser-déposer. Les liens vers les pages gardent
+leur rendu et leur comportement actuels.
+
+Acceptation : vérifier le rendu des profils et dates dans une Section et un
+champ promu en Tiptap ; vérifier visuellement les accolades et la couleur,
+l’impossibilité de sélection textuelle, le déplacement du nœud et le clic qui
+ouvre toujours l’édition de l’étiquette dans Variables. Vérifier que les
+accolades sont uniquement visuelles et n’entrent pas dans le contenu sérialisé
+ou la preview.

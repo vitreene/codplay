@@ -21,6 +21,9 @@ export interface SummaryProfileSettingsProps {
   readonly document: LearningDocument
   readonly mediaSources: Readonly<Record<string, string>>
   readonly actions: Pick<LearningEditorFacade, 'importSummaryBackgroundFile' | 'updateProfileDefinition' | 'updateSummarySettings'>
+  readonly profileDraft?: ProfileDefinition | null
+  readonly getProfileDraft?: () => ProfileDefinition | null
+  readonly onProfileDraftChange?: (profile: ProfileDefinition | null) => void
   readonly error: string | null
   readonly summaryProfileEditingEnabled?: boolean
   readonly onClose: () => void
@@ -63,7 +66,7 @@ export function renderSummaryProfileSettings(props: SummaryProfileSettingsProps)
 function renderSummarySettings(props: SummaryProfileSettingsProps): RemixNode {
   const summary = props.document.data.summary
   setLearningInlineTextFieldContext(
-    props.document.data.profile.properties,
+    profileForEditing(props).properties,
     props.document.scenarioPageIds.flatMap((pageId) => {
       const page = props.document.pages.find((candidate) => candidate.id === pageId)
       return page === undefined ? [] : [page]
@@ -142,8 +145,8 @@ function renderSummarySettings(props: SummaryProfileSettingsProps): RemixNode {
             value={summary.displayMode}
             mix={on<HTMLSelectElement, 'change'>('change', (event) => change({ displayMode: event.currentTarget.value as SummarySettings['displayMode'] }))}
           >
-            <option value="chapters">Niveaux seuls</option>
-            <option value="pages">Pages et niveaux</option>
+            <option value="chapters" selected={summary.displayMode === 'chapters'}>Niveaux seuls</option>
+            <option value="pages" selected={summary.displayMode === 'pages'}>Pages et niveaux</option>
           </select>
         </div>
         <div id="elce-summary-page-continuation-control" className="elce-summary-profile-settings__field">
@@ -153,8 +156,8 @@ function renderSummarySettings(props: SummaryProfileSettingsProps): RemixNode {
             value={summary.pageContinuationMode ?? 'endpage'}
             mix={on<HTMLSelectElement, 'change'>('change', (event) => change({ pageContinuationMode: event.currentTarget.value as SummarySettings['pageContinuationMode'] }))}
           >
-            <option value="endpage">Fin de page</option>
-            <option value="free">Libre</option>
+            <option value="endpage" selected={(summary.pageContinuationMode ?? 'endpage') === 'endpage'}>Fin de page</option>
+            <option value="free" selected={summary.pageContinuationMode === 'free'}>Libre</option>
           </select>
         </div>
         <div id="elce-summary-end-destination-control" className="elce-summary-profile-settings__field">
@@ -165,8 +168,8 @@ function renderSummarySettings(props: SummaryProfileSettingsProps): RemixNode {
             disabled={!summary.showAtRoot}
             mix={on<HTMLSelectElement, 'change'>('change', (event) => change({ endChapterDestination: event.currentTarget.value as SummarySettings['endChapterDestination'] }))}
           >
-            <option value="next">Ouvrir le chapitre suivant</option>
-            <option value="summary">Revenir au Sommaire</option>
+            <option value="next" selected={summary.endChapterDestination === 'next'}>Ouvrir le chapitre suivant</option>
+            <option value="summary" selected={summary.endChapterDestination === 'summary'}>Revenir au Sommaire</option>
           </select>
         </div>
       </div>
@@ -176,7 +179,7 @@ function renderSummarySettings(props: SummaryProfileSettingsProps): RemixNode {
 
 /** Edits stable profile properties, their fields, defaults and choice labels. */
 function renderProfileProperties(props: SummaryProfileSettingsProps): RemixNode {
-  const profile = props.document.data.profile
+  const profile = profileForEditing(props)
   return <section id="elce-profile-properties" className="elce-summary-profile-settings__group">
     <h2 id="elce-profile-properties-title">Propriétés du profil</h2>
     <p id="elce-profile-properties-help">Les propriétés peuvent être utilisées par les règles même si elles ne figurent pas dans le formulaire.</p>
@@ -195,11 +198,12 @@ function renderProfileProperties(props: SummaryProfileSettingsProps): RemixNode 
 
 /** Renders one property and blocks its deletion while references remain. */
 function renderProfileProperty(props: SummaryProfileSettingsProps, property: ProfileProperty): RemixNode {
-  const profile = props.document.data.profile
+  const profile = profileForEditing(props)
   const usages = learningProfileService.profilePropertyUsages(props.document, property.id)
   const update = (patch: Partial<ProfileProperty>): void => {
-    const properties = profile.properties.map((entry) => entry.id === property.id ? { ...entry, ...patch } : entry)
-    updateProfile(props, { ...profile, properties })
+    const current = profileForEditing(props)
+    const properties = current.properties.map((entry) => entry.id === property.id ? { ...entry, ...patch } : entry)
+    stageProfile(props, { ...current, properties })
   }
   const isField = profile.fieldPropertyIds.includes(property.id)
   return <li id={`elce-profile-property-row-${property.id}`} key={property.id}>
@@ -225,17 +229,18 @@ function renderProfileProperty(props: SummaryProfileSettingsProps, property: Pro
         value={property.type}
         mix={on<HTMLSelectElement, 'change'>('change', (event) => updatePropertyType(props, property, event.currentTarget.value as ProfilePropertyType))}
       >
-        <option value="text">Texte</option>
-        <option value="number">Nombre</option>
-        <option value="choice-one">Choix unique</option>
-        <option value="choice-many">Choix multiple</option>
+        <option value="text" selected={property.type === 'text'}>Texte</option>
+        <option value="number" selected={property.type === 'number'}>Nombre</option>
+        <option value="choice-one" selected={property.type === 'choice-one'}>Choix unique</option>
+        <option value="choice-many" selected={property.type === 'choice-many'}>Choix multiple</option>
       </select>
       {renderCheckbox(`elce-profile-property-required-${property.id}`, 'Champ obligatoire', property.required, (value) => update({ required: value }))}
       {renderCheckbox(`elce-profile-property-field-${property.id}`, 'Afficher dans le formulaire', isField, (value) => {
+        const current = profileForEditing(props)
         const fieldPropertyIds = value
-          ? [...profile.fieldPropertyIds, property.id]
-          : profile.fieldPropertyIds.filter((propertyId) => propertyId !== property.id)
-        updateProfile(props, { ...profile, fieldPropertyIds })
+          ? [...current.fieldPropertyIds, property.id]
+          : current.fieldPropertyIds.filter((propertyId) => propertyId !== property.id)
+        stageProfile(props, { ...current, fieldPropertyIds })
       })}
       {renderProfileDefault(props, property, update)}
       {property.type === 'choice-one' || property.type === 'choice-many' ? renderChoices(props, property, update) : null}
@@ -303,8 +308,8 @@ function renderProfileDefault(
           value={typeof property.defaultValue === 'string' ? property.defaultValue : ''}
           mix={on<HTMLSelectElement, 'change'>('change', (event) => update({ defaultValue: event.currentTarget.value === '' ? undefined : event.currentTarget.value }))}
         >
-          <option value="">Aucune</option>
-          {property.choices.map((choice) => <option id={`${id}-option-${choice.id}`} value={choice.id}>{choice.label}</option>)}
+          <option value="" selected={property.defaultValue === undefined}>Aucune</option>
+          {property.choices.map((choice) => <option id={`${id}-option-${choice.id}`} value={choice.id} selected={property.defaultValue === choice.id}>{choice.label}</option>)}
         </select>
       </div>
     case 'choice-many':
@@ -393,14 +398,18 @@ function renderConstraintWorkspace(props: SummaryProfileSettingsProps): RemixNod
       on<HTMLFormElement, 'submit'>('submit', (event) => {
         event.preventDefault()
         if (props.error !== null) return
-        if (saveConstraintChanges(props, event.currentTarget)) props.onClose()
+        const profile = profileAfterConstraintChanges(props, event.currentTarget)
+        if (profile === null) return
+        if (profile !== undefined && !updateProfile(props, profile)) return
+        props.onError(null)
+        props.onClose()
       }),
     ]}
   >
     <div id="elce-profile-constraint-layout" className="elce-profile-constraint-layout">
       <section id="elce-profile-constraint-target-panel" className="elce-summary-profile-settings__group">
         <h2 id="elce-profile-constraint-target-title">Sommaire</h2>
-        {renderConstraintTargetTree(props.document)}
+        {renderConstraintTargetTree(props)}
       </section>
       <section id="elce-profile-constraint-editor-panel" className="elce-summary-profile-settings__group">
         <h2 id="elce-profile-constraint-editor-title">Contraintes</h2>
@@ -416,24 +425,25 @@ function renderConstraintWorkspace(props: SummaryProfileSettingsProps): RemixNod
 }
 
 /** Renders the scenario hierarchy with checkboxes and without structural actions. */
-function renderConstraintTargetTree(document: LearningDocument): RemixNode {
+function renderConstraintTargetTree(props: SummaryProfileSettingsProps): RemixNode {
+  const document = props.document
   const pages = new Map(document.pages.map((page) => [page.id, page]))
   const chapters = new Map(document.chapters.map((chapter) => [chapter.id, chapter]))
   const entries: RemixNode[] = []
   for (const entry of document.data.scenarioEntries) {
     if (entry.kind === SCENARIO_ENTRY_KIND.PAGE) {
       const page = pages.get(entry.pageId)
-      if (page !== undefined) entries.push(renderConstraintTargetItem(document, { kind: 'page', id: page.id }, plainTextFromValue(page.name)))
+      if (page !== undefined) entries.push(renderConstraintTargetItem(props, { kind: 'page', id: page.id }, plainTextFromValue(page.name)))
       continue
     }
     const chapter = chapters.get(entry.chapterId)
     if (chapter === undefined) continue
     const pageItems = chapter.pageIds.flatMap((pageId) => {
       const page = pages.get(pageId)
-      return page === undefined ? [] : [renderConstraintTargetItem(document, { kind: 'page', id: page.id }, plainTextFromValue(page.name))]
+      return page === undefined ? [] : [renderConstraintTargetItem(props, { kind: 'page', id: page.id }, plainTextFromValue(page.name))]
     })
     entries.push(renderConstraintTargetItem(
-      document,
+      props,
       { kind: 'chapter', id: chapter.id },
       plainTextFromValue(chapter.name),
       pageItems,
@@ -446,11 +456,12 @@ function renderConstraintTargetTree(document: LearningDocument): RemixNode {
 
 /** Renders one selectable chapter or page target in the scenario hierarchy. */
 function renderConstraintTargetItem(
-  document: LearningDocument,
+  props: SummaryProfileSettingsProps,
   target: Extract<ProfileTarget, { kind: 'chapter' | 'page' }>,
   label: string,
   children?: readonly RemixNode[],
 ): RemixNode {
+  const document = props.document
   const value = `${target.kind}:${target.id}`
   const itemId = `elce-profile-target-item-${safeId(value)}`
   return <li id={itemId} key={value}>
@@ -477,7 +488,7 @@ function renderConstraintTargetItem(
             syncParentChapterSelection(form, document, target.id)
           }
           syncConstraintEditorState(form, document)
-          refreshProfileVisibilityRows(form, document)
+          refreshProfileVisibilityRows(form, document, profileForEditing(props).properties)
           refreshReadingRuleState(form, document)
         })}
       />
@@ -489,7 +500,7 @@ function renderConstraintTargetItem(
 
 /** Renders profile visibility rule controls for the checked pages and chapters. */
 function renderProfileConstraintEditor(props: SummaryProfileSettingsProps): RemixNode {
-  const properties = props.document.data.profile.properties
+  const properties = profileForEditing(props).properties
   return <fieldset
     id="elce-profile-rule-editor"
     className="elce-summary-profile-settings__subgroup"
@@ -629,7 +640,8 @@ function renderVisibilityConditionRowTemplate(properties: readonly ProfileProper
 /** Creates and exposes a new stable property in the initial profile form. */
 function addProfileProperty(props: SummaryProfileSettingsProps): void {
   const id = createStableId('profile-property')
-  const index = props.document.data.profile.properties.length + 1
+  const profile = profileForEditing(props)
+  const index = profile.properties.length + 1
   const property: ProfileProperty = {
     id,
     name: `propriete_${index}`,
@@ -638,17 +650,17 @@ function addProfileProperty(props: SummaryProfileSettingsProps): void {
     required: false,
     choices: [],
   }
-  updateProfile(props, {
-    ...props.document.data.profile,
-    properties: [...props.document.data.profile.properties, property],
-    fieldPropertyIds: [...props.document.data.profile.fieldPropertyIds, id],
+  stageProfile(props, {
+    ...profile,
+    properties: [...profile.properties, property],
+    fieldPropertyIds: [...profile.fieldPropertyIds, id],
   })
 }
 
 /** Deletes a property only after the invariant checker confirms no references remain. */
 function deleteProfileProperty(props: SummaryProfileSettingsProps, propertyId: string): void {
-  const profile = props.document.data.profile
-  updateProfile(props, {
+  const profile = profileForEditing(props)
+  stageProfile(props, {
     ...profile,
     properties: profile.properties.filter((property) => property.id !== propertyId),
     fieldPropertyIds: profile.fieldPropertyIds.filter((id) => id !== propertyId),
@@ -657,14 +669,15 @@ function deleteProfileProperty(props: SummaryProfileSettingsProps, propertyId: s
 
 /** Changes property type only when its existing conditions remain compatible. */
 function updatePropertyType(props: SummaryProfileSettingsProps, property: ProfileProperty, type: ProfilePropertyType): void {
-  const profile = props.document.data.profile
+  const profile = profileForEditing(props)
+  const currentProperty = profile.properties.find((entry) => entry.id === property.id) ?? property
   const updated: ProfileProperty = {
-    ...property,
+    ...currentProperty,
     type,
-    choices: type === 'choice-one' || type === 'choice-many' ? property.choices : [],
+    choices: type === 'choice-one' || type === 'choice-many' ? currentProperty.choices : [],
     defaultValue: undefined,
   }
-  updateProfile(props, { ...profile, properties: profile.properties.map((entry) => entry.id === property.id ? updated : entry) })
+  stageProfile(props, { ...profile, properties: profile.properties.map((entry) => entry.id === property.id ? updated : entry) })
 }
 
 /** Removes a choice after checking that no saved condition still uses it. */
@@ -677,9 +690,10 @@ function removeChoice(props: SummaryProfileSettingsProps, property: ProfilePrope
     props.onError(`Suppression bloquée : option utilisée par ${uses.map((entry) => targetLabel(props.document, entry.target)).join(' ; ')}.`)
     return
   }
-  updateProfile(props, {
-    ...props.document.data.profile,
-    properties: props.document.data.profile.properties.map((entry) => entry.id === property.id
+  const profile = profileForEditing(props)
+  stageProfile(props, {
+    ...profile,
+    properties: profile.properties.map((entry) => entry.id === property.id
       ? { ...entry, choices: entry.choices.filter((choice) => choice.id !== choiceId) }
       : entry),
   })
@@ -728,6 +742,26 @@ function updateProfile(props: SummaryProfileSettingsProps, profile: ProfileDefin
     props.onError(errorMessage(error))
     return false
   }
+}
+
+/** Returns the latest staged profile definition, or the document definition. */
+function profileForEditing(props: SummaryProfileSettingsProps): ProfileDefinition {
+  return stagedProfile(props) ?? props.document.data.profile
+}
+
+/** Reads the latest staged profile instead of a possibly stale render snapshot. */
+function stagedProfile(props: SummaryProfileSettingsProps): ProfileDefinition | null {
+  return props.getProfileDraft === undefined
+    ? props.profileDraft ?? null
+    : props.getProfileDraft()
+}
+
+/** Keeps profile property edits pending until the shared Save action commits them. */
+function stageProfile(props: SummaryProfileSettingsProps, profile: ProfileDefinition): boolean {
+  if (props.onProfileDraftChange === undefined) return updateProfile(props, profile)
+  props.onProfileDraftChange(profile)
+  props.onError(null)
+  return true
 }
 
 /** Parses the selected chapter or page from the author target tree. */
@@ -788,7 +822,7 @@ function handleVisibilityClick(props: SummaryProfileSettingsProps, event: Event)
   if (button === null) return
   event.preventDefault()
   if (button.dataset.profileVisibilityAction === 'add') {
-    appendVisibilityConditionRow(form, props.document.data.profile.properties)
+    appendVisibilityConditionRow(form, profileForEditing(props).properties)
   } else if (button.dataset.profileVisibilityAction === 'remove') {
     button.closest('[data-profile-visibility-row]')?.remove()
     syncVisibilityJoinControls(form)
@@ -814,7 +848,7 @@ function handleVisibilityChange(props: SummaryProfileSettingsProps, event: Event
   const row = target.closest<HTMLElement>('[data-profile-visibility-row]')
   if (row === null) return
   if (target.matches('[data-profile-visibility-property]')) {
-    syncVisibilityConditionControls(row, props.document.data.profile.properties)
+    syncVisibilityConditionControls(row, profileForEditing(props).properties)
   }
   markVisibilityTouched(form)
 }
@@ -859,7 +893,11 @@ function appendVisibilityConditionRow(
 }
 
 /** Loads saved or inherited conditions for the selected target set. */
-function refreshProfileVisibilityRows(form: HTMLFormElement, document: LearningDocument): void {
+function refreshProfileVisibilityRows(
+  form: HTMLFormElement,
+  document: LearningDocument,
+  properties: readonly ProfileProperty[],
+): void {
   const container = form.querySelector<HTMLElement>('#elce-profile-visibility-conditions')
   const status = form.querySelector<HTMLElement>('#elce-profile-rule-current-state')
   const unmetBehavior = form.querySelector<HTMLSelectElement>('#elce-profile-visibility-unmet-behavior')
@@ -886,8 +924,8 @@ function refreshProfileVisibilityRows(form: HTMLFormElement, document: LearningD
   const conditions = states[0]?.rule.conditions ?? []
   container.replaceChildren()
   if (unmetBehavior !== null) unmetBehavior.value = states[0]?.rule.unmetBehavior ?? 'hide'
-  if (conditions.length === 0) appendVisibilityConditionRow(form, document.data.profile.properties)
-  else conditions.forEach((condition) => appendVisibilityConditionRow(form, document.data.profile.properties, condition))
+  if (conditions.length === 0) appendVisibilityConditionRow(form, properties)
+  else conditions.forEach((condition) => appendVisibilityConditionRow(form, properties, condition))
   status.textContent = signatures.size > 1
     ? 'Visibilités différentes ; enregistrer appliquera la liste affichée à toute la sélection.'
     : states.some((state) => state?.inherited === true) ? 'Visibilité héritée du chapitre.' : ''
@@ -945,34 +983,39 @@ function parseStringArray(value: string | undefined): string[] {
   }
 }
 
-/** Applies both constraint editors in one validated document update. */
-function saveConstraintChanges(props: SummaryProfileSettingsProps, form: HTMLFormElement): boolean {
+/** Combines pending profile properties and constraint edits into one definition. */
+function profileAfterConstraintChanges(
+  props: SummaryProfileSettingsProps,
+  form: HTMLFormElement,
+): ProfileDefinition | null | undefined {
   const targets = selectedTargets(form)
   const data = new FormData(form)
   const visibilityTouched = form.dataset.profileVisibilityTouched === 'true'
   const readingTouched = form.dataset.readingTouched === 'true'
+  const profile = profileForEditing(props)
+  const hasProfileDraft = stagedProfile(props) !== null
   if (targets.length === 0) {
     if (visibilityTouched || readingTouched) {
       props.onError('Sélectionnez au moins un élément du Sommaire pour enregistrer les modifications.')
-      return false
+      return null
     }
     props.onError(null)
-    return true
+    return hasProfileDraft ? profile : undefined
   }
 
-  let constraints = [...props.document.data.profile.constraints]
-  let readingConstraints = [...props.document.data.profile.readingConstraints]
+  let constraints = [...profile.constraints]
+  let readingConstraints = [...profile.readingConstraints]
   if (visibilityTouched) {
-    const conditions = visibilityConditionsFromRows(form, props.document.data.profile.properties)
+    const conditions = visibilityConditionsFromRows(form, profile.properties)
     if (conditions === null) {
       props.onError('Complétez chaque condition de visibilité avant de l’enregistrer.')
-      return false
+      return null
     }
     constraints = constraints.filter((entry) => !targets.some((target) => sameTarget(entry.target, target)))
     if (conditions.length > 0) {
       const unmetBehavior = data.get('visibilityUnmetBehavior') === 'lock' ? 'lock' : 'hide'
       for (const target of targets) {
-        const current = props.document.data.profile.constraints.find((entry) => sameTarget(entry.target, target))
+        const current = profile.constraints.find((entry) => sameTarget(entry.target, target))
         constraints.push({
           id: current?.id ?? createStableId('visibility-rule'),
           target,
@@ -987,7 +1030,7 @@ function saveConstraintChanges(props: SummaryProfileSettingsProps, form: HTMLFor
     const selectedChapters = targets.filter((target): target is Extract<ProfileTarget, { kind: 'chapter' }> => target.kind === 'chapter')
     if (selectedChapters.length === 0) {
       props.onError('Sélectionnez au moins un chapitre pour modifier les prérequis de lecture.')
-      return false
+      return null
     }
     const selectedRequirements = data.getAll('readingPrerequisites').map(String)
     if (selectedRequirements.length === 0 || selectedRequirements.every((value) => value === 'ignore')) {
@@ -1001,12 +1044,12 @@ function saveConstraintChanges(props: SummaryProfileSettingsProps, form: HTMLFor
         const chapterIds = selectedRequirements.map((value) => value.slice('chapter:'.length))
         if (chapterIds.some((chapterId) => !props.document.chapters.some((chapter) => chapter.id === chapterId))) {
           props.onError('Choisissez des chapitres requis existants.')
-          return false
+          return null
         }
         requirement = { kind: 'chapters', chapterIds }
       } else {
         props.onError('Choisissez « - », « Précédent » ou un ou plusieurs chapitres.')
-        return false
+        return null
       }
       for (const target of selectedChapters) {
         const current = readingConstraints.find((entry) => entry.target.id === target.id)
@@ -1022,13 +1065,13 @@ function saveConstraintChanges(props: SummaryProfileSettingsProps, form: HTMLFor
 
   if (!visibilityTouched && !readingTouched) {
     props.onError(null)
-    return true
+    return hasProfileDraft ? profile : undefined
   }
-  return updateProfile(props, {
-    ...props.document.data.profile,
+  return {
+    ...profile,
     constraints,
     readingConstraints,
-  })
+  }
 }
 
 /** Compares stable target kind and identifier pairs. */

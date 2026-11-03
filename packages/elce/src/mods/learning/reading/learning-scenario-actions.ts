@@ -574,7 +574,10 @@ export class LearningScenarioActions {
     }, { scope: 'story', storyId: 'main' })
     await context.send(ELCE_SCENARIO.NAVIGATION_SCENE, {
       name: ELCE_EVENTS.PRESENTATION_NAVIGATION_STATUS,
-      data: { content: presentation.navigationStatus },
+      data: {
+        content: presentation.navigationStatus,
+        attr: { 'data-summary-button-visible': String(presentation.summaryButtonVisible) },
+      },
     }, { scope: 'story', storyId: 'main' })
     await context.send(ELCE_SCENARIO.NAVIGATION_SCENE, {
       name: ELCE_EVENTS.PRESENTATION_NAVIGATION_NEXT,

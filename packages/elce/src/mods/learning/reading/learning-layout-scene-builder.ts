@@ -116,8 +116,25 @@ export class LearningLayoutSceneBuilder {
     }
   }
 
-  /** Builds the navigation scene with comment anchors for previous, status, and next. */
-  public createNavigationScene(): SceneDoc<string> {
+  /** Builds navigation controls, adding the summary shortcut when the document enables it. */
+  public createNavigationScene(showSummaryButton: boolean): SceneDoc<string> {
+    const navigationClassName = showSummaryButton
+      ? 'elce-player-navigation elce-player-navigation--with-summary'
+      : 'elce-player-navigation'
+    const summaryAnchor = showSummaryButton ? '<!-- data-part="elce:navigation:summary" -->' : ''
+    const summaryButton: readonly PersoDoc<string>[] = showSummaryButton ? [{
+      id: 'elce-navigation-summary',
+      type: 'tag',
+      initial: {
+        tag: 'button',
+        content: 'Sommaire',
+        attr: { type: 'button' },
+        className: 'elce-player-navigation__button elce-player-navigation__button--summary',
+        move: { target: 'elce:navigation:summary' },
+      },
+      emit: { click: { event: { name: ELCE_EVENTS.MENU_SUMMARY, visibility: 'public' } } },
+      actions: {},
+    }] : []
     return {
       id: `${ELCE_SCENARIO.NAVIGATION_SCENE}-document`,
       stories: {
@@ -135,14 +152,16 @@ export class LearningLayoutSceneBuilder {
               type: 'layout',
               initial: {
                 move: '@root',
-                className: 'elce-player-navigation',
-                markup: `<div id="elce-navigation-controls-root" class="elce-player-navigation">
+                className: navigationClassName,
+                attr: { 'data-summary-button-visible': 'false' },
+                markup: `<div id="elce-navigation-controls-root" class="${navigationClassName}" data-summary-button-visible="false">
                   <!-- data-part="elce:navigation:previous" -->
+                  ${summaryAnchor}
                   <!-- data-part="elce:navigation:status" -->
                   <!-- data-part="elce:navigation:next" -->
                 </div>`,
               },
-              actions: {},
+              actions: { [ELCE_EVENTS.PRESENTATION_NAVIGATION_STATUS]: {} },
             },
             {
               id: 'elce-navigation-previous',
@@ -157,6 +176,7 @@ export class LearningLayoutSceneBuilder {
               emit: { click: { event: { name: ELCE_EVENTS.NAVIGATION_PREVIOUS, visibility: 'public' } } },
               actions: { [ELCE_EVENTS.PRESENTATION_NAVIGATION_PREVIOUS]: {} },
             },
+            ...summaryButton,
             {
               id: 'elce-navigation-status',
               type: 'tag',

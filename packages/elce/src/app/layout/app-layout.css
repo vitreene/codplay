@@ -522,6 +522,44 @@ body {
   border-color: #46726b;
 }
 
+.ProseMirror .elce-profile-label,
+.ProseMirror .elce-inline-label--date {
+  color: #46726b;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.ProseMirror .elce-profile-label {
+  display: inline-block;
+  margin: 0 0.08em;
+  padding: 0.04em 0.32em;
+  background: #e8efea;
+  border: 1px solid #b8c9c0;
+  border-radius: 0.3em;
+  font-size: 0.88em;
+  line-height: 1.4;
+  vertical-align: baseline;
+}
+
+.ProseMirror .elce-profile-label::before,
+.ProseMirror .elce-profile-label::after,
+.ProseMirror .elce-inline-label--date::before,
+.ProseMirror .elce-inline-label--date::after {
+  color: #46726b;
+  font-weight: 700;
+}
+
+.ProseMirror .elce-profile-label::before,
+.ProseMirror .elce-inline-label--date::before {
+  content: '{{';
+}
+
+.ProseMirror .elce-profile-label::after,
+.ProseMirror .elce-inline-label--date::after {
+  content: '}}';
+}
+
 .elce-inline-text-catalog {
   display: grid;
   gap: 0.8rem;

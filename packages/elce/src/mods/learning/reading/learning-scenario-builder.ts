@@ -109,7 +109,9 @@ export class LearningScenarioBuilder {
       ),
       [ELCE_SCENARIO.PROFILE_COMPLETE_SCENE]: learningLayoutSceneBuilder.createProfileCompleteScene(document.id),
       [ELCE_SCENARIO.TITLE_SCENE]: learningLayoutSceneBuilder.createTitleScene(),
-      [ELCE_SCENARIO.NAVIGATION_SCENE]: learningLayoutSceneBuilder.createNavigationScene(),
+      [ELCE_SCENARIO.NAVIGATION_SCENE]: learningLayoutSceneBuilder.createNavigationScene(
+        document.data.summary.showAtRoot && document.data.summary.permanentAccess,
+      ),
       [`scene-${ELCE_SCENARIO.EMPTY_PAGE}`]: learningLayoutSceneBuilder.createEmptyPageScene(document.id),
       ...scenes,
     }

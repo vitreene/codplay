@@ -59,6 +59,12 @@ export class LearningPresentationService {
     const nextScormChapterAllowed = nextScormChapter !== undefined
       && this.hasScormChapterSco(readerContext, nextScormChapter)
     const previousPageAllowed = !rootSummaryActive && (contentPageIndex > 0 || includesRootSummary && contentPageIndex === 0)
+    const summaryButtonVisible = scormChapter === undefined
+      && runtime.summary.showAtRoot
+      && runtime.summary.permanentAccess
+      && page !== undefined
+      && page !== ELCE_SCENARIO.EMPTY_PAGE
+      && !rootSummaryActive
     const nextExitAllowed = rootSummaryActive
       ? true
       : page === undefined
@@ -109,6 +115,7 @@ export class LearningPresentationService {
         disabled: !previousPageAllowed && !previousScormChapterAllowed,
         hidden: !previousPageAllowed && !previousScormChapterAllowed,
       },
+      summaryButtonVisible,
       nextAttributes: { type: 'button', disabled: !nextExitAllowed || !nextDestinationAllowed },
       navigationStatus: pageIndex < 0 || page === ELCE_SCENARIO.EMPTY_PAGE
         ? ''

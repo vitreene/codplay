@@ -34,6 +34,39 @@ d’utilisateurs restent différées. Le détail fonctionnel accepté reste dans
 
 ## Décisions acceptées et formats internes retenus
 
+### Conservation du profil de preview — implémentée localement le 3 novembre 2026,
+acceptation en attente
+
+- Après validation de la page Profil, enregistrer ses valeurs et son état
+  soumis dans l’état test séparé du document. La fermeture puis la réouverture
+  d’une preview ne redemande pas un profil déjà soumis et compatible.
+- Le bouton de remise à zéro du profil efface aussi ces valeurs enregistrées
+  et rouvre la collecte. Une définition modifiée qui exige des valeurs
+  manquantes rouvre le formulaire en conservant les réponses encore compatibles.
+- Cette conservation concerne le profil uniquement. La progression, les
+  réponses Question, les états d’Évaluation et la navigation restent propres à
+  la session de consultation.
+- Le raccord d’écriture doit pouvoir fonctionner dans le popup local et la
+  preview réseau sans autoriser cette dernière à modifier le reste de l’état
+  test. Utiliser la ressource et la révision test existantes ; conserver le
+  compare-and-swap.
+- Brave, sur « Test Elcé — liens et date » : la soumission de « Profil test »
+  a envoyé `PUT /test-state/profile` (`200`). Le `GET` suivant, révision 14,
+  contient `profileSubmitted: true` et la valeur saisie, tout en gardant les
+  pages terminées et la réponse Question existantes. Un nouvel appel à
+  « Prévisualiser » a ouvert directement la page de contenu et y a résolu
+  « Profil test » ; la page Profil n’est pas réapparue. Le premier essai avait
+  reçu `404`, car l’API déjà lancée ne contenait pas cette route. Le redémarrage
+  du serveur sur 5175/5181 a chargé la correction.
+- La fermeture/réouverture du popup local est vérifiée. L’acceptation de la
+  preview réseau, de la remise à zéro persistée et de la réouverture après
+  ajout d’une propriété requise reste en attente ; le plan demeure En cours.
+- Acceptation : valider le profil dans chacune des deux previews, fermer puis
+  rouvrir, et confirmer l’accès direct au lecteur avec les valeurs conservées ;
+  vérifier que la progression reste inchangée, que la remise à zéro est
+  persistée et que l’ajout d’une propriété requise rouvre le formulaire avec
+  les valeurs compatibles préremplies.
+
 ### Présentation de la page Sommaire — accepté le 30 octobre 2026, En cours
 
 - Pour le Sommaire racine du lecteur : présenter les entrées en liens sans
@@ -84,16 +117,16 @@ d’utilisateurs restent différées. Le détail fonctionnel accepté reste dans
   si le premier ne l’est pas. Lorsqu’il est coché, le bouton interrompt la page
   en cours et ouvre le Sommaire, même si la page n’est pas terminée. Lorsqu’il
   est décoché, l’accès existant du menu conserve sa garde de fin de page.
-- Implémentation ajoutée dans le builder de navigation : le bouton émet
-  l’événement Sommaire existant et le layout le masque hors d’une page de
-  contenu. Le lecteur masque aussi Précédent lorsqu’il est désactivé. Des zones
-  de grille explicites gardent Suivant à sa largeur normale quand le bouton
-  Sommaire est masqué.
-- Les 71 tests ciblés des builders de scénario et de composition, le typecheck
-  et la preview réelle passent. Sur la page Sommaire, Brave confirme qu’il ne
-  reste que Suivant, à 104 px dans la fenêtre testée ; Précédent et Sommaire
-  sont absents de l’arbre accessible. Le module reste En cours pour les autres
-  validations visuelles listées plus haut.
+- L’ancienne implémentation du lecteur Elcé créait ce bouton dans la barre de
+  navigation, le masquait hors d’une page de contenu et réutilisait l’événement
+  Sommaire existant. Ses 71 tests ciblés, le typecheck et la preview réelle
+  étaient passés avant la fusion.
+- Le portage vers Learning avait omis ce bouton. Le raccord est rétabli le
+  3 novembre 2026 dans le constructeur de navigation, la projection de
+  présentation et l’action de rafraîchissement ; il réutilise l’événement et la
+  garde Sommaire existants. La validation ciblée du code porté et le parcours
+  dans le lecteur réel restent à faire ; les preuves d’avant fusion ne valident
+  pas cette version. Le module reste En cours.
 - Sur la page Sommaire, masquer aussi « Précédent » lorsqu’il n’a aucune
   destination. Quand le bouton Sommaire est masqué, la grille libère sa colonne
   afin que « Suivant » conserve sa largeur de bouton.
@@ -232,12 +265,28 @@ construction.
    - **Décision acceptée et appliquée :** « Afficher comme page » place le
      Sommaire en première page du parcours et rejoint la séquence
      Précédent/Suivant ; le contrat et les preuves sont dans la spécification.
-   - **Décision acceptée et appliquée :** le bouton global « Enregistrer »
-     soumet aussi les deux familles de contraintes ; les autres réglages sont
-     déjà appliqués par les commandes documentaires existantes. Il fonctionne
-     sans cible cochée quand aucune contrainte n’est modifiée. Si la validation
-     réussit, l’écran revient au scénario ; sinon il reste ouvert et affiche
-     l’erreur.
+   - **Décision acceptée, application en cours (3 novembre 2026) :** tous les
+     réglages de « Présentation du Sommaire » s’appliquent immédiatement par
+     commande documentaire. Le bouton global « Enregistrer » valide les
+     propriétés du profil et les contraintes de visibilité et de lecture ;
+     leurs brouillons sont regroupés dans une seule mise à jour de définition
+     du profil. Sans modification des contraintes, il enregistre tout de même
+     les propriétés. Après validation, l’écran revient au scénario ; en cas
+     d’erreur, il reste ouvert avec les brouillons. L’implémentation est en
+     cours ; le parcours réel d’enregistrement reste à valider sur le document
+     de test autorisé.
+   - **Sélecteurs du formulaire — cause trouvée et correction en cours
+     (3 novembre 2026) :** le document et le cache local conservaient bien
+     `displayMode: pages`, mais le panneau remonté affichait la première option,
+     « Niveaux seuls ». Le runtime monte la valeur du `<select>` avant ses
+     options ; sans option marquée comme sélectionnée, le navigateur retient la
+     première. Les options reflètent maintenant la valeur du document. Après
+     réouverture du panneau sur « Test Elcé — liens et date », Brave affiche
+     « Pages et niveaux », ainsi que les valeurs conservées « Fin de page »,
+     « Ouvrir le chapitre suivant » et « Texte ». L’éditeur est ensuite passé en
+     lecture seule après un refus `409` du renouvellement d’accès ; le test
+     d’édition, de sauvegarde et de réouverture des sélecteurs reste à faire
+     lorsque l’accès au document de test sera libre.
    - Définir, ordonner et éditer propriétés, choix, défauts, champs du profil,
      contraintes et étiquettes par les façades et commandes existantes.
    - **Décision acceptée et appliquée — sélection des cibles :** cocher ou
@@ -284,9 +333,11 @@ construction.
      L’arbre n’expose aucune action d’ajout, déplacement ou suppression, et ne
      liste pas les BDC. L’édition des BDC reste dans leur page ; les contraintes
      BDC déjà enregistrées sont conservées sans être éditables ici. Un unique
-     bouton « Enregistrer » en haut de l’écran valide les contraintes de profil
-     et de lecture, puis revient au scénario ; il reste utilisable sans cible
-     cochée pour terminer l’édition des autres réglages.
+     bouton « Enregistrer » en haut de l’écran valide les propriétés du profil
+     et les contraintes de profil et de lecture, puis revient au scénario. La
+     « Présentation du Sommaire » s’applique immédiatement et ne dépend pas de
+     ce bouton. L’enregistrement reste utilisable sans cible cochée si aucune
+     contrainte n’a été modifiée.
    - Tests automatisés de la sélection de toutes les pages par le chapitre,
      de la sélection directe de pages sans cocher la cible chapitre, de
      l’exception locale dans un chapitre à une page, de l’application aux pages
