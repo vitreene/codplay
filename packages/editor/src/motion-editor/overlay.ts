@@ -148,7 +148,8 @@ export function createMotionOverlay(
   orientationButton.setAttribute('aria-pressed', 'false')
   orientationButton.style.position = 'absolute'
   orientationButton.style.display = 'none'
-  orientationButton.style.zIndex = '1102'
+  // The Selection Frame is mounted at 1160; keep this action above its handles.
+  orientationButton.style.zIndex = '1161'
   orientationButton.style.transform = 'translate(-50%, 0)'
   orientationButton.style.boxSizing = 'border-box'
   orientationButton.style.width = '28px'
@@ -507,7 +508,7 @@ export function createMotionOverlay(
     if (!suspended && segment.path !== undefined) {
       const aligned = segment.orientToPath === true
       orientationButton.setAttribute('aria-pressed', String(aligned))
-      orientationButton.style.color = aligned ? '#fbbf24' : '#e5e7eb'
+      orientationButton.style.color = aligned ? '#ff6d00' : '#e5e7eb'
       orientationButton.style.display = 'flex'
       orientationButton.style.alignItems = 'center'
       orientationButton.style.justifyContent = 'center'

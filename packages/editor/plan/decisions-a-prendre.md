@@ -149,6 +149,13 @@ conflit de révision et garde de dernière scène.
   à ce contrôle. Le test overlay vérifie le masquage et la reprise ; Safari dans
   l’application confirme Play/Pause sans écriture SQLite. Les autres critères
   P6 restent ouverts.
+- **Tangente :** le bouton passe maintenant au-dessus du Selection Frame (`1161`
+  contre `1160`) et l’icône active a un orange plus marqué ; valider son ciblage
+  et son contraste dans l’application avant d’actualiser la preuve de la spec
+  d’orientation.
+- **Rotation :** l’angle de l’item est normalisé modulo 360 dans le Builder et
+  dans les gestes du CS ; valider le geste, son commit et le seek dans
+  l’application avant d’actualiser la preuve de présentation.
 
 Les comportements déjà vérifiés sont spécifiés dans les specs
 [d’intégration](../specs/editor-v2-integration-spec.md),

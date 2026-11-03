@@ -3,6 +3,7 @@ import { resolveKeyframeChannel } from '../app/commands/types'
 import { parseColor, prepareTween, resolveTween, type InterpolationValue } from 'ace'
 import { resolveKeyframeTransition } from './keyframe-transition'
 import type { StyleDefaultCapture } from './types'
+import { normalizeAngleDegrees } from '../motion-editor/geometry'
 
 /** Resolves one Decor into the style record consumed by the V2 tag component. */
 export function resolveDecorStyle(decor: Decor | undefined): Record<string, unknown> {
@@ -342,7 +343,7 @@ export function resolveOffsetAsStyle(offset: Decor['offset']): Record<string, un
   if (offset.translate?.y != null) style.y = offset.translate.y
   if (offset.width != null) style.width = offset.width
   if (offset.height != null) style.height = offset.height
-  if (offset.rotate !== undefined) style.rotate = offset.rotate
+  if (offset.rotate !== undefined) style.rotate = normalizeAngleDegrees(offset.rotate)
   if (offset.scale?.x !== undefined) style.scaleX = offset.scale.x
   if (offset.scale?.y !== undefined) style.scaleY = offset.scale.y
   if (offset.rotationOrigin !== undefined) {

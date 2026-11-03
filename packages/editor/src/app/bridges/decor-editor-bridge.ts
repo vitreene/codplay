@@ -59,6 +59,7 @@ import {
   motionPathAnchorForFrame,
   resolveMotionGeometryPose,
   frameWithTangentAtPathAnchor,
+  normalizeAngleDegrees,
   presentationItemPoseToContentFrame,
   presentationPoseToSelectionFrame,
   splitMotionPath,
@@ -616,7 +617,7 @@ function materializeZoneFillStyle(base: DecorPatch, patch: DecorPatch): DecorPat
  */
 export function applyFrameDelta(base: SelectionFrameValue, delta: SelectionFrameDelta): SelectionFrameValue {
   if (delta.kind === 'move') return { ...base, x: base.x + delta.dx, y: base.y + delta.dy }
-  if (delta.kind === 'rotate') return { ...base, rotate: (base.rotate ?? 0) + delta.dr }
+  if (delta.kind === 'rotate') return { ...base, rotate: normalizeAngleDegrees((base.rotate ?? 0) + delta.dr) }
   if (delta.kind === 'pivot') return applyRotationOriginDelta(base, delta.fx, delta.fy)
 
   const minSize = 4
@@ -1843,7 +1844,10 @@ export function createDecorEditorBridge(
 
   /** Converts one local pixel frame to the unitless structured offset vocabulary. */
   function frameToOffsetPatch(value: SelectionFrameValue, rootWidthPx: number): OffsetPatch {
-    return offsetValuesPxToPatch(value, rootWidthPx)
+    const patch = offsetValuesPxToPatch(value, rootWidthPx)
+    return patch.rotate === undefined
+      ? patch
+      : { ...patch, rotate: normalizeAngleDegrees(patch.rotate) }
   }
 
   /** Keeps pixel and responsive projections of the same authored frame together. */
@@ -1861,7 +1865,10 @@ export function createDecorEditorBridge(
   /** Stores the authored tangent-relative offset while keeping the CS value in presentation space. */
   function authorFrameForGesture(displayedFrame: SelectionFrameValue, authoredRotate: number): SelectionFrameValue {
     return frameWithRotationAtPathAnchor(
-      displayedFrame, authoredRotate, motionPathAnchorForFrame(displayedFrame, frameBorderInsetsPx), frameBorderInsetsPx,
+      displayedFrame,
+      normalizeAngleDegrees(authoredRotate),
+      motionPathAnchorForFrame(displayedFrame, frameBorderInsetsPx),
+      frameBorderInsetsPx,
     )
   }
 
@@ -1923,9 +1930,10 @@ export function createDecorEditorBridge(
     insets = frameBorderInsetsPx,
   ): SelectionFrameValue {
     const projection = resolveTangentGestureProjection(scene, target, value, insets)
-    return projection === null ? value : frameWithTangentAtPathAnchor(
+    const displayedFrame = projection === null ? value : frameWithTangentAtPathAnchor(
       value, projection.pathAnchor, projection.angle, insets,
     )
+    return { ...displayedFrame, rotate: normalizeAngleDegrees(displayedFrame.rotate ?? 0) }
   }
 
   /** Resolves the offset angle for the pose currently shown by the Selection Frame. */
@@ -3238,13 +3246,17 @@ export function createDecorEditorBridge(
     // presentation port remains the safe fallback for parent transforms and stale seek handoffs.
     authorFramePx = rootWidth === null || logicalFrame === null ? null : logicalFrameToPx(logicalFrame, rootWidth)
     frameBorderInsetsPx = resolvedBorderInsets
-    displayFramePx = authorFramePx === null
+    const presentedFrame = authorFramePx === null
+      ? null
+      : presentedContentBoxFrameForItem(target.itemId, authorFramePx.rotationOrigin)
+    const nextDisplayFrame = authorFramePx === null
       ? null
       : frameCommitCandidatePx
-        ?? (() => {
-          return presentedContentBoxFrameForItem(target.itemId, authorFramePx.rotationOrigin)
-            ?? authorFramePx
-        })()
+        ?? presentedFrame
+        ?? authorFramePx
+    displayFramePx = nextDisplayFrame === null
+      ? null
+      : { ...nextDisplayFrame, rotate: normalizeAngleDegrees(nextDisplayFrame.rotate ?? 0) }
     frameGestureBasePx = null
     frameGestureKind = null
     frameGestureHasNetDelta = false
