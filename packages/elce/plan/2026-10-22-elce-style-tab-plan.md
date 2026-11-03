@@ -85,6 +85,19 @@ consomment cette palette. Les CSS de palette ne sont plus chargées pour peindre
 le lecteur. L’interface ne propose qu’un duo typographique ; `headingFontId` et
 `bodyFontId` restent distincts dans `appearance`.
 
+## Classes de portée d’apparence — 3 novembre 2026
+
+**Décision utilisateur :** proscrire les classes qui développent chaque
+caractère de l’identité de cible en une suite hexadécimale. La portée reste
+déterministe par document, page ou BDC, mais son nom doit rester court.
+
+Le générateur d’apparence réutilise `sceneStyleClassName` avec le rôle
+`appearance`. Il produit ainsi le même hachage compact base 36 que les autres
+styles de scène, sans dupliquer un circuit de nommage. **Acceptation restante :**
+vérifier que les classes produites restent identiques entre le markup lecteur,
+la feuille d’apparence de preview et l’export, et qu’elles sont nettement plus
+courtes ; les validations ciblées n’ont pas encore été relancées.
+
 ## Déjà réalisé
 
 - Document v7 : polices de titre et de corps indépendantes ; Transparent écrit

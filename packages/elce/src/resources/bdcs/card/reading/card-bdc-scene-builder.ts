@@ -94,7 +94,7 @@ function createCardContentProjection(
   const addField = (zone: CardTextZone, tag: string, value: ElceTextValue): void => {
     const target = layout.zonePartIds[zone]
     const className = layout.zoneClassNames[zone]
-    if (target === undefined || authoredTextToPlainText(value).length === 0) return
+    if (target === undefined || authoredTextToPlainText(value).trim().length === 0) return
     if (typeof value === 'string') {
       persos.push(...createCardTextPersos(prefix, bdc.id, zone, tag, value, target, className))
       return

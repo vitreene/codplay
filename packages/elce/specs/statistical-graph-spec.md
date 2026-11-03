@@ -70,6 +70,9 @@ affichée. Les cellules vides avant cette limite restent visibles. Zéro compte
 comme une valeur. L’alternative sémantique des rendus SVG conserve les
 dimensions complètes de la matrice.
 
+Le titre HTML du Graphe est rendu comme un titre visible seulement si l’auteur
+en a renseigné un. Aucun titre HTML masqué n’est ajouté lorsqu’il est vide.
+
 Les couleurs des rendus SVG forment une palette fixe, indépendante de l’apparence
 du projet. Barres et courbes associent ses teintes à l’ordre des séries ; les
 secteurs les associent à l’ordre des catégories. Les repères de légende

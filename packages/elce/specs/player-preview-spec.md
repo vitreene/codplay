@@ -63,6 +63,13 @@ dans `title` et dans le nom accessible du bouton. Au-dessus de 800 px, l’icôn
 et le libellé sont visibles ensemble.
 Le bouton « Test auteur » suit la même adaptation : son libellé est masqué sur
 petit écran, tandis que son nom accessible descriptif reste disponible.
+
+Le document de preview reste à la taille du viewport et ne défile pas lui-même.
+Le contenu Flux défile dans son scrollport vertical ; la barre de navigation
+reste au bord inférieur de la fenêtre. Le scrollport masque le débordement
+horizontal et conserve le défilement vertical. Brave a vérifié le scroll interne
+et la position de la navigation aux formats 855 × 783 et 1762 × 712 ; les
+mesures sont consignées dans le [plan de construction](../plan/2026-10-01-elce-construction-plan.md).
 Les icônes d’interface du lecteur, y compris l’ouverture et la fermeture du
 sommaire Sighty/CodPlay, suivent la hauteur de capitale de la police courante
 avec `block-size: 1cap` et une largeur automatique, sans taille fixe dans les

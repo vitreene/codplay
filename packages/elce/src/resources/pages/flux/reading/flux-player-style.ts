@@ -6,6 +6,7 @@ export const FLUX_PLAYER_STYLE_RULES = [
   width: 100%;
   height: 100%;
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior-y: contain;
   scrollbar-gutter: stable;

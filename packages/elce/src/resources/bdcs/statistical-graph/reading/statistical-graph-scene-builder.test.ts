@@ -130,11 +130,11 @@ describe('Statistical Graph scene builder', () => {
     expect(markup).not.toContain('title="2026">2026</th>')
   })
 
-  it('uses Graphe as the default accessible title', () => {
+  it('uses Graphe as the SVG default title without adding a hidden heading', () => {
     const markup = builder.buildContent(createGraph(STATISTICAL_GRAPH_RENDERING.BAR, { title: '' }), 'statistical-graph-above-text', 'untitled-graph').markup
 
-    expect(markup).toContain('class="elce-statistical-graph__title elce-statistical-graph__visually-hidden">Graphe</h2>')
     expect(markup).toContain('<title id="untitled-graph-svg-title">Graphe</title>')
+    expect(markup).not.toContain('<h2 id="untitled-graph-heading"')
     expect(markup).not.toContain('Graphe statistique')
   })
 

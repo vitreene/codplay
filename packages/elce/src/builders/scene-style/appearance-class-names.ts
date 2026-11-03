@@ -13,6 +13,7 @@ import {
   appearanceBackgroundAppliesToSurface,
   resolveAppearance,
 } from '../../domain/appearance/appearance-resolver'
+import { sceneStyleClassName } from './scene-style-classes'
 
 export type AppearanceSurfaceRole =
   | 'project-layout'
@@ -38,8 +39,7 @@ export function appearanceScopeClassName(document: ResourceDocumentData, target:
   const identity = target.kind === 'document'
     ? `project-${document.id}`
     : `${target.kind}-${document.id}-${target.kind === 'page' ? target.pageId : target.bdcId}`
-  const token = Array.from(identity, (character) => character.codePointAt(0)?.toString(16) ?? '0').join('-')
-  return `appearance-${token}`
+  return sceneStyleClassName('appearance', identity)
 }
 
 /** Returns the classes for one page using its business identifier as the lookup key. */

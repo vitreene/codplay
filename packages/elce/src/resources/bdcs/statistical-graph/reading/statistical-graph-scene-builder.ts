@@ -70,17 +70,24 @@ export class ElceStatisticalGraphSceneBuilder {
     const renderingContent = transposeStatisticalGraphContent(plainContent)
     const renderingRichContent = transposeStatisticalGraphContent(content)
     const title = plainContent.title.trim() || 'Graphe'
+    const hasTitle = plainContent.title.trim().length > 0
+    const hasOverline = plainContent.overline.trim().length > 0
+    const hasEditorial = plainContent.editorialText.trim().length > 0
     const contentPersos: PersoDoc<string>[] = []
-    const titleMarkup = graphInlineMarkup(content.title, `${rootId}-heading-content`, 'h2', 'elce-statistical-graph__title', interactiveLabels, inlineTextSceneFeature)
-    const overlineMarkup = graphInlineMarkup(content.overline, `${rootId}-overline-content`, 'p', 'elce-statistical-graph__overline', interactiveLabels, inlineTextSceneFeature)
-    const editorialMarkup = graphEditorialMarkup(content.editorialText, `${rootId}-editorial`, interactiveLabels, inlineTextSceneFeature)
-    contentPersos.push(...titleMarkup.persos, ...overlineMarkup.persos, ...editorialMarkup.persos)
-    const visibleTitle = plainContent.title.trim().length > 0
+    const titleMarkup = hasTitle
+      ? graphInlineMarkup(content.title, `${rootId}-heading-content`, 'h2', 'elce-statistical-graph__title', interactiveLabels, inlineTextSceneFeature)
+      : null
+    const overlineMarkup = hasOverline
+      ? graphInlineMarkup(content.overline, `${rootId}-overline-content`, 'p', 'elce-statistical-graph__overline', interactiveLabels, inlineTextSceneFeature)
+      : null
+    const editorialMarkup = hasEditorial
+      ? graphEditorialMarkup(content.editorialText, `${rootId}-editorial`, interactiveLabels, inlineTextSceneFeature)
+      : null
+    contentPersos.push(...(titleMarkup?.persos ?? []), ...(overlineMarkup?.persos ?? []), ...(editorialMarkup?.persos ?? []))
+    const visibleTitle = titleMarkup !== null
       ? titleMarkup.markup.replace(`${rootId}-heading-content`, `${rootId}-heading`)
-      : `<h2 id="${rootId}-heading" class="elce-statistical-graph__title elce-statistical-graph__visually-hidden">${escapeHtml(title)}</h2>`
-    const overline = plainContent.overline.trim().length === 0
-      ? ''
-      : overlineMarkup.markup.replace(`${rootId}-overline-content`, `${rootId}-overline`)
+      : ''
+    const overline = overlineMarkup?.markup.replace(`${rootId}-overline-content`, `${rootId}-overline`) ?? ''
     const chartProjection = renderingContent.rendering === STATISTICAL_GRAPH_RENDERING.TABLE
       ? renderVisibleTable(renderingContent, renderingRichContent, rootId, tableFitRules, contentPersos, interactiveLabels, inlineTextSceneFeature)
       : renderSvgChart(renderingContent, renderingRichContent, rootId, titleId, contentPersos, interactiveLabels, inlineTextSceneFeature)
@@ -90,9 +97,7 @@ export class ElceStatisticalGraphSceneBuilder {
     const layoutClass = layoutId === 'statistical-graph-side-by-side'
       ? 'elce-statistical-graph--side-by-side'
       : 'elce-statistical-graph--above-text'
-    const textPanel = plainContent.editorialText.trim().length === 0
-      ? ''
-      : editorialMarkup.markup
+    const textPanel = editorialMarkup?.markup ?? ''
     const rootPart = partId === undefined ? '' : `<!-- data-part="${escapeHtml(partId)}:root" -->`
     const visualPartId = partId === undefined ? undefined : `${partId}:visual`
     const visualMarkup = visualPartId === undefined
@@ -226,6 +231,7 @@ function renderCartesian(content: PlainGraphContent, richContent: StatisticalGra
   const density = labelDensity(content.categories.length)
   const labels = content.categories.flatMap((category, index) => {
     if (index % density !== 0 && index !== content.categories.length - 1) return []
+    if (category.label.trim().length === 0) return []
     const x = left + (width * (index + 0.5)) / content.categories.length
     const y = top + height + 24
     const richCategory = richContent.categories.find((candidate) => candidate.id === category.id)
@@ -386,7 +392,7 @@ function renderSvgInlineLabelOverlay(
   if (!interactiveLabels || content.rendering === STATISTICAL_GRAPH_RENDERING.PIE) return ''
   const labels: string[] = []
   const addLabel = (value: ElceTextValue, id: string, left: number, top: number, transform: string): void => {
-    if (typeof value === 'string') return
+    if (authoredTextToPlainText(value).trim().length === 0) return
     const projection = graphInlineMarkup(value, id, 'span', 'elce-statistical-graph__inline-overlay-label', true, inlineTextSceneFeature)
     if (projection.markup.length === 0) return
     labels.push(`<div id="${id}-position" class="elce-statistical-graph__inline-overlay-position" style="left:${left}%;top:${top}%;transform:${transform}">${projection.markup}</div>`)
@@ -449,7 +455,9 @@ function renderTable(
   const title = content.title.trim() || 'Graphe'
   const isVisible = !className.includes('--visually-hidden')
   const renderLabel = (value: string, richValue: ElceTextValue | undefined, id: string): string => {
+    if (value.trim().length === 0) return ''
     if (!interactiveLabels || !isVisible || richValue === undefined || typeof richValue === 'string' || persos === undefined) return escapeHtml(value)
+    if (authoredTextToPlainText(richValue).trim().length === 0) return escapeHtml(value)
     const projection = graphInlineMarkup(richValue, id, 'span', undefined, true, inlineTextSceneFeature)
     persos.push(...projection.persos)
     return projection.markup
@@ -513,6 +521,7 @@ function renderAxisCaptions(
     : graphInlineMarkup(content.seriesAxisLabel, `${rootId}-table-series-axis`, 'p', 'elce-statistical-graph__table-axis', interactiveLabels, inlineTextSceneFeature)
   if (category !== '' && interactiveLabels) persos.push(...category.persos)
   if (series !== '' && interactiveLabels) persos.push(...series.persos)
+  if (category === '' && series === '') return ''
   return `<div id="${rootId}-table-axis-captions" class="elce-statistical-graph__table-axis-captions">${category === '' ? '' : category.markup}${series === '' ? '' : series.markup}</div>`
 }
 
@@ -562,7 +571,10 @@ function graphEditorialMarkup(
 
 /** Keeps the editorial text as separate paragraphs without interpreting markup. */
 function renderParagraphs(text: string, idPrefix: string): string {
-  return text.split(/\n\s*\n/).map((paragraph, index) => `<p id="${idPrefix}-paragraph-${index}">${escapeHtml(paragraph).replaceAll('\n', '<br>')}</p>`).join('')
+  return text.split(/\n\s*\n/)
+    .filter((paragraph) => paragraph.trim().length > 0)
+    .map((paragraph, index) => `<p id="${idPrefix}-paragraph-${index}">${escapeHtml(paragraph).replaceAll('\n', '<br>')}</p>`)
+    .join('')
 }
 
 /** Chooses the category or legend label interval for dense charts. */

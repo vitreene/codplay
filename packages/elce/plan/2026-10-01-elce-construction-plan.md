@@ -730,6 +730,55 @@ conservés pendant l’arrêt, retour et suivi réactivé. L’acceptation respo
 précédente reste acquise. Typecheck, 523 tests, build et contrôle d'espacement
 passent.
 
+### Défilement horizontal du Flux — accepté le 3 novembre 2026
+
+La preview ne doit pas permettre de faire défiler horizontalement une page.
+Brave montre que le scrollport a `overflow-y: auto`, mais que l’axe horizontal
+devient lui aussi défilable par défaut. Une Carte ancrée décalée par sa
+transition étend temporairement `scrollWidth` au-delà du viewport. Le correctif
+explicite `overflow-x: hidden` sur le scrollport et conserve son défilement
+vertical natif.
+
+Brave confirme déjà à 855 px `overflow-x: hidden`, `overflow-y: auto` et aucun
+débordement du document hôte. La translation des Cartes ancrées reste active ;
+leur largeur transformée n’est plus exposée au défilement horizontal de
+l’utilisateur. Acceptation restante : refaire ce contrôle sur une largeur
+étroite et confirmer le défilement vertical et les transitions complètes de
+Carte ancrée avant de fermer ce point.
+
+### Barre de navigation ancrée en bas de la preview — accepté le 3 novembre 2026
+
+La barre de navigation reste au bas de la fenêtre de lecture pendant le
+défilement vertical du contenu. Brave a montré que le titre HTML masqué de
+fallback « Graphe », positionné en absolu sans conteneur positionné, allongeait
+le document hôte à 3 483 px et faisait remonter le lecteur. Ce titre redoublait
+le nom du SVG et le `caption` du tableau. Le builder ne produit plus ce titre
+HTML quand l’auteur n’en a pas saisi ; un titre rédigé par l’auteur reste dans
+le flux normal.
+
+Brave confirme le comportement à 855 × 783 : pendant 320 px de défilement
+interne, `window.scrollY` reste à 0, le document reste à 783 px et la
+navigation touche le bas du viewport (`bottom: 783`). À 1762 × 712, le
+document reste exactement à la taille du viewport, la navigation touche le
+bas (`bottom: 712`) et le scrollport conserve `overflow-x: hidden`,
+`overflow-y: auto` et un contenu vertical défilable. Le correctif ne modifie
+pas la grille du lecteur ni le scrollport Flux.
+
+### Omission des contenus vides du rendu — accepté le 3 novembre 2026
+
+Les textes facultatifs vides ou réduits à des espaces ne produisent ni balise
+de contenu ni perso. Les blocs de texte vides dans une Section, les
+paragraphes éditoriaux vides et les conteneurs de légendes Graphe sans légende
+sont omis de la projection. Les points de montage d’ancre ou de texte, la
+structure du tableau, les contrôles requis et la zone de retour dynamique du
+Quiz restent lorsqu’ils servent au rendu ou au runtime ; ils ne sont pas du
+contenu vide inutilisé.
+
+Le code des builders Graphe, Carte, Question et Flux applique cette règle.
+Acceptation restante : vérifier les sorties sans contenu et les variantes
+avec texte, ancres, champs Tiptap et tableau ; contrôler l’export du scénario.
+Le plan reste `En cours` jusqu’à cette vérification.
+
 Avant de clore la tranche 9 : traiter l'écart `aria-expanded` et l'ordre du
 transfert de focus du sommaire décrits ci-dessus, puis rejouer leur acceptation
 responsive. Ces points restent indépendants de la synchronisation appliquée.

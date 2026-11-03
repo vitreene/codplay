@@ -35,14 +35,16 @@ export function buildQuestionCardPreset(
   appearanceClassName?: string,
   inlineTextSceneFeature?: ResourceInlineTextSceneFeature,
 ): CardPresetBuild {
-  const inlineTitle = typeof question.title === 'string' ? null : requireInlineTextFeature(inlineTextSceneFeature, question.title, `${partPrefix}:inline:title`)
-  const inlinePrompt = typeof question.prompt === 'string' ? null : requireInlineTextFeature(inlineTextSceneFeature, question.prompt, `${partPrefix}:inline:prompt`)
+  const hasTitle = authoredTextToPlainText(question.title).trim().length > 0
+  const hasPrompt = authoredTextToPlainText(question.prompt).trim().length > 0
+  const inlineTitle = !hasTitle || typeof question.title === 'string' ? null : requireInlineTextFeature(inlineTextSceneFeature, question.title, `${partPrefix}:inline:title`)
+  const inlinePrompt = !hasPrompt || typeof question.prompt === 'string' ? null : requireInlineTextFeature(inlineTextSceneFeature, question.prompt, `${partPrefix}:inline:prompt`)
   const answerRows = question.answers.map((answer) => {
     const inputTarget = `${partPrefix}:answer:${answer.id}:input`
     return `<div id="${rootId}-answer-${answer.id}" class="elce-question-reader-answer-row"><!-- data-part="${inputTarget}" --></div>`
   }).join('')
   const contentByZone = {
-    title: authoredTextToPlainText(question.title).trim().length === 0
+    title: !hasTitle
       ? ''
       : inlineTitle === null
         ? `<header id="${rootId}-title-host"><!-- data-part="${partPrefix}:title" --></header>`
@@ -87,9 +89,11 @@ export function buildQuestionBdcStory(
     : typeof question.title === 'string'
       ? [createQuestionTextPerso(`${prefix}:title`, 'h2', question.title, requireQuestionZone(zones, 'title', bdc.id))]
       : requireInlineTextFeature(inlineTextSceneFeature, question.title, `${prefix}:inline:title`).persos
-  const prompt = typeof question.prompt === 'string'
-    ? [createQuestionTextPerso(`${prefix}:prompt`, 'legend', question.prompt, requireQuestionZone(zones, 'question', bdc.id))]
-    : requireInlineTextFeature(inlineTextSceneFeature, question.prompt, `${prefix}:inline:prompt`).persos
+  const prompt = authoredTextToPlainText(question.prompt).trim().length === 0
+    ? []
+    : typeof question.prompt === 'string'
+      ? [createQuestionTextPerso(`${prefix}:prompt`, 'legend', question.prompt, requireQuestionZone(zones, 'question', bdc.id))]
+      : requireInlineTextFeature(inlineTextSceneFeature, question.prompt, `${prefix}:inline:prompt`).persos
   const answersZone = requireQuestionZone(zones, 'answers', bdc.id)
   const instructions = createQuestionTextPerso(
     `${prefix}:instructions`,

@@ -11,9 +11,11 @@ de la colonne centrale pendant le défilement de leur propre bloc.
   Résultat, Carousel, Carte et Graphe.
 - Un en-tête reste en haut tant que son BDC est visible dans la séquence. À la
   limite du bloc, il laisse la place à l’en-tête du BDC suivant.
+- Les six bandes adhérentes ont un fond légèrement translucide. Leurs marges,
+  paddings et espacements voisins sont intégrés à la bande pour que le contenu
+  défilant ne passe pas à travers des fentes.
 - Le titre, les actions et la barre de mise en forme d’une Section forment un
-  seul bloc sticky opaque, avec un espace sous les icônes inclus dans le bloc
-  pour éviter que le texte passe dans un jour.
+  seul bloc sticky, avec l’espace sous les icônes intégré au bloc.
 - Les vues Carte/Graphe d’un Carousel et les éditeurs d’ancres gardent leur
   contexte imbriqué existant et ne deviennent pas des en-têtes de la séquence
   directe.
@@ -21,9 +23,10 @@ de la colonne centrale pendant le défilement de leur propre bloc.
 ## Travail et acceptation
 
 - [x] Appliquer l’adhérence aux six en-têtes de BDC directs dans le scrollport
-  central et leur donner un fond opaque adapté au BDC.
+  central, avec un fond légèrement translucide adapté au BDC et couvrant leurs
+  espaces de marge, padding et séparation.
 - [x] Regrouper le titre, les actions et la barre Section dans un seul bloc
-  sticky opaque, avec un espace inférieur intégré au bloc.
+  sticky, avec les espaces supérieur et inférieur intégrés au bloc.
 - [ ] Vérifier dans l’éditeur réel qu’un en-tête reste visible pendant le
   défilement de son BDC, que le suivant prend le relais, et qu’aucun en-tête ni
   la barre Section ne se recouvre ; vérifier aussi une largeur étroite.

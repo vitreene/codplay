@@ -116,6 +116,10 @@ Les racines de Graphe ancré gardent
   paragraphe ;
 - l’article occupe au minimum toute la zone de contenu et sa hauteur augmente
   avec le texte, tandis que le scrollport porte le défilement ;
+- le scrollport défile sur l’axe vertical (`overflow-y: auto`) et masque
+  explicitement l’axe horizontal (`overflow-x: hidden`). Une Carte ou un
+  Graphe ancré peut dépasser temporairement sa zone pendant une transition ; ce
+  mouvement ne rend pas la page horizontalement défilable ;
 - le scrollport n’impose pas de snap CSS. Le défilement des BDC reste natif et
   libre, notamment lorsqu’un BDC dépasse la hauteur du viewport. Aucun
   `scroll-snap-type`, `scroll-snap-align` ou gestionnaire de snap JavaScript
@@ -285,6 +289,14 @@ Elcé.
   parent, et le cadre de lecture reste en place. Le repère de fin active
   « Suivant ». `elce-player-composition.test.ts` vérifie la règle du scrollport ;
   ses 47 tests, le typecheck et le build passent.
+- Brave DevTools, le 3 novembre 2026, reproduit le débordement horizontal à
+  855 px : avant correction, le scrollport de 823 px calculait
+  `overflow-x: auto` et `scrollWidth: 1007` pendant la translation d’une Carte
+  ancrée. Après correction, `overflow-x: hidden` et `overflow-y: auto` gardent
+  le document à `scrollWidth: 855`, sans défilement horizontal exposé ; la
+  translation de la Carte reste active dans le scrollport vertical. Celui-ci
+  peut encore mesurer une largeur de contenu supérieure à sa largeur visible,
+  mais l’utilisateur ne peut plus la parcourir horizontalement.
 
 Le 26 octobre 2026, après résolution de fusion, les 481 tests Elcé dans
 73 fichiers passent, ainsi que le typecheck et le build. Les tests Flux et

@@ -305,12 +305,13 @@ function createBdcMount(
       const sectionLinkProjection = bdc.section == null
         ? undefined
         : options.inlineTextSceneFeature.projectSectionLinks(bdc.section.markup, bdc.section.content.content, bdc.id)
+      const sectionPlayerMarkup = omitEmptySectionTextBlocks(sectionLinkProjection?.markup ?? bdc.section?.markup ?? '')
       const card = options.presetBuilder.build(
         bdc.presetId,
         sectionId,
         partId,
         {
-          body: projectFluxPlayerMarkup(sectionLinkProjection?.markup ?? bdc.section?.markup ?? ''),
+          body: projectFluxPlayerMarkup(sectionPlayerMarkup),
         },
       )
       const markup = appendClassToMarkupElement(
@@ -414,6 +415,19 @@ function createBdcMount(
     default:
       throw new Error(`Le BDC ${bdc.id} (${bdc.type}) n’est pas pris en charge dans Flux.`)
   }
+}
+
+/** Omits blank authored text blocks while keeping anchors and CodPlay mount points. */
+function omitEmptySectionTextBlocks(markup: string): string {
+  return markup.replace(/<(p|h[1-6])\b[^>]*>([\s\S]*?)<\/\1>/gi, (block, _tag: string, content: string) => {
+    if (/<!--\s*data-part=|\bdata-elce-anchor\s*=/.test(content)) return block
+    const text = content
+      .replace(/<br\b[^>]*\/?\s*>/gi, '')
+      .replace(/<[^>]*>/g, '')
+      .replace(/&(?:nbsp|#0*160|#x0*a0);/gi, ' ')
+      .trim()
+    return text.length === 0 ? '' : block
+  })
 }
 
 /** Reads the CodPlay targets exported by anchors inside the page's Sections. */
