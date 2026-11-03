@@ -1,4 +1,4 @@
-import { Bold, Italic, Underline, Subscript, Superscript, Pilcrow, AlignLeft, AlignCenter, AlignRight, AlignJustify, Heading1, Heading2, Heading3, Heading4, Heading5, Heading6, Trash2, X } from 'lucide-static'
+import { Bold, Italic, Underline, Subscript, Superscript, Pilcrow, Ellipsis, AlignLeft, AlignCenter, AlignRight, AlignJustify, Heading1, Heading2, Heading3, Heading4, Heading5, Heading6, Trash2, X } from 'lucide-static'
 import { on, ref, type RemixNode } from 'remix/ui'
 
 import { ANCHOR } from '../../../anchoring/anchor-config'
@@ -33,6 +33,7 @@ import { renderRemixStatisticalGraphEditor } from '../../statistical-graph/autho
 import { anchorNameFor } from '../../../../domain/anchor/anchor-position'
 import { renderAppearanceTrigger } from '../../../../core/authoring/appearance-trigger'
 import { authoredTextToPlainText } from '../../../../core/document/rich-text-utils'
+import { DOT_LEADER_STYLE_SHEET } from '../dot-leader/dot-leader-style'
 
 export type SectionEditorMediaById = Readonly<Record<string, Readonly<{ name: string; type: MediaType; source: string | null }>>>
 
@@ -109,6 +110,7 @@ export function renderRemixSectionEditor(
     id={`elce-section-editor-${bdc.id}`}
     className="elce-section-editor"
   >
+    <style id={`elce-section-dot-leader-style-${bdc.id}`}>{DOT_LEADER_STYLE_SHEET}</style>
     <div
       id={`elce-section-sticky-header-${bdc.id}`}
       className="elce-section-sticky-header"
@@ -226,6 +228,7 @@ function renderToolbar(
       run: (editor: SectionTiptapAdapter['editor']) => editor.chain().toggleHeading({ level }).run(),
     })),
     { suffix: 'paragraph', label: 'Paragraphe', icon: Pilcrow, active: state.paragraph, run: (editor: SectionTiptapAdapter['editor']) => editor.chain().setParagraph().run() },
+    { suffix: 'dot-leader', label: 'Points de suite', icon: Ellipsis, active: state.dotLeader, run: (editor: SectionTiptapAdapter['editor']) => editor.chain().toggleDotLeader().run() },
     { suffix: 'align-left', label: 'Aligner à gauche', icon: AlignLeft, active: state.textAlign === 'left', run: (editor: SectionTiptapAdapter['editor']) => editor.chain().setTextAlign('left').run() },
     { suffix: 'align-center', label: 'Centrer', icon: AlignCenter, active: state.textAlign === 'center', run: (editor: SectionTiptapAdapter['editor']) => editor.chain().setTextAlign('center').run() },
     { suffix: 'align-right', label: 'Aligner à droite', icon: AlignRight, active: state.textAlign === 'right', run: (editor: SectionTiptapAdapter['editor']) => editor.chain().setTextAlign('right').run() },
@@ -425,5 +428,6 @@ function sameToolbarState(left: SectionToolbarState, right: SectionToolbarState)
     && left.superscript === right.superscript
     && left.headingLevel === right.headingLevel
     && left.paragraph === right.paragraph
+    && left.dotLeader === right.dotLeader
     && left.textAlign === right.textAlign
 }

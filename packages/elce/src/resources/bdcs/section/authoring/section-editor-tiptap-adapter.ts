@@ -156,5 +156,6 @@ function sameToolbarState(left: SectionToolbarState, right: SectionToolbarState)
     && left.superscript === right.superscript
     && left.headingLevel === right.headingLevel
     && left.paragraph === right.paragraph
+    && left.dotLeader === right.dotLeader
     && left.textAlign === right.textAlign
 }

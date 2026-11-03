@@ -7,6 +7,7 @@ import type { AppearanceTarget } from '../../../domain/appearance/appearance-tar
 import type { PagePlacement } from '../organization/learning-page-placement'
 import type { InlineTextLabelSelection } from '../profile/authoring/profile-token-events'
 import type { ProfileDefinition } from '../profile/domain/learning-profile-types'
+import type { CatalogPaletteTab } from './learning-authoring-config'
 import type { EditorPanelName, EditorPanelVisibility } from '../../../core/authoring/layout/editor-frame'
 
 export type ResponsivePanel = 'outline' | 'properties' | null
@@ -24,6 +25,8 @@ export interface EditorWorkspaceViewProps {
   readonly sidePanelTab: SidePanelTab
   readonly appearanceTarget: AppearanceTarget
   readonly summarySettingsOpen: boolean
+  readonly catalogPaletteOpen?: boolean
+  readonly catalogPaletteTab?: CatalogPaletteTab
   readonly profileDraft?: ProfileDefinition | null
   readonly getProfileDraft?: () => ProfileDefinition | null
   readonly profileTokenTargetId: string | null
@@ -37,6 +40,8 @@ export interface EditorWorkspaceViewProps {
   readonly onSetSidePanelTab: (tab: SidePanelTab) => void
   readonly onOpenAppearanceTarget: (target: AppearanceTarget, triggerId: string) => void
   readonly onSetSummarySettingsOpen: (open: boolean) => void
+  readonly onSetCatalogPaletteOpen?: (isOpen: boolean) => void
+  readonly onSetCatalogPaletteTab?: (tab: CatalogPaletteTab) => void
   readonly onSetProfileDraft?: (profile: ProfileDefinition | null) => void
   readonly onSetAuthoringError: (error: string | null) => void
   readonly onSetDropTarget: (targetId: string | null) => void

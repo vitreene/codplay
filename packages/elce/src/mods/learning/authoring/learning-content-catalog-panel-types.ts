@@ -16,9 +16,6 @@ export interface LearningContentCatalogPanelProps {
   readonly sidePanelTab: SidePanelTab
   readonly appearanceTarget: AppearanceTarget
   readonly onSetSidePanelTab: (tab: SidePanelTab) => void
-  readonly onOpenAppearanceTarget: (target: AppearanceTarget, triggerId: string) => void
   readonly profileTokenTargetId: string | null
   readonly selectedInlineLabel: InlineTextLabelSelection | null
-  readonly dropTarget: string | null
-  readonly onSetDropTarget: (targetId: string | null) => void
 }

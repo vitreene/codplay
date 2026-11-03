@@ -497,24 +497,33 @@ function bdcNavigationDropPosition(
   state: PageEditorRenderState,
 ): Readonly<{ index: number; targetId: string }> | null {
   const page = state.current.view.selectedPage
-  const draggedBdcId = state.draggedBdcId()
+  const localDraggedBdcId = state.draggedBdcId()
+  const transfer = event.dataTransfer
+  const isCatalogBdcDrag = transfer !== null
+    && transfer.effectAllowed === 'move'
+    && Array.from(transfer.types).includes(CATALOG_REFERENCE.MIME_TYPE)
+  const catalogDraggedBdcId = isCatalogBdcDrag && transfer !== null ? catalogBdcIdFromTransfer(transfer) : null
+  const draggedBdcId = localDraggedBdcId ?? catalogDraggedBdcId
   const target = event.currentTarget
-  if (page === undefined || draggedBdcId === null || draggedBdcId === bdcId) return null
+  if (page === undefined || (draggedBdcId === null && !isCatalogBdcDrag) || draggedBdcId === bdcId) return null
   if (page.bdcIds[targetIndex] !== bdcId) return null
   if (!(target instanceof HTMLElement)) return null
 
-  const sourceIndex = page.bdcIds.indexOf(draggedBdcId)
-  if (sourceIndex < 0) return null
+  const sourceIndex = draggedBdcId === null ? -1 : page.bdcIds.indexOf(draggedBdcId)
+  if (localDraggedBdcId !== null && sourceIndex < 0) return null
   const bounds = target.getBoundingClientRect()
   const position = event.clientY < bounds.top + bounds.height / 2 ? 'before' : 'after'
   const targetInsertionIndex = targetIndex + (position === 'after' ? 1 : 0)
-  const index = sourceIndex < targetInsertionIndex ? targetInsertionIndex - 1 : targetInsertionIndex
+  const index = sourceIndex >= 0 && sourceIndex < targetInsertionIndex
+    ? targetInsertionIndex - 1
+    : targetInsertionIndex
   if (sourceIndex === index) return null
-  if (!state.canMoveBdcToPage(state.current.view.documentModel, draggedBdcId, page.id, index)) return null
+  if (draggedBdcId !== null
+    && !state.canMoveBdcToPage(state.current.view.documentModel, draggedBdcId, page.id, index)) return null
   return { index, targetId: `elce-page-bdc-navigation-drop-${bdcId}-${position}` }
 }
 
-/** Highlights an icon's before/after edge while a page BDC is dragged over it. */
+/** Highlights an icon's insertion edge for a catalog drop or page BDC move. */
 function dragOverBdcNavigationItem(
   event: DragEvent,
   bdcId: string,

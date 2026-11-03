@@ -18,6 +18,11 @@ import { LearningPageEditor } from '../authoring/learning-page-editor'
 import { buildFluxScene } from '../../../resources/pages/flux/flux-scene-builder'
 import { createLearningSceneBuilders } from '../reading/learning-scene-builders'
 import { anchorNameFor } from '../../../domain/anchor/anchor-position'
+import { applyDocumentCommand } from '../../../domain/commands/document-commands'
+import { learningDocumentService } from '../document/learning-document-service'
+import { learningPreviewService } from '../preview/learning-preview-service'
+import { INITIAL_PROJECT_TEST_STATE } from '../reading/learning-test-state-types'
+import type { SightyRuntimeApi } from '@codplay/sighty'
 
 const editorSettingsResolver = new ElceEditorSettingsResolver()
 
@@ -66,6 +71,100 @@ describe('Remix production Section editor', () => {
     else Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', originalScrollIntoView)
     originalScrollIntoView = undefined
     vi.restoreAllMocks()
+  })
+
+  it('persists the leader toolbar command, restores it with Undo/Redo and mounts its markup in the real player', async ({ onTestFinished }) => {
+    const controller = createActor(controllerMachine, { input: { documentStore: new PendingMediaStore() } })
+    controller.start()
+    controller.send({ type: 'editor.access.activate' })
+    onTestFinished(() => { controller.stop() })
+    const initial = applyDocumentCommand(learningDocumentService.createInitialDocument(), {
+      type: 'bdc.section.update',
+      bdcId: 'bdc-section-1',
+      title: '',
+      markup: '<p id="dot-leader-source"><strong>Libellé</strong><em>38 €</em></p>',
+      content: { type: 'doc', content: [{ type: 'paragraph', content: [
+        { type: 'text', text: 'Libellé', marks: [{ type: 'bold' }] },
+        { type: 'text', text: '38 €', marks: [{ type: 'italic' }] },
+      ] }] },
+    })
+    controller.send({ type: 'document.replace', document: initial })
+    const actions = new LearningEditorFacade(controller)
+
+    /** Mounts the production page editor from the same controller snapshot. */
+    function renderEditor() {
+      return render(<LearningEditorContextProvider controller={controller} actions={actions}>
+        <LearningPageEditor canMoveBdcToPage={actions.authoring.canMoveBdcToPage.bind(actions.authoring)} onOpenAppearanceTarget={() => undefined} />
+      </LearningEditorContextProvider>)
+    }
+
+    const rendered = renderEditor()
+    onTestFinished(() => rendered.cleanup())
+    const editor = getEditor(rendered.$('.ProseMirror'))
+    await rendered.act(() => editor.commands.setTextSelection(8))
+    const button = rendered.$('#elce-section-dot-leader-bdc-section-1')
+    expect(button?.getAttribute('aria-label')).toBe('Points de suite')
+    expect(button?.querySelector('.lucide-ellipsis')).not.toBeNull()
+    await rendered.act(() => button?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    await flush()
+
+    const section = controller.getSnapshot().context.document.bdcs[0]?.section
+    if (section === undefined || section === null) throw new Error('The leader test must retain its Section.')
+    expect(section.content.content[0]?.type).toBe('dotLeaderParagraph')
+    expect(section.markup).toContain('<strong>Libellé</strong>')
+    expect(section.markup).toContain('<em>38 €</em>')
+    expect(section.markup).toContain('elce-dot-leader-rule')
+    expect(rendered.$('#elce-section-dot-leader-bdc-section-1')?.getAttribute('aria-pressed')).toBe('true')
+    expect(rendered.$('#elce-section-dot-leader-style-bdc-section-1')?.textContent).toContain('align-items: baseline;')
+    expect(getEditor(rendered.$('.ProseMirror'))).toBe(editor)
+
+    await rendered.act(() => controller.send({ type: 'history.undo' }))
+    await flush()
+    expect(controller.getSnapshot().context.document.bdcs[0]?.section?.content.content[0]?.type).toBe('paragraph')
+    expect(editor.state.doc.firstChild?.type.name).toBe('paragraph')
+    expect(rendered.$('#elce-section-dot-leader-bdc-section-1')?.getAttribute('aria-pressed')).toBe('false')
+    await rendered.act(() => controller.send({ type: 'history.redo' }))
+    await flush()
+    expect(controller.getSnapshot().context.document.bdcs[0]?.section).toEqual(section)
+    expect(editor.state.doc.firstChild?.type.name).toBe('dotLeaderParagraph')
+
+    const saved = learningDocumentService.writeDocument(controller.getSnapshot().context.document)
+    const decoded = learningDocumentService.readDocument(JSON.parse(JSON.stringify(saved)))
+    expect(decoded.bdcs[0]?.section).toEqual(section)
+    rendered.cleanup()
+    expect(editor.isDestroyed).toBe(true)
+    const reopened = renderEditor()
+    onTestFinished(() => reopened.cleanup())
+    const reopenedEditor = getEditor(reopened.$('.ProseMirror'))
+    expect(reopenedEditor.getJSON()).toEqual(section.content)
+    expect(reopenedEditor.getHTML()).toBe(section.markup)
+    reopened.cleanup()
+
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    onTestFinished(() => stage.remove())
+    const player = learningPreviewService.createPlayer(stage, {
+      documentModel: decoded,
+      selectedPageId: 'page-a',
+      mediaSources: {},
+      testState: { ...INITIAL_PROJECT_TEST_STATE, profileEnabled: false },
+    })
+    if (player === null) throw new Error('The leader test must create the real Flux player.')
+    onTestFinished(() => player.destroy())
+    await player.initialize()
+    expect(stage.querySelector('.elce-dot-leader-paragraph')?.textContent).toBe('Libellé38 €')
+    expect(stage.querySelector('.elce-dot-leader-rule')?.getAttribute('aria-hidden')).toBe('true')
+    expect(stage.querySelector('strong')?.textContent).toBe('Libellé')
+    expect(Array.from(document.querySelectorAll('style')).some((style) => style.textContent?.includes('border-block-end: 1px dotted currentColor'))).toBe(true)
+
+    const runtime = (player as unknown as { runtime: { api: SightyRuntimeApi } }).runtime.api
+    const instance = runtime.getInstance('scene-page-a')
+    if (instance === undefined) throw new Error('The leader test must mount the real CodPlay page instance.')
+    await instance.telco.pause()
+    await instance.telco.seek(0)
+    await instance.telco.play()
+    expect(stage.querySelector('.elce-dot-leader-paragraph')?.textContent).toBe('Libellé38 €')
+    expect(stage.querySelectorAll('.elce-dot-leader-rule')).toHaveLength(1)
   })
 
   it('keeps Tiptap mounted while Remix commands edit the Section and import an anchored image through XState', async () => {

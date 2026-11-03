@@ -65,6 +65,12 @@
   padding: 0 0.25rem;
 }
 
+.elce-workspace-primary-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
 .elce-responsive-panel-toggle {
   display: none;
 }

@@ -18,6 +18,8 @@ export interface EditorFrameProps {
   readonly editable?: boolean
   readonly onSetPanelVisibility: (panel: EditorPanelName, open: boolean, triggerId?: string) => void
   readonly onPreview: () => void
+  readonly workspaceAction: RemixNode
+  readonly workspaceOverlay: RemixNode
   readonly previewError: string | null
   readonly exportBusy: boolean
   readonly exportKind: 'sighty' | 'scorm' | null
@@ -43,6 +45,7 @@ export function renderEditorFrame(props: EditorFrameProps): RemixNode {
       </div>
       {props.rightPanel}
     </main>
+    {props.workspaceOverlay}
   </div>
 }
 
@@ -55,7 +58,10 @@ function renderWorkspaceAccess(props: EditorFrameProps): RemixNode {
       aria-label="Commandes de l’éditeur"
     >
       {renderPanelToggle('outline', props.panelVisibility, props.onSetPanelVisibility)}
-      {renderPreviewButton(props.onPreview)}
+      <div id="elce-workspace-primary-actions" className="elce-workspace-primary-actions">
+        {renderPreviewButton(props.onPreview)}
+        {props.workspaceAction}
+      </div>
       {renderPanelToggle('properties', props.panelVisibility, props.onSetPanelVisibility)}
     </nav>
     {props.previewError === null ? null : <p

@@ -5,6 +5,7 @@ import { CARD_BDC_TYPE, CARD_PRESET_ID } from '../../bdcs/card/card-config'
 import { CAROUSEL_BDC_TYPE } from '../../bdcs/carousel/carousel-config'
 import { QUESTION_BDC_TYPE, QUESTION_EVENTS } from '../../bdcs/question/question-config'
 import { SECTION_BDC_TYPE } from '../../bdcs/section/section-config'
+import { DOT_LEADER_STYLE_SHEET } from '../../bdcs/section/dot-leader/dot-leader-style'
 import { STATISTICAL_GRAPH_BDC_TYPE } from '../../bdcs/statistical-graph/statistical-graph-config'
 import { FLUX_PAGE_TYPE } from './flux-config'
 import { DIAPO_PAGE_TYPE } from '../diapo/diapo-config'
@@ -216,6 +217,7 @@ function buildFluxPageScene(page: ContentPage, bdcs: readonly ResourceBdc[], opt
       ]),
       ...anchoredGraphStyleSheets,
       ...(anchorStyleSheet.length === 0 ? [] : [anchorStyleSheet]),
+      ...(mounts.some((mount) => mount.bdc.type === SECTION_BDC_TYPE) ? [DOT_LEADER_STYLE_SHEET] : []),
     ],
     ...(questionMount?.questionResetEvent === undefined ? {} : { questionReset: { eventName: questionMount.questionResetEvent } }),
   }

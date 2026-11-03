@@ -21,8 +21,6 @@ export function renderScenarioPanel(props: ScenarioPanelProps): RemixNode {
   const { view, actions, responsivePanel } = workspace
   const panelVisibility = workspace.panelVisibility
     ?? workspacePanelVisibilityFromResponsiveState(responsivePanel, typeof window === 'undefined' ? 1280 : window.innerWidth)
-  const selectedPageId = view.selectedChapter === undefined ? view.selectedPage?.id : undefined
-
   return <section
     id="elce-outline"
     className="elce-panel elce-outline"
@@ -80,18 +78,27 @@ export function renderScenarioPanel(props: ScenarioPanelProps): RemixNode {
         Glissez une page pour la déplacer ou la réordonner.
       </p>
       {renderScenarioEntryList(props, view.documentModel.data.scenarioEntries)}
-      <section
-        id="elce-catalog-pages"
-        className="elce-outline-group"
-      >
-        <h2
-          id="elce-catalog-pages-title"
-        >
-          Catalogue de pages
-        </h2>
-        {renderPageList(props, 'elce-catalog-page-list', view.documentModel.data.catalogPageIds, 'Déposer une page ici', () => ({ kind: PAGE_LOCATION.CATALOG }), selectedPageId)}
-      </section>
     </div>
+  </section>
+}
+
+/** Renders the existing page catalog list for the floating catalog palette. */
+export function renderScenarioPageCatalog(props: ScenarioPanelProps): RemixNode {
+  const { view } = props.workspace
+  const selectedPageId = view.selectedChapter === undefined ? view.selectedPage?.id : undefined
+  return <section
+    id="elce-catalog-pages"
+    className="elce-outline-group"
+  >
+    <h2 id="elce-catalog-pages-title">Catalogue de pages</h2>
+    {renderPageList(
+      props,
+      'elce-catalog-page-list',
+      view.documentModel.data.catalogPageIds,
+      'Déposer une page ici',
+      () => ({ kind: PAGE_LOCATION.CATALOG }),
+      selectedPageId,
+    )}
   </section>
 }
 

@@ -17,6 +17,33 @@ describe('SectionTiptapAdapter', () => {
     vi.restoreAllMocks()
   })
 
+  it('keeps the existing anchor node and its attributes while formatting and restoring its paragraph', () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    adapter = new SectionTiptapAdapter(host, {
+      bdcId: 'bdc-section-leader-anchor',
+      section: createSectionWithAnchor(),
+      anchorOptions: { presetBuilder: createAnchorTestPresetBuilder() },
+      onChange: () => undefined,
+      onToolbarState: () => undefined,
+    })
+    const original = adapter.editor.getJSON()
+    adapter.editor.commands.setTextSelection(1)
+    adapter.editor.commands.toggleDotLeader()
+    expect(adapter.editor.getJSON().content?.[0]).toMatchObject({
+      type: 'dotLeaderParagraph',
+      content: [
+        { type: 'dotLeaderText' },
+        { type: 'dotLeaderText', content: original.content?.[0]?.content },
+      ],
+    })
+    expect(host.querySelectorAll('.elce-anchor')).toHaveLength(1)
+    expect(adapter.editor.getHTML()).toContain('data-elce-anchor="true"')
+    adapter.editor.commands.toggleDotLeader()
+    expect(adapter.editor.getJSON()).toEqual(original)
+    expect(host.querySelectorAll('.elce-anchor')).toHaveLength(1)
+  })
+
   it('submits a cached image ratio update as a derived anchor change', async () => {
     vi.spyOn(HTMLImageElement.prototype, 'complete', 'get').mockReturnValue(true)
     vi.spyOn(HTMLImageElement.prototype, 'naturalWidth', 'get').mockReturnValue(900)

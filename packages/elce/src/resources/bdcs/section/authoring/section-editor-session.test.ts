@@ -55,6 +55,7 @@ describe('SectionEditorSession', () => {
       subscript: false,
       superscript: false,
       paragraph: false,
+      dotLeader: false,
       headingLevel: 0,
       textAlign: null,
     })

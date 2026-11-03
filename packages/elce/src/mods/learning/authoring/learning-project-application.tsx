@@ -5,6 +5,7 @@ import { LearningEditorContextProvider } from '../composition/learning-editor-co
 import type { LearningEditorFacade } from './learning-editor-facade'
 import { editorViewModelEqual, type LearningAuthoringService } from './learning-authoring-service'
 import { CATALOG_TAB } from './learning-authoring-config'
+import type { CatalogPaletteTab } from './learning-authoring-config'
 import { PopupPreviewHost } from '../../../core/preview/popup-preview-host'
 import { learningDocumentService } from '../document/learning-document-service'
 import type { LearningDocument } from '../document/learning-document'
@@ -84,6 +85,18 @@ export function LearningProjectApplication(handle: Handle) {
   const setSidePanelTab = (tab: SidePanelTab): void => {
     if (sidePanelTab === tab) return
     sidePanelTab = tab
+    void handle.update()
+  }
+  const setCatalogPaletteOpen = (isOpen: boolean): void => {
+    if (learningWorkspaceState.catalogPaletteOpen === isOpen) return
+    learningWorkspaceState.catalogPaletteOpen = isOpen
+    if (!isOpen) dropTarget = null
+    void handle.update()
+  }
+  const setCatalogPaletteTab = (tab: CatalogPaletteTab): void => {
+    if (learningWorkspaceState.catalogPaletteTab === tab) return
+    learningWorkspaceState.catalogPaletteTab = tab
+    dropTarget = null
     void handle.update()
   }
   const openAppearanceTarget = (target: AppearanceTarget, triggerId: string): void => {
@@ -309,6 +322,8 @@ export function LearningProjectApplication(handle: Handle) {
     sidePanelTab,
     appearanceTarget,
     summarySettingsOpen: learningWorkspaceState.summarySettingsOpen,
+    catalogPaletteOpen: learningWorkspaceState.catalogPaletteOpen,
+    catalogPaletteTab: learningWorkspaceState.catalogPaletteTab,
     profileDraft: learningWorkspaceState.profileDraft,
     getProfileDraft: () => learningWorkspaceState.profileDraft,
     profileTokenTargetId: learningWorkspaceState.profileTokenTargetId,
@@ -321,6 +336,8 @@ export function LearningProjectApplication(handle: Handle) {
     setSidePanelTab,
     openAppearanceTarget,
     setSummarySettingsOpen,
+    setCatalogPaletteOpen,
+    setCatalogPaletteTab,
     setProfileDraft,
     setAuthoringError,
     setDropTarget,
@@ -450,6 +467,8 @@ function renderApplication(
       sidePanelTab: workspace.sidePanelTab,
       appearanceTarget: workspace.appearanceTarget,
       summarySettingsOpen: workspace.summarySettingsOpen,
+      catalogPaletteOpen: workspace.catalogPaletteOpen,
+      catalogPaletteTab: workspace.catalogPaletteTab,
       profileDraft: workspace.profileDraft,
       getProfileDraft: workspace.getProfileDraft,
       profileTokenTargetId: workspace.profileTokenTargetId,
@@ -463,6 +482,8 @@ function renderApplication(
       onSetSidePanelTab: workspace.setSidePanelTab,
       onOpenAppearanceTarget: workspace.openAppearanceTarget,
       onSetSummarySettingsOpen: workspace.setSummarySettingsOpen,
+      onSetCatalogPaletteOpen: workspace.setCatalogPaletteOpen,
+      onSetCatalogPaletteTab: workspace.setCatalogPaletteTab,
       onSetProfileDraft: workspace.setProfileDraft,
       onSetAuthoringError: workspace.setAuthoringError,
       onSetDropTarget: workspace.setDropTarget,

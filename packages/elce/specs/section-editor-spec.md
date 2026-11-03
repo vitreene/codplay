@@ -24,6 +24,8 @@ La surface Tiptap propose dans le POC :
 - les paragraphes et les niveaux de titre `h1` à `h6` ;
 - gras, italique, souligné, indice et exposant ;
 - alignements gauche, centré, droite et justifié ;
+- [points de suite](./section-dot-leader-spec.md) : commande « … » appliquée
+  au paragraphe entier, avec deux zones de texte et un filet extensible ;
 - une barre de commandes compacte en icônes Lucide, avec `aria-label` et
   infobulle pour chaque commande. Les boutons exposent l’état actif de la
   sélection courante via Tiptap (`aria-pressed` et `data-active`) ; un titre H3

@@ -9,6 +9,7 @@ import type { ElceSectionChange } from '../../../anchoring/domain/anchor-types'
 import { ELCE_ANCHOR_TRANSACTION_META } from '../../../anchoring/authoring/elce-anchor-extension'
 import type { ElceAnchorTransaction } from '../../../anchoring/authoring/anchor-types'
 import type { ElceTextValue } from '../../../document/rich-text-types'
+import { DotLeaderParagraph } from '../dot-leader/dot-leader-extension'
 
 export type SectionToolbarTextAlign = 'left' | 'center' | 'right' | 'justify'
 
@@ -20,6 +21,7 @@ export type SectionToolbarState = Readonly<{
   readonly superscript: boolean
   readonly headingLevel: number | null
   readonly paragraph: boolean
+  readonly dotLeader: boolean
   readonly textAlign: SectionToolbarTextAlign | null
 }>
 
@@ -31,6 +33,7 @@ export const EMPTY_SECTION_TOOLBAR_STATE: SectionToolbarState = {
   superscript: false,
   headingLevel: null,
   paragraph: false,
+  dotLeader: false,
   textAlign: null,
 }
 
@@ -56,6 +59,7 @@ export const SECTION_EDITOR_EXTENSIONS = [
   TextAlign.configure({ types: ['heading', 'paragraph'] }),
   Subscript,
   Superscript,
+  DotLeaderParagraph,
 ]
 
 /** Creates the minimum rich-text document accepted by a Section. */
@@ -108,6 +112,7 @@ export function readSectionToolbarState(editor: Editor): SectionToolbarState {
     superscript: editor.isActive('superscript'),
     headingLevel,
     paragraph: editor.isActive('paragraph'),
+    dotLeader: editor.isActive('dotLeaderParagraph'),
     textAlign: readSectionTextAlign(editor),
   }
 }
