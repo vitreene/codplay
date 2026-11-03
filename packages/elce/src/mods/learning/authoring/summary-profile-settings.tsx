@@ -44,21 +44,37 @@ export function renderSummaryProfileSettings(props: SummaryProfileSettingsProps)
       className="elce-summary-profile-settings__heading"
     >
       <h1 id="elce-summary-profile-settings-title">Sommaire</h1>
-      <button
-        id="elce-summary-profile-settings-save"
-        type={summaryProfileEditingEnabled ? 'submit' : 'button'}
-        form={summaryProfileEditingEnabled ? 'elce-profile-constraints-form' : undefined}
-        mix={on<HTMLButtonElement, 'click'>('click', () => {
-          if (!summaryProfileEditingEnabled) props.onClose()
-        })}
+      {summaryProfileEditingEnabled ? null : <button
+        id="elce-summary-profile-settings-close"
+        type="button"
+        mix={on<HTMLButtonElement, 'click'>('click', props.onClose)}
       >
-        Enregistrer
-      </button>
+        Fermer
+      </button>}
     </div>
     {props.error === null ? null : <p id="elce-summary-profile-error" role="alert">{props.error}</p>}
     {renderSummarySettings(props)}
-    {summaryProfileEditingEnabled ? renderProfileProperties(props) : null}
-    {summaryProfileEditingEnabled ? renderConstraintWorkspace(props) : null}
+    {summaryProfileEditingEnabled ? <section
+      id="elce-summary-profile-saved-part"
+      className="elce-summary-profile-settings__saved-part"
+      aria-labelledby="elce-summary-profile-saved-part-title"
+    >
+      <div
+        id="elce-summary-profile-saved-part-heading"
+        className="elce-summary-profile-settings__saved-part-heading"
+      >
+        <h2 id="elce-summary-profile-saved-part-title">Sommaire et profil</h2>
+        <button
+          id="elce-summary-profile-settings-save"
+          type="submit"
+          form="elce-profile-constraints-form"
+        >
+          Enregistrer
+        </button>
+      </div>
+      {renderProfileProperties(props)}
+      {renderConstraintWorkspace(props)}
+    </section> : null}
   </section>
 }
 

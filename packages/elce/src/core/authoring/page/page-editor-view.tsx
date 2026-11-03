@@ -1,16 +1,24 @@
 import { on, type RemixNode } from 'remix/ui'
-import { GripVertical } from 'lucide-static'
 import type { ContentPage } from '../../document/content-document-types'
 import type { ResourceTextFieldFeature } from '../resource-text-field-feature'
 import type { AuthoredTextValue } from '../../document/rich-text-types'
 import type { AppearanceTarget } from '../../../domain/appearance/appearance-target-types'
 import { renderLucideIcon } from '../lucide-static-icon'
+import { Plus, Trash2 } from 'lucide-static'
 import { renderAppearanceTrigger } from '../appearance-trigger'
 
 export interface PageEditorViewProps<TPage extends ContentPage = ContentPage> {
   readonly page: TPage | undefined
-  readonly sequence: readonly Readonly<{ bdcId: string; index: number }>[]
-  readonly pageToolbar: RemixNode
+  readonly sequence: readonly Readonly<{
+    bdcId: string
+    index: number
+    navigationIcon: RemixNode
+    navigationLabel: string
+  }>[]
+  readonly addContentMenu: RemixNode
+  readonly isAddContentMenuOpen: boolean
+  readonly trashAnimationToken: number
+  readonly onToggleAddContentMenu: () => void
   readonly dropTarget: string | null
   readonly chapterTitle: RemixNode | null
   readonly renderPageTypeMark: (page: TPage) => RemixNode
@@ -20,30 +28,33 @@ export interface PageEditorViewProps<TPage extends ContentPage = ContentPage> {
   readonly renderBdcEditor: (bdcId: string, index: number) => RemixNode
   readonly onStartBdcDrag: (event: DragEvent, bdcId: string) => void
   readonly onEndBdcDrag: () => void
+  readonly onDragOverBdcNavigationItem: (event: DragEvent, bdcId: string, index: number) => void
+  readonly onDropBdcNavigationItem: (event: DragEvent, bdcId: string, index: number) => void
+  readonly onDragOverBdcTrash: (event: DragEvent) => void
+  readonly onDropBdcTrash: (event: DragEvent) => void
   readonly onDragOverSeparator: (event: DragEvent, targetId: string, index: number) => void
-  readonly onDragLeaveSeparator: (event: DragEvent) => void
+  readonly onDragLeaveDropTarget: (event: DragEvent) => void
   readonly onDropBdc: (event: DragEvent, index: number) => void
 }
 
-/** Renders the shared page heading, ordered BDC host and insertion separators. */
+/** Renders the page controls, heading, ordered BDC host and insertion separators. */
 export function renderPageEditorView<TPage extends ContentPage>(props: PageEditorViewProps<TPage>): RemixNode {
   const page = props.page
-  return <section id="elce-work-area" className="elce-panel elce-work-area">
-    <div id="elce-work-area-heading" className="elce-work-area-heading">
-      <div id="elce-work-area-title-row" className="elce-work-area-title-row">
-        <div id="elce-work-area-actions" className="elce-work-area-actions">
-          {props.pageToolbar}
-        </div>
-        <div id="elce-work-area-titles" className="elce-work-area-titles">
-          {props.chapterTitle}
-          {renderPageTitle(page, props.renderPageTypeMark, props.textFieldFeature, props.onRenamePage, props.onOpenAppearanceTarget)}
+  return <div id="elce-page-editor-layout" className="elce-page-editor-layout">
+    <section id="elce-work-area" className="elce-panel elce-work-area">
+      <div id="elce-work-area-heading" className="elce-work-area-heading">
+        <div id="elce-work-area-title-row" className="elce-work-area-title-row">
+          <div id="elce-work-area-titles" className="elce-work-area-titles">
+            {props.chapterTitle}
+            {renderPageTitle(page, props.renderPageTypeMark, props.textFieldFeature, props.onRenamePage, props.onOpenAppearanceTarget)}
+          </div>
         </div>
       </div>
-    </div>
-    {page === undefined
-      ? <p id="elce-editor-unavailable">Sélectionnez une page du scénario.</p>
-      : renderPageBdcSequence(page, props)}
-  </section>
+      {page === undefined
+        ? <p id="elce-editor-unavailable">Sélectionnez une page du scénario.</p>
+        : renderPageBdcLayout(page, props)}
+    </section>
+  </div>
 }
 
 /** Renders the page title and its keyboard-accessible style entry point. */
@@ -89,28 +100,130 @@ function renderPageBdcSequence<TPage extends ContentPage>(page: TPage, props: Pa
       ? <p id="elce-editor-unavailable">Cette page ne contient aucun bloc éditable.</p>
       : null}
     {props.sequence.flatMap(({ bdcId, index }) => [
-      renderBdcSeparator(index, props),
-      <div key={bdcId} id={`elce-page-bdc-${bdcId}`} className="elce-page-bdc">
-        <div id={`elce-page-bdc-actions-${bdcId}`} className="elce-page-bdc-actions">
-          <button
-            id={`elce-page-bdc-drag-${bdcId}`}
-            className="elce-bdc-icon-button elce-page-bdc__drag"
-            type="button"
-            draggable={true}
-            aria-label="Déplacer le bloc"
-            title="Glisser pour déplacer ou rendre disponible"
-            mix={[
-              on<HTMLButtonElement, 'dragstart'>('dragstart', (event) => props.onStartBdcDrag(event, bdcId)),
-              on<HTMLButtonElement, 'dragend'>('dragend', props.onEndBdcDrag),
-            ]}
-          >
-            {renderLucideIcon(GripVertical, `elce-page-bdc-drag-icon-${bdcId}`)}
-          </button>
-        </div>
-        {props.renderBdcEditor(bdcId, index)}
-      </div>,
+      index === 0 ? null : renderBdcSeparator(index, props),
+      renderPageBdc<TPage>(bdcId, index, props),
     ])}
     {renderBdcSeparator(page.bdcIds.length, props)}
+  </div>
+}
+
+/** Renders the sticky type-icon rail beside the existing direct BDC sequence. */
+function renderPageBdcLayout<TPage extends ContentPage>(page: TPage, props: PageEditorViewProps<TPage>): RemixNode {
+  return <div id={`elce-page-bdc-layout-${page.id}`} className="elce-page-bdc-layout">
+    {renderBdcSeparator(0, props)}
+    <nav
+      id={`elce-page-bdc-navigation-${page.id}`}
+      className="elce-page-bdc-navigation"
+      aria-label="Navigation des blocs de la page"
+    >
+      {props.sequence.map((entry) => renderBdcNavigationItem(entry, props))}
+      {renderAddContentMenu(page.id, props)}
+      {renderBdcTrash(page.id, props)}
+    </nav>
+    {renderPageBdcSequence(page, props)}
+  </div>
+}
+
+/** Renders a borderless drop target that permanently deletes a direct page BDC. */
+function renderBdcTrash<TPage extends ContentPage>(pageId: string, props: PageEditorViewProps<TPage>): RemixNode {
+  const id = `elce-page-bdc-trash-${pageId}`
+  const classNames = [
+    'elce-page-bdc-trash',
+    ...(props.dropTarget === `${id}-drop` ? ['elce-page-bdc-trash--drop-target'] : []),
+  ]
+  return <div
+    id={id}
+    className={classNames.join(' ')}
+    role="region"
+    aria-label="Corbeille : déposer un bloc pour le supprimer"
+    title="Déposer un bloc ici pour le supprimer"
+    mix={[
+      on<HTMLElement, 'dragover'>('dragover', props.onDragOverBdcTrash),
+      on<HTMLElement, 'dragleave'>('dragleave', props.onDragLeaveDropTarget),
+      on<HTMLElement, 'drop'>('drop', props.onDropBdcTrash),
+    ]}
+  >
+    <span
+      key={props.trashAnimationToken}
+      id={`elce-page-bdc-trash-icon-${pageId}`}
+      className={props.trashAnimationToken === 0
+        ? 'elce-page-bdc-trash__icon'
+        : 'elce-page-bdc-trash__icon elce-page-bdc-trash__icon--success'}
+      aria-hidden={true}
+    >
+      {renderLucideIcon(Trash2, `elce-page-bdc-trash-symbol-${pageId}`)}
+    </span>
+  </div>
+}
+
+/** Renders the final rail control and the existing BDC creation commands. */
+function renderAddContentMenu<TPage extends ContentPage>(pageId: string, props: PageEditorViewProps<TPage>): RemixNode {
+  const menuId = `elce-page-bdc-add-menu-${pageId}`
+  return <div id={`elce-page-bdc-add-${pageId}`} className="elce-page-bdc-add">
+    <button
+      id={`elce-page-bdc-add-toggle-${pageId}`}
+      className="elce-bdc-icon-button elce-page-bdc-add-toggle"
+      type="button"
+      aria-label="Ajouter un contenu"
+      title="Ajouter un contenu"
+      aria-expanded={props.isAddContentMenuOpen}
+      aria-controls={menuId}
+      mix={on<HTMLButtonElement, 'click'>('click', props.onToggleAddContentMenu)}
+    >
+      {renderLucideIcon(Plus, `elce-page-bdc-add-icon-${pageId}`)}
+    </button>
+    <div
+      id={menuId}
+      className="elce-page-bdc-add-menu"
+      role="group"
+      aria-label="Ajouter un contenu"
+      hidden={!props.isAddContentMenuOpen}
+    >
+      {props.addContentMenu}
+    </div>
+  </div>
+}
+
+/** Renders one BDC point that navigates, reorders and returns the same BDC. */
+function renderBdcNavigationItem<TPage extends ContentPage>(
+  entry: PageEditorViewProps<TPage>['sequence'][number],
+  props: PageEditorViewProps<TPage>,
+): RemixNode {
+  const beforeDropTarget = `elce-page-bdc-navigation-drop-${entry.bdcId}-before`
+  const afterDropTarget = `elce-page-bdc-navigation-drop-${entry.bdcId}-after`
+  const classNames = [
+    'elce-bdc-icon-button',
+    'elce-page-bdc-navigation-item',
+    ...(props.dropTarget === beforeDropTarget ? ['elce-page-bdc-navigation-item--drop-before'] : []),
+    ...(props.dropTarget === afterDropTarget ? ['elce-page-bdc-navigation-item--drop-after'] : []),
+  ]
+  return <button
+    key={entry.bdcId}
+    id={`elce-page-bdc-drag-${entry.bdcId}`}
+    className={classNames.join(' ')}
+    type="button"
+    draggable={true}
+    aria-label={`Aller au bloc ${entry.navigationLabel} ${entry.index + 1}`}
+    title={`Bloc ${entry.index + 1} · ${entry.navigationLabel} : cliquer pour atteindre, glisser pour réordonner ou rendre disponible`}
+    mix={[
+      on<HTMLButtonElement, 'click'>('click', () => {
+        document.getElementById(`elce-page-bdc-${entry.bdcId}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+      }),
+      on<HTMLButtonElement, 'dragstart'>('dragstart', (event) => props.onStartBdcDrag(event, entry.bdcId)),
+      on<HTMLButtonElement, 'dragover'>('dragover', (event) => props.onDragOverBdcNavigationItem(event, entry.bdcId, entry.index)),
+      on<HTMLButtonElement, 'dragleave'>('dragleave', props.onDragLeaveDropTarget),
+      on<HTMLButtonElement, 'drop'>('drop', (event) => props.onDropBdcNavigationItem(event, entry.bdcId, entry.index)),
+      on<HTMLButtonElement, 'dragend'>('dragend', props.onEndBdcDrag),
+    ]}
+  >
+    {entry.navigationIcon}
+  </button>
+}
+
+/** Renders one BDC at its stable identity in the page sequence. */
+function renderPageBdc<TPage extends ContentPage>(bdcId: string, index: number, props: PageEditorViewProps<TPage>): RemixNode {
+  return <div key={bdcId} id={`elce-page-bdc-${bdcId}`} className="elce-page-bdc">
+    {props.renderBdcEditor(bdcId, index)}
   </div>
 }
 
@@ -124,7 +237,7 @@ function renderBdcSeparator<TPage extends ContentPage>(index: number, props: Pag
     aria-label="Déposer le bloc à cet endroit"
     mix={[
       on<HTMLElement, 'dragover'>('dragover', (event) => props.onDragOverSeparator(event, id, index)),
-      on<HTMLElement, 'dragleave'>('dragleave', props.onDragLeaveSeparator),
+      on<HTMLElement, 'dragleave'>('dragleave', props.onDragLeaveDropTarget),
       on<HTMLElement, 'drop'>('drop', (event) => props.onDropBdc(event, index)),
     ]}
   >

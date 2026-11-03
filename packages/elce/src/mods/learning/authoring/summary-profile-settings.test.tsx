@@ -103,6 +103,7 @@ describe('Sommaire et profils auteur', () => {
     expect(rendered.$('#elce-profile-properties')).toBeNull()
     expect(rendered.$('#elce-profile-constraint-layout')).toBeNull()
     expect(rendered.$('#elce-profile-constraints-form')).toBeNull()
+    expect(rendered.$('#elce-summary-profile-settings-save')).toBeNull()
 
     const title = rendered.$('#elce-summary-title') as HTMLInputElement
     await rendered.act(() => {
@@ -111,7 +112,7 @@ describe('Sommaire et profils auteur', () => {
     })
     expect(controller.getSnapshot().context.document.data.summary.title).toBe('Sommaire modifié')
 
-    await rendered.act(() => rendered.$('#elce-summary-profile-settings-save')?.dispatchEvent(new Event('click', { bubbles: true })))
+    await rendered.act(() => rendered.$('#elce-summary-profile-settings-close')?.dispatchEvent(new Event('click', { bubbles: true })))
     expect(onClose).toHaveBeenCalledOnce()
     expect(controller.getSnapshot().context.document.data.profile.properties).toEqual([property])
     expect(controller.getSnapshot().context.document.data.profile.constraints).toEqual([constraint])

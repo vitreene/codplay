@@ -1,9 +1,9 @@
 @scope (.elce-player-layout) {
   .density-large.bdc :is(p, li, blockquote, dd, dt, figcaption, label, legend) {
-    font-size: max(0.95rem, 2.76cqi);
+    font-size: max(0.95rem, var(--elce-reading-font-size-cqi));
   }
   .density-large.bdc .elce-card__copy {
-    font-size: max(0.95rem, 2.76cqi);
+    font-size: max(0.95rem, var(--elce-reading-font-size-cqi));
   }
 
   .density-large.page-flux.has-background { padding: 2.5rem; }

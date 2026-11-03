@@ -110,41 +110,46 @@ export function renderRemixSectionEditor(
     className="elce-section-editor"
   >
     <div
-      id={`elce-section-heading-${bdc.id}`}
-      className="elce-section-heading"
+      id={`elce-section-sticky-header-${bdc.id}`}
+      className="elce-section-sticky-header"
     >
-      {state.textFieldFeature.render({
-        id: `elce-section-title-${bdc.id}`,
-        className: 'elce-section-title-input',
-        ariaLabel: 'Titre de section',
-        placeholder: 'Titre',
-        value: section.title,
-        onChange: (title) => state.session.adapters.get(bdc.id)?.updateTitle(title),
-      })}
       <div
-        id={`elce-section-header-actions-${bdc.id}`}
-        className="elce-bdc-header-actions"
+        id={`elce-section-heading-${bdc.id}`}
+        className="elce-section-heading"
       >
-        {renderAppearanceTrigger({
-          id: `elce-section-style-${bdc.id}`,
-          target: { kind: 'bdc', bdcId: bdc.id },
-          label: `Ouvrir le style de la section ${authoredTextToPlainText(section.title).trim() || ''}`,
-          onOpen: state.onOpenAppearanceTarget,
-          className: 'elce-appearance-trigger elce-bdc-style-trigger',
+        {state.textFieldFeature.render({
+          id: `elce-section-title-${bdc.id}`,
+          className: 'elce-section-title-input',
+          ariaLabel: 'Titre de section',
+          placeholder: 'Titre',
+          value: section.title,
+          onChange: (title) => state.session.adapters.get(bdc.id)?.updateTitle(title),
         })}
-        <button
-          id={`elce-section-delete-${bdc.id}`}
-          className="elce-bdc-icon-button elce-bdc-icon-button--danger"
-          type="button"
-          aria-label="Supprimer le bloc texte"
-          title="Supprimer le bloc texte"
-          mix={on<HTMLButtonElement, 'click'>('click', () => actions.deleteSection(bdc.id))}
+        <div
+          id={`elce-section-header-actions-${bdc.id}`}
+          className="elce-bdc-header-actions"
         >
-          {renderLucideIcon(Trash2, `elce-section-delete-icon-${bdc.id}`)}
-        </button>
+          {renderAppearanceTrigger({
+            id: `elce-section-style-${bdc.id}`,
+            target: { kind: 'bdc', bdcId: bdc.id },
+            label: `Ouvrir le style de la section ${authoredTextToPlainText(section.title).trim() || ''}`,
+            onOpen: state.onOpenAppearanceTarget,
+            className: 'elce-appearance-trigger elce-bdc-style-trigger',
+          })}
+          <button
+            id={`elce-section-delete-${bdc.id}`}
+            className="elce-bdc-icon-button elce-bdc-icon-button--danger"
+            type="button"
+            aria-label="Supprimer le bloc texte"
+            title="Supprimer le bloc texte"
+            mix={on<HTMLButtonElement, 'click'>('click', () => actions.deleteSection(bdc.id))}
+          >
+            {renderLucideIcon(Trash2, `elce-section-delete-icon-${bdc.id}`)}
+          </button>
+        </div>
       </div>
+      {renderToolbar(bdc.id, toolbarState, state.session.adapters, handle)}
     </div>
-    {renderToolbar(bdc.id, toolbarState, state.session.adapters, handle)}
     <div
       key={bdc.id}
       id={`elce-remix-section-editor-host-${bdc.id}`}
@@ -246,7 +251,7 @@ function renderToolbar(
         const editor = adapters.get(bdcId)?.editor
         if (editor === undefined) return
         run(editor)
-        editor.commands.focus()
+        editor.commands.focus(undefined, { scrollIntoView: false })
         if (!handle.signal.aborted) void handle.update()
       })}
     >

@@ -43,7 +43,7 @@ export const CARD_PLAYER_STYLE_RULES = [
   [68, `
 
 .elce-card__copy {
-  font-size: max(0.9rem, 2.76cqi);
+  font-size: max(0.9rem, var(--elce-reading-font-size-cqi));
 }`],
   [69, `
 

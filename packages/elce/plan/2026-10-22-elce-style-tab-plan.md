@@ -4,7 +4,8 @@
 Demo5 est convertie en v7. Le générateur couleur OKLCH de la preview est
 implémenté. Le typecheck et le build du paquet Elcé passent ; Brave confirme
 partiellement les surfaces projet, page et BDC sur écran large et étroit. La
-cible vient d’être ramenée à 60–85 caractères ; son recalibrage reste à faire.
+cible demandée le 3 novembre est un optimum d’environ 75 caractères par ligne,
+avec un maximum visé de 80 ; la calibration réelle reste à valider.
 Le test typographique ciblé passe et la preview confirme ses espacements sur
 grand et petit écran. Le padding Normal des surfaces bordées sans fond est
 appliqué et vérifié sur Question ; Cadre est implémenté, hérité du projet aux
@@ -21,9 +22,10 @@ typecheck et le build Elcé.
 La mesure s’applique à la racine `.bdc` de tous les types. Décision utilisateur
 du 26 octobre : autoriser le bloc à s’étendre jusqu’à `55rem`, quelle
 que soit la densité, et continuer à augmenter la taille du texte au-delà de son
-plafond actuel pour viser 60–85 caractères par ligne. Les planchers de taille
-et les retours à la ligne naturels restent actifs sur écran étroit. La formule
-et ses paramètres sont isolés dans la
+plafond actuel. La cible initiale de 60–85 caractères a été remplacée le
+3 novembre par un optimum autour de 75 et un maximum visé de 80. Les planchers
+de taille et les retours à la ligne naturels restent actifs sur écran étroit.
+La formule et ses paramètres sont isolés dans la
 [spécification de taille responsive](../specs/responsive-text-sizing-spec.md).
 Le recalibrage réel des fontes et la vérification des autres BDC restent ouverts.
 
@@ -139,10 +141,10 @@ le lecteur. L’interface ne propose qu’un duo typographique ; `headingFontId`
    plein cadre. La Question réelle est vérifiée sur grand et petit écran ; une
    fixture Brave contrôle le Carousel et un test CSS protège les deux règles.
 3. **Calibrer.** Mesurer les lignes réelles avec les fontes du projet sur
-   conteneur étroit et jusqu’à la borne `55rem`. Confirmer que la taille qui
-   suit le conteneur garde 60–85 caractères par ligne quand la largeur le
-   permet, sans débordement ni effet de zoom excessif. Le panneau auteur
-   n’ajoute aucun réglage de largeur ou de taille.
+   conteneur étroit et jusqu’à la borne `55rem`. Viser environ 75 caractères
+   par ligne, sans dépasser la cible maximale de 80 quand la largeur le permet,
+   et sans débordement ni effet de zoom excessif. Le panneau auteur n’ajoute
+   aucun réglage de largeur ou de taille.
 4. **Clore.** Mettre les preuves MCP et les résultats de calibration dans cette
    spec, rejouer le contrôle SQLite requis, puis terminer le plan ou garder les
    valeurs à revoir.
@@ -279,7 +281,8 @@ et [`2026-10-25-content-typography-references.md`](../notes/2026-10-25-content-t
   du cadre ; garder 1 rem de padding minimum à l’intérieur du contenu lecteur.
   Les paddings de densité des pages et BDC restent cumulables avec ce minimum.
 - **Décision typographique de l’utilisateur :** lier la taille du texte à la
-  largeur de son vrai conteneur et viser 60–85 caractères par ligne en moyenne.
+  largeur de son vrai conteneur ; la cible initiale était 60–85 caractères par
+  ligne en moyenne.
   La formule du corps et les règles responsive des titres sont isolées dans la
   [spécification de taille responsive](../specs/responsive-text-sizing-spec.md).
   Le facteur `1.41` des titres H1–H6 s’applique aussi aux titres dédiés du
@@ -298,9 +301,10 @@ et [`2026-10-25-content-typography-references.md`](../notes/2026-10-25-content-t
   `.bdc` peut s’élargir jusqu’à `55rem` pour exploiter davantage la
   surface disponible. À mesure que le conteneur s’élargit, la taille du corps
   et des titres continue à suivre ses facteurs `cqi`, au-delà des plafonds
-  actuels, afin de garder la cible de 60–85 caractères par ligne. Les
-  planchers de densité, les lignes courtes sur petit écran et l’absence de
-  contrôle auteur restent inchangés. La règle est implémentée et documentée
+  actuels, afin de garder la cible alors fixée à 60–85 caractères par ligne.
+  Cette cible est remplacée le 3 novembre par un optimum de 75 et un maximum
+  visé de 80. Les planchers de densité, les lignes courtes sur petit écran et
+  l’absence de contrôle auteur restent inchangés. La règle est implémentée et documentée
   dans la
   [spécification de taille responsive](../specs/responsive-text-sizing-spec.md).
   Brave mesure
@@ -348,3 +352,20 @@ et [`2026-10-25-content-typography-references.md`](../notes/2026-10-25-content-t
   titres et leurs nouveaux espacements, enrichissements, fontes, BDC étroits,
   page avec/sans fond, écran étroit, resize et zoom. Recalibrer avec les fontes
   locales et garder la tranche `En cours` jusqu’à cette validation.
+
+## Ajustement de la cible de lecture — 3 novembre 2026
+
+**Décision utilisateur :** viser environ 75 caractères par ligne, avec 80 comme
+maximum visé, en remplacement de la plage précédente 60–85. Cette mesure reste
+approximative selon la fonte et le contenu ; aucun compteur JavaScript ni
+réglage auteur n’est ajouté.
+
+La mesure Brave du 26 octobre donne 76,9 caractères avec `2.76cqi` à la borne
+`55rem`. Après la proposition initiale `2.83cqi`, l’utilisateur a fixé le
+coefficient à `2.9cqi`. Cette valeur est centralisée dans la configuration CSS
+`--elce-reading-font-size-cqi` sur les éléments texte cibles, puis consommée par
+les feuilles du corps, Carte et Question pour conserver la largeur du conteneur
+local. **Validation restante :** mesurer dans la preview
+sur conteneur large, puis vérifier le plancher et l’absence de débordement sur
+écran étroit. Mettre à jour la spécification de taille responsive après cette
+validation.

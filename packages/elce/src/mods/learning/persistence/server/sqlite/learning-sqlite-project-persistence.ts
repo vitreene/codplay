@@ -83,20 +83,20 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
   /** Reports whether the exact page grant still owns a project. */
   public async hasEditAccess(projectId: string, grant: ProjectEditGrant): Promise<boolean> {
     const rows = await queryRows(this.database,
-      'SELECT project_id FROM projects WHERE project_id = ? AND edit_page_id = ? AND edit_grant_id = ? AND edit_lease_expires_at > ?',
-      [projectId, grant.pageId, grant.grantId, Date.now()])
+      'SELECT project_id FROM projects WHERE project_id = ? AND edit_page_id = ? AND edit_grant_id = ?',
+      [projectId, grant.pageId, grant.grantId])
     return rows.length > 0
   }
 
-  /** Renews a still-live grant atomically and refuses renewal after expiration. */
+  /** Renews the exact current grant, including an expired grant not yet replaced. */
   public async renewEditAccess(projectId: string, grant: ProjectEditGrant): Promise<boolean> {
     const now = Date.now()
     return this.database.transaction(async (transaction) => {
       const rows = await queryRows(transaction, `
         UPDATE projects SET edit_lease_expires_at = ?
-        WHERE project_id = ? AND edit_page_id = ? AND edit_grant_id = ? AND edit_lease_expires_at > ?
+        WHERE project_id = ? AND edit_page_id = ? AND edit_grant_id = ?
         RETURNING project_id
-      `, [now + PROJECT_EDIT_LEASE_MS, projectId, grant.pageId, grant.grantId, now])
+      `, [now + PROJECT_EDIT_LEASE_MS, projectId, grant.pageId, grant.grantId])
       return rows.length > 0
     })
   }
@@ -198,6 +198,12 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
         WHERE project_id = ? AND media_id = ? AND storage_key IS NULL
         RETURNING media_id
       `, [storageKey, contentSha256, projectId, mediaId])
+      if (updated.length > 0) {
+        await queryRows(transaction, `
+          UPDATE projects SET edit_lease_expires_at = ?
+          WHERE project_id = ? AND edit_page_id = ? AND edit_grant_id = ?
+        `, [Date.now() + PROJECT_EDIT_LEASE_MS, projectId, grant.pageId, grant.grantId])
+      }
       return updated.length === 0 ? { kind: 'media-changed' } : { kind: 'stored' }
     })
   }
@@ -250,12 +256,13 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
       if (stored === null) return { kind: 'not-found' }
 
       const document = learningDocumentCommandService.applyCommand(stored.document, { type: 'document.rename', name })
+      const now = Date.now()
       const updated = await queryRows(transaction, `
         UPDATE projects
-        SET name = ?, revision = revision + 1, updated_at = ?
+        SET name = ?, revision = revision + 1, updated_at = ?, edit_lease_expires_at = ?
         WHERE project_id = ?
         RETURNING project_id, name, revision
-      `, [document.data.name, new Date().toISOString(), projectId])
+      `, [document.data.name, new Date(now).toISOString(), now + PROJECT_EDIT_LEASE_MS, projectId])
 
       return { kind: 'updated', project: projectSummaryFromRow(requireRow(updated[0], 'Project update did not return a row')) }
     })
@@ -286,10 +293,11 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
       const access = await editGrantState(transaction, projectId, grant)
       if (access === 'not-found') return { kind: 'not-found' }
       if (access === 'lost') return { kind: 'edit-access-lost' }
-      const now = new Date().toISOString()
+      const now = Date.now()
       const updated = await queryRows(transaction, `
         UPDATE projects
         SET name = ?, format_version = ?, revision = revision + 1, updated_at = ?,
+            edit_lease_expires_at = ?,
             default_intro_transition_ref = ?, default_outro_transition_ref = ?,
             summary_json = ?, profile_json = ?, appearance_json = ?
         WHERE project_id = ? AND revision = ?
@@ -297,7 +305,8 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
       `, [
         document.data.name,
         document.data.version,
-        now,
+        new Date(now).toISOString(),
+        now + PROJECT_EDIT_LEASE_MS,
         document.data.revelationDefaults.intro,
         document.data.revelationDefaults.outro,
         JSON.stringify(document.data.summary),
@@ -949,20 +958,18 @@ async function clearDocumentRows(database: ProjectDatabase, projectId: string): 
   await queryRows(database, 'DELETE FROM chapters WHERE project_id = ?', [projectId])
 }
 
-/** Reads the exact editing grant inside the transaction that will mutate data. */
+/** Reads the exact current grant; expiry permits takeover but not stale writes after replacement. */
 async function editGrantState(
   database: ProjectDatabase,
   projectId: string,
   grant: ProjectEditGrant,
 ): Promise<'held' | 'lost' | 'not-found'> {
   const rows = await queryRows(database,
-    'SELECT edit_page_id, edit_grant_id, edit_lease_expires_at FROM projects WHERE project_id = ?', [projectId])
+    'SELECT edit_page_id, edit_grant_id FROM projects WHERE project_id = ?', [projectId])
   const row = rows[0]
   if (row === undefined) return 'not-found'
-  const expiresAt = nullableNumber(row, 'edit_lease_expires_at')
   return nullableText(row, 'edit_page_id') === grant.pageId
     && nullableText(row, 'edit_grant_id') === grant.grantId
-    && expiresAt !== null && expiresAt > Date.now()
     ? 'held' : 'lost'
 }
 

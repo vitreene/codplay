@@ -2,9 +2,10 @@
 
 ## Statut
 
-**Fixe — modèle documentaire v9 ; les structures générales, les commandes et
-invariants de placement sont vérifiés. Sommaire et profils sont décrits dans
-la [spécification dédiée](./summary-profile-spec.md).**
+**Fixe — structure documentaire v10 et invariants de placement vérifiés. La
+validation complète des transitions de Révélation par Carte reste en cours dans
+le [plan de synchronisation locale](../plan/2026-10-06-elce-local-first-synchronisation-plan.md).
+Sommaire et profils sont décrits dans la [spécification dédiée](./summary-profile-spec.md).**
 
 Cette spécification couvre le document métier manipulé par l’application et
 la voie de modification utilisée par l’interface. La projection des cartes
@@ -13,7 +14,7 @@ Flux.
 
 ## Modèle
 
-Un `ElceDocument` version 9 contient des tableaux de chapitres, pages, BDC et
+Un `ElceDocument` version 10 contient des tableaux de chapitres, pages, BDC et
 médias, ainsi que `scenarioEntries`, une séquence ordonnée de références de
 type `page` ou `chapter`. Une page autonome est une entrée racine sœur d’une
 entrée de chapitre ; ces deux formes peuvent alterner dans la même séquence.
@@ -50,18 +51,20 @@ catégorie image/vidéo : l’application déduit celle-ci du MIME. Changer de l
 masque éventuellement des valeurs, mais ne les retire pas du BDC. La création
 propose un Carousel avec sa première Carte enfant.
 
-`ElceDocument` v9 conserve `data.summary`, `data.profile` et les réglages
+`ElceDocument` v10 conserve `data.summary`, `data.profile` et les réglages
 d’apparence facultatifs sur le document, chaque page et chaque BDC. Le preset
-général d’apparence est réservé au document ; le modèle v9 enregistre séparément
+général d’apparence est réservé au document ; le modèle v10 enregistre séparément
 les polices de titre et de corps. Les détails et la résolution par propriété
 figurent dans la [spécification d’apparence](./appearance-spec.md).
 `data.summary` et `data.profile` gardent leur structure et leurs invariants
 décrits dans la [spécification Sommaire et profils](./summary-profile-spec.md).
-`ElceDocument.fromJSON()` accepte les versions 7, 8 et 9 et retourne toujours
-un modèle v9. La migration v7 → v9 convertit les textes enrichis existants ; la
-migration v8 → v9 ajoute le réglage facultatif de page. SQLite conserve le
-réglage automatique comme `NULL` et les choix explicites comme `0` ou `1` dans
-`pages.allow_early_exit`. Les autres versions documentaires sont rejetées.
+`ElceDocument.fromJSON()` accepte les versions 7 à 10 et retourne toujours un
+modèle v10. La migration v7 → v10 convertit les textes enrichis existants ; la
+migration v8 → v10 ajoute le réglage facultatif de page ; la migration v9 → v10
+ajoute à chaque Carte l’objet `revelation` avec `intro` et `outro` initialisés à
+`null`. SQLite conserve le réglage automatique de sortie anticipée comme `NULL`
+et les choix explicites comme `0` ou `1` dans `pages.allow_early_exit`. Les
+autres versions documentaires sont rejetées.
 
 Les placements de BDC sont déclarés dans
 [`content-location.ts`](../src/core/document/content-location.ts) :
@@ -86,7 +89,7 @@ Les identifiants, métadonnées et vues de placement minimales partagées sont
 dans [`content-document-types.ts`](../src/core/document/content-document-types.ts).
 Les payloads BDC et leur vue de lecture commune sont dans
 [`resource-document-types.ts`](../src/resources/document/resource-document-types.ts).
-Le modèle v7 complet et ses types appartiennent à Learning dans
+Le modèle documentaire v10 complet et ses types appartiennent à Learning dans
 [`learning-document.ts`](../src/mods/learning/document/learning-document.ts) et
 [`learning-document-types.ts`](../src/mods/learning/document/learning-document-types.ts).
 Le contenu
@@ -95,8 +98,8 @@ initiale sont possédés par la ressource Section dans
 [`resources/bdcs/section/`](../src/resources/bdcs/section/section-config.ts) ;
 les types de transitions Révélation sont possédés par
 [`revelation-types.ts`](../src/resources/revelation/revelation-types.ts). Ces
-transferts ne changent ni les clés JSON, ni le format v7. L’union de commandes
-Learning est dans
+transferts ne changent ni les clés JSON ni les noms des commandes. L’union de
+commandes Learning est dans
 [`learning-document-command-types.ts`](../src/mods/learning/commands/learning-document-command-types.ts) ;
 elle compose les sous-unions de Carte, Carousel, Question, Section, Graphe et
 ancrage déclarées dans leurs dossiers `resources/*/authoring/`. Les façades
@@ -104,7 +107,7 @@ Carte, Question, Carousel et Graphe utilisent leurs unions de ressource. Les
 factories de création de BDC correspondantes appartiennent à ces ressources.
 Les factories de page par défaut, chapitre et Résultat sont des méthodes de
 `LearningDocumentService`. Aucune de ces extractions ne change les noms des
-commandes envoyées ni le format v7.
+commandes envoyées ni le format documentaire courant v10.
 
 `LearningDocumentCommandService` est l’unique répartiteur des commandes
 documentaires Learning. Il délègue aux services de page, BDC, ancrage, média et
@@ -142,8 +145,8 @@ il est créé atomiquement avec un BDC Carte enfant au layout initial
 `text-short-basic`. Les quatre layouts Carte partagent le même jeu de champs
 métier.
 
-`LearningDocument.toJSON()` fournit la valeur structurée enregistrable en version
-7. Les octets des médias sont conservés à part par la frontière IndexedDB.
+`LearningDocument.toJSON()` fournit la valeur structurée enregistrable en
+version 10. Les octets des médias sont conservés à part par la frontière IndexedDB.
 
 Les types communs ne contiennent pas les payloads Learning : les services
 d’ancre, d’apparence et de réglages de lecture consultent `ResourceDocumentData`
@@ -344,9 +347,10 @@ serveur.
   vérifie l’ajout des colonnes d’apparence facultatives et la migration ciblée
   des anciens presets locaux de Demo5, avec restauration des presets canoniques
   au rollback. Les autres projets ne sont pas convertis.
-- Le même fichier vérifie la migration des projets v8 vers v9, la conservation
-  du défaut automatique sous forme de valeur nulle et l’aller-retour SQLite des
-  choix explicites de sortie anticipée.
+- Le même fichier vérifie la migration des projets v8 vers v10, la conservation
+  du défaut automatique sous forme de valeur nulle, l’aller-retour SQLite des
+  choix explicites de sortie anticipée et l’ajout des colonnes de transition de
+  Carte pour le format v10.
 - Le même fichier vérifie les champs et médias d’un BDC Carte à travers les
   layouts, le déplacement vers un autre Carousel, la suppression enfant/parent,
   la Carte autonome dans la séquence Flux et comme unique BDC direct d’une

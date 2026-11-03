@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { createActor } from 'xstate'
 import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -21,6 +22,8 @@ import {
 import { applyDocumentCommand, assertDocumentInvariants, createStatisticalGraphCarouselBdcCommand } from '../../../../../domain/commands/document-commands'
 import { learningDocumentService } from '../../../document/learning-document-service'
 import { LearningDocument } from '../../../document/learning-document'
+import { learningControllerMachine } from '../../../authoring/learning-controller-machine'
+import { LearningEditorFacade } from '../../../authoring/learning-editor-facade'
 import { INITIAL_PROJECT_TEST_STATE, type ProjectTestState } from '../../../reading/learning-test-state-types'
 import { LearningProjectApiClient } from '../../../persistence/learning-project-api-client'
 import { ProjectHttpTransport } from '../../../../../core/persistence/project-api/project-http-transport'
@@ -45,7 +48,7 @@ describe('SQLite project persistence through the Remix API', () => {
     temporaryDirectory = undefined
   })
 
-  it('migrates a fresh database and round-trips the v9 scenario and BDC relations', async () => {
+  it('migrates a fresh database and round-trips the v10 scenario and BDC relations', async () => {
     database = await openProjectDatabase(':memory:')
     const persistence = new LearningSqliteProjectPersistence(database)
     const router = createLearningApiRouter(persistence)
@@ -71,6 +74,68 @@ describe('SQLite project persistence through the Remix API', () => {
     expect(restored.data.summary).toEqual(document.data.summary)
     expect(restored.data.profile).toEqual(document.data.profile)
     assertDocumentInvariants(restored)
+  })
+
+  it('persists repeated BDC additions through the facade, XState, page selection, and SQLite', async () => {
+    database = await openProjectDatabase(':memory:')
+    const router = createLearningApiRouter(new LearningSqliteProjectPersistence(database))
+    const actor = createActor(learningControllerMachine, { input: {} })
+    actor.start()
+    actor.send({ type: 'editor.access.activate' })
+    const actions = new LearningEditorFacade(actor)
+    const initialDocument = actor.getSnapshot().context.document
+    const pageId = initialDocument.pages[0]!.id
+    const created = await router.fetch(jsonRequest('POST', '/api/projects', initialDocument.toJSON()))
+    expect(created.status).toBe(201)
+    const editAccessResponse = await router.fetch(jsonRequest(
+      'POST', `/api/projects/${initialDocument.id}/edit-access`, { pageId },
+    ))
+    const { grantId } = await editAccessResponse.json() as { grantId: string }
+    const editGrant = { 'X-Elce-Page-Id': pageId, 'X-Elce-Edit-Grant': grantId }
+    let revision = 0
+
+    /** Persists the actor's current document, advances the revision, and reloads it from SQLite. */
+    const saveAndReload = async (): Promise<LearningDocument> => {
+      const document = actor.getSnapshot().context.document
+      const response = await router.fetch(jsonRequest(
+        'PUT', `/api/projects/${document.id}/document`, document.toJSON(), {
+          'If-Match': `"${revision}"`,
+          ...editGrant,
+        },
+      ))
+      expect(response.status).toBe(200)
+      revision += 1
+      expect(response.headers.get('ETag')).toBe(`"${revision}"`)
+      const reopened = await router.fetch(new Request(`http://elce.test/api/projects/${document.id}`))
+      expect(reopened.status).toBe(200)
+      const body = await reopened.json() as { document: unknown }
+      return LearningDocument.fromJSON(body.document)
+    }
+
+    actions.createStandaloneCard(pageId)
+    const firstCardId = actor.getSnapshot().context.document.pages.find((page) => page.id === pageId)?.bdcIds.at(-1)
+    if (firstCardId === undefined) throw new Error('The first facade-created Card was not placed on its page.')
+    const firstSaved = await saveAndReload()
+    expect(firstSaved.pages.find((page) => page.id === pageId)?.bdcIds).toContain(firstCardId)
+
+    actions.createPage({ kind: PAGE_LOCATION.SCENARIO })
+    const otherPageId = actor.getSnapshot().context.selection.selectedPageId
+    expect(otherPageId).not.toBe(pageId)
+    actions.selectPage(pageId)
+    expect(actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === firstCardId)?.pageId).toBe(pageId)
+    await saveAndReload()
+
+    actions.createStandaloneCard(pageId)
+    const currentPageIds = actor.getSnapshot().context.document.pages.find((page) => page.id === pageId)?.bdcIds ?? []
+    const secondCardId = currentPageIds.at(-1)
+    if (secondCardId === undefined || secondCardId === firstCardId) {
+      throw new Error('The second facade-created Card was not placed after the first one.')
+    }
+    const secondSaved = await saveAndReload()
+    expect(secondSaved.data.version).toBe(10)
+    expect(secondSaved.pages.find((page) => page.id === pageId)?.bdcIds).toContain(firstCardId)
+    expect(secondSaved.pages.find((page) => page.id === pageId)?.bdcIds).toContain(secondCardId)
+    actor.stop()
   })
 
   it('saves and reloads rich Card labels with page and local date labels', async () => {
@@ -534,7 +599,7 @@ describe('SQLite project persistence through the Remix API', () => {
     expect(current.status).toBe(200)
   })
 
-  it('renews a live lease and lets another page recover it after expiry', async () => {
+  it('renews an unreplaced grant after expiry and lets another page recover it after expiration', async () => {
     database = await openProjectDatabase(':memory:')
     const router = createLearningApiRouter(new LearningSqliteProjectPersistence(database))
     const document = createDocumentWithId('project-expired-edit-lease')
@@ -554,7 +619,11 @@ describe('SQLite project persistence through the Remix API', () => {
     const lateRenewal = await router.fetch(new Request(`http://elce.test/api/projects/${document.id}/edit-access`, {
       method: 'PUT', headers: firstHeaders,
     }))
-    expect(lateRenewal.status).toBe(409)
+    expect(lateRenewal.status).toBe(204)
+
+    await database.exec(rawSql(
+      'UPDATE projects SET edit_lease_expires_at = ? WHERE project_id = ?', [Date.now() - 1, document.id],
+    ))
 
     const recovered = await router.fetch(jsonRequest('POST', `/api/projects/${document.id}/edit-access`, { pageId: 'page-b' }))
     expect(recovered.status).toBe(200)

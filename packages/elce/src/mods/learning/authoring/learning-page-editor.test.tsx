@@ -69,21 +69,30 @@ describe('Remix production page editor', () => {
     controller.send({ type: 'page.select', pageId: firstPage.id })
 
     const subscribeSpy = vi.spyOn(controller, 'subscribe')
-    const rendered = render(<LearningEditorContextProvider
-      controller={controller}
-      actions={actions}
-    >
-      <LearningPageEditor canMoveBdcToPage={actions.authoring.canMoveBdcToPage.bind(actions.authoring)} onOpenAppearanceTarget={() => undefined} />
-    </LearningEditorContextProvider>)
+    const rendered = render(<div id="elce-remix-page-editor-host-container">
+      <LearningEditorContextProvider
+        controller={controller}
+        actions={actions}
+      >
+        <LearningPageEditor canMoveBdcToPage={actions.authoring.canMoveBdcToPage.bind(actions.authoring)} onOpenAppearanceTarget={() => undefined} />
+      </LearningEditorContextProvider>
+    </div>)
     cleanup = () => {
       rendered.cleanup()
       controller.stop()
     }
 
     await actOnRemix(rendered, () => Promise.resolve())
+    const editorLayout = rendered.$('#elce-page-editor-layout')
+    const hostContainer = rendered.$('#elce-remix-page-editor-host-container')
     const titleRow = rendered.$('#elce-work-area-title-row')
-    expect(titleRow?.children[0]?.id).toBe('elce-work-area-actions')
-    expect(titleRow?.children[1]?.id).toBe('elce-work-area-titles')
+    expect(editorLayout?.parentElement).toBe(hostContainer)
+    expect(rendered.$('#elce-work-area-actions')).toBeNull()
+    expect(titleRow?.children[0]?.id).toBe('elce-work-area-titles')
+    expect(rendered.$(`#elce-page-bdc-add-toggle-${firstPage.id}`)).not.toBeNull()
+    expect(rendered.$(`#elce-page-bdc-add-menu-${firstPage.id}`)?.hidden).toBe(true)
+    await actOnRemix(rendered, () => rendered.$(`#elce-page-bdc-add-toggle-${firstPage.id}`)?.click())
+    expect(rendered.$(`#elce-page-bdc-add-menu-${firstPage.id}`)?.hidden).toBe(false)
     expect(rendered.$('#elce-carousel-create')).not.toBeNull()
     expect(pageBdcOrder(rendered)).toEqual(initialBdcOrder)
     await actOnRemix(rendered, () => rendered.$('#elce-card-create')?.click())

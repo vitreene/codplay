@@ -265,16 +265,24 @@ construction.
    - **Décision acceptée et appliquée :** « Afficher comme page » place le
      Sommaire en première page du parcours et rejoint la séquence
      Précédent/Suivant ; le contrat et les preuves sont dans la spécification.
-   - **Décision acceptée, application en cours (3 novembre 2026) :** tous les
+   - **Décision acceptée, application en cours (3 novembre 2026) :** les
      réglages de « Présentation du Sommaire » s’appliquent immédiatement par
-     commande documentaire. Le bouton global « Enregistrer » valide les
-     propriétés du profil et les contraintes de visibilité et de lecture ;
-     leurs brouillons sont regroupés dans une seule mise à jour de définition
-     du profil. Sans modification des contraintes, il enregistre tout de même
-     les propriétés. Après validation, l’écran revient au scénario ; en cas
-     d’erreur, il reste ouvert avec les brouillons. L’implémentation est en
-     cours ; le parcours réel d’enregistrement reste à valider sur le document
-     de test autorisé.
+     commande documentaire. Une seconde partie « Sommaire et profil » regroupe
+     les propriétés du profil et les contraintes de visibilité et de lecture.
+     Son bouton « Enregistrer » est placé dans son en-tête sticky et ne valide
+     que ces brouillons, regroupés dans une mise à jour de définition du profil.
+     Sans modification des contraintes, il enregistre tout de même les
+     propriétés. Après validation, l’écran revient au scénario ; en cas
+     d’erreur, il reste ouvert avec les brouillons. Le bouton supérieur
+     « Enregistrer » est retiré ; si l’édition du profil est désactivée, le
+     titre garde une commande « Fermer ». Vérifier le placement sticky et le
+     parcours réel d’enregistrement sur le document de test autorisé.
+     - [x] Créer la partie « Sommaire et profil » et y déplacer le bouton
+       « Enregistrer » dans un en-tête sticky.
+     - [x] Laisser « Présentation du Sommaire » hors de cette soumission et
+       garder une commande « Fermer » lorsque l’édition du profil est désactivée.
+     - [ ] Vérifier dans l’éditeur réel que l’en-tête reste visible pendant le
+       défilement de cette partie et que l’enregistrement conserve son circuit.
    - **Sélecteurs du formulaire — cause trouvée et correction en cours
      (3 novembre 2026) :** le document et le cache local conservaient bien
      `displayMode: pages`, mais le panneau remonté affichait la première option,
@@ -410,8 +418,9 @@ construction.
      validation unique et admission Sighty.
 
 5. **Sommaire lecteur — intégré ; affichage du menu vérifié sur ordinateur et
-   mobile le 30 octobre ; page de Sommaire en tête du scénario et de la lecture,
-   navigation retour/départ vérifiées le 30 octobre. Les autres parcours
+   mobile le 30 octobre ; entrée Sommaire permanente dans le scénario, page de
+   lecture en tête quand elle est activée, et navigation retour/départ vérifiées
+   le 30 octobre. Les autres parcours
    navigateur restent ouverts.**
    - Correction « Afficher le menu » terminée : 79 tests ciblés, 526 tests
      Elcé, typecheck, build et Brave passent. Contrat et preuves transférés à
@@ -425,6 +434,23 @@ construction.
    - Le composant externe est monté dans le `slot` persistent ; les tests
      vérifient le montage, les entrées, le lien du menu et la route vers la scène
      racine dans le slot contenu.
+   - **Décision acceptée le 3 novembre 2026, application en cours — entrée du
+     Sommaire dans le Scénario :** retirer le bouton Sommaire de la rangée
+     d’actions en haut du panneau et conserver une entrée Sommaire permanente,
+     toujours en première position de la liste du Scénario, même si
+     « Afficher comme page » est décoché. Cette option continue uniquement de
+     décider si le Sommaire ouvre le parcours lecteur comme première page.
+     Présenter l’icône et le titre sur une même ligne. Quand l’auteur sélectionne
+     une autre page ou un chapitre, fermer l’éditeur du Sommaire et afficher
+     l’élément sélectionné. La spécification actuelle décrit encore l’ancienne
+     règle conditionnelle ; elle sera mise à jour après validation intégrée.
+     - [x] Retirer l’action Sommaire de la rangée supérieure et garder sa ligne
+       à la première place du Scénario, quel que soit « Afficher comme page ».
+     - [x] Fermer l’éditeur du Sommaire à la sélection d’une page ou d’un
+       chapitre et présenter l’icône avec son titre sur la même ligne.
+     - [ ] Vérifier dans l’éditeur réel la ligne persistante, le changement de
+       sélection et le rendu horizontal de l’icône et du titre ; mettre ensuite
+       à jour la spécification Sommaire et celle du Scénario.
    - Alimenter le menu et la page Sommaire depuis la même projection et les
      mêmes décisions d’accès. Quand elle est activée, elle précède les pages
      dans la lecture et la séquence Précédent/Suivant.

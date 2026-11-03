@@ -135,13 +135,19 @@ Au-delà de 1200 px, seul
 L’erreur d’ouverture de la fenêtre de lecture y reste annoncée avec `role="alert"`.
 Le bouton continue d’appeler la même action de preview du workspace.
 
-La barre d’ajout de page affiche les libellés « Texte », « Quiz »,
+La barre d’ajout de page est rendue dans
+`#elce-remix-page-editor-host-container`, hors de `#elce-work-area` et avant
+celui-ci dans `#elce-page-editor-layout`. Elle affiche les libellés « Texte »,
+« Quiz »,
 « Carousel », « Carte » et « Graphe » sous leurs icônes. Le nom accessible et
-l’infobulle de chaque bouton gardent la description complète. Le bouton Quiz
-utilise ListChecks, sans point d’interrogation. La Question reste unique par
-page ; après son ajout, son bouton est désactivé. Une page créée dans un
-chapitre Évaluation reçoit déjà son BDC Question initial ; une page d’un
-chapitre standard reçoit un BDC Section.
+l’infobulle de chaque bouton gardent la description complète. Ces commandes
+conservent leurs actions ; au repos, elles n’ont ni fond ni contour et gardent
+un padding de `0.5rem`. Au survol, les boutons actifs reçoivent un fond clair.
+Le bouton Quiz utilise ListChecks, sans point
+d’interrogation. La Question reste unique par page ; après son ajout, son
+bouton est désactivé. Une page créée dans un chapitre Évaluation reçoit déjà
+son BDC Question initial ; une page d’un chapitre standard reçoit un BDC
+Section.
 
 Sur une page Flux d’un chapitre Évaluation, une icône BadgeCheck ajoute à la
 même séquence un BDC Résultat qui regroupe les branches Réussite et Échec.

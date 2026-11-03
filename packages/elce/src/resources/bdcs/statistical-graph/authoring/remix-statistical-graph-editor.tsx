@@ -572,6 +572,7 @@ function renderGridEditor(
                   {renderGridLabelField({
                     id: `elce-statistical-graph-series-label-${bdcId}-${seriesIndex}`,
                     label: `Nom de la série ${seriesIndex + 1}`,
+                    placeholder: `Ser. ${seriesIndex + 1}`,
                     value,
                     position,
                     textFieldFeature,
@@ -601,6 +602,7 @@ function renderGridEditor(
                   {renderGridLabelField({
                     id: `elce-statistical-graph-category-label-${bdcId}-${categoryIndex}`,
                     label: `Nom de la catégorie ${categoryIndex + 1}`,
+                    placeholder: `Cat. ${spreadsheetColumnLetters(categoryIndex)}`,
                     value: category?.label ?? '',
                     position: { rowIndex, columnIndex: 0 },
                     textFieldFeature,
@@ -654,6 +656,7 @@ function renderGridEditor(
 interface GraphGridLabelFieldOptions {
   readonly id: string
   readonly label: string
+  readonly placeholder: string
   readonly value: ElceTextValue
   readonly position: GridPosition
   readonly textFieldFeature: ResourceTextFieldFeature | undefined
@@ -670,7 +673,7 @@ function renderGridLabelField(options: GraphGridLabelFieldOptions): RemixNode {
       id: options.id,
       value: options.value,
       ariaLabel: options.label,
-      placeholder: options.label,
+      placeholder: options.placeholder,
       onChange: options.onChange,
       onFocus: options.onFocus,
       onKeyDown: options.onKeyDown,
@@ -680,10 +683,23 @@ function renderGridLabelField(options: GraphGridLabelFieldOptions): RemixNode {
     id={options.id}
     type="text"
     aria-label={options.label}
+    placeholder={options.placeholder}
     value={plainTextFromValue(options.value)}
     {...options.textFieldAttributes}
     mix={on<HTMLInputElement, 'keydown'>('keydown', options.onKeyDown)}
   />
+}
+
+/** Converts a zero-based category index to spreadsheet-style letters. */
+function spreadsheetColumnLetters(index: number): string {
+  let value = index + 1
+  let letters = ''
+  while (value > 0) {
+    const remainder = (value - 1) % 26
+    letters = String.fromCharCode(65 + remainder) + letters
+    value = Math.floor((value - 1) / 26)
+  }
+  return letters
 }
 
 /** Reads the text at a visual grid coordinate, including optional heading cells. */

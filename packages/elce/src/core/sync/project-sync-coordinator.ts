@@ -118,6 +118,11 @@ export class ProjectSyncCoordinator<TDocument, TSerialized, TSelection> {
     this.schedule(document)
   }
 
+  /** Reports synchronization work that must keep its edit grant alive. */
+  public hasPendingWork(): boolean {
+    return this.running || this.queued || this.timer !== null || this.lastFailure !== null
+  }
+
   /** Releases pending timers and the browser network-recovery listener. */
   public destroy(): void {
     if (this.timer !== null) clearTimeout(this.timer)

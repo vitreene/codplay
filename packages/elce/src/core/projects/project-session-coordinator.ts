@@ -222,7 +222,9 @@ implements ProjectSessionPort<TDocument, ElceProjectSummary> {
         this.persistence?.detach()
         this.persistence = null
       },
-      onAccessHeartbeat: async () => this.api.renewEditAccess(projectId),
+      onAccessBusy: () => this.sync?.hasPendingWork() ?? false,
+      onAccessRenewal: async () => this.api.renewEditAccess(projectId),
+      onAccessCheck: async () => this.api.stillHasEditAccess(projectId),
       onAccessLost: async () => {
         controller.send({ type: 'editor.access.suspend' })
         await this.persistence?.flushLocalChanges()

@@ -1,4 +1,4 @@
-import { PROJECT_EDIT_HEARTBEAT_MS } from '../persistence/project-api/project-api-config'
+import { PROJECT_EDIT_ACCESS_CHECK_MS } from '../persistence/project-api/project-api-config'
 
 type ProjectEditorLockMessage =
   | Readonly<{ type: 'request'; projectId: string; senderId: string }>
@@ -13,7 +13,9 @@ export interface ProjectEditorLockLifecycle {
   onAccessGranted(force?: boolean): Promise<boolean | void>
   onAccessSuspending(): Promise<void>
   onAccessPriorityRequest?(): Promise<boolean>
-  onAccessHeartbeat?(): Promise<boolean>
+  onAccessBusy?(): boolean
+  onAccessRenewal?(): Promise<boolean>
+  onAccessCheck?(): Promise<boolean>
   onAccessLost?(error: unknown): Promise<void>
   onAccessRecoveryRequired?(error: unknown): void
   onAccessError(error: unknown): void
@@ -35,8 +37,8 @@ export class ProjectEditorLock {
   private releaseTask: Promise<void> | null = null
   private releaseFailed = false
   private accessWaitTimer: ReturnType<typeof setTimeout> | null = null
-  private heartbeatTimer: ReturnType<typeof setInterval> | null = null
-  private heartbeatTask: Promise<void> | null = null
+  private accessCheckTimer: ReturnType<typeof setInterval> | null = null
+  private accessCheckTask: Promise<void> | null = null
   private forceInProgress = false
   private priorityRequest: Promise<void> | null = null
   private priorityFailureCount = 0
@@ -191,7 +193,7 @@ export class ProjectEditorLock {
         void this.releaseAccess().catch(() => undefined)
         return
       }
-      void this.renewAccess()
+      void this.checkAccess()
       return
     }
     this.requestAccess()
@@ -270,7 +272,7 @@ export class ProjectEditorLock {
       }
       this.priorityFailureCount = 0
       this.grantReady = true
-      this.startHeartbeat()
+      this.startAccessChecks()
       if (!this.wantsAccess || !this.pageCanEdit()) await this.releaseAccess().catch(() => undefined)
       await released
     } catch (error) {
@@ -279,7 +281,7 @@ export class ProjectEditorLock {
       else this.lifecycle.onAccessError(error)
       release()
     } finally {
-      this.stopHeartbeat()
+      this.stopAccessChecks()
       this.ownsAccess = false
       this.grantReady = false
       this.releaseLock = null
@@ -287,33 +289,37 @@ export class ProjectEditorLock {
     }
   }
 
-  /** Renews the server lease and suspends local editing when renewal fails. */
-  private renewAccess(): Promise<void> {
-    if (!this.ownsAccess || !this.grantReady || this.lifecycle.onAccessHeartbeat === undefined) return Promise.resolve()
-    if (this.heartbeatTask !== null) return this.heartbeatTask
-    this.heartbeatTask = (async () => {
+  /** Checks the current grant and suspends local editing if another page replaced it. */
+  private checkAccess(): Promise<void> {
+    if (!this.ownsAccess || !this.grantReady) return Promise.resolve()
+    if (this.accessCheckTask !== null) return this.accessCheckTask
+    this.accessCheckTask = (async () => {
       try {
-        if (await this.lifecycle.onAccessHeartbeat?.() === false) await this.loseAccess(new Error('edit_access_lost'))
+        const renewalRequired = this.filePickerOpen || this.lifecycle.onAccessBusy?.() === true
+        const accessState = renewalRequired
+          ? await this.lifecycle.onAccessRenewal?.() ?? await this.lifecycle.onAccessCheck?.()
+          : await this.lifecycle.onAccessCheck?.()
+        if (accessState === false) await this.loseAccess(new Error('edit_access_lost'))
       } catch (error) {
         await this.loseAccess(error)
       } finally {
-        this.heartbeatTask = null
+        this.accessCheckTask = null
       }
     })()
-    return this.heartbeatTask
+    return this.accessCheckTask
   }
 
-  /** Starts lease renewal while this page holds its server grant. */
-  private startHeartbeat(): void {
-    this.stopHeartbeat()
-    if (this.lifecycle.onAccessHeartbeat === undefined) return
-    this.heartbeatTimer = setInterval(() => { void this.renewAccess() }, PROJECT_EDIT_HEARTBEAT_MS)
+  /** Polls grant ownership while this page holds the browser lock. */
+  private startAccessChecks(): void {
+    this.stopAccessChecks()
+    if (this.lifecycle.onAccessCheck === undefined && this.lifecycle.onAccessRenewal === undefined) return
+    this.accessCheckTimer = setInterval(() => { void this.checkAccess() }, PROJECT_EDIT_ACCESS_CHECK_MS)
   }
 
-  /** Stops lease renewal after the grant is released or lost. */
-  private stopHeartbeat(): void {
-    if (this.heartbeatTimer !== null) clearInterval(this.heartbeatTimer)
-    this.heartbeatTimer = null
+  /** Stops grant polling after the access is released or lost. */
+  private stopAccessChecks(): void {
+    if (this.accessCheckTimer !== null) clearInterval(this.accessCheckTimer)
+    this.accessCheckTimer = null
   }
 
   /** Exposes the existing recovery controls when a native lock never resolves. */
@@ -338,7 +344,7 @@ export class ProjectEditorLock {
     if (!this.ownsAccess || !this.grantReady) return
     this.wantsAccess = false
     this.grantReady = false
-    this.stopHeartbeat()
+    this.stopAccessChecks()
     try {
       await this.lifecycle.onAccessLost?.(error)
     } catch (lossError) {
@@ -403,7 +409,7 @@ export class ProjectEditorLock {
         await this.lifecycle.onAccessSuspending()
         this.releaseFailed = false
         this.grantReady = false
-        this.stopHeartbeat()
+        this.stopAccessChecks()
         this.releaseLock?.()
       } catch (error) {
         this.releaseFailed = true

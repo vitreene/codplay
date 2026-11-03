@@ -22,7 +22,8 @@ cache. Pour ce nettoyage et la suppression partagée, l’enregistrement sérial
 expose `id` et `medias[].id`, indépendamment de sa version métier. Les octets
 confirmés peuvent être retirés par `deleteMedia()` sans réécrire le document.
 
-L’adaptateur Learning `learningDocumentCodec` relie le store au modèle v7. Les
+L’adaptateur Learning `learningDocumentCodec` relie le store au modèle courant
+v10. Les
 autres compositions peuvent fournir leur propre codec et partager le même
 contrat de persistance technique.
 

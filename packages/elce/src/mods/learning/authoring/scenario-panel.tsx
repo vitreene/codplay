@@ -55,18 +55,6 @@ export function renderScenarioPanel(props: ScenarioPanelProps): RemixNode {
         {renderIconButton('elce-create-evaluation-chapter', CHAPTER_TYPE_CONFIG[CHAPTER_TYPE.EVALUATION].createLabel, ClipboardCheck, () => actions.createEvaluationChapter(view.documentModel), 'elce-icon-action', 'Éval.')}
         {renderIconButton('elce-create-scenario-page', 'Ajouter une Page à la racine du scénario', getLearningPageTypeIcon(PAGE_TYPE.FLUX), () => actions.createPage({ kind: PAGE_LOCATION.SCENARIO }, PAGE_TYPE.FLUX), 'elce-icon-action', 'Page')}
         {renderIconButton('elce-create-scenario-diapo', 'Ajouter une Diapo à la racine du scénario', getLearningPageTypeIcon(PAGE_TYPE.DIAPO), () => actions.createPage({ kind: PAGE_LOCATION.SCENARIO }, PAGE_TYPE.DIAPO), 'elce-icon-action', 'Diapo')}
-        <button
-          id="elce-summary-profile-open"
-          className="elce-add-content-action elce-icon-action"
-          type="button"
-          aria-label="Sommaire"
-          title="Sommaire"
-          aria-pressed={workspace.summarySettingsOpen}
-          mix={on<HTMLButtonElement, 'click'>('click', () => workspace.onSetSummarySettingsOpen(!workspace.summarySettingsOpen))}
-        >
-          {renderLucideIcon(SUMMARY_PROFILE_ACCESS_ICON, 'elce-summary-profile-open-icon')}
-          <span id="elce-summary-profile-open-label" className="elce-add-content-action__label">Sommaire</span>
-        </button>
         {renderAppearanceTrigger({
           id: 'elce-scenario-project-style-trigger',
           target: { kind: 'document' },
@@ -143,18 +131,20 @@ function renderScenarioEntryList(props: ScenarioPanelProps, entries: readonly Sc
     id="elce-scenario-entry-list"
     className="elce-outline-list"
   >
-    {view.documentModel.data.summary.showAtRoot ? <li id="elce-scenario-summary-entry">
+    <li id="elce-scenario-summary-entry">
       <button
         id="elce-scenario-summary-page"
         type="button"
-        className="elce-page-button"
+        className={workspace.summarySettingsOpen
+          ? 'elce-page-button elce-page-button--selected elce-scenario-summary-page'
+          : 'elce-page-button elce-scenario-summary-page'}
         aria-pressed={workspace.summarySettingsOpen}
-        mix={on<HTMLButtonElement, 'click'>('click', () => workspace.onSetSummarySettingsOpen(true))}
+        mix={on<HTMLButtonElement, 'click'>('click', () => workspace.onSetSummarySettingsOpen(!workspace.summarySettingsOpen))}
       >
         {renderLucideIcon(SUMMARY_PROFILE_ACCESS_ICON, 'elce-scenario-summary-page-icon')}
         <span id="elce-scenario-summary-page-title">{plainTextFromValue(view.documentModel.data.summary.title)}</span>
       </button>
-    </li> : null}
+    </li>
     {children}
   </ul>
 }
@@ -196,7 +186,10 @@ function renderChapterItem(props: ScenarioPanelProps, chapter: LearningChapter):
         className={isSelected ? 'elce-chapter-select elce-chapter-select--selected' : 'elce-chapter-select'}
         type="button"
         aria-pressed={isSelected}
-        mix={on<HTMLButtonElement, 'click'>('click', () => actions.selectChapter(chapter.id))}
+        mix={on<HTMLButtonElement, 'click'>('click', () => {
+          workspace.onSetSummarySettingsOpen(false)
+          actions.selectChapter(chapter.id)
+        })}
       >
         {renderChapterTypeIcon(chapter)}
         <strong
@@ -293,7 +286,10 @@ function renderPageItem(props: ScenarioPanelProps, listId: string, page: Learnin
         id={`${listId}-select-${page.id}`}
         className={page.id === selectedPageId ? 'elce-page-button elce-page-button--selected' : 'elce-page-button'}
         type="button"
-        mix={on<HTMLButtonElement, 'click'>('click', () => workspace.actions.selectPage(page.id))}
+        mix={on<HTMLButtonElement, 'click'>('click', () => {
+          workspace.onSetSummarySettingsOpen(false)
+          workspace.actions.selectPage(page.id)
+        })}
       >
         {pageName}
       </button>

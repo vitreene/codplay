@@ -55,11 +55,31 @@ export function LearningPageEditor(handle: Handle<LearningPageEditorProps>) {
   let draggedBdcId: string | null = null
   let dropTargetId: string | null = null
   let editingAnchorBdcId: string | null = null
+  let isAddContentMenuOpen = false
+  let trashAnimationToken = 0
+  let trashAnimationTimer: ReturnType<typeof setTimeout> | undefined
+
+  /** Updates transient visibility for the selected page's add-content menu. */
+  const updateAddContentMenuOpen = (isOpen: boolean): void => {
+    if (isAddContentMenuOpen === isOpen) return
+    isAddContentMenuOpen = isOpen
+    if (!handle.signal.aborted) void handle.update()
+  }
 
   const updateDropTarget = (targetId: string | null): void => {
     if (dropTargetId === targetId) return
     dropTargetId = targetId
     if (!handle.signal.aborted) void handle.update()
+  }
+  const animateTrashDropSuccess = (): void => {
+    trashAnimationToken += 1
+    if (trashAnimationTimer !== undefined) clearTimeout(trashAnimationTimer)
+    if (!handle.signal.aborted) void handle.update()
+    trashAnimationTimer = setTimeout(() => {
+      trashAnimationTimer = undefined
+      trashAnimationToken = 0
+      if (!handle.signal.aborted) void handle.update()
+    }, 420)
   }
   const setEditingAnchorBdc = (bdcId: string | null): void => {
     editingAnchorBdcId = bdcId
@@ -94,6 +114,7 @@ export function LearningPageEditor(handle: Handle<LearningPageEditorProps>) {
     handle.signal.addEventListener('abort', () => {
       subscription.unsubscribe()
       sectionSession.destroy()
+      if (trashAnimationTimer !== undefined) clearTimeout(trashAnimationTimer)
     }, { once: true })
   })
 
@@ -108,8 +129,13 @@ export function LearningPageEditor(handle: Handle<LearningPageEditorProps>) {
     setDraggedBdcId: (bdcId) => { draggedBdcId = bdcId },
     dropTargetId: () => dropTargetId,
     updateDropTarget,
+    trashAnimationToken: () => trashAnimationToken,
+    animateTrashDropSuccess,
+    hasBdc: (bdcId) => controller.getSnapshot().context.document.bdcs.some((bdc) => bdc.id === bdcId),
     editingAnchorBdcId,
     setEditingAnchorBdc,
+    isAddContentMenuOpen: () => isAddContentMenuOpen,
+    updateAddContentMenuOpen,
     onOpenAppearanceTarget: handle.props.onOpenAppearanceTarget,
     canMoveBdcToPage: handle.props.canMoveBdcToPage,
   })
@@ -126,8 +152,13 @@ interface PageEditorRenderState {
   readonly setDraggedBdcId: (bdcId: string | null) => void
   readonly dropTargetId: () => string | null
   readonly updateDropTarget: (targetId: string | null) => void
+  readonly trashAnimationToken: () => number
+  readonly animateTrashDropSuccess: () => void
+  readonly hasBdc: (bdcId: string) => boolean
   readonly editingAnchorBdcId: string | null
   readonly setEditingAnchorBdc: (bdcId: string | null) => void
+  readonly isAddContentMenuOpen: () => boolean
+  readonly updateAddContentMenuOpen: (isOpen: boolean) => void
   readonly onOpenAppearanceTarget: (target: AppearanceTarget, triggerId: string) => void
   readonly canMoveBdcToPage: LearningPageEditorProps['canMoveBdcToPage']
 }
@@ -157,33 +188,51 @@ function renderPageEditor(view: EditorViewModel, actions: LearningEditorFacade, 
 
   const addSection = (): void => {
     if (availability.canCreateSection && page !== undefined) actions.createSection(page.id, page.bdcIds.length)
+    state.updateAddContentMenuOpen(false)
   }
   const addQuestion = (): void => {
-    if (page === undefined || !availability.canCreateQuestion) return
-    actions.createQuestion(view.documentModel, page.id, page.bdcIds.length)
+    if (page !== undefined && availability.canCreateQuestion) {
+      actions.createQuestion(view.documentModel, page.id, page.bdcIds.length)
+    }
+    state.updateAddContentMenuOpen(false)
   }
   const addEvaluationResult = (): void => {
-    if (page === undefined || !availability.canCreateEvaluationResult) return
-    actions.createEvaluationResult(page.id, page.bdcIds.length)
+    if (page !== undefined && availability.canCreateEvaluationResult) {
+      actions.createEvaluationResult(page.id, page.bdcIds.length)
+    }
+    state.updateAddContentMenuOpen(false)
   }
   const addCarousel = (): void => {
-    if (page === undefined || !availability.canCreateCarousel) return
-    actions.createCarousel(page.id, page.bdcIds.length)
+    if (page !== undefined && availability.canCreateCarousel) {
+      actions.createCarousel(page.id, page.bdcIds.length)
+    }
+    state.updateAddContentMenuOpen(false)
   }
   const addStandaloneCard = (): void => {
-    if (page === undefined || !availability.canCreateStandaloneCard) return
-    actions.createStandaloneCard(page.id)
+    if (page !== undefined && availability.canCreateStandaloneCard) actions.createStandaloneCard(page.id)
+    state.updateAddContentMenuOpen(false)
   }
   const addStatisticalGraph = (): void => {
-    if (page === undefined || !availability.canCreateStatisticalGraph) return
-    actions.createStatisticalGraph(page.id, page.bdcIds.length)
+    if (page !== undefined && availability.canCreateStatisticalGraph) {
+      actions.createStatisticalGraph(page.id, page.bdcIds.length)
+    }
+    state.updateAddContentMenuOpen(false)
   }
 
   return renderPageEditorView({
     page,
-    sequence: view.selectedPageBdcs.map((bdc) => ({ bdcId: bdc.id, index: page?.bdcIds.indexOf(bdc.id) ?? -1 })),
+    sequence: view.selectedPageBdcs.map((bdc) => {
+      const navigation = bdcNavigationPresentation(bdc)
+      return {
+        bdcId: bdc.id,
+        index: page?.bdcIds.indexOf(bdc.id) ?? -1,
+        navigationIcon: renderLucideIcon(navigation.icon, `elce-page-bdc-navigation-icon-${bdc.id}`),
+        navigationLabel: navigation.label,
+      }
+    }),
     dropTarget: state.dropTargetId(),
-    pageToolbar: [
+    trashAnimationToken: state.trashAnimationToken(),
+    addContentMenu: [
       renderCreateButton('elce-section-create', 'Ajouter un bloc texte', 'Texte', FileText, !availability.canCreateSection, addSection),
       renderCreateButton('elce-question-create', 'Ajouter un bloc quiz', 'Quiz', ListChecks, !availability.canCreateQuestion, addQuestion),
       renderCreateButton('elce-carousel-create', 'Ajouter un bloc Carousel', 'Carousel', Images, !availability.canCreateCarousel, addCarousel),
@@ -193,6 +242,8 @@ function renderPageEditor(view: EditorViewModel, actions: LearningEditorFacade, 
         ? renderCreateButton('elce-evaluation-result-create', 'Ajouter un bloc résultat', 'Résultat', BadgeCheck, false, addEvaluationResult)
         : null,
     ],
+    isAddContentMenuOpen: state.isAddContentMenuOpen(),
+    onToggleAddContentMenu: () => state.updateAddContentMenuOpen(!state.isAddContentMenuOpen()),
     chapterTitle: view.pageChapter === undefined ? null : renderPageChapterTitle(view.pageChapter, actions, textFieldFeature),
     textFieldFeature,
     renderPageTypeMark: (currentPage) => renderLucideIcon(
@@ -208,13 +259,17 @@ function renderPageEditor(view: EditorViewModel, actions: LearningEditorFacade, 
     },
     onStartBdcDrag: (event, bdcId) => beginBdcDrag(event, bdcId, state),
     onEndBdcDrag: () => endBdcDrag(state),
+    onDragOverBdcNavigationItem: (event, bdcId, index) => dragOverBdcNavigationItem(event, bdcId, index, state),
+    onDropBdcNavigationItem: (event, bdcId, index) => dropBdcNavigationItem(event, bdcId, index, state),
+    onDragOverBdcTrash: (event) => dragOverBdcTrash(event, state),
+    onDropBdcTrash: (event) => dropBdcOnTrash(event, state),
     onDragOverSeparator: (event, targetId, index) => dragOverBdcSeparator(event, targetId, index, state),
-    onDragLeaveSeparator: (event) => dragLeaveBdcSeparator(event, state),
+    onDragLeaveDropTarget: (event) => dragLeaveBdcSeparator(event, state),
     onDropBdc: (event, index) => dropBdc(event, index, state),
   })
 }
 
-/** Renders one compact author command with a short visible label and full accessible name. */
+/** Renders one labeled author command for the page's add-content menu. */
 function renderCreateButton(
   id: string,
   label: string,
@@ -278,6 +333,29 @@ function renderChapterTypeMark(chapter: LearningChapter): RemixNode {
       {presentation.label}
     </span>}
   </span>
+}
+
+/** Returns the type icon and visible name used by one page BDC navigation point. */
+function bdcNavigationPresentation(bdc: LearningBdc): Readonly<{
+  icon: Parameters<typeof renderLucideIcon>[0]
+  label: string
+}> {
+  switch (bdc.type) {
+    case BDC_TYPE.SECTION:
+      return { icon: FileText, label: 'Texte' }
+    case BDC_TYPE.QUESTION:
+      return { icon: ListChecks, label: 'Quiz' }
+    case BDC_TYPE.EVALUATION_RESULT:
+      return { icon: BadgeCheck, label: 'Résultat' }
+    case BDC_TYPE.CAROUSEL:
+      return { icon: Images, label: 'Carousel' }
+    case BDC_TYPE.CARD:
+      return { icon: RectangleHorizontal, label: 'Carte' }
+    case BDC_TYPE.STATISTICAL_GRAPH:
+      return { icon: Activity, label: 'Graphe' }
+    default:
+      return { icon: FileText, label: 'Bloc' }
+  }
 }
 
 /** Renders one BDC with its native Remix editor and established action facade. */
@@ -409,6 +487,123 @@ function beginBdcDrag(event: DragEvent, bdcId: string, state: PageEditorRenderSt
   state.setDraggedBdcId(bdcId)
   transfer.effectAllowed = 'move'
   transfer.setData(BDC_ORDER.MIME_TYPE, bdcId)
+}
+
+/** Resolves a before/after insertion index from the half of a rail icon under the pointer. */
+function bdcNavigationDropPosition(
+  event: DragEvent,
+  bdcId: string,
+  targetIndex: number,
+  state: PageEditorRenderState,
+): Readonly<{ index: number; targetId: string }> | null {
+  const page = state.current.view.selectedPage
+  const draggedBdcId = state.draggedBdcId()
+  const target = event.currentTarget
+  if (page === undefined || draggedBdcId === null || draggedBdcId === bdcId) return null
+  if (page.bdcIds[targetIndex] !== bdcId) return null
+  if (!(target instanceof HTMLElement)) return null
+
+  const sourceIndex = page.bdcIds.indexOf(draggedBdcId)
+  if (sourceIndex < 0) return null
+  const bounds = target.getBoundingClientRect()
+  const position = event.clientY < bounds.top + bounds.height / 2 ? 'before' : 'after'
+  const targetInsertionIndex = targetIndex + (position === 'after' ? 1 : 0)
+  const index = sourceIndex < targetInsertionIndex ? targetInsertionIndex - 1 : targetInsertionIndex
+  if (sourceIndex === index) return null
+  if (!state.canMoveBdcToPage(state.current.view.documentModel, draggedBdcId, page.id, index)) return null
+  return { index, targetId: `elce-page-bdc-navigation-drop-${bdcId}-${position}` }
+}
+
+/** Highlights an icon's before/after edge while a page BDC is dragged over it. */
+function dragOverBdcNavigationItem(
+  event: DragEvent,
+  bdcId: string,
+  targetIndex: number,
+  state: PageEditorRenderState,
+): void {
+  if (event.dataTransfer === null) return
+  const target = bdcNavigationDropPosition(event, bdcId, targetIndex, state)
+  if (target === null) return
+  event.preventDefault()
+  event.stopPropagation()
+  event.dataTransfer.dropEffect = 'move'
+  state.updateDropTarget(target.targetId)
+}
+
+/** Moves a dragged page BDC before or after the activated rail icon. */
+function dropBdcNavigationItem(
+  event: DragEvent,
+  bdcId: string,
+  targetIndex: number,
+  state: PageEditorRenderState,
+): void {
+  const target = bdcNavigationDropPosition(event, bdcId, targetIndex, state)
+  if (target !== null) dropBdc(event, target.index, state)
+}
+
+/** Accepts only a direct BDC from the selected page as a trash drop target. */
+function dragOverBdcTrash(event: DragEvent, state: PageEditorRenderState): void {
+  const page = state.current.view.selectedPage
+  const bdcId = state.draggedBdcId()
+  if (event.dataTransfer === null || page === undefined || bdcId === null || !page.bdcIds.includes(bdcId)) return
+  event.preventDefault()
+  event.stopPropagation()
+  event.dataTransfer.dropEffect = 'move'
+  state.updateDropTarget(`elce-page-bdc-trash-${page.id}-drop`)
+}
+
+/** Deletes the dragged direct page BDC through its existing typed editor action. */
+function dropBdcOnTrash(event: DragEvent, state: PageEditorRenderState): void {
+  const page = state.current.view.selectedPage
+  const bdcId = state.draggedBdcId()
+  const bdc = state.current.view.selectedPageBdcs.find((candidate) => candidate.id === bdcId)
+  if (event.dataTransfer === null || page === undefined || bdcId === null || bdc === undefined
+    || !page.bdcIds.includes(bdcId)) {
+    state.updateDropTarget(null)
+    return
+  }
+  event.preventDefault()
+  event.stopPropagation()
+  if (deletePageBdc(bdc, state) && !state.hasBdc(bdcId)) state.animateTrashDropSuccess()
+  endBdcDrag(state)
+}
+
+/** Routes deletion through the same resource command used by each BDC editor. */
+function deletePageBdc(bdc: LearningBdc, state: PageEditorRenderState): boolean {
+  const document = state.current.view.documentModel
+  switch (bdc.type) {
+    case BDC_TYPE.SECTION:
+      state.actions.deleteSection(bdc.id)
+      return true
+    case BDC_TYPE.QUESTION:
+      if (bdc.question == null) return false
+      state.actions.createQuestionEditorActions(bdc.id, bdc.question).deleteQuestion()
+      return true
+    case BDC_TYPE.EVALUATION_RESULT:
+      if (bdc.evaluationResult == null) return false
+      state.actions.deleteEvaluationResult(bdc.id)
+      return true
+    case BDC_TYPE.CAROUSEL:
+      if (bdc.carousel == null) return false
+      state.actions.createCarouselEditorActions(
+        bdc.id,
+        bdc.carousel,
+        bdc.carousel.cards.flatMap((entry) => {
+          const child = document.bdcs.find((candidate) => candidate.id === entry.bdcId)
+          return child === undefined ? [] : [child]
+        }),
+        document.data.revelationDefaults,
+      ).deleteCarousel()
+      return true
+    case BDC_TYPE.CARD:
+      state.actions.deleteCard(bdc.id)
+      return true
+    case BDC_TYPE.STATISTICAL_GRAPH:
+      state.actions.deleteStatisticalGraph(bdc.id)
+      return true
+    default:
+      return false
+  }
 }
 
 /** Highlights a page separator only while a BDC is being dragged. */

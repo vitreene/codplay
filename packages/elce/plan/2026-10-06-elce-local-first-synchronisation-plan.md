@@ -226,10 +226,23 @@ ne fait partie de cette tranche.
 
 **Avancement au 3 novembre 2026 — En cours :** le champ de transition Carte,
 son select partagé, la résolution d’héritage, les migrations document/SQLite,
-le cadre stable du Flux et le seuil numérique de phase sont implémentés. Les
-tests, typechecks, build et parcours navigateur n’ont pas été relancés ; les
-spécifications restent donc sur le dernier comportement vérifié jusqu’à
-l’acceptation de cette tranche.
+le cadre stable du Flux et le seuil numérique de phase sont implémentés. Un test
+ciblé vérifie que deux BDC créés par `LearningEditorFacade` traversent le même
+acteur XState, survivent à un changement de page et sont rechargés après trois
+révisions SQLite/API successives. Le 3 novembre 2026, le listener API obsolète
+a été remplacé ; la migration SQLite a fait passer le document ciblé « Test
+Elcé — liens et date » de v9 à v10. Dans l’éditeur réel, deux Cartes ajoutées
+successivement puis un Quiz ont été sauvegardés aux révisions 37, 38 et 39 ;
+après rechargement, les six BDC sont toujours présents et l’état indique
+« Synchronisé ».
+
+Le Quiz de la copie locale précédente n’a pas pu être récupéré après le
+rechargement. Avec l’accord de l’utilisateur, un nouveau Quiz au contenu par
+défaut a été créé ; il ne s’agit pas de la restauration de son ancien contenu.
+Le lanceur local peut réutiliser un serveur API déjà présent sur `5181` si son
+contrôle CORS passe, sans comparer les versions documentaires ; ce garde-fou
+reste à examiner. La validation complète des transitions de révélation dans le
+lecteur reste ouverte, donc la tranche demeure En cours.
 
 **Centralisation des réglages de révélation — décision acceptée le 23 octobre
 2026 :** les réglages et leur héritage sont résolus dans une couche Elcé

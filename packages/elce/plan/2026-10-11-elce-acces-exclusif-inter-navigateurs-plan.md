@@ -566,3 +566,30 @@ relancer l’éditeur avec son API courante. Au démarrage, vérifier que le mes
 indique `API Elcé disponible`, pas `API Elcé réutilisée`. Ne pas reproduire
 l’édition avant ce redémarrage, car aucun diagnostic n’est encore émis par le
 serveur actuellement actif.
+
+## Correction du 3 novembre 2026 — écritures SQLite du bail au repos
+
+**Statut : implémentation appliquée ; validation à terminer.**
+L’éditeur renouvelle actuellement le bail par `PUT /edit-access` toutes les
+trois secondes. Chaque appel met à jour `projects.edit_lease_expires_at`, même
+si le document n’a pas changé.
+
+Au repos, la correction remplace le renouvellement périodique par une
+vérification en lecture seule du détenteur courant. Le renouvellement périodique
+reste actif tant qu'une synchronisation, un transfert média ou le sélecteur de
+fichiers est en cours. L’expiration rend le bail récupérable par une autre page ;
+elle ne rend pas invalide le détenteur tant que sa paire page/droit reste celle
+de la ligne. Toute acquisition qui remplace cette paire invalide immédiatement
+l’ancien détenteur. Les mutations réellement effectuées par le détenteur
+prolongent le bail dans la même transaction que leur écriture. Ainsi, un
+éditeur sans activité ne modifie pas SQLite, tandis que les mutations
+concurrentes restent sérialisées sur la ligne du projet.
+
+**Implémentation appliquée ; acceptation restante :** couvrir la lecture
+périodique sans écriture au repos, le renouvellement pendant une synchronisation
+et un sélecteur de fichiers actif, la prolongation atomique par sauvegarde
+documentaire, renommage et publication média, la reprise d’un bail expiré avant
+qu’il soit repris, le refus de l’ancien droit après remplacement, et l’absence
+de régression du transfert de focus et de l’upload média. Après cette
+validation, mettre à jour les spécifications de session, d’accès et d’API avec
+le contrat appliqué.

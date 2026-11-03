@@ -11,11 +11,11 @@ import { renderEditorWorkspace } from './learning-workspace'
 import type { DraggedScenarioEntry, ResponsivePanel } from './learning-workspace-types'
 
 describe('Remix editor workspace', () => {
-  it('shows the optional summary first without changing document pages or insertion positions', async () => {
+  it('keeps the summary first in the scenario without changing document pages or insertion positions', async () => {
     const { controller, mount, cleanup } = createWorkspace()
     const initial = controller.getSnapshot().context.document
     let rendered = mount()
-    expect(rendered.$('#elce-scenario-summary-entry')).toBeNull()
+    expect(rendered.$('#elce-scenario-entry-list')?.firstElementChild?.id).toBe('elce-scenario-summary-entry')
     rendered.cleanup()
 
     controller.send({ type: 'document.apply', command: {
@@ -34,7 +34,7 @@ describe('Remix editor workspace', () => {
     await rendered.act(() => checkbox.click())
     rendered.cleanup()
     rendered = mount()
-    expect(rendered.$('#elce-scenario-summary-entry')).toBeNull()
+    expect(rendered.$('#elce-scenario-entry-list')?.firstElementChild?.id).toBe('elce-scenario-summary-entry')
     expect(controller.getSnapshot().context.document.pages).toEqual(initial.pages)
     expect(controller.getSnapshot().context.document.data.scenarioEntries).toEqual(initial.data.scenarioEntries)
 
@@ -200,9 +200,9 @@ describe('Remix editor workspace', () => {
     const { controller, mount, cleanup, setProfileTokenTargetId } = createWorkspace()
     let rendered = mount()
 
-    expect(rendered.$('#elce-summary-profile-open')?.getAttribute('aria-label')).toBe('Sommaire')
-    expect(rendered.$('#elce-summary-profile-open-icon')?.classList.contains('lucide-list')).toBe(true)
-    await rendered.act(() => rendered.$('#elce-summary-profile-open')?.dispatchEvent(new Event('click', { bubbles: true })))
+    expect(rendered.$('#elce-scenario-summary-page')).not.toBeNull()
+    expect(rendered.$('#elce-scenario-summary-page-icon')?.classList.contains('lucide-list')).toBe(true)
+    await rendered.act(() => rendered.$('#elce-scenario-summary-page')?.dispatchEvent(new Event('click', { bubbles: true })))
     rendered.cleanup()
     rendered = mount()
     expect(rendered.$('#elce-summary-profile-settings-title')?.textContent).toBe('Sommaire')
@@ -219,7 +219,7 @@ describe('Remix editor workspace', () => {
     rendered = mount()
     expect(rendered.$('#elce-profile-property-list')?.children).toHaveLength(1)
 
-    await rendered.act(() => rendered.$('#elce-summary-profile-open')?.dispatchEvent(new Event('click', { bubbles: true })))
+    await rendered.act(() => rendered.$('#elce-scenario-summary-page')?.dispatchEvent(new Event('click', { bubbles: true })))
     rendered.cleanup()
     rendered = mount()
     expect(rendered.$('#elce-content-catalog-title')?.textContent).toBe('Contenus')

@@ -56,7 +56,7 @@ export class ProjectApiController<Document extends ProjectApiDocument> {
     }
   }
 
-  /** Renews the caller's live grant without extending an expired right. */
+  /** Renews the caller's exact grant when the page has active work. */
   public async renewEditAccess(request: Request, projectId: string): Promise<Response> {
     const grant = projectEditGrantFrom(request)
     if (grant === null) return missingProjectEditGrant()

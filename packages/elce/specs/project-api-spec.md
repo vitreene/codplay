@@ -3,12 +3,12 @@
 ## Rôle
 
 Le routeur Fetch Remix expose les opérations du catalogue local des projets.
-Les projets existants peuvent conserver un document v7, v8 ou v9. Le navigateur
-lit ces formats ; `LearningDocument.fromJSON()` migre les formats v7 et v8 en
-v9 dans l’éditeur. Les créations et remplacements envoyés par l’éditeur utilisent
-le format courant v9. Le navigateur crée le document initial ; le serveur reçoit
-ensuite sa valeur structurée et la persiste. Le routeur ne crée pas un second
-document initial.
+Les projets existants peuvent conserver un document v7, v8, v9 ou v10. Le
+navigateur lit ces formats ; `LearningDocument.fromJSON()` migre les formats
+v7, v8 et v9 en v10 dans l’éditeur. Les créations et remplacements envoyés par
+l’éditeur utilisent le format courant v10. Le navigateur crée le document
+initial ; le serveur reçoit ensuite sa valeur structurée et la persiste. Le
+routeur ne crée pas un second document initial.
 
 Cette spécification décrit le contrat HTTP du routeur et du contrôleur. La
 frontière `ProjectPersistence` isole le stockage ; ce contrat ne transforme
@@ -59,10 +59,10 @@ lorsqu’une copie indépendante récupère les médias du projet source.
 
 | Méthode et chemin | Requête | Réponse |
 | --- | --- | --- |
-| `POST /api/exports/sighty` | `multipart/form-data` : `document` JSON v7, v8 ou v9 et un fichier `media:<id>` par média référencé | `200 application/zip`, `Content-Disposition: attachment; filename="<nom>.sighty.zip"`, `Cache-Control: no-store` ; aucune persistance |
+| `POST /api/exports/sighty` | `multipart/form-data` : `document` JSON v7, v8, v9 ou v10 et un fichier `media:<id>` par média référencé | `200 application/zip`, `Content-Disposition: attachment; filename="<nom>.sighty.zip"`, `Cache-Control: no-store` ; aucune persistance |
 | `POST /api/exports/scorm` | `multipart/form-data` : `sightyPackage` ZIP, `documentName`, `version` (`1.2`, `2004v3` ou `2004v4`) et `monoSco` (`true` ou `false`) | `200 application/zip`, nom stable dans `Content-Disposition` et `X-Elce-Scorm-Filename`, nombre de packages dans `X-Elce-Scorm-Package-Count`, `Cache-Control: no-store` ; aucune persistance |
 | `GET /api/projects` | — | `200 { "projects": [{ "id", "name", "revision" }] }` |
-| `POST /api/projects` | `ElceDocumentData` v9 en JSON | `201 { "project": { "id", "name", "revision": 0 } }` et `ETag: "0"` |
+| `POST /api/projects` | `ElceDocumentData` v10 en JSON | `201 { "project": { "id", "name", "revision": 0 } }` et `ETag: "0"` |
 | `GET /api/projects/:projectId` | — | `200 { "project", "document" }` et l’ETag de la révision courante |
 | `POST /api/projects/:projectId/edit-access` | `{ "pageId": string, "force"?: true }` | `200 { "grantId": string, "recovered": boolean }` ; une répétition normale par la page détentrice retrouve son droit ; `force: true` le remplace |
 | `GET /api/projects/:projectId/edit-access` | En-têtes de droit | `200 { "held": boolean }` |
@@ -70,16 +70,16 @@ lorsqu’une copie indépendante récupère les médias du projet source.
 | `DELETE /api/projects/:projectId/edit-access` | En-têtes de droit | `204` si la paire courante a libéré le droit |
 | `PATCH /api/projects/:projectId` | `{ "name": string }` et en-têtes de droit | `200 { "project" }`, avec le nom mis à jour, la révision suivante et son ETag |
 | `DELETE /api/projects/:projectId` | En-têtes de droit | `204` |
-| `PUT /api/projects/:projectId/document` | `ElceDocumentData` v9, `If-Match: "<revision>"` et en-têtes de droit | `200 { "project" }` et l’ETag de la nouvelle révision |
+| `PUT /api/projects/:projectId/document` | `ElceDocumentData` v10, `If-Match: "<revision>"` et en-têtes de droit | `200 { "project" }` et l’ETag de la nouvelle révision |
 | `GET /api/projects/:projectId/test-state` | — | `200 { "state" }` et un ETag de révision indépendant |
 | `PUT /api/projects/:projectId/test-state` | `{ "state": ProjectTestState }`, `If-Match: "<revision>"` | `200 { "state" }` et l’ETag suivant ; `412` si périmé |
 | `PUT /api/projects/:projectId/test-state/profile` | `{ "profileValues": ProjectTestState["profileValues"] }`, `If-Match: "<revision>"` | Enregistre le profil soumis sans remplacer les autres champs de l’état ; `200 { "state" }` et l’ETag suivant ; `412` si périmé |
 | `PUT /api/projects/:projectId/media/:mediaId` | Octets du média en corps brut et en-têtes de droit | `201 { "media": { "id", "url" } }`, ou `204` si les octets sont déjà enregistrés sous cette ressource |
 | `GET /api/projects/:projectId/media/:mediaId` | — | Fichier média avec son type MIME et sa taille |
 
-Les corps JSON de création et de remplacement sont les documents v9 structurés
+Les corps JSON de création et de remplacement sont les documents v10 structurés
 produits par `LearningDocument.toJSON()`. La route d’export Sighty peut aussi
-lire les formats v7 et v8 et les reconstitue avant l’export. La persistance
+lire les formats v7 à v9 et les reconstitue avant l’export. La persistance
 projette le document vers les tables ; le JSON riche de Tiptap et le contenu
 complet du BDC Graphe sont les deux champs JSON en base. Les autres BDC, dont
 Question/Réponses, conservent leurs projections relationnelles.
@@ -124,7 +124,7 @@ spécifiques :
 
 | Statut | Code | Sens |
 | --- | --- | --- |
-| `400` | `invalid_request` | JSON, document v9, identifiant ou nom de type invalide ; un `PUT /document` ajoute le diagnostic décrit ci-dessous |
+| `400` | `invalid_request` | JSON, document v10, identifiant ou nom de type invalide ; un `PUT /document` ajoute le diagnostic décrit ci-dessous |
 | `404` | `project_not_found` | Le projet demandé n’existe pas |
 | `409` | `project_already_exists` | L’identifiant du document existe déjà |
 | `409` | `edit_access_occupied` / `edit_access_lost` | Une autre page détient le projet, ou la paire envoyée n’est plus courante |
@@ -161,7 +161,7 @@ attente afin de pouvoir l’inspecter ou la récupérer.
 `remix/data-table/sqlite`. À l’ouverture, `openProjectDatabase()` applique les
 migrations SQL chargées avec `loadMigrations()` de Remix. Les tables relationnelles
 stockent les champs du modèle ; la colonne `format_version` permet de lire les
-documents v7, v8 et v9, et les migrations ajoutent les colonnes des versions
+documents v7 à v10, et les migrations ajoutent les colonnes des versions
 ultérieures. Aucune table ne contient le document Elcé entier en JSON.
 `sections.content_json` garde le JSON Tiptap et
 `sections.markup_html` son export HTML. `statistical_graphs` garde le contenu
@@ -184,6 +184,10 @@ v7 et l’éditeur l’ouvre sans erreur de version.
 La migration `20261015100000_add_summary_page_continuation_mode` complète les
 réglages existants avec `pageContinuationMode: "endpage"` seulement quand cette
 clé manque ; elle préserve une valeur déjà enregistrée.
+La migration `20261103120000_add_card_revelation` ajoute les colonnes
+`intro_transition_ref` et `outro_transition_ref` à `cards` et fait passer les
+projets v9 au format v10. Les deux colonnes sont nullables afin de conserver les
+remplacements de transition par Carte sans réécrire les valeurs existantes.
 
 Le dépôt restitue le document à partir des lignes `projects`, `chapters`,
 `pages`, `scenario_entries`, `catalog_pages`, `media_resources`,
@@ -271,7 +275,7 @@ services communs dans `core/server/http/` ; la composition du routeur et le
 stockage SQLite restent possédés par Learning. Les tests couvrent les
 opérations API avec le dépôt isolé, puis avec SQLite Remix en mémoire. Une base
 fichier est fermée puis rouverte ; les projets restent lisibles et le document
-v9 conserve ses relations et ordres. La révision périmée est refusée sans
+v10 conserve ses relations et ordres. La révision périmée est refusée sans
 perdre les métadonnées de stockage média.
 
 `createElceHttpServer()` assemble le listener Node, le routeur Fetch Remix,

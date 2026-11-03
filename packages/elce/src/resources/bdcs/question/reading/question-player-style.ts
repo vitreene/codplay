@@ -32,7 +32,7 @@ export const QUESTION_PLAYER_STYLE_RULES = [
 .elce-card--question legend {
   width: 100%;
   margin: 0 0 0.8rem;
-  font-size: max(1.05rem, 2.76cqi);
+  font-size: max(1.05rem, var(--elce-reading-font-size-cqi));
   font-weight: 700;
   line-height: 1.4;
 }`],
@@ -40,7 +40,7 @@ export const QUESTION_PLAYER_STYLE_RULES = [
 
 .elce-question-instructions {
   margin: 0 0 0.5rem;
-  font-size: max(0.9rem, 2.76cqi);
+  font-size: max(0.9rem, var(--elce-reading-font-size-cqi));
 }`],
   [114, `
 
