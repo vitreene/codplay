@@ -1,5 +1,6 @@
 import { ELCE_EDITOR_SETTINGS } from '../../config/editor-settings'
 import { CAROUSEL_BDC_TYPE } from '../../resources/bdcs/carousel/carousel-config'
+import { CARD_BDC_TYPE } from '../../resources/bdcs/card/card-config'
 import { SECTION_BDC_TYPE } from '../../resources/bdcs/section/section-config'
 import type { ContentPage } from '../../core/document/content-document-types'
 import type { BdcId } from '../../core/document/content-document-types'
@@ -58,10 +59,15 @@ export class ElceEditorSettingsResolver {
       const defaults = byBdcId[bdcId]
       const entries: Record<BdcId, RevelationTransitionDefaults> = {}
       for (const entry of bdc.carousel.cards) {
-        entries[entry.bdcId] = {
-          intro: entry.introTransitionRef ?? defaults.intro,
-          outro: entry.outroTransitionRef ?? defaults.outro,
-        }
+        const entryBdc = bdcsById.get(entry.bdcId)
+        if (entryBdc === undefined) throw new Error(`La vue ${entry.bdcId} du Carousel ${bdc.id} est introuvable.`)
+        entries[entry.bdcId] = this.resolveBdcRevelation(
+          entryBdc,
+          bdcsById,
+          projectDefaults,
+          resolvedByBdcId,
+          resolvingBdcIds,
+        )
       }
       carouselsByBdcId[bdcId] = {
         defaults,
@@ -114,9 +120,18 @@ export class ElceEditorSettingsResolver {
     if (bdc.parentBdcId !== null && parent === undefined) {
       throw new Error(`Le BDC parent ${bdc.parentBdcId} du BDC ${bdc.id} est introuvable.`)
     }
-    const inherited = parent === undefined
+    const parentSettings = parent === undefined
       ? projectDefaults
       : this.resolveBdcRevelation(parent, bdcsById, projectDefaults, resolvedByBdcId, resolvingBdcIds)
+    const placement = parent?.type === CAROUSEL_BDC_TYPE
+      ? parent.carousel?.cards.find((entry) => entry.bdcId === bdc.id)
+      : undefined
+    const inherited = placement === undefined
+      ? parentSettings
+      : this.resolveOverrides(parentSettings, {
+        intro: placement.introTransitionRef,
+        outro: placement.outroTransitionRef,
+      })
     const resolved = this.resolveOverrides(inherited, this.revelationOverrides(bdc))
     resolvingBdcIds.delete(bdc.id)
     resolvedByBdcId.set(bdc.id, resolved)
@@ -130,6 +145,8 @@ export class ElceEditorSettingsResolver {
         return bdc.section?.revelation ?? null
       case CAROUSEL_BDC_TYPE:
         return bdc.carousel?.revelation ?? null
+      case CARD_BDC_TYPE:
+        return bdc.card?.revelation ?? null
       default:
         return null
     }

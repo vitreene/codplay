@@ -4,6 +4,7 @@ import { on, type Handle, type RemixNode } from 'remix/ui'
 import { CARD_BDC_TYPE, CARD_PRESET_ID } from '../card-config'
 import { CARD_IMAGE_FIT, CARD_IMAGE_FIT_OPTIONS, CARD_LAYOUT_OPTIONS } from '../card-config'
 import { CAROUSEL_CONFIG, CAROUSEL_IMAGE_POSITION_OPTIONS } from '../../carousel/carousel-config'
+import { CAROUSEL_TRANSITION_OPTIONS, REVELATION_TRANSITION_PAIRS } from '../../../revelation/revelation-config'
 import { CATALOG_REFERENCE } from '../../../../core/catalog/catalog-config'
 import { MEDIA_FILE_ACCEPT, MEDIA_TYPE } from '../../../../core/media/media-config'
 import type { CardLayoutId } from '../card-config'
@@ -89,6 +90,7 @@ function renderCardFields(
     >
       {[
         renderCardLayoutSelect(bdcId, presetId, actions, idPrefix),
+        renderCardTransitionSetting(bdcId, card, actions, idPrefix),
         toolbarContent,
         ...renderCardPresentationSettings(bdcId, presetId, card, mediaById, actions, idPrefix),
         toolbarEnd,
@@ -96,6 +98,66 @@ function renderCardFields(
     </div>
     {renderCardContent(bdcId, presetId, card, mediaById, actions, idPrefix, imageAspectRatio, allowMultipleMediaFiles, importMediaFiles, textFieldAttributes, textFieldFeature)}
   </div>
+}
+
+/** Renders the one Card-level control for the logical intro/outro pair. */
+function renderCardTransitionSetting(
+  bdcId: BdcId,
+  card: CardContent,
+  actions: ElceCardEditorActions,
+  idPrefix: string,
+): RemixNode {
+  const inherits = card.revelation.intro === null && card.revelation.outro === null
+  const preset = Object.entries(REVELATION_TRANSITION_PAIRS)
+    .find(([, pair]) => pair.intro === card.revelation.intro && pair.outro === card.revelation.outro)?.[0]
+  const custom = !inherits && preset === undefined
+  return <label
+    id={`${idPrefix}-card-transition-label-${bdcId}`}
+    className="elce-carousel-editor__setting elce-carousel-editor__setting--card-transition"
+  >
+    <span id={`${idPrefix}-card-transition-caption-${bdcId}`}>
+      Transition de la Carte
+    </span>
+    <select
+      id={`${idPrefix}-card-transition-${bdcId}`}
+      aria-label="Transition de la Carte"
+      mix={on<HTMLSelectElement, 'change'>('change', (event) => {
+        const value = event.currentTarget.value
+        if (value === '') {
+          actions.setRevelation(bdcId, { intro: null, outro: null })
+          return
+        }
+        const pair = REVELATION_TRANSITION_PAIRS[value as keyof typeof REVELATION_TRANSITION_PAIRS]
+        if (pair !== undefined) actions.setRevelation(bdcId, pair)
+      })}
+    >
+      <option
+        id={`${idPrefix}-card-transition-option-inherit-${bdcId}`}
+        value=""
+        selected={inherits}
+      >
+        Hériter des réglages
+      </option>
+      {custom
+        ? <option
+          id={`${idPrefix}-card-transition-option-custom-${bdcId}`}
+          value="custom"
+          disabled={true}
+          selected={true}
+        >
+          Personnalisée
+        </option>
+        : null}
+      {CAROUSEL_TRANSITION_OPTIONS.map((option) => <option
+        id={`${idPrefix}-card-transition-option-${bdcId}-${option.value}`}
+        key={option.value}
+        value={option.value}
+        selected={option.value === preset}
+      >
+        {option.label}
+      </option>)}
+    </select>
+  </label>
 }
 
 /** Renders the layout selector for one identified Card BDC. */

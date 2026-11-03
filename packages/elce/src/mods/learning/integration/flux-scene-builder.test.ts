@@ -183,16 +183,16 @@ describe('Elcé Flux scene builder', () => {
     })
 
     const pagePersos = build.sceneDoc.stories['page-a-page']?.persos ?? []
-    expect(pagePersos).toHaveLength(6)
+    expect(pagePersos).toHaveLength(7)
     expect(pagePersos[3]).toMatchObject({
       type: 'layout',
       initial: {
-        markup: expect.stringContaining('<!-- data-part="page-a:bdc-image-1:card:bdc-image-1:media" -->'),
+        markup: expect.stringContaining('<!-- data-part="page-a-bdc-image-1-card:visual" -->'),
         move: { target: 'page-a:bdc-image-1:card:mount' },
       },
       emit: { observe: {
         root: 'page-a-scrollport',
-        zone: { threshold: 0 },
+        zone: { threshold: 0.15 },
         enter: [{ name: 'page-a-bdc-image-1-card:enter' }],
         leave: [{ name: 'page-a-bdc-image-1-card:leave' }],
       } },
@@ -200,11 +200,10 @@ describe('Elcé Flux scene builder', () => {
     expect(pagePersos[3]?.initial).not.toHaveProperty('style')
     expect(pagePersos[3]?.actions).toBeUndefined()
     expect(pagePersos[4]).toMatchObject({
-      type: 'img',
+      type: 'layout',
       initial: {
-        src: 'blob:image-1',
         style: { opacity: 1, x: 0 },
-        move: { target: 'page-a:bdc-image-1:card:bdc-image-1:media' },
+        move: { target: 'page-a-bdc-image-1-card:visual' },
       },
       actions: {
         'page-a-bdc-image-1-card:enter': { style: {
@@ -217,7 +216,15 @@ describe('Elcé Flux scene builder', () => {
         } },
       },
     })
-    expect(pagePersos[5]).toMatchObject({ type: 'layout', id: 'page-a-page-viewport-expansion-host' })
+    expect(pagePersos[5]).toMatchObject({
+      type: 'img',
+      initial: {
+        src: 'blob:image-1',
+        move: { target: 'page-a:bdc-image-1:card:bdc-image-1:media' },
+      },
+    })
+    expect(pagePersos[5]?.actions).toBeUndefined()
+    expect(pagePersos[6]).toMatchObject({ type: 'layout', id: 'page-a-page-viewport-expansion-host' })
   })
 
   it('mounts an image bdc at the exported anchor inside the text flow', () => {
@@ -274,12 +281,12 @@ describe('Elcé Flux scene builder', () => {
       },
       emit: { observe: {
         root: 'page-a-scrollport',
-        zone: { threshold: 0 },
+        zone: { threshold: 0.15 },
         enter: [{ name: 'page-a-bdc-image-1-card:enter' }],
         leave: [{ name: 'page-a-bdc-image-1-card:leave' }],
       } },
     })
-    expect(pageStory?.persos[3]?.initial).toMatchObject({
+    expect(pageStory?.persos[4]?.initial).toMatchObject({
       className: expect.stringContaining('appearance-test'),
     })
     expect(pageStory?.persos[3]?.initial).not.toHaveProperty('style')
@@ -287,12 +294,8 @@ describe('Elcé Flux scene builder', () => {
     expect(build.styleSheets.join('\n')).toContain(`position-anchor: ${anchorNameFor('page-a:bdc-image-1:anchor')}`)
     expect(build.styleSheets.join('\n')).toContain('z-index: 1;')
     expect(pageStory?.persos[4]).toMatchObject({
-      type: 'img',
-      initial: {
-        src: 'blob:image-1',
-        style: { opacity: 1, x: 0 },
-        move: { target: 'page-a:bdc-section-1:card:bdc-image-1:media' },
-      },
+      type: 'layout',
+      initial: { move: { target: 'page-a-bdc-image-1-card:visual' }, style: { opacity: 1, x: 0 } },
       actions: {
         'page-a-bdc-image-1-card:enter': { style: {
           opacity: { from: 0, to: 1, duration: 300 },
@@ -304,9 +307,17 @@ describe('Elcé Flux scene builder', () => {
         } },
       },
     })
+    expect(pageStory?.persos[5]).toMatchObject({
+      type: 'img',
+      initial: {
+        src: 'blob:image-1',
+        move: { target: 'page-a:bdc-section-1:card:bdc-image-1:media' },
+      },
+    })
+    expect(pageStory?.persos[5]?.actions).toBeUndefined()
   })
 
-  it('keeps the reveal on the root for a Card without media', () => {
+  it('applies the reveal to the whole Card without media', () => {
     const initial = learningDocumentService.createInitialDocument()
     const createdCard = applyDocumentCommand(initial, {
       type: 'bdc.create',
@@ -317,7 +328,7 @@ describe('Elcé Flux scene builder', () => {
     })
     const persos = buildFluxSceneForTest(createdCard.pages[0]!, createdCard.bdcs).sceneDoc.stories['page-a-page']?.persos ?? []
 
-    expect(persos.find((perso) => perso.id === 'page-a-bdc-text-card-card')).toMatchObject({
+    expect(persos.find((perso) => perso.id === 'page-a-bdc-text-card-card-visual')).toMatchObject({
       initial: { style: { opacity: 1, x: 0 } },
       actions: {
         'page-a-bdc-text-card-card:enter': { style: { x: { from: -250, to: 0, duration: 300 } } },
@@ -343,15 +354,11 @@ describe('Elcé Flux scene builder', () => {
       mediaSources: { 'media-video-1': 'blob:video-1' },
       mediaTypes: { 'media-video-1': MEDIA_TYPE.VIDEO },
     })
-    const videoPerso = build.sceneDoc.stories['page-a-page']?.persos[4]
+    const visualPerso = build.sceneDoc.stories['page-a-page']?.persos[4]
+    const videoPerso = build.sceneDoc.stories['page-a-page']?.persos[5]
 
-    expect(videoPerso).toMatchObject({
-      type: 'media',
-      initial: {
-        tag: 'video', src: 'blob:video-1', controls: true, sync: 'independent',
-        style: { opacity: 1, x: 0 },
-        move: { target: 'page-a:bdc-video-1:card:bdc-video-1:media' },
-      },
+    expect(visualPerso).toMatchObject({
+      type: 'layout',
       actions: {
         'page-a-bdc-video-1-card:enter': { style: {
           opacity: { from: 0, to: 1, duration: 300 },
@@ -359,6 +366,14 @@ describe('Elcé Flux scene builder', () => {
         } },
       },
     })
+    expect(videoPerso).toMatchObject({
+      type: 'media',
+      initial: {
+        tag: 'video', src: 'blob:video-1', controls: true, sync: 'independent',
+        move: { target: 'page-a:bdc-video-1:card:bdc-video-1:media' },
+      },
+    })
+    expect(videoPerso?.actions).toBeUndefined()
   })
 
   it('projects Question inputs, instructions, validation, and reset as a CodPlay story', () => {

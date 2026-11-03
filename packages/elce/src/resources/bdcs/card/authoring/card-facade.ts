@@ -8,6 +8,7 @@ import type { BdcId } from '../../../../core/document/content-document-types'
 import { ElceMediaResourceService } from '../../../../domain/media/media-resource-service'
 import { ElceCardService } from '../domain/card-service'
 import type { ElceTextValue } from '../../../document/rich-text-types'
+import type { RevelationTransitionOverrides } from '../../../revelation/revelation-types'
 
 /** Routes shared standalone and Carousel Card edits through document commands. */
 export class ElceCardFacade {
@@ -41,6 +42,9 @@ export class ElceCardFacade {
       },
       setImageFit: (targetBdcId, imageFit) => {
         updateCard(targetBdcId, (current) => this.cardService.setImageFit(current, imageFit))
+      },
+      setRevelation: (targetBdcId, revelation: RevelationTransitionOverrides) => {
+        updateCard(targetBdcId, (current) => this.cardService.setRevelation(current, revelation))
       },
       attachCatalogReference: (targetBdcId, reference: ElceCatalogReference) => {
         this.attachCatalogReference(targetBdcId, reference)

@@ -119,7 +119,7 @@ describe('SQLite project persistence through the Remix API', () => {
     const body = await opened.json() as { document: ReturnType<LearningDocument['toJSON']> }
     const restored = LearningDocument.fromJSON(body.document)
 
-    expect(restored.data.version).toBe(9)
+    expect(restored.data.version).toBe(10)
     expect(restored.bdcs.find((bdc) => bdc.id === 'bdc-card-photo')?.card?.message).toEqual(richMessage)
     expect(restored.bdcs.find((bdc) => bdc.id === 'bdc-question')?.question?.answers[0]?.label).toBe('Réponse conservée')
   })
@@ -151,7 +151,7 @@ describe('SQLite project persistence through the Remix API', () => {
     const page = await database.exec(rawSql(
       'SELECT allow_early_exit FROM pages WHERE project_id = ?', ['project-v8-page-setting'],
     ))
-    expect(migrated.rows?.[0]?.format_version).toBe(9)
+    expect(migrated.rows?.[0]?.format_version).toBe(10)
     expect(page.rows?.[0]?.allow_early_exit).toBeNull()
   })
 

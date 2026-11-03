@@ -202,7 +202,7 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
     })
   }
 
-  /** Creates a project from its browser-owned v9 document unless its id already exists. */
+  /** Creates a project from its browser-owned v10 document unless its id already exists. */
   public async createProject(document: LearningDocument): Promise<CreateProjectResult> {
     return this.database.transaction(async (transaction) => {
       const now = new Date().toISOString()
@@ -379,7 +379,7 @@ async function readStoredProject(database: ProjectDatabase, projectId: string): 
 
   const projectRow = projectRows[0]!
   const version = numberValue(projectRow, 'format_version')
-  if (version !== 7 && version !== 8 && version !== 9) {
+  if (version !== 7 && version !== 8 && version !== 9 && version !== 10) {
     throw new Error(`Version documentaire SQLite non prise en charge : ${String(projectRow.format_version)}`)
   }
   const document = await readDocument(database, projectRow)
@@ -597,6 +597,10 @@ function bdcFromRows(
       caption: decodeSqlText(nullableText(card, 'caption') ?? ''),
       imagePosition: stringValue(card, 'image_position') as NonNullable<LearningBdc['card']>['imagePosition'],
       imageFit: stringValue(card, 'image_fit') as NonNullable<LearningBdc['card']>['imageFit'],
+      revelation: {
+        intro: nullableText(card, 'intro_transition_ref') as NonNullable<LearningBdc['card']>['revelation']['intro'],
+        outro: nullableText(card, 'outro_transition_ref') as NonNullable<LearningBdc['card']>['revelation']['outro'],
+      },
     },
     ...(statisticalGraphContent === null ? {} : { statisticalGraph: statisticalGraphContent }),
   }
@@ -914,11 +918,13 @@ async function insertBdcDetail(database: ProjectDatabase, projectId: string, bdc
       await queryRows(database, `
         INSERT INTO cards (
           project_id, content_block_id, media_id, overline, title, description,
-          message, note, caption, image_position, image_fit
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          message, note, caption, image_position, image_fit,
+          intro_transition_ref, outro_transition_ref
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [projectId, bdc.id, card.mediaId, nullableSerializedText(card.overline), nullableSerializedText(card.title),
         nullableSerializedText(card.description), nullableSerializedText(card.message), nullableSerializedText(card.note),
-        nullableSerializedText(card.caption), card.imagePosition, card.imageFit])
+        nullableSerializedText(card.caption), card.imagePosition, card.imageFit,
+        card.revelation.intro, card.revelation.outro])
       return
     }
     case BDC_TYPE.STATISTICAL_GRAPH: {

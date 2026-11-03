@@ -85,7 +85,7 @@ export class ProjectApiController<Document extends ProjectApiDocument> {
     return Response.json({ projects })
   }
 
-  /** Creates a project from the current v9 document authored by the browser. */
+  /** Creates a project from the current v10 document authored by the browser. */
   public async createProject(request: Request): Promise<Response> {
     const body = await readJsonBody(request)
     if (body.kind === 'invalid') return apiError(API_ERROR.INVALID_REQUEST, 400)

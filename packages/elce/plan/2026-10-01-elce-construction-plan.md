@@ -378,7 +378,10 @@ le refus d’une action directe si la page n’est pas terminée.
 
 **État, 25 octobre :** le défaut est appliqué au code et au projet Demo5 par la
 commande `document.revelation.update` (révision 32) ; aucun remplacement local
-de BDC n’a été modifié ; le défaut des transitions entre cartes reste « Fondu ».
+de BDC n’a été modifié. À cette date, le Carousel gardait encore son défaut
+« Fondu » distinct. Le 3 novembre 2026, ce défaut concurrent a été supprimé :
+les Carousel héritent désormais de la paire projet centralisée
+`swipe-right`/`swipe-right`.
 Le bouton « Précédent » ne vérifie plus de garde de sortie, et « Suivant » sépare
 la sortie courante de l’accès à sa destination ; à la frontière SCO, le handler
 revalide la page et l’identifiant cible. Le test de scénario couvre les deux

@@ -305,6 +305,7 @@ describe('Elcé reader projection', () => {
             caption: '',
             imagePosition: 'left',
             imageFit: 'cover',
+            revelation: { intro: null, outro: null },
           },
           statisticalGraph: null,
         },

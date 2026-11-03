@@ -69,7 +69,8 @@ ni l’état d’une session de lecture.
   d’entrée ou de sortie propre à chaque Carte, héritée du Carousel si elle
   n’est pas renseignée. Une Carte déjà visible au chargement n’exécute pas son animation
   d’entrée. Capsule Automation fournit les références et définitions de
-  transition pour les deux contextes ; le Carousel reprend son preset `fade`.
+  transition pour les deux contextes ; le Carousel hérite du défaut projet
+  `swipe-right`.
   La démo 5 fixe le déclenchement enter/leave au scroll ; l’animation vient
   des définitions nommées de Capsule Automation.
 - [x] Définir les valeurs de repli au niveau du projet, sans réglage propre à chaque
@@ -151,7 +152,7 @@ placement, tandis que les valeurs par défaut sont stockées dans `sections` ou
 d’entrée, notamment la première Carte du Carousel. Les valeurs sont des
 références de transition déclarées en configuration et résolues depuis
 Capsule Automation, source des définitions pour le scroll et le Carousel. Le
-Carousel reprend le preset `fade`. La démo 5 fournit les événements enter/leave
+Carousel hérite du défaut projet `swipe-right`. La démo 5 fournit les événements enter/leave
 de visibilité au scroll. Le projet porte les valeurs de repli ; une page n’a
 pas ses propres réglages à ce stade. Un BDC parent peut remplacer ces défauts,
 et le placement d’une Carte Carousel peut remplacer ceux du Carousel. Le futur
@@ -173,7 +174,8 @@ l’unique propriétaire de l’observation et des événements de visibilité ;
 l’image reçoit son mouvement par ces événements, sans observer le scroll elle-
 même. La Section reste responsable du placement et de la réserve d’ancre.
 
-**Révélation Flux — comportement distant retenu le 26 octobre 2026 :** la
+**Révélation Flux — comportement appliqué le 26 octobre 2026, supersédé le
+3 novembre :** la
 racine Carte observe `threshold: 0` et conserve sa géométrie. Pour une Carte
 avec média, les actions Capsule résolues et leur état de repos sont appliqués
 au média ; sans média, ils restent sur la racine. La première mesure reste
@@ -184,6 +186,50 @@ résolution remplace les tweens image supplémentaires et l’opacité fixe `0.9
 de la branche locale. Les tests Flux et player exercent le comportement retenu ;
 son contrôle visuel après fusion reste dans le
 [plan Style](./2026-10-22-elce-style-tab-plan.md).
+
+**Révélation des Cartes — décisions acceptées le 3 novembre 2026, à appliquer :**
+les actions d’entrée et de sortie visent toujours la Carte entière, avec ou
+sans image/vidéo. Le média reste une part de la Carte ; ses éventuelles
+transitions propres sont hors périmètre. Le Carousel conserve son déclenchement
+Capsule par vue et le Flux son déclenchement par défilement ; les deux
+appliquent les actions au même conteneur visuel de Carte.
+
+La paire d’entrée/sortie se règle sur chaque BDC Carte et constitue le dernier
+niveau de l’héritage : défaut projet → réglage du parent (Section ou Carousel)
+→ remplacement existant du placement Carousel → remplacement de la Carte.
+Les réglages déjà enregistrés aux niveaux précédents restent intacts. L’éditeur
+de Carte expose un seul select pour le couple logique d’entrée/sortie, réutilise
+les options Capsule existantes et permet d’hériter sans remplacement. Le défaut
+global reste l’unique paire de configuration
+`ELCE_EDITOR_SETTINGS.revelation.projectDefaults` : `swipe-right` pour les deux
+directions ; `CAROUSEL_CONFIG` ne porte pas de défaut concurrent.
+
+Au défilement, le seuil porte sur la surface visible de la Carte elle-même :
+`enter` se produit à 15 % ou plus et `leave` sous 15 %. La transition complète
+anime le contenu de la Carte. La mesure reste stable pendant cette animation,
+afin qu’un déplacement visuel du contenu ne modifie pas le ratio observé. Le
+cadre mesuré conserve la boîte de la Carte ; son contenu visuel porte les
+transitions. Le contrat de l’observateur partagé évolue pour utiliser un
+`zone.threshold` numérique comme seuil de phase `enter`/`leave`, en plus des
+notifications natives. Une liste de seuils reste réservée à la fréquence des
+notifications. Le circuit existant est conservé. La première mesure reste
+stable et les passages ultérieurs rejouent entrée et sortie.
+
+La paire de remplacement de la Carte nécessite des champs relationnels dans la
+table `cards`, une migration documentaire v9 → v10 et une migration SQLite.
+L’acceptation couvre la conservation des remplacements project/parent/Carousel,
+la sélection et l’héritage par Carte directe et enfant Carousel, la mesure au
+seuil de 15 %, la stabilité de la mesure pendant l’animation, le premier rendu
+sans animation et le rejeu à chaque entrée/sortie. Les spécifications seront
+modifiées après implémentation et validation. Aucune transition propre au média
+ne fait partie de cette tranche.
+
+**Avancement au 3 novembre 2026 — En cours :** le champ de transition Carte,
+son select partagé, la résolution d’héritage, les migrations document/SQLite,
+le cadre stable du Flux et le seuil numérique de phase sont implémentés. Les
+tests, typechecks, build et parcours navigateur n’ont pas été relancés ; les
+spécifications restent donc sur le dernier comportement vérifié jusqu’à
+l’acceptation de cette tranche.
 
 **Centralisation des réglages de révélation — décision acceptée le 23 octobre
 2026 :** les réglages et leur héritage sont résolus dans une couche Elcé

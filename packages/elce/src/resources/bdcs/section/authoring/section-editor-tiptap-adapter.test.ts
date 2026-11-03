@@ -42,6 +42,7 @@ describe('SectionTiptapAdapter', () => {
             caption: '',
             imagePosition: CAROUSEL_IMAGE_POSITION.LEFT,
             imageFit: CARD_IMAGE_FIT.COVER,
+            revelation: { intro: null, outro: null },
           },
           layoutId: CARD_PRESET_ID.PHOTO,
           media: { source: 'blob:image-1', type: 'image' },

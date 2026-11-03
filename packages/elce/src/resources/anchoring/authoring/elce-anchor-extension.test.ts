@@ -109,7 +109,7 @@ describe('Elcé anchor extension', () => {
     document.body.append(host)
     editor = new Editor({
       extensions: [StarterKit, createElceAnchorExtension({ resolveCard: () => ({
-        content: { mediaId: 'media-image-1', overline: '', title: '', description: '', message: '', note: '', caption: '', imagePosition: CAROUSEL_IMAGE_POSITION.LEFT, imageFit: CARD_IMAGE_FIT.COVER },
+        content: { mediaId: 'media-image-1', overline: '', title: '', description: '', message: '', note: '', caption: '', imagePosition: CAROUSEL_IMAGE_POSITION.LEFT, imageFit: CARD_IMAGE_FIT.COVER, revelation: { intro: null, outro: null } },
         layoutId: CARD_PRESET_ID.PHOTO,
         media: { source: 'blob:image-1', type: 'image' },
       }) })],
@@ -132,7 +132,7 @@ describe('Elcé anchor extension', () => {
     document.body.append(host)
     editor = new Editor({
       extensions: [StarterKit, createElceAnchorExtension({ resolveCard: () => ({
-        content: { mediaId: 'media-video-1', overline: '', title: '', description: '', message: '', note: '', caption: '', imagePosition: CAROUSEL_IMAGE_POSITION.LEFT, imageFit: CARD_IMAGE_FIT.COVER },
+        content: { mediaId: 'media-video-1', overline: '', title: '', description: '', message: '', note: '', caption: '', imagePosition: CAROUSEL_IMAGE_POSITION.LEFT, imageFit: CARD_IMAGE_FIT.COVER, revelation: { intro: null, outro: null } },
         layoutId: CARD_PRESET_ID.PHOTO,
         media: { source: 'blob:video-1', type: 'video' },
       }) })],
@@ -207,6 +207,7 @@ describe('Elcé anchor extension', () => {
           caption: '',
           imagePosition: CAROUSEL_IMAGE_POSITION.LEFT,
           imageFit: CARD_IMAGE_FIT.COVER,
+          revelation: { intro: null, outro: null },
         },
         layoutId: CARD_PRESET_ID.TEXT_SHORT,
         media: null,
@@ -240,6 +241,7 @@ describe('Elcé anchor extension', () => {
           caption: '',
           imagePosition: CAROUSEL_IMAGE_POSITION.RIGHT,
           imageFit: CARD_IMAGE_FIT.CONTAIN,
+          revelation: { intro: null, outro: null },
         },
         layoutId: CARD_PRESET_ID.TEXT_IMAGE,
         media: { source: 'blob:image-1', type: 'image' },
@@ -275,6 +277,7 @@ describe('Elcé anchor extension', () => {
           caption: 'Légende',
           imagePosition: CAROUSEL_IMAGE_POSITION.LEFT,
           imageFit: CARD_IMAGE_FIT.COVER,
+          revelation: { intro: null, outro: null },
         },
         layoutId: CARD_PRESET_ID.IMAGE_CAPTION,
         media: { source: 'blob:image-2', type: 'image' },
@@ -306,6 +309,7 @@ describe('Elcé anchor extension', () => {
           caption: '',
           imagePosition: CAROUSEL_IMAGE_POSITION.CENTER,
           imageFit: CARD_IMAGE_FIT.COVER,
+          revelation: { intro: null, outro: null },
         },
         layoutId: CARD_PRESET_ID.IMAGE_TITLE,
         media: { source: 'blob:cover-image', type: 'image' },
@@ -373,6 +377,7 @@ describe('Elcé anchor extension', () => {
             caption: '',
             imagePosition: CAROUSEL_IMAGE_POSITION.LEFT,
             imageFit: CARD_IMAGE_FIT.COVER,
+            revelation: { intro: null, outro: null },
           },
           layoutId: CARD_PRESET_ID.PHOTO,
           media: { source: 'blob:image-1', type: 'image' },
@@ -509,7 +514,7 @@ describe('Elcé anchor extension', () => {
     let anchorChange: unknown
     editor = new Editor({
       extensions: [StarterKit, createElceAnchorExtension({ resolveCard: () => ({
-        content: { mediaId: 'media-image-1', overline: '', title: '', description: '', message: '', note: '', caption: '', imagePosition: CAROUSEL_IMAGE_POSITION.LEFT, imageFit: CARD_IMAGE_FIT.COVER },
+        content: { mediaId: 'media-image-1', overline: '', title: '', description: '', message: '', note: '', caption: '', imagePosition: CAROUSEL_IMAGE_POSITION.LEFT, imageFit: CARD_IMAGE_FIT.COVER, revelation: { intro: null, outro: null } },
         layoutId: CARD_PRESET_ID.PHOTO,
         media: { source: 'blob:image-1', type: 'image' },
       }) })],

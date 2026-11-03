@@ -6,7 +6,7 @@ export const ELCE_EDITOR_SETTINGS = {
     projectDefaults: DEFAULT_PROJECT_REVELATION,
     transitionPairs: REVELATION_TRANSITION_PAIRS,
     flux: {
-      cardObservationZone: { threshold: 0 },
+      cardObservationZone: { threshold: 0.15 },
       graphObservation: {
         initial: 'enter',
         zone: { threshold: 0 },

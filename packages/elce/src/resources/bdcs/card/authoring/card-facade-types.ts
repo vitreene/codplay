@@ -6,6 +6,7 @@ import type { CardTextField } from '../domain/card-types'
 import type { ElceCatalogReference } from '../../../../core/catalog/catalog-types'
 import type { ElceMediaImport } from '../../../../domain/media/media-resource-types'
 import type { ElceTextValue } from '../../../document/rich-text-types'
+import type { RevelationTransitionOverrides } from '../../../revelation/revelation-types'
 
 export interface ElceCardFacadeOptions {
   readonly dispatch: (command: CardCommand) => void
@@ -18,6 +19,7 @@ export interface ElceCardEditorActions {
   readonly setCaption: (bdcId: BdcId, value: ElceTextValue) => void
   readonly setImagePosition: (bdcId: BdcId, imagePosition: CarouselImagePosition) => void
   readonly setImageFit: (bdcId: BdcId, imageFit: CardImageFit) => void
+  readonly setRevelation: (bdcId: BdcId, revelation: RevelationTransitionOverrides) => void
   readonly attachCatalogReference: (bdcId: BdcId, reference: ElceCatalogReference) => void
   readonly importMediaFile: (bdcId: BdcId, file: File) => void
   readonly clearMedia: (bdcId: BdcId) => void

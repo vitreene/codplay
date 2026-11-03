@@ -1,4 +1,3 @@
-import { CAROUSEL_TRANSITION } from '../../revelation/revelation-config'
 import { CARD_IMAGE_FIT, CARD_PRESET_ID } from '../card/card-config'
 
 export const CAROUSEL_BDC_TYPE = 'carousel' as const
@@ -54,7 +53,6 @@ export const CAROUSEL_CONFIG = {
   defaultImagePosition: CAROUSEL_IMAGE_POSITION.LEFT,
   defaultImageFit: CARD_IMAGE_FIT.COVER,
   textShortMessageMaxLength: 250,
-  defaultTransition: CAROUSEL_TRANSITION.FADE,
 } as const
 
 export type CarouselAspectRatioId = typeof CAROUSEL_ASPECT_RATIO[keyof typeof CAROUSEL_ASPECT_RATIO]

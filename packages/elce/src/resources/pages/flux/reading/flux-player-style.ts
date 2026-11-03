@@ -83,6 +83,20 @@ export const FLUX_PLAYER_STYLE_RULES = [
 .elce-flux-card-root {
   width: 100%;
 }`],
+  [108, `
+
+.elce-flux-card-frame {
+  width: 100%;
+}
+
+.elce-flux-card-frame--anchored,
+.elce-flux-card-visual--anchored {
+  height: 100%;
+}
+
+.elce-flux-card-visual {
+  width: 100%;
+}`],
   [121, `
 
 .elce-flux-article > section p,

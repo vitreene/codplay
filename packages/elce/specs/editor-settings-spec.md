@@ -52,8 +52,10 @@ Capsule résolues, sans second observateur. Une Carte sans média porte ses
 propres actions. La première mesure synchronise la phase sans animer une Carte
 déjà visible ; les passages suivants rejouent l’entrée et la sortie. La
 Section continue de gérer le placement de l’ancre. Le défaut des nouveaux
-projets est `swipe-right` pour les deux directions ; les références persistées
-et leurs remplacements restent prioritaires. Les anciens tweens image
+projets vient uniquement de `ELCE_EDITOR_SETTINGS.revelation.projectDefaults`
+et vaut `swipe-right` pour les deux directions ; le Carousel n’ajoute pas de
+défaut concurrent. Les références persistées et leurs remplacements restent
+prioritaires. Les anciens tweens image
 supplémentaires et l’opacité fixe `0.92` ne sont plus appliqués aux Cartes.
 L’illustration image d’une Question conserve sa propre entrée configurée.
 

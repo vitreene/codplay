@@ -7,7 +7,7 @@ import { ELCE_DOCUMENT_VERSION, LearningDocument } from './learning-document'
 import { learningDocumentService } from './learning-document-service'
 
 describe('Learning document model and creation service', () => {
-  it('creates and round-trips the same v7 document shape', () => {
+  it('creates and round-trips the current document shape', () => {
     const document = learningDocumentService.createInitialDocument()
     const rehydrated = LearningDocument.fromJSON(document.toJSON())
 

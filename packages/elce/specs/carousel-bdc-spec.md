@@ -104,9 +104,12 @@ leur nom accessible conserve la description complète.
 Le Carousel règle aussi le mode, la durée commune, le ratio, la transition et
 le nombre de passages automatiques supplémentaires. Les valeurs initiales
 sont définies dans `CAROUSEL_CONFIG` : mode manuel, ratio 16:9, durée de cinq
-secondes, dix répétitions supplémentaires et fondu. Le nombre de répétitions va
-de 0 à 10 ; 0 correspond à un passage. En lecture automatique, une durée
-particulière remplace la durée commune pour l’entrée concernée. Les points
+secondes et dix répétitions supplémentaires. La transition n’a pas de défaut
+propre au Carousel : les nouveaux projets héritent de `swipe-right` pour
+l’entrée et la sortie depuis `ELCE_EDITOR_SETTINGS.revelation.projectDefaults`.
+`CAROUSEL_CONFIG` ne définit donc aucune transition par défaut. Le nombre de
+répétitions va de 0 à 10 ; 0 correspond à un passage. En lecture automatique,
+une durée particulière remplace la durée commune pour l’entrée concernée. Les points
 permettent de sélectionner une vue dans les deux modes. Cliquer sur un point
 pendant la lecture automatique sélectionne cette vue et interrompt la
 progression temporisée de l’instance courante : la lecture se poursuit en mode

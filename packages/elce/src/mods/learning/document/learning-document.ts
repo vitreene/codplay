@@ -3,7 +3,7 @@ import type { LearningBdc, LearningChapter, LearningDocumentData, LearningPage, 
 import { authoredTextToPlainText } from '../../../core/document/rich-text-utils'
 import { isRichTextDocument, parseInlineTextTokens } from '../inline-text/learning-inline-text-value'
 
-export const ELCE_DOCUMENT_VERSION = 9 as const
+export const ELCE_DOCUMENT_VERSION = 10 as const
 
 /** Owns the serializable Learning document value and its versioned codec. */
 export class LearningDocument {
@@ -53,37 +53,51 @@ export class LearningDocument {
     return this.data
   }
 
-  /** Rehydrates a document and promotes legacy inline tokens from v7 or v8. */
+  /** Rehydrates legacy document versions and supplies Card transition defaults. */
   public static fromJSON(value: unknown): LearningDocument {
-    if (!isRecord(value) || (value.version !== 7 && value.version !== 8 && value.version !== ELCE_DOCUMENT_VERSION)) {
+    if (!isRecord(value) || (value.version !== 7 && value.version !== 8 && value.version !== 9 && value.version !== ELCE_DOCUMENT_VERSION)) {
       const version = isRecord(value) ? value.version : undefined
       throw new Error(`Version de document Elcé non supportée : ${String(version)}`)
     }
     const data = value.version === 7
-      ? migrateV7Document(value)
+      ? migrateV9Document(migrateV7Document(value))
       : value.version === 8
-        ? migrateV8Document(value)
-        : value as unknown as LearningDocumentData
+        ? migrateV9Document(migrateV8Document(value))
+        : value.version === 9
+          ? migrateV9Document(value)
+          : value as unknown as LearningDocumentData
     return new LearningDocument(normalizeQuestionAnswerLabels(data))
   }
 }
 
-/** Upgrades a v8 document with the optional page-level early-exit setting. */
-function migrateV8Document(value: Record<string, unknown>): LearningDocumentData {
-  return { ...value, version: ELCE_DOCUMENT_VERSION } as unknown as LearningDocumentData
+/** Promotes a v8 document to the v9 shape that introduced page early exit. */
+function migrateV8Document(value: Record<string, unknown>): Record<string, unknown> {
+  return { ...value, version: 9 }
 }
 
 /** Upgrades v7 authored text fields while preserving all other document data. */
-function migrateV7Document(value: Record<string, unknown>): LearningDocumentData {
+function migrateV7Document(value: Record<string, unknown>): Record<string, unknown> {
   const migrated: Record<string, unknown> = {
     ...value,
-    version: ELCE_DOCUMENT_VERSION,
+    version: 9,
     summary: mapTextFields(value.summary, ['title', 'description']),
     chapters: mapRecords(value.chapters, (chapter) => mapTextRecordFields(chapter, ['name'])),
     pages: mapRecords(value.pages, (page) => mapTextRecordFields(page, ['name'])),
     bdcs: mapRecords(value.bdcs, migrateBdcTextFields),
   }
-  return migrated as unknown as LearningDocumentData
+  return migrated
+}
+
+/** Adds inherited transition defaults to every Card stored in a v9 document. */
+function migrateV9Document(value: Record<string, unknown>): LearningDocumentData {
+  return {
+    ...value,
+    version: ELCE_DOCUMENT_VERSION,
+    bdcs: mapRecords(value.bdcs, (bdc) => {
+      if (!isRecord(bdc.card) || bdc.card.revelation !== undefined) return bdc
+      return { ...bdc, card: { ...bdc.card, revelation: { intro: null, outro: null } } }
+    }),
+  } as unknown as LearningDocumentData
 }
 
 /** Promotes legacy inline text tokens in the authored fields of one BDC. */

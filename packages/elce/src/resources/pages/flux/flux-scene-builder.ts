@@ -503,17 +503,17 @@ function createFluxCardPersos(
   const introRef = revelation.intro
   const outroRef = revelation.outro
   const cardId = `${page.id}-${bdc.id}-card`
+  const visualId = `${cardId}-visual`
+  const visualPartId = `${cardId}:visual`
   const enterEvent = `${cardId}:enter`
   const leaveEvent = `${cardId}:leave`
-  const hasMedia = cardBuild.mediaPersos.length > 0
   const root: PersoDoc<string> = {
     id: cardId,
     type: 'layout',
     initial: {
       move: { target: targetPartId },
-      className: `${cardBuild.rootClassName} elce-flux-card-root${anchor === undefined ? '' : ` ${sceneStyleClassName('flux-anchor-illustration', cardId)}`}`,
-      ...(hasMedia ? {} : { style: createRevelationInitialStyle(introRef) }),
-      markup: cardBuild.markup,
+      className: `elce-flux-card-root${anchor === undefined ? '' : ` ${sceneStyleClassName('flux-anchor-illustration', cardId)}`}`,
+      markup: `<div id="${cardId}-frame" class="elce-flux-card-frame${anchor === undefined ? '' : ' elce-flux-card-frame--anchored'}"><!-- data-part="${visualPartId}" --></div>`,
     },
     emit: {
       observe: {
@@ -523,35 +523,22 @@ function createFluxCardPersos(
         leave: [{ name: leaveEvent }],
       },
     },
-    ...(hasMedia ? {} : { actions: {
-      [enterEvent]: createRevelationAction(introRef, EVENT_ACTION.intro),
-      [leaveEvent]: createRevelationAction(outroRef, EVENT_ACTION.outro),
-    } }),
   }
-  const mediaPersos = hasMedia
-    ? cardBuild.mediaPersos.map((perso) => revealFluxCardMedia(perso, enterEvent, leaveEvent, introRef, outroRef))
-    : cardBuild.mediaPersos
-  return [root, ...cardBuild.contentPersos, ...mediaPersos]
-}
-
-/** Applies a Flux Card's visibility transitions to its media, keeping the observed root still. */
-function revealFluxCardMedia(
-  perso: PersoDoc<string>,
-  enterEvent: string,
-  leaveEvent: string,
-  introRef: RevelationTransitionDefaults['intro'],
-  outroRef: RevelationTransitionDefaults['outro'],
-): PersoDoc<string> {
-  if (perso.initial === undefined) throw new Error(`Le média ${perso.id} de la Carte Flux ne possède pas d’état initial.`)
-  return {
-    ...perso,
-    initial: { ...perso.initial, style: createRevelationInitialStyle(introRef) },
+  const visual: PersoDoc<string> = {
+    id: visualId,
+    type: 'layout',
+    initial: {
+      move: { target: visualPartId },
+      className: `${cardBuild.rootClassName} elce-flux-card-visual${anchor === undefined ? '' : ' elce-flux-card-visual--anchored'}`,
+      style: createRevelationInitialStyle(introRef),
+      markup: cardBuild.markup,
+    },
     actions: {
-      ...perso.actions,
       [enterEvent]: createRevelationAction(introRef, EVENT_ACTION.intro),
       [leaveEvent]: createRevelationAction(outroRef, EVENT_ACTION.outro),
     },
   }
+  return [root, visual, ...cardBuild.contentPersos, ...cardBuild.mediaPersos]
 }
 
 /** Projects an anchored Statistical Graph into its existing Section anchor target. */
