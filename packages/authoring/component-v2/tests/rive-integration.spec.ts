@@ -24,7 +24,7 @@ function emptyServices(): ComponentServices {
 describe('Rive V2 integration', () => {
   it('declares separate document and state-machine components', () => {
     expect(RIVE_ENGINE.libraries?.register).toHaveLength(1)
-    expect(RIVE_COMPONENTS.map((definition) => definition.type)).toEqual(['rive', 'rive-state-machine'])
+    expect(RIVE_COMPONENTS.map((definition) => definition.type)).toEqual(['rive', 'rive-state-machine', 'rive-view-model'])
     expect(RIVE_COMPONENTS[0]?.libraries).toEqual(['rive'])
   })
 
@@ -87,7 +87,7 @@ describe('Rive V2 integration', () => {
     animations[0]?.sample(0)?.apply()
     animations[0]?.sample(1_000)?.apply()
 
-    expect(artboard.stateMachineByName).toHaveBeenCalledWith('Coach machine')
+    expect(artboard.stateMachineLookups).toContain('Coach machine')
     expect(artboard.lastStateMachineInput?.value).toBe(2)
     expect(artboard.lastStateMachineAdvance).toHaveBeenCalledWith(1)
 
@@ -101,6 +101,7 @@ describe('Rive V2 integration', () => {
     const artboards = [firstArtboard, secondArtboard]
     const runtime = createRuntime(firstArtboard)
     const file: RiveFile = {
+      viewModelByName: () => null,
       defaultArtboard: () => artboards.shift() ?? secondArtboard,
       artboardByName: () => artboards.shift() ?? secondArtboard,
     }
@@ -148,6 +149,85 @@ describe('Rive V2 integration', () => {
     expect(component.getTarget().getRevision()).toBe(2)
     component.destroy()
   })
+
+  it('keeps native frame deltas when a START occurrence remains active across visemes', () => {
+    const artboard = createArtboard()
+    const runtime = createRuntime(artboard)
+    registerRiveResource('/persistent-start.riv', { runtime, file: createFile(artboard) })
+    const document = createComponent(runtime, '/persistent-start.riv')
+    const stateMachine = new RiveStateMachineComponent({
+      services: emptyServices(),
+      runtime: { getLibrary: () => runtime },
+      perso: {
+        id: 'state-machine',
+        storyId: 'main',
+        initial: { stateMachine: 'Coach machine' },
+        actions: { start: { broadcast: { type: 'START' } } },
+      },
+    } as never)
+    document.initialize()
+
+    const start = {
+      name: 'start', startAt: 0, elapsedMs: 0,
+      action: { broadcast: { type: 'START' } },
+    }
+    stateMachine.update({
+      state: {}, timeMs: 0, target: document.getTarget(), activeActions: [start],
+    })
+    stateMachine.update({
+      state: {}, timeMs: 100, target: document.getTarget(),
+      activeActions: [start, { name: 'viseme', startAt: 100, elapsedMs: 0, action: { inputs: { blend: 1 } } }],
+    })
+    stateMachine.update({
+      state: {}, timeMs: 200, target: document.getTarget(),
+      activeActions: [
+        start,
+        { name: 'viseme', startAt: 100, elapsedMs: 100, action: { inputs: { blend: 1 } } },
+        { name: 'viseme', startAt: 200, elapsedMs: 0, action: { inputs: { blend: 2 } } },
+      ],
+    })
+
+    const advances = vi.mocked(artboard.lastStateMachineAdvance).mock.calls
+      .map(([seconds]) => seconds)
+    expect(advances).toEqual([0.1, 0.1])
+    expect(artboard.lastStateMachineInput.value).toBe(2)
+
+    stateMachine.destroy()
+    document.destroy()
+  })
+
+  it('recreates a native machine only once while a STOP occurrence remains active', () => {
+    const artboard = createArtboard()
+    const runtime = createRuntime(artboard)
+    registerRiveResource('/persistent-stop.riv', { runtime, file: createFile(artboard) })
+    const document = createComponent(runtime, '/persistent-stop.riv')
+    const stateMachine = new RiveStateMachineComponent({
+      services: emptyServices(),
+      runtime: { getLibrary: () => runtime },
+      perso: {
+        id: 'state-machine',
+        storyId: 'main',
+        initial: { stateMachine: 'Coach machine' },
+        actions: { stop: { broadcast: { type: 'STOP' } } },
+      },
+    } as never)
+    document.initialize()
+    const stop = {
+      name: 'stop', startAt: 100, elapsedMs: 0,
+      action: { broadcast: { type: 'STOP' } },
+    }
+
+    stateMachine.update({
+      state: {}, timeMs: 100, target: document.getTarget(), activeActions: [stop],
+    })
+    stateMachine.update({
+      state: {}, timeMs: 200, target: document.getTarget(), activeActions: [stop],
+    })
+
+    expect(artboard.stateMachineLookups).toHaveLength(2)
+    stateMachine.destroy()
+    document.destroy()
+  })
 })
 
 /** Creates a materialized host with the injected fake runtime. */
@@ -164,6 +244,7 @@ function createComponent(runtime: RiveRuntime, src = '/demo.riv'): RiveDocumentC
 /** Creates the fake file boundary used by the component tests. */
 function createFile(artboard: RiveArtboard): RiveFile {
   return {
+    viewModelByName: () => null,
     defaultArtboard: () => artboard,
     artboardByName: () => artboard,
   }
@@ -171,6 +252,7 @@ function createFile(artboard: RiveArtboard): RiveFile {
 
 /** Creates one observable artboard without imposing Rive internals on CodPlay. */
 type TestRiveArtboard = RiveArtboard & {
+  stateMachineLookups: string[]
   lastStateMachineInput: {
     name: string
     value: number | boolean | undefined
@@ -179,7 +261,12 @@ type TestRiveArtboard = RiveArtboard & {
 }
 
 function createArtboard(): TestRiveArtboard {
-  const stateMachineByName = vi.fn(() => ({ id: 'state-machine' }))
+  const stateMachineLookups: string[] = []
+  /** Records the native machine requested by the component. */
+  const stateMachineByName = (name: string) => {
+    stateMachineLookups.push(name)
+    return { id: 'state-machine' }
+  }
   const lastStateMachineInput = {
     name: 'blend',
     value: 0 as number | boolean | undefined,
@@ -196,6 +283,7 @@ function createArtboard(): TestRiveArtboard {
     delete: vi.fn(),
     lastStateMachineInput,
     lastStateMachineAdvance,
+    stateMachineLookups,
   }
 }
 
@@ -217,6 +305,7 @@ function createRuntime(artboard: TestRiveArtboard): RiveRuntime {
 
     inputCount(): number { return 1 }
     input(): typeof this.inputValue { return this.inputValue }
+    bindViewModelInstance(): void {}
     delete(): void {}
   }
 

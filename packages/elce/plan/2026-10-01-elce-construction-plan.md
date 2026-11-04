@@ -42,6 +42,15 @@ non arrêtés y restent **A relire**. L’[étude technique Learning](../mods/no
 détaille les découpages et raccords envisagés. Les contrats et acceptations du
 présent plan restent propriétaires du mod actuel, désormais nommé Learning.
 
+## Étude distincte — tête parlante
+
+La [note tête parlante](../notes/2026-11-04-talking-head-study.md) et son
+[plan de cadrage](./2026-11-04-talking-head-plan.md) suivent le composant Rive
+ViewModel, la narration Diapo/Carousel et la captation réutilisable. Le lot 0
+ViewModel est **Fini** et couvert par la
+[spécification Rive](../../codplay/specs/third-party-rive-spec.md) ; la nouvelle
+démo, l’intégration Elcé et la captation restent dans les lots suivants.
+
 ## Étude distincte de l’onglet Style
 
 L’[analyse de l’onglet Style](../notes/2026-10-22-style-tab-analysis.md) et son

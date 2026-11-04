@@ -1,21 +1,15 @@
 # Rive V2
 
-Le module Rive V2 fournit deux composants complémentaires :
+Affichez un personnage Rive dans une scène CodPlay et animez ses propriétés
+avec les événements de votre story. Utilisez `rive-view-model` pour un fichier
+avec data binding, ou `rive-state-machine` pour ses inputs classiques.
 
-- `rive` est le host HTML qui possède le canvas, le document et l’artboard ;
-- `rive-state-machine` est un composant logique relié à ce host par `rel` et
-  capable d'appliquer des valeurs nommées aux inputs de la state machine.
-
-Le host est le seul composant Rive qui reçoit `move`. Le composant state
-machine ne produit pas de DOM : il reçoit la cible publiée par le host et
-pilote l’instance native de state machine.
+L’exemple suivant ouvre la bouche du personnage à 100 ms et la remet au repos
+à 600 ms. Adaptez les noms à ceux exportés par votre fichier `.riv`.
 
 ```ts
 import { CodPlay } from 'codplay'
-import {
-  RIVE_ENGINE,
-  RIVE_PRELOAD_STRATEGIES,
-} from '@codplay/component-v2'
+import { RIVE_ENGINE, RIVE_PRELOAD_STRATEGIES } from '@codplay/component-v2'
 
 const codplay = new CodPlay({
   engine: RIVE_ENGINE,
@@ -23,40 +17,66 @@ const codplay = new CodPlay({
 })
 
 const scene = {
-  id: 'rive-scene',
+  id: 'speaking-avatar',
   stories: {
     main: {
       id: 'main',
+      initial: { move: '@root' },
       persos: [
         {
           id: 'avatar',
           type: 'rive',
           initial: {
-            src: '/avatars/coach.riv',
-            artboard: 'Coach model',
+            src: '/avatars/my-matt-visemes.riv',
+            artboard: 'Matt Visemes',
             animations: [],
             move: '@root',
           },
         },
         {
-          id: 'state-machine',
-          type: 'rive-state-machine',
+          id: 'expression',
+          type: 'rive-view-model',
           initial: {
-            stateMachine: 'State Machine 1',
             rel: { host: 'avatar' },
+            stateMachine: 'Matt_Visemes_SM',
+            viewModel: 'VisemesVM',
+            instance: 'Instance',
+            blendSpeed: 18,
           },
           actions: {
-            setMood: { inputs: { mood: 1 } },
+            speak: { values: { v100: 0, v102: 100, isTalking: true } },
+            rest: { values: { v100: 100, v102: 0, isTalking: false } },
           },
         },
+      ],
+      eventimes: [
+        { name: 'speak', startAt: 100 },
+        { name: 'rest', startAt: 600 },
+        { name: 'sequence:end', startAt: 1_000 },
       ],
     },
   },
 }
 ```
 
-Le nom de state machine et les noms d’inputs sont des conventions du document
-Rive fourni par l’auteur. CodPlay ne prétend pas inspecter la structure
-interne du fichier. Le composant state machine transmet uniquement les valeurs
-nommées demandées par l’auteur ; une application peut ainsi piloter n’importe
-quel input sans imposer une sémantique métier au module.
+`blendSpeed` lisse les propriétés numériques du ViewModel sur le temps du
+player. Omettez ce réglage pour conserver une application immédiate ; les
+booléens restent immédiats dans tous les cas.
+
+Pour un fichier qui utilise des inputs classiques, remplacez le perso
+`expression` par exemple par :
+
+```ts
+{
+  id: 'expression',
+  type: 'rive-state-machine',
+  initial: {
+    rel: { host: 'avatar' },
+    stateMachine: 'State Machine 1',
+  },
+  actions: {
+    speak: { inputs: { mood: 1 } },
+    rest: { inputs: { mood: 0 } },
+  },
+}
+```

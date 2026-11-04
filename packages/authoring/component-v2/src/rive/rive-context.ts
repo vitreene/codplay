@@ -54,7 +54,24 @@ export type RiveStateMachineInstance = {
   advance(seconds: number): boolean
   inputCount(): number
   input(index: number): RiveStateMachineInput
+  bindViewModelInstance(instance: RiveViewModelInstance): void
   delete(): void
+}
+
+export type RiveViewModelProperty = Readonly<{
+  name: string
+  type: string
+}>
+
+export type RiveViewModelInstance = {
+  getProperties(): readonly RiveViewModelProperty[]
+  number(name: string): { value: number } | null
+  boolean(name: string): { value: boolean } | null
+  delete(): void
+}
+
+export type RiveViewModel = {
+  instanceByName(name: string): RiveViewModelInstance | null
 }
 
 export type RiveArtboard = {
@@ -71,6 +88,7 @@ export type RiveArtboard = {
 export type RiveFile = {
   defaultArtboard(): RiveArtboard
   artboardByName(name: string): RiveArtboard | null
+  viewModelByName(name: string): RiveViewModel | null
 }
 
 export type RiveRuntime = {
@@ -98,5 +116,9 @@ export type RiveResource = Readonly<{
 export type RiveDocumentTarget = Readonly<{
   getRuntime(): RiveRuntime
   getArtboard(): RiveArtboard | undefined
+  getFile(): RiveFile
+  prepareArtboard(timeMs: number): void
+  invalidate(): void
+  onArtboardRelease(release: () => void): () => void
   getRevision(): number
 }>

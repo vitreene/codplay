@@ -32,6 +32,8 @@ export class RiveDocumentComponent extends BaseHTMLComponent<RiveInitial> {
   private playback: RivePlayback
   private lastTimeMs: number | undefined
   private revision = 0
+  private renderRevision = 0
+  private readonly artboardReleases = new Set<() => void>()
 
   public constructor(input: ComponentInput<RiveInitial>) {
     super(input)
@@ -40,6 +42,13 @@ export class RiveDocumentComponent extends BaseHTMLComponent<RiveInitial> {
     this.target = {
       getRuntime: () => this.runtime,
       getArtboard: () => this.artboard,
+      getFile: () => this.resource.file,
+      prepareArtboard: (timeMs) => this.resetAt(timeMs),
+      invalidate: () => { this.renderRevision += 1 },
+      onArtboardRelease: (release) => {
+        this.artboardReleases.add(release)
+        return () => { this.artboardReleases.delete(release) }
+      },
       getRevision: () => this.revision,
     }
     this.services.declare(RiveDocumentComponent.declaredServices)
@@ -131,7 +140,7 @@ export class RiveDocumentComponent extends BaseHTMLComponent<RiveInitial> {
       endAt: Number.POSITIVE_INFINITY,
       presentationPhase: 'commit',
       sample: (timeMs) => ({
-        value: `${timeMs}:${this.revision}:${this.playback}`,
+        value: `${timeMs}:${this.revision}:${this.playback}:${this.renderRevision}`,
         apply: () => this.drawFrame(),
       }),
     }
@@ -168,6 +177,7 @@ export class RiveDocumentComponent extends BaseHTMLComponent<RiveInitial> {
 
   /** Releases the current artboard and every animation instance it owns. */
   private deleteArtboard(): void {
+    this.artboardReleases.forEach((release) => release())
     for (const animation of this.animationInstances) animation.delete()
     this.animationInstances = []
     this.artboard?.delete()

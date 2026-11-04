@@ -1,0 +1,252 @@
+{
+  "date": "2026-11-04",
+  "scope": "rive-view-model, lot 0; Safari with real CodPlay engine, preload, HTML materializer and Rive WASM",
+  "asset": {
+    "name": "my-matt-visemes.riv",
+    "bytes": 84538,
+    "sha256": "e668aee807a3100c379838cd2b2cc81c3ab9215c71652d7dadd5f7b9b56cf67f"
+  },
+  "riveVersion": "2.38.3",
+  "authoredScenario": {
+    "artboard": "Matt Visemes",
+    "stateMachine": "Matt_Visemes_SM",
+    "viewModel": "VisemesVM",
+    "instance": "Instance",
+    "events": [
+      {
+        "name": "nativeStart",
+        "atMs": 0
+      },
+      {
+        "name": "mouth",
+        "atMs": 100,
+        "values": {
+          "v100": 0,
+          "v102": 100,
+          "isTalking": true
+        }
+      },
+      {
+        "name": "turn",
+        "atMs": 300,
+        "values": {
+          "headX": 75
+        }
+      },
+      {
+        "name": "rest",
+        "atMs": 600,
+        "values": {
+          "v100": 100,
+          "v102": 0,
+          "isTalking": false
+        }
+      }
+    ]
+  },
+  "method": "Temporary HTTP fixture imports actual repository modules. Frame scheduler is supplied through public CodPlay options; external engine frames before and after play establish/resume the shared clock. Reverse and normal declaration orders use distinct players. Canvas buffers and public snapshots are read; native bindViewModelInstance is observed to inspect real bound values at STOP/START without replacing it.",
+  "checks": [
+    {
+      "label": "native canvas rendered",
+      "passed": true
+    },
+    {
+      "label": "seek resolves mouth and head",
+      "passed": true
+    },
+    {
+      "label": "later rest resolves",
+      "passed": true
+    },
+    {
+      "label": "backward seek restores narrative values",
+      "passed": true
+    },
+    {
+      "label": "reverse declaration returns to initial rendered pose",
+      "passed": true
+    },
+    {
+      "label": "event boundary applies",
+      "passed": true
+    },
+    {
+      "label": "same-time runtime event redraws",
+      "passed": true
+    },
+    {
+      "label": "second native instance stays isolated",
+      "passed": true
+    },
+    {
+      "label": "reset clears live state",
+      "passed": true
+    },
+    {
+      "label": "play presents narrative contributions",
+      "passed": true
+    },
+    {
+      "label": "pause freezes player time",
+      "passed": true
+    },
+    {
+      "label": "host style preview preserves binding",
+      "passed": true
+    },
+    {
+      "label": "clear host preview preserves binding",
+      "passed": true
+    },
+    {
+      "label": "reset returns to zero",
+      "passed": true
+    },
+    {
+      "label": "seek after reset works",
+      "passed": true
+    },
+    {
+      "label": "native PAUSE keeps narrated pose",
+      "passed": true
+    },
+    {
+      "label": "native STOP restores initial bound values",
+      "passed": true
+    },
+    {
+      "label": "native START reapplies narrated values",
+      "passed": true
+    },
+    {
+      "label": "second instance destruction removes canvas",
+      "passed": true
+    }
+  ],
+  "baseline": {
+    "timeMs": 0,
+    "values": {
+      "v100": 100,
+      "v102": 0,
+      "headX": 50,
+      "headY": 50,
+      "headTilt": 50,
+      "isTalking": false
+    },
+    "hash": "c1b031c5",
+    "width": 235.828125
+  },
+  "target": {
+    "timeMs": 400,
+    "values": {
+      "v100": 0,
+      "v102": 100,
+      "headX": 75,
+      "headY": 50,
+      "headTilt": 50,
+      "isTalking": true
+    },
+    "hash": "140ca3c8",
+    "width": 235.828125
+  },
+  "played": {
+    "timeMs": 400,
+    "values": {
+      "v100": 0,
+      "v102": 100,
+      "headX": 75,
+      "headY": 50,
+      "headTilt": 50,
+      "isTalking": true
+    },
+    "hash": "680cbbba",
+    "width": 235.828125
+  },
+  "diagnostics": [],
+  "observations": [
+    {
+      "label": "host opacity absent from base survives snapshot.clear",
+      "observed": true,
+      "scope": "shared style preview; outside ViewModel lot 0"
+    }
+  ],
+  "resize": {
+    "before": {
+      "timeMs": 400,
+      "values": {
+        "v100": 0,
+        "v102": 100,
+        "headX": 75,
+        "headY": 50,
+        "headTilt": 50,
+        "isTalking": true
+      },
+      "hash": "140ca3c8",
+      "width": 187.9375
+    },
+    "after": {
+      "timeMs": 400,
+      "values": {
+        "v100": 0,
+        "v102": 100,
+        "headX": 75,
+        "headY": 50,
+        "headTilt": 50,
+        "isTalking": true
+      },
+      "hash": "140ca3c8",
+      "width": 145.390625
+    },
+    "passed": true,
+    "backingWidth": 600,
+    "destroyed": true
+  },
+  "remount": {
+    "timeMs": 400,
+    "values": {
+      "v100": 0,
+      "v102": 100,
+      "headX": 75,
+      "headY": 50,
+      "headTilt": 50,
+      "isTalking": true
+    },
+    "hash": "140ca3c8",
+    "width": 235.828125,
+    "passed": true
+  },
+  "finalDestruction": {
+    "noCanvas": true,
+    "diagnostics": []
+  },
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15",
+  "limitations": [
+    "Free native phases and transitions are not reconstructed; native pixel hashes need not match Play and Seek.",
+    "CSS resize changes displayed canvas dimensions; the authored backing width remains 600.",
+    "JSON authoring roundtrip is covered by player tests; application persistence and Elce integration remain future lots.",
+    "Shared style-preview rollback issue is recorded separately in the third-party plan; binding checks do not certify style rollback."
+  ],
+  "checksRun": {
+    "componentTests": 72,
+    "componentFiles": 15,
+    "parentAndTargetRegressionTests": 20,
+    "typecheck": [
+      "component-v2",
+      "demos V2",
+      "codplay"
+    ],
+    "build": "demos passed; existing chunk-size warning"
+  },
+  "broadcastPlaybackRegression": {
+    "route": "http://localhost:5173/?demo=rive-view-model",
+    "seekMs": 7400,
+    "playbackRate": 0.25,
+    "sampledFrames": 680,
+    "maxStateMachineDeltaMs": 5.6673,
+    "zeroTimeResetsAfterSeek": 0,
+    "visemeBoundariesMs": [7438, 7548, 7775, 7845, 7914, 7972, 8042, 8100, 8158],
+    "passed": true
+  },
+  "visualInspection": "Safari MCP screenshots of the local rive-view-model page showed the real rig at 7,400 ms and during playback after successive viseme boundaries. The head pose continued changing while the native state machine received frame-sized deltas.",
+  "cleanup": "The user's Safari tab and Vite session on port 5173 remain available for continued testing."
+}

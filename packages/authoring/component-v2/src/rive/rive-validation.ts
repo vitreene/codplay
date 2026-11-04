@@ -66,7 +66,7 @@ export function validateRiveStateMachineAction(value: unknown, context: Validati
 }
 
 /** Validates optional named input values without inspecting native Rive data. */
-function validateRiveInputValues(
+export function validateRiveInputValues(
   value: unknown,
   context: ValidationContext,
   property: string,

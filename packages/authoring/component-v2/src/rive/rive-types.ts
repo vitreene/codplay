@@ -58,3 +58,15 @@ export type RiveStateMachineInitial = PersoInitialCommon &
 export type RiveStateMachineActionPayload = RiveActionPayload & Readonly<{
   inputs?: RiveInputValues
 }>
+
+export type RiveViewModelInitial = PersoInitialCommon & Readonly<{
+  stateMachine: string
+  viewModel: string
+  instance: string
+  values?: RiveInputValues
+  blendSpeed?: number
+}>
+
+export type RiveViewModelActionPayload = RiveActionPayload & Readonly<{
+  values?: RiveInputValues
+}>

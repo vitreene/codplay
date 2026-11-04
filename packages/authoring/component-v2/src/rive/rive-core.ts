@@ -7,6 +7,8 @@ import type {
 import { RiveDocumentComponent } from './rive-document-component'
 import { getRiveRuntime } from './rive-preload'
 import { RiveStateMachineComponent } from './rive-state-machine-component'
+import { RiveViewModelComponent } from './view-model/rive-view-model-component'
+import { validateRiveViewModelAction, validateRiveViewModelInitial } from './view-model/rive-view-model-validation'
 import {
   validateRiveAction,
   validateRiveInitial,
@@ -43,6 +45,15 @@ export const RIVE_COMPONENTS: readonly RuntimeComponentDefinition[] = [
     runtimeProfile: 'attached',
     validateInitial: validateRiveStateMachineInitial,
     validateAction: validateRiveStateMachineAction,
+  },
+  {
+    type: 'rive-view-model',
+    component: RiveViewModelComponent,
+    modules: [],
+    libraries: ['rive'],
+    runtimeProfile: 'attached',
+    validateInitial: validateRiveViewModelInitial,
+    validateAction: validateRiveViewModelAction,
   },
 ]
 

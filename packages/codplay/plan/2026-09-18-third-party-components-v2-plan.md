@@ -94,6 +94,19 @@ spécifications ne seront enrichies qu’après implémentation et vérification
 
 ## Parcours d’acceptation restant
 
+Le lot ViewModel du 4 novembre 2026 est décrit dans la
+[spécification Rive](../specs/third-party-rive-spec.md), avec sa preuve native
+sur le rig fourni. Il ne ferme pas les parcours d’autres documents/familles.
+
+**S1 — À analyser, hors lot ViewModel :** sur le host Rive, une preview
+`snapshot.set` ajoutant `style.opacity = 0.5` à un état sans opacité laisse
+`canvas.style.opacity` à `0.5` après `snapshot.clear()`. La façade annonce le
+retrait de la preview ; le binding ViewModel reste correct. Reproduire avec
+un composant HTML simple, puis identifier le propriétaire avant toute
+correction. Aucun correctif ni contournement appliqué. Le
+[relevé navigateur](../../elce/notes/assets/talking-head/rive-player-acceptance.json)
+conserve ce constat ; la fermeture de S1 ne fait pas partie du lot 0 accepté.
+
 Les validations transverses et leur ordre sont détaillés dans le
 [plan d’acceptation du pont](./2026-09-18-third-party-render-target-codplay-plan.md).
 Pour fermer les intégrations de ce plan, ce parcours doit notamment couvrir :
