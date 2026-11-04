@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createActor } from 'xstate'
 
-import { render } from 'remix/ui/test'
+import { render } from 'remix/component/test'
 import { BDC_TYPE, DEFAULT_PRESET_ID, PAGE_TYPE } from '../learning-definition'
 import { CARD_IMAGE_FIT } from '../../../resources/bdcs/card/card-config'
 import { CAROUSEL_IMAGE_POSITION, CAROUSEL_PLAYBACK_MODE } from '../../../resources/bdcs/carousel/carousel-config'

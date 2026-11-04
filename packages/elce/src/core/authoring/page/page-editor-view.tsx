@@ -1,4 +1,4 @@
-import { on, type RemixNode } from 'remix/ui'
+import { on, type RemixNode } from 'remix/component'
 import type { ContentPage } from '../../document/content-document-types'
 import type { ResourceTextFieldFeature } from '../resource-text-field-feature'
 import type { AuthoredTextValue } from '../../document/rich-text-types'

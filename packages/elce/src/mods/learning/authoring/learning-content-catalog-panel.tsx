@@ -1,4 +1,4 @@
-import { on, type RemixNode } from 'remix/ui'
+import { on, type RemixNode } from 'remix/component'
 
 import { CATALOG_TAB } from './learning-authoring-config'
 import { renderProfileTokenInsertion } from '../profile/authoring/profile-token-insertion'

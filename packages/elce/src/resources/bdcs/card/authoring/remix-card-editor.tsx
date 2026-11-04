@@ -1,5 +1,5 @@
 import { Trash2 } from 'lucide-static'
-import { on, type RemixNode } from 'remix/ui'
+import { on, type RemixNode } from 'remix/component'
 
 import type { ResourceBdc } from '../../../document/resource-document-types'
 import type { AppearanceTarget } from '../../../../domain/appearance/appearance-target-types'

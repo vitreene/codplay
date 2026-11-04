@@ -1,4 +1,4 @@
-import { on, type RemixNode } from 'remix/ui'
+import { on, type RemixNode } from 'remix/component'
 
 import { ClipboardCheck, Folder } from 'lucide-static'
 import { CHAPTER_TYPE, CHAPTER_TYPE_CONFIG } from '../organization/learning-organization-config'

@@ -1,4 +1,4 @@
-import { on, type Handle, type RemixNode } from 'remix/ui'
+import { on, type Handle, type RemixNode } from 'remix/component'
 
 import { Activity, BadgeCheck, ClipboardCheck, FileText, Folder, Images, ListChecks, RectangleHorizontal } from 'lucide-static'
 import { BDC_TYPE } from '../learning-definition'

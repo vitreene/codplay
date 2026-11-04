@@ -1,4 +1,4 @@
-import type { Handle, RemixNode } from 'remix/ui'
+import type { Handle, RemixNode } from 'remix/component'
 
 export interface EditorContext<TController extends object, TActions extends object> {
   readonly controller: TController | null

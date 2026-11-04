@@ -1,6 +1,6 @@
 import { createRouter } from 'remix/router'
 import { render } from 'remix/spa'
-import type { RemixNode } from 'remix/ui'
+import type { RemixNode } from 'remix/component'
 import { POPUP_PREVIEW_PROJECT_PARAM, POPUP_PREVIEW_SESSION_PARAM } from '../../core/preview/popup-preview-messages'
 
 export interface ElceSpaRoots {

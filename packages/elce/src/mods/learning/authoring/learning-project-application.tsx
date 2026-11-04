@@ -1,4 +1,4 @@
-import type { Handle, RemixNode } from 'remix/ui'
+import type { Handle, RemixNode } from 'remix/component'
 import type { SnapshotFrom } from 'xstate'
 import { isImportChange, type controllerMachine } from '../../../app/controller/controller-machine'
 import { LearningEditorContextProvider } from '../composition/learning-editor-context'

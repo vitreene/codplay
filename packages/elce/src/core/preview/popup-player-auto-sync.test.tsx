@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { render } from 'remix/ui/test'
+import { render } from 'remix/component/test'
 import { PAGE_LOCATION } from '../../mods/learning/organization/learning-page-placement'
 import { applyDocumentCommand, createPageCommand } from '../../domain/commands/document-commands'
 import { LearningDocument } from '../../mods/learning/document/learning-document'

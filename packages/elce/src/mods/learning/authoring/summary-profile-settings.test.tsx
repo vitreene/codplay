@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { createActor } from 'xstate'
 import { describe, expect, it, vi } from 'vitest'
-import { render } from 'remix/ui/test'
+import { render } from 'remix/component/test'
 import { CATALOG_REFERENCE } from '../../../core/catalog/catalog-config'
 import { MEDIA_FILE_ACCEPT } from '../../../core/media/media-config'
 import { PAGE_LOCATION } from '../organization/learning-page-placement'

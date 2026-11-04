@@ -1,5 +1,5 @@
 import { createActor } from 'xstate'
-import type { RemixNode } from 'remix/ui'
+import type { RemixNode } from 'remix/component'
 import { createLearningDocumentStore } from '../persistence/learning-document-store'
 import { LearningProjectApiClient } from '../persistence/learning-project-api-client'
 import { ProjectHttpTransport } from '../../../core/persistence/project-api/project-http-transport'

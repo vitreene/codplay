@@ -1,4 +1,4 @@
-import type { Handle } from 'remix/ui'
+import type { Handle } from 'remix/component'
 import { PopupPreviewWindow } from '../../../core/preview/popup-preview-window'
 import type { LearningPreviewSession } from './learning-preview-session'
 import { learningPreviewService } from './learning-preview-service'

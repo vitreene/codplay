@@ -1,4 +1,4 @@
-import { on, type RemixNode } from 'remix/ui'
+import { on, type RemixNode } from 'remix/component'
 import { BDC_TYPE, DEFAULT_PRESET_ID } from '../learning-definition'
 import {
   APPEARANCE_COLOR_ROLES,

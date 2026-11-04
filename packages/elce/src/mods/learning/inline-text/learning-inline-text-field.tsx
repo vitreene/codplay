@@ -1,7 +1,7 @@
 import { Editor } from '@tiptap/core'
 import { NodeSelection } from '@tiptap/pm/state'
 import StarterKit from '@tiptap/starter-kit'
-import { on, ref, type RemixNode } from 'remix/ui'
+import { on, ref, type RemixNode } from 'remix/component'
 import type { LearningPage } from '../document/learning-document-types'
 import type { RichTextDocument } from '../../../resources/document/rich-text-types'
 import type { ProfileProperty } from '../profile/domain/learning-profile-types'

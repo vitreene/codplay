@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
 import { createActor } from 'xstate'
-import { render } from 'remix/ui/test'
+import { render } from 'remix/component/test'
 import { BDC_TYPE, DEFAULT_PRESET_ID } from '../learning-definition'
 import { CHAPTER_TYPE } from '../organization/learning-organization-config'
 import { PAGE_LOCATION } from '../organization/learning-page-placement'

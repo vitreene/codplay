@@ -1,5 +1,5 @@
 import { ImagePlus, X } from 'lucide-static'
-import { on, type RemixNode } from 'remix/ui'
+import { on, type RemixNode } from 'remix/component'
 import type { MediaMetadata } from '../../document/content-document-types'
 import type { SupportedMediaType } from '../../../domain/media/media-resource-service'
 import { CATALOG_REFERENCE } from '../../catalog/catalog-config'

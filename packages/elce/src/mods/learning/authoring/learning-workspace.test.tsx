@@ -2,7 +2,7 @@
 import { createActor } from 'xstate'
 import { describe, expect, it, vi } from 'vitest'
 
-import { render } from 'remix/ui/test'
+import { render } from 'remix/component/test'
 import { CHAPTER_TYPE } from '../organization/learning-organization-config'
 import { PAGE_TYPE } from '../learning-definition'
 import { learningControllerMachine as controllerMachine } from './learning-controller-machine'

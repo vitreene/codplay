@@ -3,7 +3,7 @@ import type { Editor } from '@tiptap/core'
 import { createActor } from 'xstate'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { render } from 'remix/ui/test'
+import { render } from 'remix/component/test'
 import { BDC_TYPE, PAGE_TYPE } from '../learning-definition'
 import { PAGE_LOCATION } from '../organization/learning-page-placement'
 import { MEDIA_TYPE } from '../../../core/media/media-config'

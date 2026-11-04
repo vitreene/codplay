@@ -1,4 +1,4 @@
-import { on, type RemixNode } from 'remix/ui'
+import { on, type RemixNode } from 'remix/component'
 import { Plus, Trash2 } from 'lucide-static'
 import { CATALOG_REFERENCE } from '../../../core/catalog/catalog-config'
 import { MEDIA_FILE_ACCEPT, MEDIA_TYPE } from '../../../core/media/media-config'

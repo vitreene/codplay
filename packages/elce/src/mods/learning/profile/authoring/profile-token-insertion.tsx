@@ -1,4 +1,4 @@
-import { on, type RemixNode } from 'remix/ui'
+import { on, type RemixNode } from 'remix/component'
 import type { LearningPage } from '../../document/learning-document-types'
 import type { ProfileProperty } from '../domain/learning-profile-types'
 import {

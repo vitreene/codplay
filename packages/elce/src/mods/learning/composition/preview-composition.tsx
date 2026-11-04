@@ -1,4 +1,4 @@
-import type { RemixNode } from 'remix/ui'
+import type { RemixNode } from 'remix/component'
 import {
   POPUP_PREVIEW_PAGE_PARAM,
   POPUP_PREVIEW_PROJECT_PARAM,

@@ -1,4 +1,4 @@
-import { on, type RemixNode } from 'remix/ui'
+import { on, type RemixNode } from 'remix/component'
 import { PanelLeftClose, PanelRightClose } from 'lucide-static'
 
 import { renderLucideIcon } from '../../../core/authoring/lucide-static-icon'

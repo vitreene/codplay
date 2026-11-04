@@ -3,7 +3,7 @@ import { mkdir } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createAssetServer } from 'remix/assets'
-import { uiHmr } from 'remix/ui-hmr/assets'
+import { componentHmr } from 'remix/component-hmr/assets'
 import { createRouter } from 'remix/router'
 import { createRequestListener } from 'remix/node-fetch-server'
 import { DEFAULT_ELCE_API_ORIGIN, ELCE_API_PORT } from '../config/api-config'
@@ -124,7 +124,7 @@ export async function startElceLocalServer(): Promise<ElceLocalServer> {
           moduleImporter: 'remix/multiple-import-maps-polyfill',
         }
       : undefined,
-    scripts: { loaders: [jsonModules.load, ...(enableHmr ? [uiHmr()] : [])] },
+    scripts: { loaders: [jsonModules.load, ...(enableHmr ? [componentHmr()] : [])] },
     sourceMaps: isDevelopment ? 'external' : undefined,
     minify: !isDevelopment,
     watch: enableHmr ? { poll: true, pollInterval: 250 } : false,

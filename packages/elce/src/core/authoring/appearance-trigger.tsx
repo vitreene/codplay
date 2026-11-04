@@ -1,5 +1,5 @@
 import { Palette } from 'lucide-static'
-import { on, type RemixNode } from 'remix/ui'
+import { on, type RemixNode } from 'remix/component'
 
 import type { AppearanceTarget } from '../../domain/appearance/appearance-target-types'
 import { renderLucideIcon } from './lucide-static-icon'

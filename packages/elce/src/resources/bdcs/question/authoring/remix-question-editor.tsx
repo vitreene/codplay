@@ -6,7 +6,7 @@ import {
 } from '../question-config'
 import { MEDIA_FILE_ACCEPT } from '../../../../core/media/media-config'
 import type { QuestionAnswer, QuestionType } from '../domain/question-types'
-import { on, type RemixNode } from 'remix/ui'
+import { on, type RemixNode } from 'remix/component'
 
 import type { QuestionEditorProps } from './question-editor-types'
 import { renderRemixMediaPicker } from '../../../../core/authoring/media/remix-media-picker'

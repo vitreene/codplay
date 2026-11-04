@@ -1,4 +1,4 @@
-import type { RemixNode } from 'remix/ui'
+import type { RemixNode } from 'remix/component'
 
 /** Converts a trusted Lucide SVG asset into native Remix elements. */
 export function renderLucideIcon(svg: string, id: string): RemixNode {

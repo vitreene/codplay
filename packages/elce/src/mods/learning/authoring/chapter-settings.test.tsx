@@ -2,7 +2,7 @@
 import { createActor } from 'xstate'
 import { describe, expect, it } from 'vitest'
 
-import { render } from 'remix/ui/test'
+import { render } from 'remix/component/test'
 import { CHAPTER_TYPE } from '../organization/learning-organization-config'
 import { EVALUATION_RETRY_SCOPE } from '../evaluation/learning-evaluation-config'
 import type { LearningChapter } from '../document/learning-document-types'

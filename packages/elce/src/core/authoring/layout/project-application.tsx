@@ -1,4 +1,4 @@
-import { on, type RemixNode } from 'remix/ui'
+import { on, type RemixNode } from 'remix/component'
 import { X } from 'lucide-static'
 import type { ScormVersion } from '../../../scorm/scorm-types'
 import type { ElceProjectSummary } from '../../../infrastructure/project-api/project-api-types'

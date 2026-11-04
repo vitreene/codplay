@@ -7,6 +7,19 @@ Cette entrée compose l’application auteur dans le routeur navigateur
 Les builders et scènes restent des responsabilités Elcé, Sighty et CodPlay ;
 le portage ne crée pas de scène, d’état de lecture ni de commande parallèle.
 
+## Dépendance du workspace
+
+`packages/elce/package.json` est l’unique déclaration directe de `remix` dans
+le monorepo, fixée exactement à `3.1.0`. Cette version fournit les API
+`remix/component`, `remix/component-hmr` et `remix/spa` utilisées par les surfaces ci-dessous.
+La racine ne déclare pas de seconde version de Remix.
+
+Le lockfile résout une seule installation de `remix@3.1.0`, remontée dans le
+`node_modules` racine par npm. Les sous-paquets `@remix-run/*` conservent les
+versions requises par cet arbre ; leurs numéros de version sont indépendants
+de celui du paquet `remix`. La branche RC4 et ses anciens runtimes `ui` et
+`ui-hmr` ne sont plus installés.
+
 ## Composition
 
 - [`browser-entry.tsx`](../src/app/remix/browser-entry.tsx) choisit la
@@ -58,16 +71,16 @@ le portage ne crée pas de scène, d’état de lecture ni de commande parallèl
 - Les icônes Elcé sont créées à partir de `lucide-static` comme éléments SVG
   natifs ; aucun adaptateur d’icônes React n’est chargé.
 - Les vues Remix sont écrites en JSX dans des fichiers `.tsx`. TypeScript est
-  configuré avec `jsx: "react-jsx"` et `jsxImportSource: "remix/ui"` : le
-  runtime émis est celui de Remix (`remix/ui/jsx-runtime`), sans dépendance ni
+  configuré avec `jsx: "react-jsx"` et `jsxImportSource: "remix/component"` : le
+  runtime émis est celui de Remix (`remix/component/jsx-runtime`), sans dépendance ni
   import React.
 - [`elce-local-server.ts`](../src/server/elce-local-server.ts) sert le document
   Remix et ses assets, puis réutilise ou lance le serveur projet API sur
   `127.0.0.1:5181`. La réponse HTML fournit l’import map Remix et les styles.
-  Le mount `elceVendor` expose `packages/elce/node_modules` sous
-  `/assets/elceVendor/`, en complément du mount `vendor` à la racine du
-  monorepo. Le serveur d’assets peut ainsi résoudre le paquet `remix` installé
-  dans le workspace Elcé et suivre ses imports `remix/spa`.
+  Le mount `vendor` expose le `node_modules` racine et `elceVendor` expose
+  `packages/elce/node_modules` sous `/assets/elceVendor/`. Ces deux mounts
+  suivent la résolution des workspaces npm ; Remix 3.1.0 et son runtime
+  `component` sont servis depuis `vendor` dans l’installation actuelle.
   Si le port API est déjà occupé en mode local, le serveur ne réutilise son
   listener que si `GET /api/projects`, envoyé avec une origine locale, renvoie
   le catalogue et les en-têtes `Access-Control-Allow-Origin` et `Vary: Origin`
@@ -96,6 +109,8 @@ le portage ne crée pas de scène, d’état de lecture ni de commande parallèl
   mécanismes existants de persistance et de synchronisation. L’interface reste
   sur 5175 et l’API sur 5181 ; le flux HMR utilise son canal local interne,
   sans serveur Vite navigateur supplémentaire.
+  Le chargeur de composants est `componentHmr()` depuis
+  `remix/component-hmr/assets` ; il complète le chargeur JSON existant.
 
 ## Imports JSON locaux
 
@@ -177,6 +192,25 @@ Le suivi de l'intégration et de l'acceptation globale reste dans le
 
 ## Preuves
 
+- Le 4 novembre 2026, `npm view remix version dist-tags` confirme la version
+  publiée `latest: 3.1.0`, puis `npm ls remix --all` ne résout que
+  `@codplay/elce → remix@3.1.0`. Les six suites `elce-local-server`,
+  `json-module-loader`, `learning-sqlite-project-persistence`,
+  `remix-spa-router`, `remix-section-production` et
+  `learning-project-application` passent leurs 52 tests après migration des
+  points d’entrée vers `remix/component`. Le build réussit. La comparaison
+  complète avec la RC4 conserve 583 tests réussis et les mêmes 11 échecs sur
+  594 tests ; le typecheck conserve seulement l’erreur préexistante `TS6133`
+  sur `title` dans `statistical-graph-scene-builder.ts`.
+- Le même jour, `npm run dev` lance le vrai superviseur et le serveur avec
+  une base temporaire et des ports libres. Les requêtes HTTP sur le document,
+  l’entrée auteur, le runtime JSX `@remix-run/component`, une vue auteur,
+  son module `component-hmr` et l’API répondent `200`. L’URL du flux SSE est
+  lue dans le client HMR émis ; une règle CSS temporaire ajoutée à une feuille
+  réellement chargée provoque `browser:reload`, et la feuille HTTP contient
+  sa nouvelle valeur. La règle est retirée et le serveur arrêté après le
+  contrôle. Cette preuve couvre le serveur et le canal HMR ; l’acceptation
+  navigateur reste dans le [plan de mise à jour](../plan/2026-11-04-remix-latest-upgrade-plan.md).
 - [`learning-page-editor.test.tsx`](../src/mods/learning/authoring/learning-page-editor.test.tsx)
   et [`learning-workspace.test.tsx`](../src/mods/learning/authoring/learning-workspace.test.tsx)
   montent les vues de production. Ils vérifient l’ordre et l’unicité des BDC,

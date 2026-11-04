@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
-import { render } from 'remix/ui/test'
+import { render } from 'remix/component/test'
 import type { LearningPage } from '../../document/learning-document-types'
 import { createPageLinkToken } from '../../inline-text/learning-inline-text-value'
 import type { ProfileProperty } from '../domain/learning-profile-types'

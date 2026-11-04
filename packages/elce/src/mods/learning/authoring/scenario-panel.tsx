@@ -1,4 +1,4 @@
-import { on, type RemixNode } from 'remix/ui'
+import { on, type RemixNode } from 'remix/component'
 
 import { ClipboardCheck, Folder, FolderPlus, GripVertical, Trash2 } from 'lucide-static'
 import { PAGE_TYPE, type PageType } from '../learning-definition'

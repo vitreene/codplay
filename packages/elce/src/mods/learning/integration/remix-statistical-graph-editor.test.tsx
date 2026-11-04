@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { createActor } from 'xstate'
 
-import { render } from 'remix/ui/test'
+import { render } from 'remix/component/test'
 import { STATISTICAL_GRAPH_BDC_TYPE } from '../../../resources/bdcs/statistical-graph/statistical-graph-config'
 import { controllerMachine } from '../../../app/controller/controller-machine'
 import { LearningEditorFacade } from '../authoring/learning-editor-facade'

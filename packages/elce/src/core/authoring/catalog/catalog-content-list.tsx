@@ -1,4 +1,4 @@
-import { on, type RemixNode } from 'remix/ui'
+import { on, type RemixNode } from 'remix/component'
 import { GripVertical, Trash2 } from 'lucide-static'
 import { CATALOG_REFERENCE } from '../../catalog/catalog-config'
 import type { ElceCatalogBdcEntry, ElceCatalogMediaEntry, ElceCatalogReference } from '../../catalog/catalog-types'

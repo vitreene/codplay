@@ -1,4 +1,4 @@
-import { on, type Handle } from 'remix/ui'
+import { on, type Handle } from 'remix/component'
 import { FileText, List, RefreshCw } from 'lucide-static'
 import { renderLucideIcon } from '../authoring/lucide-static-icon'
 

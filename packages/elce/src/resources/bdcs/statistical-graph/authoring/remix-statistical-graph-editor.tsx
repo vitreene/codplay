@@ -1,4 +1,4 @@
-import { on, type RemixNode } from 'remix/ui'
+import { on, type RemixNode } from 'remix/component'
 import { Columns3, Eye, Pencil, Rows3, Trash2, X } from 'lucide-static'
 import { ElceStatisticalGraphSceneBuilder } from '../reading/statistical-graph-scene-builder'
 import { STATISTICAL_GRAPH_BDC_TYPE, STATISTICAL_GRAPH_PRESET_ID } from '../statistical-graph-config'

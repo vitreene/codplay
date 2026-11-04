@@ -1,4 +1,4 @@
-import type { RemixNode } from 'remix/ui'
+import type { RemixNode } from 'remix/component'
 
 import { PAGE_LOCATION } from '../organization/learning-page-placement'
 import { SCENARIO_ENTRY_KIND } from '../organization/learning-organization-config'

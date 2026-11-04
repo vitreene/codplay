@@ -1,4 +1,4 @@
-import type { RemixNode } from 'remix/ui'
+import type { RemixNode } from 'remix/component'
 import type { AuthoredTextValue } from '../document/rich-text-types'
 
 export interface ResourceTextFieldOptions {

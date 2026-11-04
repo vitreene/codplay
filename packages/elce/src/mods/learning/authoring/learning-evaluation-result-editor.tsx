@@ -10,7 +10,7 @@ import type {
 import { ElceEvaluationResultService } from '../evaluation/domain/learning-evaluation-result-service'
 import type { EvaluationResultContent } from '../evaluation/domain/learning-evaluation-result-types'
 import type { AppearanceTarget } from '../../../domain/appearance/appearance-target-types'
-import { on, type RemixNode } from 'remix/ui'
+import { on, type RemixNode } from 'remix/component'
 
 import { renderLucideIcon } from '../../../core/authoring/lucide-static-icon'
 import { renderAppearanceTrigger } from '../../../core/authoring/appearance-trigger'

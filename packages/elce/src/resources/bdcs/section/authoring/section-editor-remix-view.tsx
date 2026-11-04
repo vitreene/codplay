@@ -1,5 +1,5 @@
 import { Bold, Italic, Underline, Subscript, Superscript, Pilcrow, Ellipsis, AlignLeft, AlignCenter, AlignRight, AlignJustify, Heading1, Heading2, Heading3, Heading4, Heading5, Heading6, Trash2, X } from 'lucide-static'
-import { on, ref, type RemixNode } from 'remix/ui'
+import { on, ref, type RemixNode } from 'remix/component'
 
 import { ANCHOR } from '../../../anchoring/anchor-config'
 import { SECTION_EDITOR_HEADING_LEVELS } from '../section-config'

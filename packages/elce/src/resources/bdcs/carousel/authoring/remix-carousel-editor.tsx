@@ -9,7 +9,7 @@ import { CAROUSEL_TRANSITION_OPTIONS } from '../../../revelation/revelation-conf
 import type { CarouselAspectRatioId } from '../carousel-config'
 import type { CarouselAspectRatio } from '../domain/carousel-types'
 import type { ResourceBdc } from '../../../document/resource-document-types'
-import { on, type Handle, type RemixNode } from 'remix/ui'
+import { on, type Handle, type RemixNode } from 'remix/component'
 
 import type { ElceCarouselEditorProps } from './carousel-facade-types'
 import { renderLucideIcon } from '../../../../core/authoring/lucide-static-icon'

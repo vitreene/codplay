@@ -1,4 +1,4 @@
-import { on, type RemixNode } from 'remix/ui'
+import { on, type RemixNode } from 'remix/component'
 
 import { ANCHOR_RETURN } from '../../../resources/anchoring/anchor-config'
 import { BDC_TYPE } from '../learning-definition'

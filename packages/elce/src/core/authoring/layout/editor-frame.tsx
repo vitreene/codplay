@@ -1,4 +1,4 @@
-import { on, type RemixNode } from 'remix/ui'
+import { on, type RemixNode } from 'remix/component'
 import { Images, List } from 'lucide-static'
 import { renderLucideIcon } from '../lucide-static-icon'
 

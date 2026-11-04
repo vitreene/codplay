@@ -1,4 +1,4 @@
-import type { RemixNode } from 'remix/ui'
+import type { RemixNode } from 'remix/component'
 import type { ScenarioEntry } from '../organization/learning-scenario-entry-types'
 import type { LearningEditorFacade } from './learning-editor-facade'
 import type { EditorViewModel } from './learning-authoring-service'

@@ -1,5 +1,5 @@
 import { ImagePlus, Trash2 } from 'lucide-static'
-import { on, type Handle, type RemixNode } from 'remix/ui'
+import { on, type Handle, type RemixNode } from 'remix/component'
 
 import { CARD_BDC_TYPE, CARD_PRESET_ID } from '../card-config'
 import { CARD_IMAGE_FIT, CARD_IMAGE_FIT_OPTIONS, CARD_LAYOUT_OPTIONS } from '../card-config'
