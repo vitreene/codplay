@@ -28,6 +28,7 @@ import { ELCE_CAROUSEL_RUNTIME_KEY, selectCarouselCardStrap } from '../../../../
 import { appendClassToMarkupElement, sceneClassRule, sceneStyleClassName } from '../../../../builders/scene-style/scene-style-classes'
 import { appearanceClassNameForBdc } from '../../../../builders/scene-style/appearance-class-names'
 import type { ResourceInlineTextSceneFeature } from '../../../document/resource-inline-text-feature'
+import { projectCarouselCues } from '../domain/carousel-service'
 
 const statisticalGraphSceneBuilder = new ElceStatisticalGraphSceneBuilder()
 
@@ -65,7 +66,8 @@ export class ElceCarouselSceneBuilder {
 
   /** Projects Carousel settings and illustrative BDCs into a CodPlay story. */
   public build(input: CarouselSceneBuildInput): CarouselSceneBuild {
-    const { pageId, bdcId, content } = input
+    const { pageId, bdcId } = input
+    const content = projectCarouselCues(input.content)
     const displayMode = input.displayMode ?? 'content'
     const navigation = input.navigation ?? 'points'
     const pageCompletion = input.pageCompletion ?? 'last-card'
@@ -80,7 +82,7 @@ export class ElceCarouselSceneBuilder {
     const capsulePartId = `${prefix}:carousel:capsule`
     const navigationPartId = `${prefix}:carousel:navigation`
     const diapoRootId = displayMode === 'scene' ? input.completionEventRootId ?? rootId : undefined
-    const schedule = resolveCardSchedule(input)
+    const schedule = resolveCardSchedule({ ...input, content })
     const parentIntroRef = input.revelationSettings.defaults.intro
     const parentOutroRef = input.revelationSettings.defaults.outro
     const capsule = new AutoCapsule({

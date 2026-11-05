@@ -1,4 +1,6 @@
 import { assertAvatarContent } from '../../../../resources/bdcs/avatar/domain/avatar-service'
+import { AVATAR_PRESET_ID } from '../../../../resources/bdcs/avatar/avatar-config'
+import { resolveCarouselCueStarts } from '../../../../resources/bdcs/carousel/domain/carousel-service'
 import { BDC_TYPE, DEFAULT_PRESET_ID, PAGE_TYPE } from '../../learning-definition'
 import { CARD_LAYOUT_IDS } from '../../../../resources/bdcs/card/card-config'
 import { SCENARIO_ENTRY_KIND } from '../../organization/learning-organization-config'
@@ -131,6 +133,7 @@ export function assertDocumentInvariants(document: LearningDocument, resources: 
         const principal = page.bdcIds.filter((id) => bdcById.get(id)?.type !== BDC_TYPE.AVATAR)
         if (avatars.length > 1 || principal.length > 1) fail(`Une Diapo accepte un contenu principal et un seul Avatar : ${page.id}`)
         const carouselCount = page.bdcIds.filter((bdcId) => bdcById.get(bdcId)?.type === BDC_TYPE.CAROUSEL).length
+        if (avatars.length === 1 && carouselCount !== 1) fail(`Un Avatar de Diapo doit être placé à côté de son Carousel : ${page.id}`)
         const unsupportedBdc = page.bdcIds.find((bdcId) => {
           const type = bdcById.get(bdcId)?.type
           switch (type) {
@@ -162,7 +165,7 @@ export function assertDocumentInvariants(document: LearningDocument, resources: 
     if (bdc.type !== BDC_TYPE.AVATAR && bdc.avatar != null) fail(`Payload Avatar inattendu : ${bdc.id}`)
     switch (bdc.type) {
       case BDC_TYPE.AVATAR: {
-        if (bdc.avatar == null || bdc.parentBdcId !== null || bdc.section != null || bdc.question != null
+        if (bdc.presetId !== AVATAR_PRESET_ID || bdc.avatar == null || bdc.parentBdcId !== null || bdc.section != null || bdc.question != null
           || bdc.card != null || bdc.carousel != null || bdc.statisticalGraph != null || bdc.evaluationResult != null) fail(`BDC Avatar incomplet : ${bdc.id}`)
         if (bdc.pageId !== null && document.pages.find((page) => page.id === bdc.pageId)?.type !== PAGE_TYPE.DIAPO) fail('Un Avatar doit être placé dans une Diapo.')
         assertAvatarContent(bdc.avatar)
@@ -202,13 +205,21 @@ export function assertDocumentInvariants(document: LearningDocument, resources: 
           fail(`Bdc Carousel incomplet : ${bdc.id}`)
         }
         resources.carouselService.assertValid(bdc.carousel)
-        for (const entry of bdc.carousel.cards) {
+        const starts = resolveCarouselCueStarts(bdc.carousel)
+        for (const [index, entry] of bdc.carousel.cards.entries()) {
           const word = entry.cue?.word
           if (word === undefined) continue
           const avatar = bdcById.get(word.avatarBdcId)
           const take = avatar?.avatar?.take
+          const wordStartAtMs = take?.words[word.wordIndex]?.startAtMs
+          const wordIsAvailable = wordStartAtMs !== undefined
+            && wordStartAtMs > (starts[index - 1] ?? 0)
+            && wordStartAtMs < (starts[index + 1] ?? take?.durationMs ?? Number.POSITIVE_INFINITY)
           if (avatar?.pageId !== bdc.pageId || bdc.pageId === null || take == null || take.id !== word.takeId
-            || take.words[word.wordIndex]?.startAtMs !== entry.cue?.startAtMs) fail('Association de mot incohérente avec la prise de la Diapo.')
+            || wordStartAtMs === undefined || index === 0
+            || (entry.cue?.startAtMs !== wordStartAtMs && wordIsAvailable)) {
+            fail('Association de mot incohérente avec la prise ou l’ordre du Carousel.')
+          }
         }
         if (bdc.parentBdcId !== null) fail(`Un bdc Carousel ne peut pas être enfant d’un autre BDC : ${bdc.id}`)
         break

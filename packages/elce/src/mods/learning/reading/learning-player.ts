@@ -26,6 +26,7 @@ import { ElceEditorSettingsResolver } from '../../../domain/editor-settings/edit
 import { learningProfileService } from '../profile/domain/learning-profile-service'
 import { learningReaderProjectionService } from '../profile/reading/learning-reader-projection-service'
 import { bindLearningNavigationRemote, type LearningPagePlayback } from './navigation-remote/learning-navigation-remote'
+import { CAROUSEL_BDC_TYPE, CAROUSEL_PLAYBACK_MODE } from '../../../resources/bdcs/carousel/carousel-config'
 
 const editorSettingsResolver = new ElceEditorSettingsResolver()
 
@@ -54,8 +55,11 @@ export class LearningPlayer {
     this.document = prepared.document
     this.playbackBySceneKey = Object.fromEntries(
       prepared.document.pages.flatMap((page) => {
-        const avatar = prepared.document.bdcs.find((bdc) => page.bdcIds.includes(bdc.id) && bdc.avatar?.take != null)?.avatar
-        return avatar == null ? [] : [[`scene-${page.id}`, { autoStart: avatar.autoStart }]]
+        const pageBdcs = prepared.document.bdcs.filter((bdc) => page.bdcIds.includes(bdc.id))
+        const hasNarratedAvatar = pageBdcs.some((bdc) => bdc.avatar?.take != null)
+        const carousel = pageBdcs.find((bdc) => bdc.type === CAROUSEL_BDC_TYPE)?.carousel
+        if (!hasNarratedAvatar || carousel == null) return []
+        return [[`scene-${page.id}`, { autoStart: carousel.playbackMode === CAROUSEL_PLAYBACK_MODE.AUTOMATIC }]]
       }),
     )
     this.appearanceThemeCssLinks = loadAppearanceThemeCssLinks(

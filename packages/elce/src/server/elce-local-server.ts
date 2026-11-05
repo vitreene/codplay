@@ -27,6 +27,7 @@ const STYLE_FILES = [
   'packages/elce/src/core/authoring/appearance-trigger.css',
   'packages/elce/src/mods/learning/authoring/learning-appearance-panel.css',
   'packages/elce/src/resources/bdcs/card/authoring/card-editor.css',
+  'packages/elce/src/resources/bdcs/avatar/authoring/avatar-editor.css',
   'packages/elce/src/resources/bdcs/carousel/authoring/carousel-editor.css',
   'packages/elce/src/resources/bdcs/statistical-graph/authoring/statistical-graph.css',
   'packages/elce/src/core/preview/popup-player.css',

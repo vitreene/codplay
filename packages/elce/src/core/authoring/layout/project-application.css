@@ -1,4 +1,4 @@
-#elce-remix-project-app.elce-remix-project-app--editing {
+#elce-remix-project-app.elce-remix-project-app--project-open {
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -6,11 +6,11 @@
   overflow: hidden;
 }
 
-#elce-remix-project-app.elce-remix-project-app--editing #elce-project-header {
+#elce-remix-project-app.elce-remix-project-app--project-open #elce-project-header {
   flex: 0 0 auto;
 }
 
-#elce-remix-project-app.elce-remix-project-app--editing #elce-remix-editor-workspace {
+#elce-remix-project-app.elce-remix-project-app--project-open #elce-remix-editor-workspace {
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;

@@ -9,14 +9,14 @@
   padding: 1rem;
 }
 
-#elce-remix-project-app.elce-remix-project-app--editing #elce-main {
+#elce-remix-project-app.elce-remix-project-app--project-open #elce-main {
   grid-template-rows: minmax(0, 1fr);
   height: 100%;
   min-height: 0;
   overflow: hidden;
 }
 
-#elce-remix-project-app.elce-remix-project-app--editing .elce-remix-center-column {
+#elce-remix-project-app.elce-remix-project-app--project-open .elce-remix-center-column {
   height: auto;
   flex: 1 1 0;
   min-height: 0;
@@ -24,12 +24,12 @@
   overscroll-behavior: contain;
 }
 
-#elce-remix-project-app.elce-remix-project-app--editing .elce-remix-center-layout {
+#elce-remix-project-app.elce-remix-project-app--project-open .elce-remix-center-layout {
   height: 100%;
   min-height: 0;
 }
 
-#elce-remix-project-app.elce-remix-project-app--editing #elce-main > .elce-panel {
+#elce-remix-project-app.elce-remix-project-app--project-open #elce-main > .elce-panel {
   min-height: 0;
 }
 

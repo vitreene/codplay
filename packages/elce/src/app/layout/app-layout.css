@@ -129,43 +129,43 @@ body {
   grid-template-columns: minmax(0, 1fr);
 }
 
-#elce-remix-project-app.elce-remix-project-app--editing #elce-main {
+#elce-remix-project-app.elce-remix-project-app--project-open #elce-main {
   grid-template-rows: minmax(0, 1fr);
   height: 100%;
   min-height: 0;
   overflow: hidden;
 }
 
-#elce-remix-project-app.elce-remix-project-app--editing #elce-main > .elce-outline {
+#elce-remix-project-app.elce-remix-project-app--project-open #elce-main > .elce-outline {
   display: flex;
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
 }
 
-#elce-remix-project-app.elce-remix-project-app--editing #elce-outline-heading {
+#elce-remix-project-app.elce-remix-project-app--project-open #elce-outline-heading {
   flex: 0 0 auto;
 }
 
-#elce-remix-project-app.elce-remix-project-app--editing .elce-outline-scroll-content {
+#elce-remix-project-app.elce-remix-project-app--project-open .elce-outline-scroll-content {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
-#elce-remix-project-app.elce-remix-project-app--editing #elce-main > .elce-properties {
+#elce-remix-project-app.elce-remix-project-app--project-open #elce-main > .elce-properties {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
-#elce-remix-project-app.elce-remix-project-app--editing #elce-main > .elce-panel {
+#elce-remix-project-app.elce-remix-project-app--project-open #elce-main > .elce-panel {
   min-height: 0;
 }
 
-#elce-remix-project-app.elce-remix-project-app--editing #elce-main.elce-main--outline-closed > .elce-outline,
-#elce-remix-project-app.elce-remix-project-app--editing #elce-main.elce-main--properties-closed > .elce-properties {
+#elce-remix-project-app.elce-remix-project-app--project-open #elce-main.elce-main--outline-closed > .elce-outline,
+#elce-remix-project-app.elce-remix-project-app--project-open #elce-main.elce-main--properties-closed > .elce-properties {
   display: none;
 }
 
@@ -1243,8 +1243,8 @@ body {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  #elce-remix-project-app.elce-remix-project-app--editing #elce-main > .elce-outline[data-panel-open='false'],
-  #elce-remix-project-app.elce-remix-project-app--editing #elce-main > .elce-properties[data-panel-open='false'] {
+  #elce-remix-project-app.elce-remix-project-app--project-open #elce-main > .elce-outline[data-panel-open='false'],
+  #elce-remix-project-app.elce-remix-project-app--project-open #elce-main > .elce-properties[data-panel-open='false'] {
     display: none;
   }
 

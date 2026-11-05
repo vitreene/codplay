@@ -1,4 +1,5 @@
 import { clearAvatarWordAssociations } from '../../../../resources/bdcs/avatar/domain/avatar-carousel-associations'
+import { AVATAR_PRESET_ID } from '../../../../resources/bdcs/avatar/avatar-config'
 import { createDefaultAvatar } from '../../../../resources/bdcs/avatar/domain/avatar-service'
 import { BDC_TYPE, DEFAULT_PRESET_ID, PAGE_TYPE } from '../../learning-definition'
 import { CARD_LAYOUT_IDS } from '../../../../resources/bdcs/card/card-config'
@@ -13,7 +14,7 @@ import { createEmptyRichTextDocument } from '../../../../resources/bdcs/section/
 import type { CardContent } from '../../../../resources/bdcs/card/domain/card-types'
 import type { StatisticalGraphContent } from '../../../../resources/bdcs/statistical-graph/domain/statistical-graph-types'
 import type { EvaluationResultContent } from '../../evaluation/domain/learning-evaluation-result-types'
-import type { CarouselContent } from '../../../../resources/bdcs/carousel/domain/carousel-types'
+import type { CarouselContent, CarouselCueWordReference } from '../../../../resources/bdcs/carousel/domain/carousel-types'
 import type { LearningBdc } from '../../document/learning-document-types'
 import type { BdcId } from '../../../../core/document/content-document-types'
 import type { LearningDocumentCommand } from '../learning-document-command-types'
@@ -137,6 +138,23 @@ export function createBdc(
     }
   }
   switch (command.bdcType) {
+    case BDC_TYPE.AVATAR:
+      if (command.presetId !== AVATAR_PRESET_ID) fail('Un BDC Avatar utilise son profil configuré.')
+      switch (command.placement.kind) {
+        case BDC_LOCATION.PAGE: {
+          const page = findPage(document.pages, command.placement.pageId)
+          if (page.type !== PAGE_TYPE.DIAPO
+            || !page.bdcIds.some((bdcId) => findBdc(document.bdcs, bdcId).type === BDC_TYPE.CAROUSEL)) {
+            fail('Un Avatar de Diapo doit être placé à côté de son Carousel.')
+          }
+          break
+        }
+        case BDC_LOCATION.CATALOG:
+          break
+        case BDC_LOCATION.PARENT:
+          fail('Un BDC Avatar ne peut pas être enfant d’un autre BDC.')
+      }
+      break
     case BDC_TYPE.CAROUSEL:
       if (command.presetId !== DEFAULT_PRESET_ID.CAROUSEL || command.initialCardBdcId === undefined) {
         fail('Un BDC Carousel utilise son preset configuré et reçoit une première carte identifiée.')
@@ -343,6 +361,7 @@ export function updateCarousel(
   bdcId: BdcId,
   carousel: CarouselContent,
   resources: LearningCommandResourceServices,
+  movedBdcId?: BdcId,
 ): LearningDocument {
   const bdc = findBdc(document.bdcs, bdcId)
   switch (bdc.type) {
@@ -352,13 +371,34 @@ export function updateCarousel(
     default:
       fail(`Le bdc ${bdcId} n’est pas un Carousel.`)
   }
-  resources.carouselService.assertValid(carousel)
   const currentIds = bdc.carousel.cards.map((entry) => entry.bdcId).sort()
   const nextIds = carousel.cards.map((entry) => entry.bdcId).sort()
   if (currentIds.length !== nextIds.length || currentIds.some((id, index) => id !== nextIds[index])) {
     fail('Une mise à jour Carousel ne peut ni ajouter ni retirer ses BDC enfants.')
   }
-  return withBdc(document, { ...bdc, carousel })
+  const orderChanged = bdc.carousel.cards.some((entry, index) => carousel.cards[index]?.bdcId !== entry.bdcId)
+  const currentEntries = new Map(bdc.carousel.cards.map((entry) => [entry.bdcId, entry]))
+  const nextCarousel = movedBdcId === undefined || !orderChanged
+    ? carousel
+    : resources.carouselService.reconcileMovedCueTimes(
+      {
+        ...carousel,
+        cards: carousel.cards.map((entry) => currentEntries.get(entry.bdcId) ?? entry),
+      },
+      movedBdcId,
+      (word) => resolveCarouselWordStart(document, word),
+      document.bdcs.find((candidate) => candidate.type === BDC_TYPE.AVATAR && candidate.pageId === bdc.pageId)
+        ?.avatar?.take?.durationMs,
+    )
+  resources.carouselService.assertValid(nextCarousel)
+  return withBdc(document, { ...bdc, carousel: nextCarousel })
+}
+
+/** Resolves a Carousel word reference to its source transcript timestamp. */
+function resolveCarouselWordStart(document: LearningDocument, word: CarouselCueWordReference): number | undefined {
+  const avatar = document.bdcs.find((candidate) => candidate.id === word.avatarBdcId && candidate.type === BDC_TYPE.AVATAR)
+  const take = avatar?.avatar?.take
+  return take?.id === word.takeId ? take.words[word.wordIndex]?.startAtMs : undefined
 }
 
 /** Updates the complete content fields of one Card without changing its layout. */

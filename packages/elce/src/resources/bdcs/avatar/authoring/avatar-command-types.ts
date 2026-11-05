@@ -9,4 +9,4 @@ export type AvatarCommand =
   | Readonly<{ type: 'bdc.avatar.update'; bdcId: string; avatar: AvatarContent }>
   | Readonly<{ type: 'bdc.avatar.take.set'; bdcId: string; take: AvatarTake; media?: MediaMetadata }>
   | Readonly<{ type: 'bdc.avatar.delete'; bdcId: string }>
-  | Readonly<{ type: 'bdc.carousel.word.set'; bdcId: string; cardBdcId: string; avatarBdcId: string; wordIndex: number }>
+  | Readonly<{ type: 'bdc.carousel.word.set'; bdcId: string; cardBdcId: string; avatarBdcId: string; wordIndex: number; startAtMs: number }>

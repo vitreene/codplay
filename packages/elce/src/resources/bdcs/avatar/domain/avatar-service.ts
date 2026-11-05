@@ -11,8 +11,8 @@ export function assertAvatarContent(content: AvatarContent): void {
   if (content.profileId !== AVATAR_PROFILE_ID || typeof content.autoStart !== 'boolean'
     || !AVATAR_POSITIONS.some(({ value }) => value === content.placement.position)
     || !Number.isFinite(content.placement.widthPercent)
-    || content.placement.widthPercent < 10 || content.placement.widthPercent > 45) {
-    throw new Error('Réglages Avatar invalides : largeur attendue entre 10 et 45 %.')
+    || content.placement.widthPercent < 10 || content.placement.widthPercent > 60) {
+    throw new Error('Réglages Avatar invalides : largeur attendue entre 10 et 60 %.')
   }
   const take = content.take
   if (take === null) return

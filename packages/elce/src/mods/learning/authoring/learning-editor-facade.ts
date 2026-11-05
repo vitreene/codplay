@@ -189,8 +189,8 @@ export class LearningEditorFacade {
   }
 
   /** Reassociates one view with a specific occurrence of the current voice transcript. */
-  public associateCarouselWord(bdcId: BdcId, cardBdcId: BdcId, avatarBdcId: BdcId, wordIndex: number): void {
-    this.apply({ type: 'bdc.carousel.word.set', bdcId, cardBdcId, avatarBdcId, wordIndex })
+  public associateCarouselWord(bdcId: BdcId, cardBdcId: BdcId, avatarBdcId: BdcId, wordIndex: number, startAtMs: number): void {
+    this.apply({ type: 'bdc.carousel.word.set', bdcId, cardBdcId, avatarBdcId, wordIndex, startAtMs })
   }
 
   /** Creates a Section BDC at the requested page position. */

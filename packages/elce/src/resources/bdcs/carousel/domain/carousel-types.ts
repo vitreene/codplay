@@ -19,6 +19,8 @@ export interface CarouselBdcEntry {
   readonly outroTransitionRef: RevelationTransitionRef | null
 }
 
+export type CarouselCueWordReference = NonNullable<NonNullable<CarouselBdcEntry['cue']>['word']>
+
 export interface CarouselContent {
   readonly defaultViewDurationMs: number
   readonly playbackMode: CarouselPlaybackMode

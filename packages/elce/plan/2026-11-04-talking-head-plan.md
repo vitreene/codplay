@@ -67,6 +67,10 @@ rationale dans l’[étude](../notes/2026-11-04-talking-head-study.md).
   l’emplacement des configurations, des factories, des stories ou du catalogue.
 - Capture V2 et données réduites dans un événement final, sans event par frame.
   Autres formats de page, lecture mobile et SCORM hors POC.
+- **Après la tranche en cours — direction acceptée, cadrage différé :** concevoir
+  un BDC audio simplifié, proche du BDC Avatar, pour ajouter un son sans avatar.
+  Cadrer son éditeur et sa lecture avant d’en établir le plan de réalisation ;
+  cette évolution ne fait pas partie du lot 4.
 
 ## Ordre de réalisation
 
@@ -75,16 +79,17 @@ rationale dans l’[étude](../notes/2026-11-04-talking-head-study.md).
 | 0 — Fini | `authoring/component-v2/src/rive/view-model/` : composant distinct, cycle de state machine partagé, Seek narratif et durée de vie native vérifiés. |
 | 1 — Fini | `demos/src/v2/demos/rive-view-model/` : rig, MP3 et JSON fournis, voix maître, visèmes et mots synchronisés ; animations internes Rive préservées. Démo validée par l’utilisateur. La piste caméra reste au lot 5. |
 | 2 — Fini | `authoring/component-v2/src/rive/` porte les composants ; `authoring/story/rive-talking-avatar/` porte la story réutilisable et son guide ; `isTalking` reste le booléen canonique. |
-| 3 — En cours | `resources/bdcs/carousel/reading/`, `resources/pages/diapo/`, `mods/learning/reading/`, `mods/learning/preview/` et `src/server/elce-local-server.ts` : assembler la factory Avatar et le Carousel sur une Diapo réelle du Projet 3, avec quatre cartes et les occurrences retenues du transcript. Brancher la preview standard à la seule page de démonstration via le mapping temporaire par `pageId` ; servir les assets Rive et audio depuis le boundary Remix existant. La voix maître règle la durée, l’avatar reste responsive, les points Carousel sont absents et la fin publique est émise à la fin de la voix. Garder les pages ordinaires inchangées. Pas de modèle persistant de widget ni de catalogue. |
+| 3 — En cours | `resources/bdcs/carousel/reading/`, `resources/pages/diapo/`, `mods/learning/reading/`, `mods/learning/preview/` et `src/server/elce-local-server.ts` : composer le Carousel et le BDC Avatar persistant sur la Diapo réelle du Projet 3, avec quatre cartes et les occurrences retenues du transcript. Servir les assets Rive et audio depuis le boundary Remix existant. La voix maître règle la durée, le Carousel n’affiche pas ses points et la fin publique est émise à la fin de la voix. Garder les pages ordinaires inchangées. |
 | 4 — En cours, cadrage | Éditeurs Diapo/Carousel + commandes/persistance sur les fichiers fournis : BDC Avatar à côté du Carousel, réglages de placement et association des cartes aux occurrences du transcript. La captation micro/caméra reste au lot 5. |
 | 5 | Module de prise web + connecteur Elcé : micro/caméra, conversion après saisie, réécoute et attribution des ressources à la page. |
 
-Le pont temporaire du lot 3 est nommé
-`LearningPlayerOptions.temporaryRiveTalkingAvatarByPageId`. Il sert au POC
-sur fichiers et sera supprimé ou remplacé après la collecte des contraintes
-des candidats widgets et l’acceptation de leur modèle ; il n’est pas un champ
-du document Elcé. Le document de test MCP doit rester un document Elcé réel,
-créé et conservé par le serveur de projets ; le fixture en mémoire est écarté.
+Le premier POC utilisait le pont
+`LearningPlayerOptions.temporaryRiveTalkingAvatarByPageId`. Le lot 4 l’a
+remplacé par le BDC Avatar persistant du document Elcé ; cette option ne figure
+plus dans le code. Le modèle transversal des widgets reste ouvert sans
+remettre en cause le BDC retenu pour cette tranche. La preview de validation
+utilise le document Projet 3 conservé par le serveur de projets, pas un fixture
+en mémoire.
 
 ## Décisions restantes
 
@@ -123,18 +128,20 @@ créé et conservé par le serveur de projets ; le fixture en mémoire est écar
   sur 5175 et la preview standard monte l’avatar. Play, Pause, Seek avant/arrière
   et sortie/retour sont observés dans le player réel. La déclaration actuelle
   de fin doit être raccordée au signal de fin existant, selon G3 ci-dessous.
-  Le placement recouvre aussi
-  une partie du texte : réserver un espace lisible fait partie de l’acceptation
-  responsive restante. Preuves et analyse dans l’[étude](../notes/2026-11-04-talking-head-study.md#reprise-du-projet-3--5-novembre-2026).
+  Le rendu observé recouvre une partie du Carousel. La composition sans
+  recouvrement est appliquée au lot 4. Preuves et analyse dans l’[étude](../notes/2026-11-04-talking-head-study.md#reprise-du-projet-3--5-novembre-2026).
 - **T4 :** schéma persistant des prises/pistes et admission audio/Rive/données
   dans le catalogue média Elcé ; préparer le montage futur. L’emplacement du
   module de captation reste à choisir avant le lot 5.
 - **T5 :** format et précision de réduction temporelle ; restitution du regard
   selon les capacités réelles du rig, sans contrôle indépendant identifié.
 - **D1/D2 :** la télécommande est intégrée à la barre de navigation et le
-  démarrage manuel est appliqué. Le placement responsive du médaillon et
-  l’affichage initial du rig restent à qualifier. L’emplacement permanent de
-  la configuration attend l’examen du modèle de widgets.
+  démarrage manuel est appliqué. Le placement responsive est maintenant
+  vérifié dans le lot 4 pour le réglage haut droite sur grand et petit
+  viewport. Avant le premier Play, la première carte est visible à zéro mais
+  le canvas du rig ne peint pas encore l’Avatar ; ce point reste à qualifier.
+  L’emplacement permanent de la configuration attend l’examen du modèle de
+  widgets.
 
 ## G3 — publication de la fin vocale
 
@@ -155,20 +162,16 @@ retirée ; aucun changement de son moteur n’est nécessaire ni autorisé.
    traitement Sighty qui termine la page sans naviguer. Conserver les fins
    Carte/Quiz/Carousel ordinaires. Les deux échecs relevés avant modification
    de cette reprise restent à qualifier dans leurs circuits propriétaires.
-3. **Télécommande appliquée et vérifiée ; placement de l’avatar restant** —
-   `resources/pages/diapo/rive-talking-avatar-poc/` : achever le placement
-   responsive lisible et l’affichage du rig avant Play ;
+3. **Télécommande vérifiée ; affichage initial du rig restant** —
    `mods/learning/reading/navigation-remote/` et le layout de navigation
-   portent la télécommande partagée `@codplay/remote`,
-   avec attente d’un clic Play pour le Projet 3. Vérifier qu’avant ce clic,
-   le temps reste à zéro, la voix est suspendue et la première carte est visible.
-   L’option temporaire `autoStart` porte le choix ; le démarrage initial joue
-   les seules scènes actives autorisées par `runtime.playAll`, puis
-   l’observation du slot suspend la page narrée à chaque entrée manuelle.
-   Détruire l’ancienne télécommande au changement de page et à la destruction.
-   Tester Play/Pause, Seek, replay, sortie/retour, largeur étroite et absence de
-   télécommande sur les pages ordinaires. Aucun changement de modèle
-   documentaire, d’éditeur ou de moteur.
+   portent la télécommande partagée `@codplay/remote`. Play/Pause, Seek, replay,
+   sortie/retour, largeur étroite et absence de télécommande sur les pages
+   ordinaires sont vérifiés dans les tests et la preview Projet 3. Le mode
+   Manuel du Carousel laisse le temps à zéro et la première carte visible avant
+   Play ; le mode Automatique est l’unique source d’auto-démarrage. Le champ
+   temporaire Avatar `autoStart` du POC est ignoré. Le placement responsive
+   haut droite est vérifié dans le lot 4 ; seul le canvas du rig avant Play reste
+   à qualifier. Aucun changement CodPlay.
 4. Compléter les tests Elcé de construction et composition, typecheck et build,
    puis navigateur sur le Projet 3 : Play/Pause, Seek,
    replay, fin vocale, resize, sortie/retour, destruction et rechargement.
@@ -190,8 +193,9 @@ La preview réelle confirme Play/Pause/Seek/replay, retrait/retour, attente à
 zéro et barre sans débordement à 1280 × 756 et 390 × 844. Le test de styles
 conserve ses assertions sémantiques ; le hash global de l’ancienne extraction
 CSS est retiré, car la feuille s’enrichit de la télécommande.
-Le placement et l’affichage initial de l’avatar restent à traiter ; le lot 3
-reste En cours.
+Le placement haut droite est vérifié dans la preview du Projet 3 en grand et
+petit viewport ; le rig reste invisible avant le premier Play. Le lot 3 reste
+En cours pour l’acceptation vocale complète et ce rendu initial.
 
 ## Lot 4 — intégration auteur : implémentation En cours
 
@@ -217,6 +221,69 @@ Décision utilisateur : **un seul Avatar par Diapo pour cette version**, frère
 du Carousel. L’Avatar peut être conservé au catalogue ; Flux et placement
 enfant ne sont pas proposés dans cette tranche. Le contenu principal conserve
 son unique emplacement. Le modèle transversal des widgets reste ouvert.
+En lecture narrée, le Carousel remplit toute la zone de page. La racine Diapo
+est une grille 1/1 : l’Avatar flotte au-dessus dans la même cellule, selon ses
+réglages haut/bas et gauche/droite, avec sa marge et sa largeur responsive. Le
+player ne réserve pas d’espace au Carousel pour l’Avatar.
+
+Décisions d’édition précisées le 5 novembre : le BDC Avatar reprend le style
+commun des BDC, avec une action de suppression par icône et un slider de largeur
+à cinq tailles, de 10 à 60 %. Le mode Automatique/Manuel du Carousel pilote
+le démarrage de la page ; la case Avatar `autoStart` n’est pas proposée et son
+ancienne valeur persistée est ignorée. La prise existante conserve son audio et
+affiche son transcript. Son entrée « Capture live » ouvre une modale dédiée ;
+l’import fichier par fichier disparaît de l’éditeur, la capture réelle restant
+au lot 5. Le choix d’un mot est rattaché à chaque carte, sous forme de radios
+cachés dont la valeur en millisecondes est transmise et validée avec l’occurrence
+choisie ; l’interface affiche le mot sans temps et remplace le champ de durée
+par le mot choisi. Aucun sélecteur de mot global au Carousel.
+Décision utilisateur complémentaire : la carte 1 garde son repère à zéro, mais
+le champ de durée reste vide pour signifier une durée illimitée plutôt qu’une
+durée nulle. Le contrôle auteur masque donc le `0 s` de cette carte.
+Décision utilisateur du 5 novembre sur l’association : la liste des mots reste
+ouverte par défaut, entourée d’un bord sur toute la largeur, sous la barre de
+réglages et séparée du champ de durée. Une icône de repli se place en haut à
+droite du cadre.
+Révision auteur acceptée : conserver seulement le titre principal « Avatar » ;
+placer Capture live en bouton coloré plus grand, à droite du lecteur audio sur
+sa ligne ; afficher le transcript avant son bilan statistique et rapprocher les
+deux. Rendu Safari vérifié le 5 novembre ; contrat transféré dans la
+[spécification Avatar](../specs/avatar-bdc-spec.md#éditeur-de-lavatar).
+
+**Décision utilisateur du 5 novembre — réordonnancement narré.** Les
+associations restent liées à leur carte pendant le
+réordonnancement, sauf sur la carte qui devient première, qui revient à zéro
+sans association. L’ancienne première, déplacée en deuxième, retrouve le choix
+de mot. Les occurrences hors ordre restent visibles et leur radio est
+désactivée. Une association conservée mais hors ordre reste mémorisée ; son
+repère effectif devient libre. Les repères libres entre deux associations
+actives partagent également l’intervalle restant. Après la dernière association
+active, chaque carte libre avance selon la durée de l’entrée précédente ou la
+durée par défaut du Carousel. Réutiliser le service Carousel et la commande
+Learning existants ; aucun BDC ni circuit de commande parallèle. À vérifier
+sur les déplacements vers l’index 0 depuis les 2e, 3e et 4e cartes, la
+réactivation d’un lien quand son ordre redevient valide, la monotonie des
+repères effectifs et la sauvegarde/réouverture du Projet 3.
+
+**Implémentation appliquée ; acceptation en cours.** La façade passe l’identifiant
+déplacé à la commande `bdc.carousel.update` existante ; Learning recalcule les
+repères et valide les liens conservés. Dans Safari, la vraie commande Learning
+a été appliquée en mémoire à une copie désérialisée du Projet 3 : les
+déplacements 3e→1re et 4e→1re laissent une première carte à zéro, sans lien, et
+une séquence croissante ; le déplacement 4e avant 3e conserve son lien
+`Saturne` mais le rend hors ordre et non sélectionnable, puis le retour le
+réactive à 13 526 ms. Aucune donnée du Projet 3 n’a été écrite. Le build Elcé
+passe ; le typecheck reste bloqué uniquement par `TS6133` sur `title` dans
+`statistical-graph-scene-builder.ts:72`. Le drag UI, la sauvegarde/réouverture
+et la suite complète restent à vérifier. Le rejet API observé séparément
+atteint `assertAvatarContent` ; le document local examiné est valide, mais le
+document entrant qui a déclenché ce rejet n’a pas été capturé.
+Dans l’éditeur Projet 3, le champ de durée de la carte 1 est vide à zéro ; les
+41 occurrences de la carte 2 sont affichées dans une zone compacte pleine
+largeur bordée, séparée des réglages temporels, avec la flèche de bascule en
+haut à droite. Le cadre est ouvert par défaut ; Safari vérifie que le repli
+masque les mots et inverse la flèche, puis que le déploiement rouvre la liste.
+Le build Elcé passe.
 
 Actions du lot 4 — acceptées par la demande de poursuite :
 
@@ -235,51 +302,94 @@ Préparation de l’exécution :
   durées ordinaires gardent leur rôle actuel. La projection temporelle
   réutilise le builder Carousel et la factory Avatar existants.
   `avatar.take` contient `id`, `audioMediaId`, `durationMs`, `words` et
-  `frames` adaptés au profil fourni. `avatar` porte aussi `profileId`,
-  `autoStart` et `placement` (position, largeur, fond facultatif).
+  `frames` adaptés au profil fourni. `avatar` porte aussi `profileId` et
+  `placement` (position, largeur, fond facultatif). Le mode du Carousel est
+  l’unique réglage de démarrage de la page ; l’ancien `avatar.autoStart` stocké
+  reste ignoré pour compatibilité.
   `CarouselBdcEntry.cue` contient `startAtMs` et `word` facultatif
   `{ avatarBdcId, takeId, wordIndex }`. Aucun transcript copié dans le Carousel.
-  Le retrait/remplacement efface seulement `cue.word`. L’import de prise
-  utilise la file XState et le stockage média commun ; SQLite porte un détail
-  Avatar JSON et les repères des entrées.
+  Le retrait/remplacement efface seulement `cue.word`. La prise existante garde
+  l’audio et le transcript ; la capture future réutilisera la file XState et le
+  stockage média commun. SQLite porte un détail Avatar JSON et les repères des
+  entrées.
 - **Propriétaires à étendre :** `resources/bdcs/avatar/` pour données,
   validation, adaptation du fichier et éditeur ; modèle/commandes Learning
   pour placement et mises à jour atomiques ; file d’import et API média
   existantes pour l’audio ; codec et SQLite pour la migration et la
   persistance. Aucun catalogue, historique ou lecteur parallèle.
-- **Gates :** cardinalité arrêtée et schéma décrit ci-dessus ; conserver
-  les spécifications documentaires actuelles tant que l’évolution n’est pas
-  implémentée et vérifiée. Le modèle transversal de widgets et la captation
-  restent hors de cette tranche.
+- **Gates :** cardinalité et schéma de cette tranche sont arrêtés. Transférer
+  aux spécifications propriétaires uniquement les comportements implémentés et
+  vérifiés ; garder l’affichage initial du rig et l’acceptation restante ouverts
+  dans ce plan. Le modèle transversal de widgets et la captation restent hors
+  de cette tranche.
 
-1. `resources/bdcs/avatar/`, document et commandes Learning : ajouter le BDC
-   Avatar et ses placements acceptés, la référence de prise et les réglages
+1. **Appliqué** — `resources/bdcs/avatar/`, document et commandes Learning :
+   ajouter le BDC Avatar et ses placements acceptés, la référence de prise et les réglages
    responsive. Réutiliser commandes XState, historique, catalogue et
    persistance existants ; prévoir la migration des documents sans Avatar.
-2. Éditeurs Avatar et Carousel : utiliser la prise fournie et ouvrir ses
-   réglages depuis le BDC Avatar. Préserver le point d’entrée prévu vers le
-   futur module de captation sans le présenter comme déjà disponible.
-   Dans chaque vue Carousel, sélectionner
-   une occurrence du transcript de cette prise ; conserver la première carte
-   à zéro. Un mot répété reste distinguable. Au retrait de l’Avatar ou au
+2. **Appliqué** — Éditeurs Avatar et Carousel : utiliser la prise fournie et
+   ouvrir ses réglages depuis le BDC Avatar. Garder le son de la prise et montrer son
+   transcript. Remplacer l’import de fichiers par l’entrée Capture live et sa
+   modale dédiée, sans présenter la captation du lot 5 comme disponible.
+   Dans l’éditeur de chaque carte, sélectionner une occurrence du transcript
+   avec un bouton radio caché, dont la valeur est le temps de l’occurrence ;
+   afficher seulement le mot choisi dans le champ qui alterne avec la durée.
+   Un mot répété reste distinguable. Au retrait de l’Avatar ou au
    remplacement de sa prise, supprimer l’association et conserver le temps
    correspondant dans la même commande documentaire. Permettre ensuite de
    choisir un mot du nouveau son pour remplacer ensemble l’association et
    le temps de la carte. Ne pas copier le transcript dans le Carousel.
-3. Builders Diapo/Carousel et preview Learning : produire la configuration de
-   la factory existante depuis le document et retirer le mapping temporaire
-   par projet/page. Conserver la voix maître, la télécommande de navigation,
-   le démarrage choisi et la fin publique par le circuit déjà vérifié.
-4. Acceptation : créer et régler un Avatar dans l’éditeur réel, associer les
-   cartes (dont un mot répété), vérifier Play/Pause/Seek/replay et fin vocale ;
+3. **Appliqué, rendu partiellement accepté** — Builders Diapo/Carousel et
+   preview Learning : produire la configuration de la factory existante depuis
+   le document et retirer le mapping temporaire
+   par projet/page. Quand la prise est configurée, placer la factory Avatar
+   et le Carousel dans la même cellule 1/1 de la racine Diapo ; le Carousel
+   remplit son conteneur et l’Avatar flotte au-dessus sans réserver sa place.
+   Conserver la voix maître, la télécommande de navigation, le démarrage choisi
+   par le mode Carousel et la fin publique par le circuit déjà vérifié.
+4. **En cours — acceptation** : créer et régler un Avatar dans l’éditeur réel,
+   associer les cartes (dont un mot répété), vérifier Play/Pause/Seek/replay et
+   fin vocale ;
    retrait/remplacement doivent supprimer les associations en conservant
    exactement les temps. Undo/Redo doit restaurer ensemble la prise, les
    associations et les temps. Réassocier une carte à un mot du nouveau son
    doit remplacer son temps conservé par le début du mot choisi, sans modifier
    les autres cartes ; rechargement et preview doivent restituer
    l’état enregistré. Tests avec leurs propres
-   prises, typecheck/build et navigateur ; transférer seulement les résultats
-   vérifiés aux spécifications propriétaires.
+   prises, typecheck/build et navigateur ; vérifier le Carousel plein cadre et
+   l’Avatar superposé selon ses positions en grand et petit viewport. Transférer seulement
+   les résultats vérifiés aux spécifications propriétaires.
+
+   **Vérification partielle du 5 novembre :** Safari MCP a supprimé l’Avatar sur
+   une copie temporaire du Projet 3 ; le mot « Il » a été remplacé par le temps
+   conservé 5 770 ms, les réglages du Carousel sont restés inchangés et le temps
+   a persisté après fermeture/réouverture. La copie a été supprimée. L’Undo/Redo,
+   le remplacement de prise et les autres critères restent à vérifier.
+
+   Le 5 novembre, Safari MCP a aussi vérifié l’agencement de l’éditeur du
+   Projet 3 en lecture seule : titre Avatar seul, capture colorée à droite du
+   lecteur sur sa ligne, transcript avant le bilan avec 6 px d’écart. Aucune
+   donnée du projet n’a été modifiée.
+
+Contrôle navigateur du 5 novembre : la preview standard du Projet 3 confirme
+que le Carousel a exactement le rectangle de la racine Diapo à 1280 × 756 et
+390 × 844. À la demande d’agrandir le slider, ses valeurs sont maintenant
+10/20/30/45/60 %. La mesure du canvas avec le réglage courant à 30 % vérifie
+que le bord peint du rig en haut à droite reste à 16 px du coin choisi, y
+compris à 390 × 844, sans débordement horizontal. Le réglage enregistré du
+Projet 3 est resté à 30 %. Un contrôle DOM temporaire à 60 % exerce le cran
+maximal : l’Avatar recouvre alors une partie du texte sur grand écran ; il reste
+un overlay et le Carousel garde toute sa zone. Le fond transparent du rig est
+compensé dans la projection, comme le précise la
+[spécification Avatar](../specs/avatar-bdc-spec.md). Les mesures sont dans le
+[relevé d’acceptation](notes/assets/talking-head/elce-project-3-acceptance.json).
+Avant Play, le temps reste à zéro et la première carte est visible, mais le
+canvas ne peint pas encore le rig. L’acceptation des autres positions et de
+l’affichage initial restent ouvertes ; le lot 4 reste En cours.
+Le build Elcé du 5 novembre passe avec `vite build --emptyOutDir false`, en
+préservant `dist/avatars/` ; l’avertissement de taille de chunk préexiste. Le
+typecheck signale uniquement `TS6133` sur `title` inutilisé dans
+`statistical-graph-scene-builder.ts:72`, fichier hors de cette tranche.
 
 ## Acceptation et clôture
 

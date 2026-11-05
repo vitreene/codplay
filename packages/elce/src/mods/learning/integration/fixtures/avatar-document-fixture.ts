@@ -31,7 +31,7 @@ export function createAvatarDocumentFixture() {
     type: 'bdc.avatar.take.set', bdcId: 'avatar-test', take: createAvatarTakeFixture(),
     media: { id: 'voice-test', name: 'fixture.wav', mimeType: 'audio/wav', size: 44, caption: '' },
   })
-  const withSecondWord = applyDocumentCommand(withTake, { type: 'bdc.carousel.word.set', bdcId: 'carousel-test', cardBdcId: 'card-two', avatarBdcId: 'avatar-test', wordIndex: 1 })
-  const withThirdWord = applyDocumentCommand(withSecondWord, { type: 'bdc.carousel.word.set', bdcId: 'carousel-test', cardBdcId: 'card-three', avatarBdcId: 'avatar-test', wordIndex: 2 })
+  const withSecondWord = applyDocumentCommand(withTake, { type: 'bdc.carousel.word.set', bdcId: 'carousel-test', cardBdcId: 'card-two', avatarBdcId: 'avatar-test', wordIndex: 1, startAtMs: 2400 })
+  const withThirdWord = applyDocumentCommand(withSecondWord, { type: 'bdc.carousel.word.set', bdcId: 'carousel-test', cardBdcId: 'card-three', avatarBdcId: 'avatar-test', wordIndex: 2, startAtMs: 6800 })
   return applyDocumentCommand(withThirdWord, { type: 'bdc.avatar.update', bdcId: 'avatar-test', avatar: { ...createDefaultAvatar(), take: createAvatarTakeFixture(), placement: { position: 'bottom-left', widthPercent: 22 } } })
 }

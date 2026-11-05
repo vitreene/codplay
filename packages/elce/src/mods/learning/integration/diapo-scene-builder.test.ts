@@ -135,9 +135,21 @@ describe('Elcé Diapo scene builder', () => {
     const page = document.pages.find((candidate) => candidate.id === 'page-avatar')!
     const build = buildDiapoSceneForTest(page, document.bdcs, { mediaSources: { 'voice-test': '/test-voice.wav' } })
     const story = build.sceneDoc.stories[`${page.id}-diapo-page`]!
+    const pageRoot = story.persos.find((perso) => perso.id === `${page.id}-diapo-content`)
+    const avatarStage = story.persos.find((perso) => perso.id === 'rive-talking-avatar-avatar-test-stage')
     const cardIntroTimes = (story.eventimes ?? []).filter((event) => typeof event.name === 'string' && event.name.startsWith('page-avatar:carousel-test:card:') && event.name.endsWith(':intro')).map((event) => event.startAt)
     expect(cardIntroTimes).toEqual([2400, 6800])
     expect(story.eventimes).toContainEqual({ name: 'sequence:end', startAt: 12_000 })
+    expect(pageRoot?.initial).toMatchObject({ className: expect.stringContaining('elce-diapo-content--narrated') })
+    expect(pageRoot?.initial).not.toHaveProperty('style.paddingLeft')
+    expect(avatarStage?.initial).toMatchObject({
+      move: { target: `${page.id}-diapo-content` },
+      style: {
+        gridArea: '1 / 1', justifySelf: 'start', alignSelf: 'end',
+        marginLeft: '16px', marginBottom: '16px', transform: 'translate(-29.76%, 23.2%)',
+        width: 'min(22cqw, 75.6cqh)', zIndex: 3,
+      },
+    })
     expect(story.listen).toContainEqual({ on: 'sequence:end', emit: [{ name: ELCE_EVENTS.PAGE_FINISHED, visibility: 'public', data: { pageId: page.id } }] })
     expect(story.persos.some((perso) => perso.id.endsWith('-navigation-host') || perso.id.endsWith('-completion-marker'))).toBe(false)
     const codplay = new CodPlay({ pauseOnDocumentHidden: false, engine: { ...ELCE_ENGINE_CAPABILITIES, idle: false } })

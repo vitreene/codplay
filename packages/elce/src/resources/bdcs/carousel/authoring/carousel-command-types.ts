@@ -13,5 +13,5 @@ export type CarouselCommand =
       placement: BdcPlacement
       initialCardBdcId: BdcId
     }>
-  | Readonly<{ type: 'bdc.carousel.update'; bdcId: BdcId; carousel: CarouselContent }>
+  | Readonly<{ type: 'bdc.carousel.update'; bdcId: BdcId; carousel: CarouselContent; movedBdcId?: BdcId }>
   | Readonly<{ type: 'bdc.carousel.delete'; bdcId: BdcId }>

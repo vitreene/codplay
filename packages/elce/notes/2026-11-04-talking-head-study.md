@@ -50,6 +50,10 @@ afficher/masquer le transcript et contrôler le son sont aussi des évolutions.
 Ces extensions orientent les frontières de données sans engager leur réalisation
 dans le POC.
 
+Une évolution à concevoir plus tard est un BDC audio simplifié, proche du BDC
+Avatar, qui permette d’ajouter un son sans avatar. Son édition et sa lecture
+restent à cadrer avant sa réalisation.
+
 ## Intégration auteur proposée — 5 novembre 2026
 
 L’utilisateur propose un BDC Avatar comme point d’entrée vers la captation

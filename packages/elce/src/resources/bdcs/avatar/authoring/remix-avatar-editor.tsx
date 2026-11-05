@@ -1,76 +1,170 @@
 import { on, type Handle } from 'remix/component'
+import { Maximize2, Mic, Minimize2, Trash2, X } from 'lucide-static'
 import type { AvatarContent } from '../domain/avatar-types'
 import { AVATAR_POSITIONS } from '../avatar-config'
 import type { AppearanceTarget } from '../../../../domain/appearance/appearance-target-types'
 import { renderAppearanceTrigger } from '../../../../core/authoring/appearance-trigger'
+import { renderLucideIcon } from '../../../../core/authoring/lucide-static-icon'
 
 interface AvatarEditorProps {
   readonly bdcId: string
   readonly content: AvatarContent
   readonly audioSource?: string
   readonly onUpdate: (content: AvatarContent) => void
-  readonly onImport: (audio: File, timeline: File) => Promise<void>
   readonly onDelete: () => void
   readonly onOpenAppearanceTarget: (target: AppearanceTarget, triggerId: string) => void
 }
 
-/** Renders the Avatar's take import, placement and existing appearance controls. */
+const avatarWidthSteps = [10, 20, 30, 45, 60] as const
+const avatarWidthLabels = ['Très petit', 'Petit', 'Moyen', 'Grand', 'Très grand'] as const
+
+/** Renders Avatar placement and take details in the shared BDC editor style. */
 export function RemixAvatarEditor(handle: Handle<AvatarEditorProps>) {
-  let audio: File | undefined
-  let timeline: File | undefined
-  let status = ''
-  let importing = false
-  /** Imports the selected files through the controller-owned media queue. */
-  const importTake = async (): Promise<void> => {
-    if (audio === undefined || timeline === undefined || importing) return
-    importing = true
-    status = 'Lecture des fichiers…'
-    void handle.update()
-    await handle.props.onImport(audio, timeline).then(() => { status = 'Prise transmise à la sauvegarde.' }, (error: unknown) => {
-      status = error instanceof Error ? error.message : 'Import impossible.'
-    })
-    importing = false
-    if (!handle.signal.aborted) void handle.update()
-  }
   return () => {
     const { bdcId, content, onUpdate } = handle.props
-    return <section id={`elce-avatar-editor-${bdcId}`} className="elce-carousel-editor" aria-label="Éditeur Avatar">
-      <header id={`elce-avatar-header-${bdcId}`} className="elce-carousel-editor__header">
-        <h3 id={`elce-avatar-title-${bdcId}`}>Avatar</h3>
+    const widthStep = widthStepForPercent(content.placement.widthPercent)
+    const captureDialogId = `elce-avatar-capture-dialog-${bdcId}`
+    const take = content.take
+
+    return <section
+      id={`elce-avatar-editor-${bdcId}`}
+      className="elce-card-editor"
+      aria-label="Éditeur Avatar"
+    >
+      <header id={`elce-avatar-header-${bdcId}`} className="elce-card-editor__header">
+        <h3 id={`elce-avatar-title-${bdcId}`} className="elce-card-editor__title">Avatar</h3>
         <div id={`elce-avatar-actions-${bdcId}`} className="elce-bdc-header-actions">
-          {renderAppearanceTrigger({ id: `elce-avatar-style-${bdcId}`, target: { kind: 'bdc', bdcId }, label: 'Régler le fond et le style de l’Avatar', onOpen: handle.props.onOpenAppearanceTarget, className: 'elce-appearance-trigger elce-bdc-style-trigger' })}
-          <button id={`elce-avatar-delete-${bdcId}`} type="button" mix={on('click', handle.props.onDelete)}>Supprimer l’Avatar</button>
+          {renderAppearanceTrigger({
+            id: `elce-avatar-style-${bdcId}`,
+            target: { kind: 'bdc', bdcId },
+            label: 'Régler le fond et le style de l’Avatar',
+            onOpen: handle.props.onOpenAppearanceTarget,
+            className: 'elce-appearance-trigger elce-bdc-style-trigger',
+          })}
+          <button
+            id={`elce-avatar-delete-${bdcId}`}
+            className="elce-card-editor__delete"
+            type="button"
+            aria-label="Supprimer l’Avatar"
+            title="Supprimer l’Avatar"
+            mix={on<HTMLButtonElement, 'click'>('click', handle.props.onDelete)}
+          >
+            {renderLucideIcon(Trash2, `elce-avatar-delete-icon-${bdcId}`)}
+          </button>
         </div>
       </header>
-      <fieldset id={`elce-avatar-placement-${bdcId}`}>
-        <legend id={`elce-avatar-placement-title-${bdcId}`}>Présentation</legend>
-        <label id={`elce-avatar-position-label-${bdcId}`}>Position
-          <select id={`elce-avatar-position-${bdcId}`} value={content.placement.position} mix={on<HTMLSelectElement, 'change'>('change', (event) => {
-            const position = AVATAR_POSITIONS.find(({ value }) => value === event.currentTarget.value)?.value
-            if (position !== undefined) onUpdate({ ...content, placement: { ...content.placement, position } })
-          })}>{AVATAR_POSITIONS.map(({ value, label }) => <option value={value}>{label}</option>)}</select>
+
+      <div id={`elce-avatar-settings-${bdcId}`} className="elce-carousel-editor__settings">
+        <label id={`elce-avatar-position-label-${bdcId}`} className="elce-carousel-editor__setting">
+          <span id={`elce-avatar-position-caption-${bdcId}`}>Position</span>
+          <select
+            id={`elce-avatar-position-${bdcId}`}
+            value={content.placement.position}
+            mix={on<HTMLSelectElement, 'change'>('change', (event) => {
+              const position = AVATAR_POSITIONS.find(({ value }) => value === event.currentTarget.value)?.value
+              if (position !== undefined) onUpdate({ ...content, placement: { ...content.placement, position } })
+            })}
+          >
+            {AVATAR_POSITIONS.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
+          </select>
         </label>
-        <label id={`elce-avatar-width-label-${bdcId}`}>Largeur (%)
-          <input id={`elce-avatar-width-${bdcId}`} type="number" min="10" max="45" value={content.placement.widthPercent} mix={on<HTMLInputElement, 'change'>('change', (event) => onUpdate({ ...content, placement: { ...content.placement, widthPercent: event.currentTarget.valueAsNumber } }))} />
+        <label id={`elce-avatar-width-label-${bdcId}`} className="elce-carousel-editor__setting">
+          <span id={`elce-avatar-width-caption-${bdcId}`}>Largeur</span>
+          <span id={`elce-avatar-width-control-${bdcId}`} className="elce-carousel-editor__duration-control">
+            {renderLucideIcon(Minimize2, `elce-avatar-width-small-icon-${bdcId}`)}
+            <input
+              id={`elce-avatar-width-${bdcId}`}
+              type="range"
+              min="1"
+              max="5"
+              step="1"
+              value={widthStep}
+              aria-label="Largeur de l’Avatar"
+              aria-valuetext={avatarWidthLabels[widthStep - 1]}
+              mix={on<HTMLInputElement, 'input'>('input', (event) => {
+                const widthPercent = avatarWidthSteps[event.currentTarget.valueAsNumber - 1]
+                if (widthPercent !== undefined) onUpdate({ ...content, placement: { ...content.placement, widthPercent } })
+              })}
+            />
+            {renderLucideIcon(Maximize2, `elce-avatar-width-large-icon-${bdcId}`)}
+          </span>
         </label>
-        <label id={`elce-avatar-start-label-${bdcId}`}>
-          <input id={`elce-avatar-start-${bdcId}`} type="checkbox" checked={content.autoStart} mix={on<HTMLInputElement, 'change'>('change', (event) => onUpdate({ ...content, autoStart: event.currentTarget.checked }))} /> Démarrer automatiquement
-        </label>
-      </fieldset>
-      <fieldset id={`elce-avatar-take-${bdcId}`}>
-        <legend id={`elce-avatar-take-title-${bdcId}`}>Prise sonore</legend>
-        {content.take === null ? <p id={`elce-avatar-empty-${bdcId}`}>Choisissez le son et son fichier de transcript et visèmes.</p>
-          : <p id={`elce-avatar-take-info-${bdcId}`}>{content.take.words.length} mots · {(content.take.durationMs / 1000).toFixed(2)} s</p>}
-        {handle.props.audioSource === undefined ? null : <audio id={`elce-avatar-audio-${bdcId}`} controls src={handle.props.audioSource} />}
-        <label id={`elce-avatar-file-label-${bdcId}`}>Son
-          <input id={`elce-avatar-file-${bdcId}`} type="file" accept="audio/*" mix={on<HTMLInputElement, 'change'>('change', (event) => { audio = event.currentTarget.files?.[0]; void handle.update() })} />
-        </label>
-        <label id={`elce-avatar-timeline-label-${bdcId}`}>Transcript et visèmes (JSON)
-          <input id={`elce-avatar-timeline-${bdcId}`} type="file" accept=".json,application/json" mix={on<HTMLInputElement, 'change'>('change', (event) => { timeline = event.currentTarget.files?.[0]; void handle.update() })} />
-        </label>
-        <button id={`elce-avatar-import-${bdcId}`} type="button" disabled={audio === undefined || timeline === undefined || importing} mix={on('click', () => { void importTake() })}>{content.take === null ? 'Utiliser cette prise' : 'Remplacer la prise'}</button>
-        <p id={`elce-avatar-status-${bdcId}`} role="status">{status}</p>
-      </fieldset>
+      </div>
+
+      <section id={`elce-avatar-take-${bdcId}`} className="elce-avatar-editor__take" aria-label="Audio et transcript de l’Avatar">
+        <div id={`elce-avatar-audio-row-${bdcId}`} className="elce-avatar-editor__audio-row">
+          {take === null || handle.props.audioSource === undefined ? null : <audio
+            id={`elce-avatar-audio-${bdcId}`}
+            controls={true}
+            src={handle.props.audioSource}
+          />}
+          <button
+            id={`elce-avatar-capture-open-${bdcId}`}
+            className="elce-avatar-editor__capture"
+            type="button"
+            aria-haspopup="dialog"
+            aria-controls={captureDialogId}
+            mix={on<HTMLButtonElement, 'click'>('click', (event) => showCaptureDialog(event.currentTarget, captureDialogId))}
+          >
+            {renderLucideIcon(Mic, `elce-avatar-capture-icon-${bdcId}`)}
+            <span id={`elce-avatar-capture-label-${bdcId}`}>Capture live</span>
+          </button>
+        </div>
+        {take === null
+          ? <p id={`elce-avatar-empty-${bdcId}`} className="elce-carousel-editor__empty">Aucune prise sonore associée.</p>
+          : <>
+            <p id={`elce-avatar-transcript-${bdcId}`} className="elce-avatar-editor__transcript" aria-label="Transcript de la prise">
+              {take.words.map(({ text }) => text).join(' ')}
+            </p>
+            <p id={`elce-avatar-take-info-${bdcId}`} className="elce-avatar-editor__take-info">
+              {take.words.length} mots · {(take.durationMs / 1000).toFixed(2)} s
+            </p>
+          </>}
+      </section>
+
+      <dialog
+        id={captureDialogId}
+        className="elce-export-dialog"
+        aria-labelledby={`elce-avatar-capture-title-${bdcId}`}
+        aria-describedby={`elce-avatar-capture-description-${bdcId}`}
+      >
+        <div id={`elce-avatar-capture-content-${bdcId}`} className="elce-export-dialog__content">
+          <header id={`elce-avatar-capture-header-${bdcId}`} className="elce-export-dialog__header">
+            <h2 id={`elce-avatar-capture-title-${bdcId}`}>Capture live</h2>
+            <button
+              id={`elce-avatar-capture-close-${bdcId}`}
+              className="elce-export-dialog__close"
+              type="button"
+              aria-label="Fermer la capture live"
+              title="Fermer la capture live"
+              mix={on<HTMLButtonElement, 'click'>('click', (event) => closeCaptureDialog(event.currentTarget))}
+            >
+              {renderLucideIcon(X, `elce-avatar-capture-close-icon-${bdcId}`)}
+            </button>
+          </header>
+          <p id={`elce-avatar-capture-description-${bdcId}`}>
+            La capture micro et caméra sera disponible dans le module dédié. La prise actuelle et son transcript restent conservés.
+          </p>
+        </div>
+      </dialog>
     </section>
   }
+}
+
+/** Maps the stored width to the closest of the five authoring slider steps. */
+function widthStepForPercent(widthPercent: number): number {
+  return avatarWidthSteps.reduce((closestIndex, candidate, index) =>
+    Math.abs(candidate - widthPercent) < Math.abs(avatarWidthSteps[closestIndex]! - widthPercent) ? index : closestIndex, 0) + 1
+}
+
+/** Opens the native capture dialog from its Avatar entry point. */
+function showCaptureDialog(button: HTMLButtonElement, dialogId: string): void {
+  const dialog = button.ownerDocument.getElementById(dialogId)
+  if (dialog instanceof HTMLDialogElement) dialog.showModal()
+}
+
+/** Closes the native capture dialog from its close control. */
+function closeCaptureDialog(button: HTMLButtonElement): void {
+  const dialog = button.closest('dialog')
+  if (dialog instanceof HTMLDialogElement) dialog.close()
 }

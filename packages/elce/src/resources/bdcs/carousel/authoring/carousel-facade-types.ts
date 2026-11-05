@@ -39,7 +39,7 @@ export interface ElceCarouselEditorActions extends ElceCardEditorActions {
 
 export interface ElceCarouselEditorProps {
   readonly avatar?: ResourceBdc
-  readonly onAssociateWord?: (cardBdcId: string, avatarBdcId: string, wordIndex: number) => void
+  readonly onAssociateWord?: (cardBdcId: string, avatarBdcId: string, wordIndex: number, startAtMs: number) => void
   readonly bdcId: string
   readonly content: CarouselContent
   readonly bdcs: readonly ResourceBdc[]

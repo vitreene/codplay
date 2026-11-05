@@ -1,6 +1,6 @@
 import { AVATAR_BDC_TYPE } from '../../bdcs/avatar/avatar-config'
 import { appendAvatarToDiapoStory } from '../../bdcs/avatar/reading/avatar-diapo-story'
-import { projectCarouselCues } from '../../bdcs/avatar/domain/avatar-carousel-associations'
+import { projectCarouselCues } from '../../bdcs/carousel/domain/carousel-service'
 import type { PersoDoc, StoryDoc } from 'codplay/scene/types'
 import { CARD_BDC_TYPE } from '../../bdcs/card/card-config'
 import { CAROUSEL_BDC_TYPE } from '../../bdcs/carousel/carousel-config'
@@ -40,12 +40,13 @@ export function buildDiapoScene(
 
   if (bdc?.type === CAROUSEL_BDC_TYPE) {
     const carouselBuild = buildCarousel(page, bdc, bdcs, options, avatar)
-    const pageStory = createDiapoCarouselPageStory(page, bdc, { ...carouselBuild.story, id: storyId }, options)
     const take = avatar?.avatar?.take
     const audioSource = take == null ? undefined : options.mediaSources?.[take.audioMediaId]
     if (take != null && audioSource === undefined) throw new Error('Le fichier audio de la prise est indisponible.')
+    const pageRootId = `${page.id}-diapo-content`
+    const pageStory = createDiapoCarouselPageStory(page, bdc, { ...carouselBuild.story, id: storyId }, options, take == null ? undefined : avatar?.avatar?.placement)
     const narratedPageStory = avatar !== undefined && take != null && audioSource !== undefined
-      ? appendAvatarToDiapoStory(pageStory, page.id, `${page.id}-${bdc.id}-diapo-end-scrollport`, avatar, audioSource, appearanceClassNameForBdc(avatar.id, options.appearanceClassNamesByTarget))
+      ? appendAvatarToDiapoStory(pageStory, page.id, pageRootId, avatar, audioSource, appearanceClassNameForBdc(avatar.id, options.appearanceClassNamesByTarget))
       : pageStory
     return {
       sceneDoc: {
@@ -210,6 +211,7 @@ function createDiapoCarouselPageStory(
   carousel: ResourceBdc,
   story: StoryDoc<string>,
   options: DiapoSceneBuildOptions,
+  avatarPlacement?: NonNullable<ResourceBdc['avatar']>['placement'],
 ): StoryDoc<string> {
   const pageRootId = `${page.id}-diapo-content`
   const pagePartId = `${page.id}:diapo:carousel`
@@ -225,13 +227,14 @@ function createDiapoCarouselPageStory(
   })
   if (!foundCarouselRoot) throw new Error(`La racine de Diapo Carousel ${carousel.id} est absente.`)
   const pageAppearanceClass = appearanceClassNameForPage(page.id, options.appearanceClassNamesByTarget)
+  const narratedClass = avatarPlacement === undefined ? '' : ' elce-diapo-content--narrated'
   const pageRoot: PersoDoc<string> = {
     id: pageRootId,
     type: 'layout',
     initial: {
       move: '@root',
-      className: `elce-diapo-content ${pageAppearanceClass}`,
-      markup: `<article id="${pageRootId}" class="elce-diapo-content ${pageAppearanceClass}"><!-- data-part="${pagePartId}" --></article>`,
+      className: `elce-diapo-content${narratedClass} ${pageAppearanceClass}`,
+      markup: `<article id="${pageRootId}" class="elce-diapo-content${narratedClass} ${pageAppearanceClass}"><!-- data-part="${pagePartId}" --></article>`,
     },
   }
   return { ...story, persos: [pageRoot, ...carouselPersos] }

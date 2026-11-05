@@ -208,7 +208,7 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
     })
   }
 
-  /** Creates a project from its browser-owned v10 document unless its id already exists. */
+  /** Creates a project from its browser-owned v11 document unless its id already exists. */
   public async createProject(document: LearningDocument): Promise<CreateProjectResult> {
     return this.database.transaction(async (transaction) => {
       const now = new Date().toISOString()

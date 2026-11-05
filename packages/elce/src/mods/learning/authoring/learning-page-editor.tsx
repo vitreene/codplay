@@ -381,7 +381,6 @@ function renderBdcEditor(
         bdcId={bdc.id} content={bdc.avatar}
         audioSource={bdc.avatar.take === null ? undefined : view.mediaSources[bdc.avatar.take.audioMediaId]}
         onUpdate={(content) => actions.updateAvatar(bdc.id, content)}
-        onImport={(audio, timeline) => actions.importAvatarTake(bdc.id, audio, timeline)}
         onDelete={() => actions.deleteAvatar(bdc.id)}
         onOpenAppearanceTarget={state.onOpenAppearanceTarget}
       />
@@ -447,7 +446,7 @@ function renderBdcEditor(
         bdcId={bdc.id}
         content={bdc.carousel}
         avatar={view.selectedPageBdcs.find((candidate) => candidate.type === BDC_TYPE.AVATAR)}
-        onAssociateWord={(cardBdcId, avatarBdcId, wordIndex) => actions.associateCarouselWord(bdc.id, cardBdcId, avatarBdcId, wordIndex)}
+        onAssociateWord={(cardBdcId, avatarBdcId, wordIndex, startAtMs) => actions.associateCarouselWord(bdc.id, cardBdcId, avatarBdcId, wordIndex, startAtMs)}
         bdcs={views}
         selectedCardBdcId={view.selectedCarouselCardBdcId}
         mediaById={view.mediaById}

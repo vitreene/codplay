@@ -128,7 +128,7 @@ export class LearningAuthoringService {
       && view.documentModel.chapters.find((chapter) => chapter.id === page.chapterId)?.type === CHAPTER_TYPE.EVALUATION
 
     return {
-      canCreateAvatar: isDiapo && !view.selectedPageBdcs.some((bdc) => bdc.type === BDC_TYPE.AVATAR),
+      canCreateAvatar: isDiapo && view.pageHasCarousel && !view.selectedPageBdcs.some((bdc) => bdc.type === BDC_TYPE.AVATAR),
       canCreateQuestion: (isFlux || isDiapo)
         && !view.pageHasQuestion
         && (!isDiapo || !view.pageHasContent),

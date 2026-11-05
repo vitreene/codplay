@@ -56,7 +56,7 @@ export class LearningBdcCommandService {
       case 'bdc.evaluation-result.update':
         return updateEvaluationResult(document, command.bdcId, command.evaluationResult, this.resources)
       case 'bdc.carousel.update':
-        return updateCarousel(document, command.bdcId, command.carousel, this.resources)
+        return updateCarousel(document, command.bdcId, command.carousel, this.resources, command.movedBdcId)
       case 'bdc.card.update':
         return updateCard(document, command.bdcId, command.card, this.resources)
       case 'bdc.statistical-graph.update':

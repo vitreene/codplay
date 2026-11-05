@@ -44,7 +44,7 @@ export function renderCoreProjectApplication(props: CoreProjectApplicationProps)
   const currentName = view.activeProject === null ? null : view.projectName
   return <div
     id="elce-remix-project-app"
-    className={editorVisible ? 'elce-remix-project-app elce-remix-project-app--editing' : 'elce-remix-project-app'}
+    className={projectVisible ? 'elce-remix-project-app elce-remix-project-app--project-open' : 'elce-remix-project-app'}
   >
     <header id="elce-project-header" className="elce-project-header">
       <div id="elce-project-header-brand" className="elce-project-header-brand">

@@ -1,6 +1,7 @@
 import { AVATAR_BDC_TYPE } from '../../../../resources/bdcs/avatar/avatar-config'
 import { assertAvatarContent } from '../../../../resources/bdcs/avatar/domain/avatar-service'
-import { clearAvatarWordAssociations, resolveCarouselCueStarts } from '../../../../resources/bdcs/avatar/domain/avatar-carousel-associations'
+import { clearAvatarWordAssociations } from '../../../../resources/bdcs/avatar/domain/avatar-carousel-associations'
+import { resolveCarouselCueStarts } from '../../../../resources/bdcs/carousel/domain/carousel-service'
 import type { AvatarCommand } from '../../../../resources/bdcs/avatar/authoring/avatar-command-types'
 import { findBdc } from '../../../../core/document/content-placement-service'
 import { LearningDocument } from '../../document/learning-document'
@@ -13,16 +14,16 @@ export function applyAvatarCommand(document: LearningDocument, command: Exclude<
     const avatar = findBdc(document.bdcs, command.avatarBdcId)
     const take = avatar.avatar?.take
     if (carousel.carousel == null || carousel.pageId === null || carousel.pageId !== avatar.pageId
-      || take == null || !Number.isInteger(command.wordIndex)) throw new Error('La carte et la prise doivent appartenir à la même Diapo.')
+      || take == null || !Number.isInteger(command.wordIndex) || !Number.isInteger(command.startAtMs)) throw new Error('La carte et la prise doivent appartenir à la même Diapo.')
     const word = take.words[command.wordIndex]
     const content = carousel.carousel
     const starts = resolveCarouselCueStarts(content)
     const index = content.cards.findIndex((entry) => entry.bdcId === command.cardBdcId)
-    if (word === undefined || index <= 0) throw new Error('Choisissez un mot pour une carte après la première, qui reste à zéro.')
+    if (word === undefined || word.startAtMs !== command.startAtMs || index <= 0) throw new Error('Choisissez un mot pour une carte après la première, qui reste à zéro.')
     const cards = content.cards.map((entry, entryIndex) => ({
       ...entry,
       cue: entryIndex === index ? {
-        startAtMs: word.startAtMs,
+        startAtMs: command.startAtMs,
         word: { avatarBdcId: avatar.id, takeId: take.id, wordIndex: command.wordIndex },
       } : entry.cue ?? {
         startAtMs: starts[entryIndex]!,

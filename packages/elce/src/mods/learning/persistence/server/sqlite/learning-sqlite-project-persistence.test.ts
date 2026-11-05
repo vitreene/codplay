@@ -62,7 +62,7 @@ describe('SQLite project persistence through the Remix API', () => {
     const headers = await reserve(router, source.id)
     const bytes = Uint8Array.from({ length: 44 }, (_, index) => index)
     const mediaUrl = `http://elce.test/api/projects/${source.id}/media/voice-test`
-    expect((await router.fetch(new Request(mediaUrl, { method: 'PUT', headers, body: bytes }))).status).toBe(204)
+    expect((await router.fetch(new Request(mediaUrl, { method: 'PUT', headers, body: bytes }))).status).toBe(201)
     const audio = await router.fetch(new Request(mediaUrl))
     expect(audio.status).toBe(200)
     expect(audio.headers.get('Content-Type')).toContain('audio/wav')
@@ -81,7 +81,7 @@ describe('SQLite project persistence through the Remix API', () => {
     expect((await reopened.findMediaFile(source.id, 'voice-test'))?.storageKey).toBeTruthy()
   })
 
-  it('migrates a fresh database and round-trips the v10 scenario and BDC relations', async () => {
+  it('migrates a fresh database and round-trips the v11 scenario and BDC relations', async () => {
     database = await openProjectDatabase(':memory:')
     const persistence = new LearningSqliteProjectPersistence(database)
     const router = createLearningApiRouter(persistence)

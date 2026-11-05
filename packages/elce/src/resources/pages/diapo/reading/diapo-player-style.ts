@@ -19,6 +19,19 @@ export const DIAPO_PLAYER_STYLE_RULES = [
 }`],
   [44, `
 
+.elce-diapo-content--narrated {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  container-type: size;
+}
+
+.elce-diapo-content--narrated > .elce-diapo-carousel-root {
+  grid-area: 1 / 1;
+  max-inline-size: none;
+  margin-inline: 0;
+}`],
+  [45, `
+
 .elce-diapo-content > .elce-card--carousel,
 .elce-diapo-carousel-root {
   display: grid;
@@ -26,6 +39,7 @@ export const DIAPO_PLAYER_STYLE_RULES = [
   height: 100%;
   min-width: 0;
   min-height: 0;
+  grid-area: 1 / 1;
   grid-template-rows: minmax(0, 1fr) auto;
   position: relative;
   overflow: hidden;
@@ -38,13 +52,13 @@ export const DIAPO_PLAYER_STYLE_RULES = [
 .elce-diapo-carousel-root--no-navigation {
   grid-template-rows: minmax(0, 1fr);
 }`],
-  [45, `
+  [46, `
 
 .elce-diapo-carousel-root > .elce-carousel__navigation {
   grid-row: 2;
   grid-column: 1;
 }`],
-  [46, `
+  [47, `
 
 .elce-diapo-content > .elce-card:not(.elce-card--carousel) {
   box-sizing: border-box;
@@ -57,13 +71,13 @@ export const DIAPO_PLAYER_STYLE_RULES = [
   border-radius: 0;
   background: transparent;
 }`],
-  [47, `
+  [48, `
 
 .elce-diapo-content > .elce-card--question {
   display: flex;
   flex-direction: column;
 }`],
-  [48, `
+  [49, `
 
 .elce-diapo-content > .elce-card--question > .elce-question-illustration {
   box-sizing: border-box;
@@ -75,7 +89,7 @@ export const DIAPO_PLAYER_STYLE_RULES = [
   margin: 0;
   overflow: hidden;
 }`],
-  [49, `
+  [50, `
 
 .elce-diapo-content > .elce-card--question > form {
   display: flex;
@@ -84,7 +98,7 @@ export const DIAPO_PLAYER_STYLE_RULES = [
   flex-direction: column;
   overflow: hidden;
 }`],
-  [50, `
+  [51, `
 
 .elce-diapo-content > .elce-card--question > form > fieldset {
   display: flex;
@@ -93,7 +107,7 @@ export const DIAPO_PLAYER_STYLE_RULES = [
   flex-direction: column;
   overflow: hidden;
 }`],
-  [51, `
+  [52, `
 
 .elce-diapo-content > .elce-card--question .elce-question-answers {
   min-height: 0;
@@ -101,7 +115,7 @@ export const DIAPO_PLAYER_STYLE_RULES = [
   align-content: start;
   overflow: hidden;
 }`],
-  [52, `
+  [53, `
 
 .elce-diapo-content .elce-carousel-capsule--scene,
 .elce-diapo-content .elce-carousel-capsule__grid {

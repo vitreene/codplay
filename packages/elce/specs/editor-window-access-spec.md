@@ -77,6 +77,11 @@ Des fenêtres sur des projets différents gardent des caches indépendantes.
   sa copie locale, achève sa publication en attente, puis relit et installe la
   révision confirmée dans le même acteur XState avant d’autoriser les commandes.
   Le contrôleur conserve la page sélectionnée si elle existe encore.
+- Tant que le projet reste ouvert, le cadre auteur conserve les mêmes règles
+  de hauteur et de défilement lorsque l’accès passe entre `active` et
+  `waiting`. La perte de focus rend la surface `inert` sans retirer le cadre ni
+  réinitialiser la position de ses zones défilantes ; la reprise réactive
+  l’édition dans ce même cadre.
 - Une copie locale identique au document courant ne vide pas
   l’[historique documentaire](./document-history-spec.md) lors d’un simple
   retour de focus. L’installation d’un document différent le vide.
@@ -238,3 +243,12 @@ Le 27 octobre 2026, Safari MCP a confirmé sur `http://localhost:5175/` que la
 page sans focus reste en lecture seule sans l’ancienne alerte. Après activation
 de Safari, `document.hasFocus()` passe à `true`, l’éditeur revient à
 « Synchronisé » et le message ne réapparaît pas.
+
+Le 5 novembre 2026, le cadre auteur a été vérifié dans Safari MCP sur le Projet
+3. Avec la zone centrale à `scrollTop = 240`, une perte et une reprise simulées
+du focus ont conservé ce repère : l’état intermédiaire était « Lecture seule »
+avec `inert`, puis l’éditeur est revenu à « Synchronisé » et actif. Le cadre
+`elce-remix-project-app--project-open`, la hauteur de la zone (760 px) et le
+défilement de page (0 px) sont restés stables. Un changement d’onglet Safari
+vers la preview puis retour a aussi conservé la position centrale à 240 px avec
+`document.hasFocus()` revenu à `true`. Aucun contenu du projet n’a été modifié.

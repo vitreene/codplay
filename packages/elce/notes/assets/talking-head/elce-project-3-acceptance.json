@@ -86,8 +86,70 @@
       "sameAudioNode": true
     },
     "layout": {
-      "avatarOverlapsCardText": true,
-      "responsiveAcceptance": "pending"
+      "verified": true,
+      "position": "top-right",
+      "widthPercent": 24,
+      "composition": "Carousel and Avatar share one 1/1 Diapo grid cell; the Carousel fills the page root and Avatar overlays it.",
+      "desktop": {
+        "viewport": {
+          "width": 1280,
+          "height": 756
+        },
+        "pageRoot": {
+          "x": 288,
+          "y": 141.078125,
+          "width": 976,
+          "height": 533.921875
+        },
+        "carousel": {
+          "x": 288,
+          "y": 141.078125,
+          "width": 976,
+          "height": 533.921875
+        },
+        "avatar": {
+          "x": 1010.25,
+          "y": 156.1875,
+          "width": 234.234375,
+          "height": 278.84375
+        },
+        "sameGridCell": true,
+        "visibleAfterPlay": true,
+        "cardTextOverlap": false
+      },
+      "mobile": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "pageRoot": {
+          "x": 16,
+          "y": 142.59375,
+          "width": 358,
+          "height": 582.21875
+        },
+        "carousel": {
+          "x": 16,
+          "y": 142.59375,
+          "width": 358,
+          "height": 582.21875
+        },
+        "avatar": {
+          "x": 280.9375,
+          "y": 159.46875,
+          "width": 85.90625,
+          "height": 102.265625
+        },
+        "sameGridCell": true,
+        "visibleAfterPlay": true,
+        "cardTextOverlap": false,
+        "horizontalOverflow": false
+      },
+      "beforeFirstPlay": {
+        "firstCardVisible": true,
+        "timelineMs": 0,
+        "avatarCanvasPainted": false
+      }
     }
   },
   "independentReproduction": {
@@ -162,7 +224,7 @@
       "reuses the Question story and exposes its reset path in a Diapo: missing :prompt perso",
       "records scroll-end when the anchored Card outro and bottom marker use separate observer groups: missing observer"
     ],
-    "typecheck": "not-rerun-at-contract-gate",
+    "typecheck": "existing TS6133 unused title in src/resources/bdcs/statistical-graph/reading/statistical-graph-scene-builder.ts:72",
     "build": "not-rerun-at-contract-gate"
   },
   "completionCorrection": {
@@ -210,8 +272,7 @@
     "build": "passed; chunk size warning",
     "typecheck": "TS6133: unused title in resources/bdcs/statistical-graph/reading/statistical-graph-scene-builder.ts:72; file unchanged",
     "remaining": [
-      "responsive layout",
-      "Play control and explicit start",
+      "initial Avatar frame before Play",
       "complete integration acceptance"
     ]
   },
@@ -299,7 +360,6 @@
     "build": "passed; existing large chunk warning",
     "typecheck": "only existing TS6133 unused title in statistical-graph-scene-builder.ts:72",
     "remainingAvatarAcceptance": [
-      "responsive placement without covering card text",
       "rig visible before first Play"
     ],
     "documentPersistenceChanged": false,
@@ -355,6 +415,99 @@
     "seek7500": "verified through the actual navigation remote",
     "browserWarningsAndErrors": [],
     "distUserBackupPreserved": "packages/elce/dist/avatars/x--my-matt-visemes.riv",
-    "buildNotRun": "Asset copied to the existing Vite publicDir; preserve user-owned files currently in dist."
+    "buildAfterLayoutChange": "passed with vite build --emptyOutDir false; original dist avatar and backup preserved"
+  },
+  "editorLayoutValidation": {
+    "build": "passed after fixed corner margin and slider range updates with vite build --emptyOutDir false; dist preserved; existing large chunk warning",
+    "typecheck": "existing TS6133 unused title in src/resources/bdcs/statistical-graph/reading/statistical-graph-scene-builder.ts:72",
+    "noCodplayChanges": true,
+    "avatarWidthSlider": {
+      "oldStepsPercent": [
+        10,
+        19,
+        28,
+        36,
+        45
+      ],
+      "newStepsPercent": [
+        10,
+        20,
+        30,
+        45,
+        60
+      ],
+      "currentProjectValuePercent": 30,
+      "currentValueLabel": "Moyen",
+      "projectValueChanged": false
+    }
+  },
+  "fixedCornerPlacementValidation": {
+    "date": "2026-11-05",
+    "browser": "Safari MCP",
+    "position": "top-right",
+    "fixedVisibleInsetPx": 16,
+    "rigCanvas": {
+      "width": 420,
+      "height": 500,
+      "paintedPixelBounds": {
+        "left": 125,
+        "top": 129,
+        "right": 305,
+        "bottom": 383
+      },
+      "transparentInsetsPercent": {
+        "left": 29.76,
+        "top": 25.8,
+        "right": 27.14,
+        "bottom": 23.2
+      }
+    },
+    "desktop": {
+      "viewport": {
+        "width": 1280,
+        "height": 756
+      },
+      "pageRoot": {
+        "x": 288,
+        "y": 141.078125,
+        "width": 976,
+        "height": 533.921875
+      },
+      "avatarWidthPercent": 30,
+      "paintedBounds": {
+        "left": 1121.87,
+        "top": 157.09,
+        "right": 1248.05,
+        "bottom": 334.86
+      },
+      "visibleInset": {
+        "topPx": 16.02,
+        "rightPx": 15.95
+      }
+    },
+    "mobile": {
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "pageRoot": {
+        "x": 16,
+        "y": 142.59375,
+        "width": 358,
+        "height": 582.21875
+      },
+      "avatarWidthPercent": 30,
+      "paintedBounds": {
+        "left": 311.75,
+        "top": 158.55,
+        "right": 358.03,
+        "bottom": 223.75
+      },
+      "visibleInset": {
+        "topPx": 15.96,
+        "rightPx": 15.97
+      },
+      "horizontalOverflow": false
+    }
   }
 }
