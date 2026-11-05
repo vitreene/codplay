@@ -178,10 +178,8 @@ preview confirme que l’icône reste entièrement dans la zone visible (x=47–
 dans un viewport de 390 px). Un test de composition couvre aussi les placements
 des icônes dans les titres statiques et les liens.
 Les tests sont dans [le lecteur Learning](../src/mods/learning/reading/learning-player.test.ts),
-[le scénario Learning](../src/mods/learning/reading/learning-scenario-builder.test.ts),
-[les réglages du Sommaire](../src/mods/learning/authoring/summary-profile-settings.test.tsx)
-et [la feuille de style du lecteur](../src/mods/learning/reading/learning-player-style.test.ts),
-qui verrouille aussi la grille deux colonnes et le survol sans soulignement.
+[le scénario Learning](../src/mods/learning/reading/learning-scenario-builder.test.ts)
+et [les réglages du Sommaire](../src/mods/learning/authoring/summary-profile-settings.test.tsx).
 
 Les routes vers le Sommaire racine et la scène de transition Profil ciblent
 l’entrée de scène sous le slot contenu, pas le conteneur qui déclare ce slot.

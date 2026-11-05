@@ -8,6 +8,7 @@ import type { ResourceTextFieldFeature } from '../../../../core/authoring/resour
 export interface QuestionEditorProps {
   readonly bdcId: string
   readonly question: QuestionContent
+  readonly canDelete?: boolean
   readonly media: MediaMetadata | null
   readonly mediaType: SupportedMediaType | null
   readonly mediaSource: string | null
@@ -15,5 +16,5 @@ export interface QuestionEditorProps {
   readonly textFieldAttributes?: Readonly<Record<string, string>>
   readonly textFieldFeature?: ResourceTextFieldFeature
   readonly onCatalogReference: (value: string) => void
-  readonly onOpenAppearanceTarget: (target: AppearanceTarget, triggerId: string) => void
+  readonly onOpenAppearanceTarget?: (target: AppearanceTarget, triggerId: string) => void
 }

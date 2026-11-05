@@ -232,9 +232,6 @@ n’est ajouté dans React ou dans Elcé.
 - [`carousel-service.test.ts`](../src/resources/bdcs/carousel/domain/carousel-service.test.ts) vérifie
   l’ajout, le retrait, le réordonnancement des IDs et la conservation de la
   durée de chaque entrée lors du réordonnancement.
-- [`editor-settings-resolver.test.ts`](../src/domain/editor-settings/editor-settings-resolver.test.ts)
-  vérifie l’héritage project → parent → Carousel → entrée avec des valeurs
-  distinctes d’entrée et de sortie.
 - [`statistical-graph-placements.test.ts`](../src/mods/learning/integration/statistical-graph-placements.test.ts)
   compile une vue Graphe enfant via le builder Carousel réel et vérifie sa place
   dans la séquence et son rôle de vue finale.

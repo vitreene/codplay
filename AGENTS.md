@@ -23,6 +23,15 @@
   filenames, comments, documentation, and UI labels. Use a role-specific term
   such as `layout`, `frame`, `stage`, or `host` instead.
 
+## Randomness
+
+- Throughout the project, random behavior means pseudo-random behavior derived
+  from an initial seed. Perform an initial draw by default; the seed is editable
+  and remains stable during editing, with automatic renewal inactive, so question
+  sequences can be reproduced. In distribution mode, the Random option is checked
+  by default and renews the seed for each new game, including Restart. With Random
+  disabled, retain the fixed seed and its reproducible draw.
+
 ## Implementation process
 
 - When the user has discussed the intended work and then asks to implement it,
@@ -31,7 +40,7 @@
 - Ask the user questions when implementation certainty is below 95%.
 - Before any analysis or modification, reread the applicable specifications and contracts in the repository; do not rely on conversation summaries or assumptions.
 - For every browser validation or other MCP-backed task, inspect both the local MCP server configuration and the complete live tool inventory offered by the current session before starting. Compare configured servers with the tools actually exposed here and review their names and descriptions; do not decide availability from a name-only search for `browser` or `Safari`. Use only the exposed tools, and never infer availability from installed applications, previous sessions, or another machine. If a configured server has no callable tools in this session, report that work as pending instead of launching a different local application or treating it as equivalent.
-- Do not add a rule to a specification merely to record this working instruction or to compensate for not having reread it. Update specifications only for behavior that has been implemented and verified; keep decisions that are open or agreed but unapplied in the active plan.
+- Do not put working instructions in specifications. Maintain the owning internal specification whenever an accepted change implements and verifies behavior; keep open or agreed-but-unapplied decisions in the working plan.
 - Respect established specs strictly. Do not patch behavior opportunistically when the implementation diverges from the spec.
 - If a gap, ambiguity, or design failure is discovered, stop and discuss how to enrich or correct the spec before changing the implementation.
 - V2 demos are instruments for advancing CodPlay, not local demo products. They exercise the real project contracts, expose missing or incorrect core behavior, and provide the concrete acceptance path for fixing it. When a demo fails, first investigate and correct the applicable CodPlay contract or runtime; a demo-local change is allowed only to express the authored scenario or to make the fixture observe the agreed behavior, never to hide, compensate for, or replace a missing core capability.
@@ -61,37 +70,65 @@
 - V2 demos are pre-release validation references, not disposable bug fixtures. A fix in a complex component must not be accepted from one visual symptom or one passing scenario.
 - Before declaring such a fix stable, record the causal analysis and run the complete relevant validation set: focused regression tests for the failing boundary, non-regression tests for affected parent/child and reparent cases, and the applicable Play, Seek, resize, persistence, lifecycle, typecheck, test, build, and browser checks. Omit categories only when the analysis explicitly proves they are not affected.
 - If this evidence is incomplete, keep the implementation `En cours` or `A relire`; do not present it as stabilized and do not modify the demo to hide the defect.
-- A `README.md` is a user guide for a feature or package: it explains the purpose in plain language and shows at least one concrete usage example. It is not the authority for internal contracts. Verified, stable contracts belong in the applicable specifications; plans track implementation work, validation status, and decisions that are open or agreed but unapplied.
-- Keep the specification, plan, implementation status, and acceptance tests aligned. Never mark a module or tranche complete while a required behavior is only simulated, bypassed, or unverified.
+- A requested `README.md` is a user guide for a feature or package: it explains the purpose in plain language and shows at least one concrete usage example. It must not contain internal contracts, implementation tracking, or work reports.
+- Keep the owning specification, accepted working plan, implementation, and acceptance tests aligned. Never mark a module or tranche complete while a required behavior is only simulated, bypassed, or unverified.
 
 ## Documentation and implementation tracking
 
-- **A note is not a plan.** A discussion, audit finding, explanation, or decision
-  record belongs in `notes/`, even when marked `Fixe` or accompanied by possible
-  next steps. Do not call it a plan in filenames, headings, links, or replies.
-  Adding a status or a list of intentions does not turn a note into a plan.
-- Plans must be short execution documents: ordered actions, the files or owners
-  to change, what is replaced, the expected result, gates, status, and concrete
-  acceptance criteria. Keep only the concise decisions or prerequisites needed
-  to perform those actions; link to the note for the decision record, rationale,
-  research, or discussion. Keep small concrete examples when needed to evaluate
-  an action. When a note leads to implementation, derive an operational plan
-  from it instead of relabeling or copying the note into `plan/`. Do not append
-  narrative commentary to a plan or duplicate it across documents.
-- Documentation roles are exclusive and must not be mixed:
-  - `notes/` records project elaboration, exploration, rationale, and detailed decision records; concise open decisions needed for active work stay in its plan;
-  - `plan/` records actions to perform, their order, gates, status, acceptance path, and concise decisions that are open or agreed but unapplied;
-  - specifications record only behavior that has been implemented and verified;
-  - `README.md` records only simple user-facing usage, with an illustrated concrete example; it must not contain internal contracts, architecture, implementation status, plans, or validation tracking.
-- A `*-reprise-report.md` is a handoff report, not a living documentation surface. Do not append project elaboration, implementation specification, or user instructions to it. Put each new content in the one appropriate category above; if an action must be retained, record it in the applicable plan, not in the report.
-- Keep plans and implementation tracking up to date until the corresponding work is complete.
-- Keep resolved situations that explain the current design; do not keep investigation history merely for its chronology.
-- Once a concept is implemented, maintain a focused specification for future agents: its role, contract, invariants, decisions, and how to understand it without rereading the entire implementation.
-- Specifications are authoritative for interpreting a feature's verified behavior. Plans retain decisions that are open or agreed but unapplied, plus their implementation and acceptance work; notes record exploration and rationale. A plan does not override verified behavior in a specification.
-- **Disposition dated 2026-09-26 — spec-first code understanding and maintenance:** For future CodPlay work, use the applicable specification first and canonically to understand verified behavior and identify its established circuit and owner; read the active plan for decisions and work that remain open or unapplied. Do not reread code already covered by a specification merely to rediscover its contract. Consult implementation, callers/adapters, and tests when resolving a gap the specification leaves open, investigating a concrete signal of divergence, or validating an accepted plan item. Extend the identified circuit instead of creating a parallel one. For every accepted improvement, update the owning specification in the same task to reflect the behavior implemented and verified, with links to its evidence; update the plan with any acceptance work that remains. Do not close the task until the specification, implementation, tests, and plan agree. If the specification is incomplete, a decision remains open, or a divergence is found, record the evidence and unresolved point in the owning plan and stop dependent implementation until the contract is clarified. This disposition does not authorize core code changes; the existing authorization and accepted-plan gates still apply.
-- Remove preparatory notes when the plan they support is complete. Transfer verified behavior and acceptance evidence into the relevant specification; keep any open or agreed-but-unapplied decision in an active plan before removing the note.
-- Remove a completed plan when a specification covers its feature. Before removal, transfer verified behavior and acceptance evidence into the specification and update incoming links and status indexes. A plan with an agreed but unapplied decision is not complete.
-- At the end of each task, update the relevant specification and implementation tracking before closing temporary notes or provisional guardrails.
+- Internal technical specifications are mandatory maintained references for
+  agents. They explain verified project behavior so an agent can understand it
+  from the specification before reading implementation code. Keep the owning
+  specification current in the same task as each implemented and verified change.
+  Consolidate the existing specification; create one only when no existing
+  specification owns the concern. Never create a specification per intervention.
+- Final project documentation deliverables are retained at the user's explicit
+  request. Internal technical specifications remain necessary independently of
+  those deliverables. Do not automatically create additional reports, READMEs,
+  indexes, or copies for each task, correction, or validation.
+- Study notes, working plans, and review drafts are disposable aids. Keep only
+  what is necessary for active work and continuity; do not multiply files or
+  duplicate content. A draft named `spec` must be reviewed and consolidated into
+  the owning specification before it can serve as a verified reference.
+- Document roles are exclusive:
+  - Study notes collect remarks, questions, observations, research, alternatives,
+    reasoning, and decision rationale. They provide the material from which a
+    precise, concise plan can be derived. Keep this elaboration out of plans.
+  - A plan states the objective, scope, accepted decisions, open decisions,
+    ordered actions, affected files or owners, dependencies, and acceptance
+    criteria. Update those items rather than appending accounts of interventions.
+  - An execution-plan version must let another agent begin implementation from
+    that version alone, without reconstructing the conversation or reading the
+    study notes. Include the necessary context, applicable contracts, existing
+    circuit and owner, changes to perform, invariants, prerequisites, and concrete
+    validation steps. Keep the supporting discussion in the study notes.
+  - A specification describes the implemented and verified system:
+    purpose, responsibilities, mechanisms, contracts, invariants, and limits.
+    It contains no progress status, work history, intervention dates, execution
+    results, or narrative account of the agent's actions. Useful references to
+    implementation or tests may support the description without becoming logs.
+- Pre-delivery review is an action, not another document. Before closing the
+  task, check the owning specification against implementation and evidence,
+  remove work-report content, and consolidate the verified description.
+- Report changes, validation results, and remaining difficulties in the final
+  task response. Do not copy that report into project documentation unless the
+  user explicitly requests a retained report.
+- Reuse and consolidate existing working material instead of creating parallel
+  versions, per-task reports, or additional tracking files. Do not create a file
+  merely to record that a rule was followed or an action was performed.
+- At project completion, retain internal reference specifications and the
+  documentation deliverables requested by the user. Remove disposable working
+  material once it is no longer needed. Preserve unresolved work needed for
+  continuity; never remove existing project references merely because they have
+  not yet been reviewed under these rules.
+- Existing verified specifications remain authoritative for established behavior.
+  Read the applicable specification first to identify the contract, circuit, and
+  owner, then the active plan for open or unapplied decisions. Consult code and
+  tests to resolve gaps, investigate a concrete divergence, or implement accepted
+  work. Extend the established circuit. Stop dependent implementation when a
+  contract is missing or a divergence requires a decision. These rules do not
+  authorize CodPlay core changes or bypass accepted-plan gates.
+- A handoff report is a snapshot for transfer, not an accumulating journal or
+  a substitute for study notes, an execution plan, or a delivered specification.
 - Before resuming CodPlay V2 work, read [`packages/codplay/plan/notes/2026-08-26-decouverte-etat-codplay-v2.md`](packages/codplay/plan/notes/2026-08-26-decouverte-etat-codplay-v2.md) after identifying the applicable detailed plan.
 
 ## Module status

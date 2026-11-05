@@ -26,6 +26,8 @@ export interface CoreProjectExportState {
   readonly onExportSighty: () => void
   readonly onExportScorm: (version: ScormVersion, monoSco: boolean) => void
   readonly exportBusy: boolean
+  readonly showMonoScoOption?: boolean
+  readonly scormDescription?: string
 }
 
 export interface CoreProjectApplicationProps {
@@ -194,7 +196,7 @@ function renderExportDialog(exportState: CoreProjectExportState): RemixNode {
       >Exporter le scénario</button>
       <section id="elce-scorm-export-section" className="elce-export-dialog__scorm">
         <h3 id="elce-scorm-export-title">Exporter en SCORM</h3>
-        <p id="elce-scorm-export-description">Cochez monoSCO pour obtenir un package SCORM distinct par chapitre.</p>
+      <p id="elce-scorm-export-description">{exportState.scormDescription ?? 'Cochez monoSCO pour obtenir un package SCORM distinct par chapitre.'}</p>
         <form id="elce-scorm-export-form">
           <fieldset id="elce-scorm-version-options" className="elce-export-dialog__fieldset">
             <legend id="elce-scorm-version-legend">Version SCORM</legend>
@@ -205,9 +207,9 @@ function renderExportDialog(exportState: CoreProjectExportState): RemixNode {
               <input id="elce-scorm-version-2004" name="version" type="radio" value="2004v4" checked /> SCORM 2004 (4e édition)
             </label>
           </fieldset>
-          <label id="elce-scorm-mono-sco-label" className="elce-export-dialog__choice">
+          {exportState.showMonoScoOption === false ? null : <label id="elce-scorm-mono-sco-label" className="elce-export-dialog__choice">
             <input id="elce-scorm-mono-sco" name="monoSco" type="checkbox" value="true" /> monoSCO
-          </label>
+          </label>}
         </form>
         <button
           id="elce-scorm-export-action"

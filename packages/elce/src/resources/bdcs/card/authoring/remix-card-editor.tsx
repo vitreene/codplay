@@ -16,8 +16,8 @@ export function renderRemixCardEditor(
   bdc: ResourceBdc,
   mediaById: Readonly<Record<string, Readonly<{ name: string; type: MediaType; source: string | null }>>>,
   cardActions: ElceCardEditorActions,
-  onDelete: () => void,
-  onOpenAppearanceTarget: (target: AppearanceTarget, triggerId: string) => void,
+  onDelete?: () => void,
+  onOpenAppearanceTarget?: (target: AppearanceTarget, triggerId: string) => void,
   textFieldAttributes?: Readonly<Record<string, string>>,
   textFieldFeature?: ResourceTextFieldFeature,
 ): RemixNode {
@@ -41,14 +41,14 @@ export function renderRemixCardEditor(
         id={`elce-card-editor-header-actions-${bdc.id}`}
         className="elce-bdc-header-actions"
       >
-        {renderAppearanceTrigger({
+        {onOpenAppearanceTarget === undefined ? null : renderAppearanceTrigger({
           id: `elce-card-style-${bdc.id}`,
           target: { kind: 'bdc', bdcId: bdc.id },
           label: `Ouvrir le style de la carte ${authoredTextToPlainText(bdc.card.title).trim() || ''}`,
           onOpen: onOpenAppearanceTarget,
           className: 'elce-appearance-trigger elce-bdc-style-trigger',
         })}
-        <button
+        {onDelete === undefined ? null : <button
           id={`elce-card-editor-delete-${bdc.id}`}
           className="elce-card-editor__delete"
           type="button"
@@ -57,7 +57,7 @@ export function renderRemixCardEditor(
           mix={on<HTMLButtonElement, 'click'>('click', onDelete)}
         >
           {renderLucideIcon(Trash2, `elce-card-editor-delete-icon-${bdc.id}`)}
-        </button>
+        </button>}
       </div>
     </header>
     <RemixCardEditorFields

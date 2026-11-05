@@ -351,6 +351,18 @@ de reprise, d’interruption et de concurrence envisagées pour DGS.
 
 ## Démarrage d’un mod
 
+Le [plan Quiz Hunt](2026-11-04-quiz-hunt-editable-mod-plan.md) est accepté pour
+le second mod. L’utilisateur retient des entrées et catalogues séparés pour
+le moment ; Learning reste le défaut. Les listes d’interface restent filtrées
+par mod dans une base SQLite commune, avec une représentation relationnelle
+identique pour les BDC partagés. La ressource BDC prépare les requêtes SQL et
+convertit ses lignes ; chaque mod exécute ces requêtes dans son dépôt et ses
+transactions. `projects.mod_key` distingue les listes (`learning` par défaut,
+`quiz-hunt` pour les projets du mod) sans champ d’identité dans le document. Le
+dépôt Learning délègue lui aussi aux ressources BDC. Les extensions spécifiques
+restent dans leur mod. La séparation physique ou un stockage JSON spécifique au
+mod ne fait pas partie de ce choix.
+
 **Statut : En cours — README et skill préparés ; le dossier copiable reste
 bloqué par son contrat d’intégration.** Ce lot outille la création d’un mod à
 partir des compositions Learning sans lancer la réalisation de DGS.

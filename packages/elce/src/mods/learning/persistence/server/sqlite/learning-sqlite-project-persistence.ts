@@ -3,19 +3,28 @@ import { randomUUID } from 'node:crypto'
 import type { Database, DataManipulationResult } from 'remix/data-table'
 import type { SqliteDatabase } from 'remix/data-table/sqlite'
 import { PROJECT_EDIT_LEASE_MS } from '../../../../../config/api-config'
-import { authoredTextToPlainText } from '../../../../../core/document/rich-text-utils'
 import { BDC_TYPE } from '../../../learning-definition'
 import { CHAPTER_TYPE, SCENARIO_ENTRY_KIND } from '../../../organization/learning-organization-config'
 import {
   DEFAULT_EVALUATION_SETTINGS,
   EVALUATION_RESULT_BRANCH,
 } from '../../../evaluation/learning-evaluation-config'
-import { QUESTION_DEFAULTS } from '../../../../../resources/bdcs/question/question-config'
 import type { LearningBdc, LearningChapter, LearningDocumentData, LearningPage } from '../../../document/learning-document-types'
 import type { MediaMetadata } from '../../../../../core/document/content-document-types'
-import type { RichTextDocument } from '../../../../../resources/bdcs/section/domain/section-types'
-import type { ElceTextValue } from '../../../../../resources/document/rich-text-types'
-import type { StatisticalGraphContent } from '../../../../../resources/bdcs/statistical-graph/domain/statistical-graph-types'
+import { CONTENT_BLOCKS_SQLITE_SELECT, CONTENT_BLOCK_PLACEMENTS_SQLITE_SELECT, contentBlockFromSqliteRows, prepareContentBlockInsert, prepareContentBlockPlacementInsert } from '../../../../../resources/document/persistence/sqlite/content-block-queries'
+import { decodeSqliteText as decodeSqlText, encodeNullableSqliteText as nullableSerializedText } from '../../../../../resources/document/persistence/sqlite/sqlite-text-values'
+import type { SqliteQuery, SqliteRow } from '../../../../../resources/document/persistence/sqlite/sqlite-query-types'
+import {
+  sqliteNullableNumber as nullableNumber,
+  sqliteNullableText as nullableText,
+  sqliteNumberValue as numberValue,
+  sqliteStringValue as stringValue,
+} from '../../../../../resources/document/persistence/sqlite/sqlite-query-types'
+import { CARD_SQLITE_SELECT, cardContentFromSqliteRow, prepareCardInsert } from '../../../../../resources/bdcs/card/persistence/sqlite/card-queries'
+import { CAROUSEL_SQLITE_SELECT, carouselContentFromSqliteRows, prepareCarouselInsert } from '../../../../../resources/bdcs/carousel/persistence/sqlite/carousel-queries'
+import { QUESTION_ANSWERS_SQLITE_SELECT, QUESTION_SQLITE_SELECT, prepareQuestionInsert, questionContentFromSqliteRows } from '../../../../../resources/bdcs/question/persistence/sqlite/question-queries'
+import { SECTION_SQLITE_SELECT, prepareSectionInsert, sectionContentFromSqliteRow } from '../../../../../resources/bdcs/section/persistence/sqlite/section-queries'
+import { STATISTICAL_GRAPH_SQLITE_SELECT, prepareStatisticalGraphInsert, statisticalGraphContentFromSqliteRow } from '../../../../../resources/bdcs/statistical-graph/persistence/sqlite/statistical-graph-queries'
 import { INITIAL_PROJECT_TEST_STATE, type ProjectTestState, type VersionedProjectTestState } from '../../../reading/learning-test-state-types'
 import type { AppearanceSettings } from '../../../../../config/appearance/appearance-types'
 import { learningDocumentCommandService } from '../../../commands/learning-command-composition'
@@ -29,9 +38,7 @@ import type { SaveLearningTestStateResult, LearningTestStatePersistence } from '
 import type { MediaPersistence, StoreMediaFileResult, StoredMediaResource } from '../../../../../core/server/media/media-persistence'
 
 type ProjectDatabase = Pick<Database<'sqlite'>, 'exec'>
-type SqlRow = Record<string, unknown>
-
-const SQLITE_RICH_TEXT_PREFIX = '__elce-rich-text-v1__:'
+type SqlRow = SqliteRow
 
 type NormalizedPlacement =
   | Readonly<{ kind: 'page'; pageId: string; position: number }>
@@ -58,7 +65,7 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
   public async acquireEditAccess(projectId: string, pageId: string, force = false): Promise<AcquireProjectEditResult> {
     return this.database.transaction(async (transaction) => {
       const rows = await queryRows(transaction,
-        'SELECT edit_page_id, edit_grant_id, edit_lease_expires_at FROM projects WHERE project_id = ?', [projectId])
+        "SELECT edit_page_id, edit_grant_id, edit_lease_expires_at FROM projects WHERE project_id = ? AND mod_key = 'learning'", [projectId])
       const row = rows[0]
       if (row === undefined) return { kind: 'not-found' }
       const owner = nullableText(row, 'edit_page_id')
@@ -68,13 +75,13 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
       const live = owner !== null && currentGrant !== null && expiresAt !== null && expiresAt > now
       if (!force && live && owner === pageId) {
         await queryRows(transaction,
-          'UPDATE projects SET edit_lease_expires_at = ? WHERE project_id = ?', [now + PROJECT_EDIT_LEASE_MS, projectId])
+          "UPDATE projects SET edit_lease_expires_at = ? WHERE project_id = ? AND mod_key = 'learning'", [now + PROJECT_EDIT_LEASE_MS, projectId])
         return { kind: 'granted', grantId: currentGrant, recovered: false }
       }
       if (!force && live) return { kind: 'occupied' }
       const grantId = randomUUID()
       await queryRows(transaction,
-        'UPDATE projects SET edit_page_id = ?, edit_grant_id = ?, edit_lease_expires_at = ? WHERE project_id = ?',
+        "UPDATE projects SET edit_page_id = ?, edit_grant_id = ?, edit_lease_expires_at = ? WHERE project_id = ? AND mod_key = 'learning'",
         [pageId, grantId, now + PROJECT_EDIT_LEASE_MS, projectId])
       return { kind: 'granted', grantId, recovered: force || owner !== null }
     })
@@ -83,7 +90,7 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
   /** Reports whether the exact page grant still owns a project. */
   public async hasEditAccess(projectId: string, grant: ProjectEditGrant): Promise<boolean> {
     const rows = await queryRows(this.database,
-      'SELECT project_id FROM projects WHERE project_id = ? AND edit_page_id = ? AND edit_grant_id = ?',
+      "SELECT project_id FROM projects WHERE project_id = ? AND edit_page_id = ? AND edit_grant_id = ? AND mod_key = 'learning'",
       [projectId, grant.pageId, grant.grantId])
     return rows.length > 0
   }
@@ -94,7 +101,7 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
     return this.database.transaction(async (transaction) => {
       const rows = await queryRows(transaction, `
         UPDATE projects SET edit_lease_expires_at = ?
-        WHERE project_id = ? AND edit_page_id = ? AND edit_grant_id = ?
+        WHERE project_id = ? AND edit_page_id = ? AND edit_grant_id = ? AND mod_key = 'learning'
         RETURNING project_id
       `, [now + PROJECT_EDIT_LEASE_MS, projectId, grant.pageId, grant.grantId])
       return rows.length > 0
@@ -106,7 +113,7 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
     return this.database.transaction(async (transaction) => {
       const rows = await queryRows(transaction, `
         UPDATE projects SET edit_page_id = NULL, edit_grant_id = NULL, edit_lease_expires_at = NULL
-        WHERE project_id = ? AND edit_page_id = ? AND edit_grant_id = ?
+        WHERE project_id = ? AND edit_page_id = ? AND edit_grant_id = ? AND mod_key = 'learning'
         RETURNING project_id
       `, [projectId, grant.pageId, grant.grantId])
       return rows.length > 0
@@ -116,7 +123,7 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
   /** Lists project summaries without loading their content tables. */
   public async listProjects(): Promise<readonly ProjectSummary[]> {
     const result = await this.database.exec(rawSql(
-      'SELECT project_id, name, revision FROM projects ORDER BY created_at, project_id',
+      "SELECT project_id, name, revision FROM projects WHERE mod_key = 'learning' ORDER BY created_at, project_id",
     ))
     return (result.rows ?? []).map(projectSummaryFromRow)
   }
@@ -129,9 +136,11 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
   /** Loads one media row for its upload or file-read route. */
   public async findMediaFile(projectId: string, mediaId: string): Promise<StoredMediaResource | null> {
     const rows = await queryRows(this.database, `
-      SELECT media_id, name, mime_type, size_bytes, storage_key, content_sha256
+      SELECT media_resources.media_id, media_resources.name, media_resources.mime_type,
+        media_resources.size_bytes, media_resources.storage_key, media_resources.content_sha256
       FROM media_resources
-      WHERE project_id = ? AND media_id = ?
+      JOIN projects USING (project_id)
+      WHERE media_resources.project_id = ? AND media_resources.media_id = ? AND projects.mod_key = 'learning'
     `, [projectId, mediaId])
     const row = rows[0]
     if (row === undefined) return null
@@ -201,7 +210,7 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
       if (updated.length > 0) {
         await queryRows(transaction, `
           UPDATE projects SET edit_lease_expires_at = ?
-          WHERE project_id = ? AND edit_page_id = ? AND edit_grant_id = ?
+          WHERE project_id = ? AND edit_page_id = ? AND edit_grant_id = ? AND mod_key = 'learning'
         `, [Date.now() + PROJECT_EDIT_LEASE_MS, projectId, grant.pageId, grant.grantId])
       }
       return updated.length === 0 ? { kind: 'media-changed' } : { kind: 'stored' }
@@ -214,10 +223,10 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
       const now = new Date().toISOString()
       const inserted = await queryRows(transaction, `
         INSERT INTO projects (
-          project_id, name, format_version, revision, created_at, updated_at,
+          project_id, name, format_version, mod_key, revision, created_at, updated_at,
           default_intro_transition_ref, default_outro_transition_ref,
           summary_json, profile_json, appearance_json
-        ) VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, 'learning', 0, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(project_id) DO NOTHING
         RETURNING project_id
       `, [
@@ -260,7 +269,7 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
       const updated = await queryRows(transaction, `
         UPDATE projects
         SET name = ?, revision = revision + 1, updated_at = ?, edit_lease_expires_at = ?
-        WHERE project_id = ?
+        WHERE project_id = ? AND mod_key = 'learning'
         RETURNING project_id, name, revision
       `, [document.data.name, new Date(now).toISOString(), now + PROJECT_EDIT_LEASE_MS, projectId])
 
@@ -277,7 +286,7 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
 
       await clearDocumentRows(transaction, projectId)
       await queryRows(transaction, 'DELETE FROM media_resources WHERE project_id = ?', [projectId])
-      await queryRows(transaction, 'DELETE FROM projects WHERE project_id = ?', [projectId])
+      await queryRows(transaction, "DELETE FROM projects WHERE project_id = ? AND mod_key = 'learning'", [projectId])
       return 'deleted'
     })
   }
@@ -300,7 +309,7 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
             edit_lease_expires_at = ?,
             default_intro_transition_ref = ?, default_outro_transition_ref = ?,
             summary_json = ?, profile_json = ?, appearance_json = ?
-        WHERE project_id = ? AND revision = ?
+        WHERE project_id = ? AND revision = ? AND mod_key = 'learning'
         RETURNING project_id, name, revision
       `, [
         document.data.name,
@@ -319,7 +328,7 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
       switch (updated.length) {
         case 0: {
           const exists = await queryRows(transaction,
-            'SELECT project_id FROM projects WHERE project_id = ?', [projectId])
+            "SELECT project_id FROM projects WHERE project_id = ? AND mod_key = 'learning'", [projectId])
           return exists.length === 0 ? { kind: 'not-found' } : { kind: 'revision-mismatch' }
         }
         default:
@@ -332,7 +341,7 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
 
   /** Reads the separate author-preview state with its own revision. */
   public async readTestState(projectId: string): Promise<VersionedProjectTestState | null> {
-    const projects = await queryRows(this.database, 'SELECT project_id FROM projects WHERE project_id = ?', [projectId])
+    const projects = await queryRows(this.database, "SELECT project_id FROM projects WHERE project_id = ? AND mod_key = 'learning'", [projectId])
     if (projects.length === 0) return null
     const rows = await queryRows(this.database,
       'SELECT revision, state_json FROM project_test_states WHERE project_id = ?', [projectId])
@@ -351,7 +360,7 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
     state: ProjectTestState,
   ): Promise<SaveLearningTestStateResult> {
     return this.database.transaction(async (transaction) => {
-      const projects = await queryRows(transaction, 'SELECT project_id FROM projects WHERE project_id = ?', [projectId])
+      const projects = await queryRows(transaction, "SELECT project_id FROM projects WHERE project_id = ? AND mod_key = 'learning'", [projectId])
       if (projects.length === 0) return { kind: 'not-found' }
       const rows = await queryRows(transaction,
         'SELECT revision FROM project_test_states WHERE project_id = ?', [projectId])
@@ -383,6 +392,7 @@ async function readStoredProject(database: ProjectDatabase, projectId: string): 
            default_intro_transition_ref, default_outro_transition_ref, summary_json, profile_json,
            appearance_json
     FROM projects WHERE project_id = ?
+      AND mod_key = 'learning'
   `, [projectId])
   if (projectRows.length === 0) return null
 
@@ -409,15 +419,15 @@ async function readDocument(database: ProjectDatabase, projectRow: SqlRow): Prom
     queryRows(database, 'SELECT * FROM scenario_entries WHERE project_id = ?', [projectId]),
     queryRows(database, 'SELECT * FROM catalog_pages WHERE project_id = ? ORDER BY position', [projectId]),
     queryRows(database, 'SELECT * FROM media_resources WHERE project_id = ? ORDER BY position', [projectId]),
-    queryRows(database, 'SELECT * FROM content_blocks WHERE project_id = ?', [projectId]),
-    queryRows(database, 'SELECT * FROM content_block_placements WHERE project_id = ?', [projectId]),
-    queryRows(database, 'SELECT * FROM sections WHERE project_id = ?', [projectId]),
-    queryRows(database, 'SELECT * FROM questions WHERE project_id = ?', [projectId]),
-    queryRows(database, 'SELECT * FROM question_answers WHERE project_id = ?', [projectId]),
+    queryRows(database, CONTENT_BLOCKS_SQLITE_SELECT, [projectId]),
+    queryRows(database, CONTENT_BLOCK_PLACEMENTS_SQLITE_SELECT, [projectId]),
+    queryRows(database, SECTION_SQLITE_SELECT, [projectId]),
+    queryRows(database, QUESTION_SQLITE_SELECT, [projectId]),
+    queryRows(database, QUESTION_ANSWERS_SQLITE_SELECT, [projectId]),
     queryRows(database, 'SELECT * FROM evaluation_result_branches WHERE project_id = ?', [projectId]),
-    queryRows(database, 'SELECT * FROM carousels WHERE project_id = ?', [projectId]),
-    queryRows(database, 'SELECT * FROM cards WHERE project_id = ?', [projectId]),
-    queryRows(database, 'SELECT * FROM statistical_graphs WHERE project_id = ?', [projectId]),
+    queryRows(database, CAROUSEL_SQLITE_SELECT, [projectId]),
+    queryRows(database, CARD_SQLITE_SELECT, [projectId]),
+    queryRows(database, STATISTICAL_GRAPH_SQLITE_SELECT, [projectId]),
   ])
 
   const placementsByBlock = new Map(placementRows.map((row) => [stringValue(row, 'content_block_id'), row]))
@@ -534,91 +544,22 @@ function bdcFromRows(
 ): LearningBdc {
   const id = stringValue(row, 'content_block_id')
   const placement = placementsByBlock.get(id) ?? {}
-  const type = stringValue(row, 'content_block_type') as LearningBdc['type']
   const section = sectionsByBlock.get(id)
   const question = questionsByBlock.get(id)
   const carousel = carouselsByBlock.get(id)
   const card = cardsByBlock.get(id)
   const statisticalGraph = statisticalGraphsByBlock.get(id)
-  const statisticalGraphContent = statisticalGraphContentFromRow(statisticalGraph)
 
   return {
-    id,
-    type,
-    presetId: stringValue(row, 'preset_id'),
-    pageId: nullableText(placement, 'page_id'),
-    parentBdcId: nullableText(placement, 'parent_content_block_id'),
-    ...optionalAppearance(row),
-    section: section === undefined ? null : {
-      title: decodeSqlText(nullableText(section, 'title') ?? ''),
-      markup: stringValue(section, 'markup_html'),
-      content: JSON.parse(stringValue(section, 'content_json')) as RichTextDocument,
-      revelation: {
-        intro: nullableText(section, 'default_intro_transition_ref') as NonNullable<LearningBdc['section']>['revelation']['intro'],
-        outro: nullableText(section, 'default_outro_transition_ref') as NonNullable<LearningBdc['section']>['revelation']['outro'],
-      },
-    },
-    question: question === undefined ? null : {
-      mediaId: nullableText(question, 'media_id'),
-      type: stringValue(question, 'question_type') as NonNullable<LearningBdc['question']>['type'],
-      title: decodeSqlText(nullableText(question, 'title') ?? ''),
-      prompt: decodeSqlText(stringValue(question, 'prompt')),
-      validationLabel: decodeSqlText(nullableText(question, 'validation_label') ?? QUESTION_DEFAULTS.VALIDATE_LABEL),
-      answers: answerRows
-        .filter((answer) => answer.question_content_block_id === id)
-        .sort(byPosition)
-        .map((answer) => ({
-          id: stringValue(answer, 'answer_id'),
-          label: authoredTextToPlainText(decodeSqlText(stringValue(answer, 'label'))),
-          correct: numberValue(answer, 'is_correct') !== 0,
-        })),
-    },
+    ...contentBlockFromSqliteRows(row, placement),
+    type: stringValue(row, 'content_block_type') as LearningBdc['type'],
+    section: section === undefined ? null : sectionContentFromSqliteRow(section),
+    question: question === undefined ? null : questionContentFromSqliteRows(question, answerRows),
     evaluationResult: resultContentFromRows(id, resultRows),
-    carousel: carousel === undefined ? null : {
-      defaultViewDurationMs: numberValue(carousel, 'default_view_duration_ms'),
-      playbackMode: stringValue(carousel, 'playback_mode') as NonNullable<LearningBdc['carousel']>['playbackMode'],
-      ...(nullableNumber(carousel, 'repeat_count') === null ? {} : { repeatCount: numberValue(carousel, 'repeat_count') }),
-      aspectRatio: {
-        width: numberValue(carousel, 'aspect_ratio_width'),
-        height: numberValue(carousel, 'aspect_ratio_height'),
-      },
-      revelation: {
-        intro: nullableText(carousel, 'default_intro_transition_ref') as NonNullable<LearningBdc['carousel']>['revelation']['intro'],
-        outro: nullableText(carousel, 'default_outro_transition_ref') as NonNullable<LearningBdc['carousel']>['revelation']['outro'],
-      },
-      cards: allPlacementRows
-        .filter((entry) => entry.parent_content_block_id === id)
-        .sort(byPosition)
-        .map((entry) => ({
-          bdcId: stringValue(entry, 'content_block_id'),
-          durationMs: nullableNumber(entry, 'duration_ms'),
-          introTransitionRef: nullableText(entry, 'intro_transition_ref') as NonNullable<LearningBdc['carousel']>['cards'][number]['introTransitionRef'],
-          outroTransitionRef: nullableText(entry, 'outro_transition_ref') as NonNullable<LearningBdc['carousel']>['cards'][number]['outroTransitionRef'],
-        })),
-    },
-    card: card === undefined ? null : {
-      mediaId: nullableText(card, 'media_id'),
-      overline: decodeSqlText(nullableText(card, 'overline') ?? ''),
-      title: decodeSqlText(nullableText(card, 'title') ?? ''),
-      description: decodeSqlText(nullableText(card, 'description') ?? ''),
-      message: decodeSqlText(nullableText(card, 'message') ?? ''),
-      note: decodeSqlText(nullableText(card, 'note') ?? ''),
-      caption: decodeSqlText(nullableText(card, 'caption') ?? ''),
-      imagePosition: stringValue(card, 'image_position') as NonNullable<LearningBdc['card']>['imagePosition'],
-      imageFit: stringValue(card, 'image_fit') as NonNullable<LearningBdc['card']>['imageFit'],
-      revelation: {
-        intro: nullableText(card, 'intro_transition_ref') as NonNullable<LearningBdc['card']>['revelation']['intro'],
-        outro: nullableText(card, 'outro_transition_ref') as NonNullable<LearningBdc['card']>['revelation']['outro'],
-      },
-    },
-    ...(statisticalGraphContent === null ? {} : { statisticalGraph: statisticalGraphContent }),
+    carousel: carousel === undefined ? null : carouselContentFromSqliteRows(carousel, allPlacementRows),
+    card: card === undefined ? null : cardContentFromSqliteRow(card),
+    ...(statisticalGraph === undefined ? {} : { statisticalGraph: statisticalGraphContentFromSqliteRow(statisticalGraph) }),
   }
-}
-
-/** Parses the opaque JSON payload stored for one Graph BDC. */
-function statisticalGraphContentFromRow(graph: SqlRow | undefined): StatisticalGraphContent | null {
-  if (graph === undefined) return null
-  return JSON.parse(stringValue(graph, 'content_json')) as StatisticalGraphContent
 }
 
 /** Reconstructs both result branches when a result BDC has persisted rows. */
@@ -659,11 +600,7 @@ async function writeDocumentRows(database: ProjectDatabase, document: LearningDo
   for (const page of document.pages) await insertPage(database, document.id, page)
   await insertScenarioRows(database, document)
   await insertCatalogPages(database, document)
-  for (const bdc of document.bdcs) {
-    await queryRows(database,
-      'INSERT INTO content_blocks (project_id, content_block_id, content_block_type, preset_id, appearance_json) VALUES (?, ?, ?, ?, ?)',
-      [document.id, bdc.id, bdc.type, bdc.presetId, serializeOptionalJson(bdc.appearance)])
-  }
+  for (const bdc of document.bdcs) await executePreparedQuery(database, prepareContentBlockInsert(document.id, bdc))
   for (const bdc of document.bdcs) await insertBdcPlacement(database, document, bdc)
   for (const bdc of document.bdcs) await insertBdcDetail(database, document.id, bdc)
 }
@@ -779,20 +716,14 @@ async function insertBdcPlacement(
   bdc: LearningBdc,
 ): Promise<void> {
   const placement = normalizePlacement(document, bdc)
-  switch (placement.kind) {
-    case 'page':
-      await insertPlacementRow(database, document.id, bdc.id, placement.pageId, null,
-        placement.position, null, null, null)
-      return
-    case 'parent':
-      await insertPlacementRow(database, document.id, bdc.id, null, placement.parentBdcId,
-        placement.position, placement.durationMs, placement.introTransitionRef, placement.outroTransitionRef)
-      return
-    case 'catalog':
-      await insertPlacementRow(database, document.id, bdc.id, null, null,
-        placement.position, null, null, null)
-      return
-  }
+  await executePreparedQuery(database, prepareContentBlockPlacementInsert(document.id, bdc.id, {
+    pageId: placement.kind === 'page' ? placement.pageId : null,
+    parentBdcId: placement.kind === 'parent' ? placement.parentBdcId : null,
+    position: placement.position,
+    durationMs: placement.kind === 'parent' ? placement.durationMs : null,
+    introTransitionRef: placement.kind === 'parent' ? placement.introTransitionRef : null,
+    outroTransitionRef: placement.kind === 'parent' ? placement.outroTransitionRef : null,
+  }))
 }
 
 /** Converts the document’s parallel arrays into one discriminated placement. */
@@ -843,55 +774,17 @@ function normalizePlacement(document: LearningDocument, bdc: LearningBdc): Norma
   return { kind: 'catalog', position }
 }
 
-/** Inserts the common BDC placement columns. */
-async function insertPlacementRow(
-  database: ProjectDatabase,
-  projectId: string,
-  bdcId: string,
-  pageId: string | null,
-  parentBdcId: string | null,
-  position: number | null,
-  durationMs: number | null,
-  introTransitionRef: string | null,
-  outroTransitionRef: string | null,
-): Promise<void> {
-  await queryRows(database, `
-    INSERT INTO content_block_placements (
-      project_id, content_block_id, page_id, parent_content_block_id, position,
-      duration_ms, intro_transition_ref, outro_transition_ref
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `, [projectId, bdcId, pageId, parentBdcId, position, durationMs, introTransitionRef, outroTransitionRef])
-}
-
 /** Inserts the detail row matching one BDC type. */
 async function insertBdcDetail(database: ProjectDatabase, projectId: string, bdc: LearningBdc): Promise<void> {
   switch (bdc.type) {
     case BDC_TYPE.SECTION: {
       const section = requireValue(bdc.section, `Section manquante : ${bdc.id}`)
-      await queryRows(database, `
-        INSERT INTO sections (
-          project_id, content_block_id, title, content_json, markup_html,
-          default_intro_transition_ref, default_outro_transition_ref
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-      `, [projectId, bdc.id, nullableSerializedText(section.title), JSON.stringify(section.content), section.markup,
-        section.revelation.intro, section.revelation.outro])
+      await executePreparedQuery(database, prepareSectionInsert(projectId, bdc.id, section))
       return
     }
     case BDC_TYPE.QUESTION: {
       const question = requireValue(bdc.question, `Question manquante : ${bdc.id}`)
-      await queryRows(database, `
-        INSERT INTO questions (
-          project_id, content_block_id, media_id, question_type, title, prompt, validation_label
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-      `, [projectId, bdc.id, question.mediaId, question.type, nullableSerializedText(question.title), serializeSqlText(question.prompt),
-        serializeSqlText(question.validationLabel ?? QUESTION_DEFAULTS.VALIDATE_LABEL)])
-      for (const [position, answer] of question.answers.entries()) {
-        await queryRows(database, `
-          INSERT INTO question_answers (
-            project_id, question_content_block_id, answer_id, position, label, is_correct
-          ) VALUES (?, ?, ?, ?, ?, ?)
-        `, [projectId, bdc.id, answer.id, position, serializeSqlText(answer.label), answer.correct ? 1 : 0])
-      }
+      await executePreparedQueries(database, prepareQuestionInsert(projectId, bdc.id, question))
       return
     }
     case BDC_TYPE.EVALUATION_RESULT: {
@@ -911,38 +804,17 @@ async function insertBdcDetail(database: ProjectDatabase, projectId: string, bdc
     }
     case BDC_TYPE.CAROUSEL: {
       const carousel = requireValue(bdc.carousel, `Carousel manquant : ${bdc.id}`)
-      await queryRows(database, `
-        INSERT INTO carousels (
-          project_id, content_block_id, default_view_duration_ms, playback_mode,
-          repeat_count, aspect_ratio_width, aspect_ratio_height,
-          default_intro_transition_ref, default_outro_transition_ref
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [projectId, bdc.id, carousel.defaultViewDurationMs, carousel.playbackMode,
-        carousel.repeatCount ?? null, carousel.aspectRatio.width, carousel.aspectRatio.height,
-        carousel.revelation.intro, carousel.revelation.outro])
+      await executePreparedQuery(database, prepareCarouselInsert(projectId, bdc.id, carousel))
       return
     }
     case BDC_TYPE.CARD: {
       const card = requireValue(bdc.card, `Carte manquante : ${bdc.id}`)
-      await queryRows(database, `
-        INSERT INTO cards (
-          project_id, content_block_id, media_id, overline, title, description,
-          message, note, caption, image_position, image_fit,
-          intro_transition_ref, outro_transition_ref
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [projectId, bdc.id, card.mediaId, nullableSerializedText(card.overline), nullableSerializedText(card.title),
-        nullableSerializedText(card.description), nullableSerializedText(card.message), nullableSerializedText(card.note),
-        nullableSerializedText(card.caption), card.imagePosition, card.imageFit,
-        card.revelation.intro, card.revelation.outro])
+      await executePreparedQuery(database, prepareCardInsert(projectId, bdc.id, card))
       return
     }
     case BDC_TYPE.STATISTICAL_GRAPH: {
       const graph = requireValue(bdc.statisticalGraph, `Graphe manquant : ${bdc.id}`)
-      await queryRows(database, `
-        INSERT INTO statistical_graphs (
-          project_id, content_block_id, content_json
-        ) VALUES (?, ?, ?)
-      `, [projectId, bdc.id, JSON.stringify(graph)])
+      await executePreparedQuery(database, prepareStatisticalGraphInsert(projectId, bdc.id, graph))
       return
     }
   }
@@ -965,7 +837,7 @@ async function editGrantState(
   grant: ProjectEditGrant,
 ): Promise<'held' | 'lost' | 'not-found'> {
   const rows = await queryRows(database,
-    'SELECT edit_page_id, edit_grant_id FROM projects WHERE project_id = ?', [projectId])
+    "SELECT edit_page_id, edit_grant_id FROM projects WHERE project_id = ? AND mod_key = 'learning'", [projectId])
   const row = rows[0]
   if (row === undefined) return 'not-found'
   return nullableText(row, 'edit_page_id') === grant.pageId
@@ -981,6 +853,16 @@ async function queryRows(
 ): Promise<SqlRow[]> {
   const result = await database.exec(rawSql(text, values)) as DataManipulationResult
   return result.rows ?? []
+}
+
+/** Executes one resource-prepared query within the mod-owned transaction. */
+async function executePreparedQuery(database: ProjectDatabase, query: SqliteQuery): Promise<SqlRow[]> {
+  return queryRows(database, query.text, [...query.values])
+}
+
+/** Executes resource-prepared detail queries in order within the same transaction. */
+async function executePreparedQueries(database: ProjectDatabase, queries: readonly SqliteQuery[]): Promise<void> {
+  for (const query of queries) await executePreparedQuery(database, query)
 }
 
 /** Restores one root scenario entry as a page or chapter reference. */
@@ -1002,13 +884,6 @@ function projectSummaryFromRow(row: SqlRow): ProjectSummary {
   }
 }
 
-/** Reads a required string field from one SQLite result row. */
-function stringValue(row: SqlRow, key: string): string {
-  const value = row[key]
-  if (typeof value !== 'string') throw new Error(`Valeur texte invalide en base : ${key}`)
-  return value
-}
-
 /** Parses one JSON document column from SQLite. */
 function parseJsonColumn<Value>(row: SqlRow, key: string): Value {
   const value = stringValue(row, key)
@@ -1017,44 +892,6 @@ function parseJsonColumn<Value>(row: SqlRow, key: string): Value {
   } catch {
     throw new Error(`Valeur JSON invalide en base : ${key}`)
   }
-}
-
-/** Reads an optional string field and normalizes SQL NULL. */
-function nullableText(row: SqlRow, key: string): string | null {
-  const value = row[key]
-  if (value === null || value === undefined) return null
-  if (typeof value !== 'string') throw new Error(`Valeur texte invalide en base : ${key}`)
-  return value
-}
-
-/** Decodes promoted Tiptap JSON stored in an existing SQLite text column. */
-function decodeSqlText(value: string): ElceTextValue {
-  if (!value.startsWith(SQLITE_RICH_TEXT_PREFIX)) return value
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(value.slice(SQLITE_RICH_TEXT_PREFIX.length))
-  } catch {
-    throw new Error('Valeur Tiptap invalide en base.')
-  }
-  if (typeof parsed === 'string') return parsed
-  if (typeof parsed === 'object' && parsed !== null && 'type' in parsed && parsed.type === 'doc'
-    && 'content' in parsed && Array.isArray(parsed.content)) return parsed as RichTextDocument
-  throw new Error('Valeur Tiptap invalide en base.')
-}
-
-/** Encodes promoted rich text while leaving ordinary authored strings readable. */
-function serializeSqlText(value: ElceTextValue): string {
-  if (typeof value === 'string') {
-    return value.startsWith(SQLITE_RICH_TEXT_PREFIX)
-      ? `${SQLITE_RICH_TEXT_PREFIX}${JSON.stringify(value)}`
-      : value
-  }
-  return `${SQLITE_RICH_TEXT_PREFIX}${JSON.stringify(value)}`
-}
-
-/** Stores optional empty text as SQL NULL and preserves promoted Tiptap values. */
-function nullableSerializedText(value: ElceTextValue): string | null {
-  return typeof value === 'string' && value.length === 0 ? null : serializeSqlText(value)
 }
 
 /** Reads a nullable SQLite boolean and rejects values outside its stored domain. */
@@ -1094,21 +931,6 @@ function optionalAppearance(row: SqlRow): Readonly<{ appearance?: AppearanceSett
 /** Converts an empty model string to SQL NULL for optional text columns. */
 function nullableTextValue(value: string): string | null {
   return value.length === 0 ? null : value
-}
-
-/** Reads an optional numeric SQLite field and normalizes SQL NULL. */
-function nullableNumber(row: SqlRow, key: string): number | null {
-  const value = row[key]
-  if (value === null || value === undefined) return null
-  if (typeof value !== 'number' && typeof value !== 'bigint') throw new Error(`Valeur numérique invalide en base : ${key}`)
-  return Number(value)
-}
-
-/** Reads a required numeric SQLite field. */
-function numberValue(row: SqlRow, key: string): number {
-  const value = nullableNumber(row, key)
-  if (value === null) throw new Error(`Valeur numérique absente en base : ${key}`)
-  return value
 }
 
 /** Sorts rows by their stored sequence position. */

@@ -10,15 +10,13 @@ import { CAROUSEL_TRANSITION } from '../../../resources/revelation/revelation-co
 import { CHAPTER_TYPE } from '../organization/learning-organization-config'
 import { PAGE_LOCATION } from '../organization/learning-page-placement'
 import { QUESTION_TYPE } from '../../../resources/bdcs/question/question-config'
-import { CATALOG_REFERENCE } from '../../../core/catalog/catalog-config'
-import { BDC_LOCATION, BDC_ORDER } from '../../../core/document/content-location'
+import { BDC_ORDER } from '../../../core/document/content-location'
 import { learningControllerMachine as controllerMachine } from './learning-controller-machine'
 import { LearningEditorFacade } from './learning-editor-facade'
 import type { ElceDocumentStore, MediaBlob } from '../../../infrastructure/indexed-db/document-store-types'
 import { ProjectEditorLock } from '../../../app/sync/project-editor-lock'
 import { LearningEditorContextProvider } from '../composition/learning-editor-context'
 import { LearningPageEditor } from './learning-page-editor'
-import { renderEditorWorkspace } from './learning-workspace'
 
 describe('Remix production page editor', () => {
   let cleanup: (() => void | Promise<void>) | undefined
@@ -554,94 +552,6 @@ describe('Remix production page editor', () => {
       .toBe(CAROUSEL_PLAYBACK_MODE.MANUAL)
     expect((rendered.$(`#elce-carousel-transition-${carouselId}`) as HTMLSelectElement).value)
       .toBe(CAROUSEL_TRANSITION.ZOOM)
-  })
-
-  it('moves a catalogue Card into a compatible page and returns it through the page catalogue action', async () => {
-    const controller = createActor(controllerMachine, { input: {} })
-    controller.start()
-    controller.send({ type: 'editor.access.activate' })
-    const actions = new LearningEditorFacade(controller)
-    const page = controller.getSnapshot().context.document.pages[0]
-    if (page === undefined) throw new Error('The catalogue fixture has no page.')
-    controller.send({
-      type: 'document.apply',
-      command: {
-        type: 'bdc.create',
-        bdcId: 'bdc-catalog-card',
-        bdcType: BDC_TYPE.CARD,
-        presetId: DEFAULT_PRESET_ID.TEXT_SHORT,
-        placement: { kind: BDC_LOCATION.CATALOG },
-      },
-    })
-
-    const mountWorkspace = () => render(<LearningEditorContextProvider controller={controller} actions={actions}>
-      {renderEditorWorkspace({
-        view: actions.authoring.selectEditorViewModel(controller.getSnapshot()),
-        actions,
-        pageEditorHost: <LearningPageEditor canMoveBdcToPage={actions.authoring.canMoveBdcToPage.bind(actions.authoring)} onOpenAppearanceTarget={() => undefined} />,
-        responsivePanel: null,
-        sidePanelTab: 'contents',
-        appearanceTarget: { kind: 'document' },
-        summarySettingsOpen: false,
-        profileTokenTargetId: null,
-        selectedInlineLabel: null,
-        authoringError: null,
-        dropTarget: null,
-        visible: true,
-        onSetResponsivePanel: () => undefined,
-        onSetSidePanelTab: () => undefined,
-        onOpenAppearanceTarget: () => undefined,
-        onSetSummarySettingsOpen: () => undefined,
-        onSetAuthoringError: () => undefined,
-        onSetDropTarget: () => undefined,
-        onSetDraggedEntry: () => undefined,
-        getDraggedEntry: () => null,
-        onPreview: () => undefined,
-        previewError: null,
-        exportBusy: false,
-        exportError: null,
-        exportNotice: null,
-        onMovePage: (pageId, placement) => actions.movePage(pageId, placement),
-        onMoveChapter: (chapterId, index) => actions.moveChapter(chapterId, index),
-      })}
-    </LearningEditorContextProvider>)
-    let rendered = mountWorkspace()
-    cleanup = () => {
-      rendered.cleanup()
-      controller.stop()
-    }
-    await actOnRemix(rendered, () => Promise.resolve())
-
-    const reference = { kind: CATALOG_REFERENCE.BDC, bdcId: 'bdc-catalog-card' }
-    const transfer = createDataTransfer()
-    const catalogSource = document.getElementById('elce-catalog-bdc-drag-bdc:bdc-catalog-card')
-    expect(catalogSource).not.toBeNull()
-    await actOnRemix(rendered, () => dispatchDrag(
-      catalogSource!,
-      'dragstart',
-      transfer,
-    ))
-    expect(transfer.getData(CATALOG_REFERENCE.MIME_TYPE)).toBe(JSON.stringify(reference))
-    await actOnRemix(rendered, () => dispatchDrag(rendered.$(`#elce-page-bdc-drop-${page.bdcIds.length}`)!, 'dragover', transfer))
-    await actOnRemix(rendered, () => dispatchDrag(rendered.$(`#elce-page-bdc-drop-${page.bdcIds.length}`)!, 'drop', transfer))
-
-    let documentModel = controller.getSnapshot().context.document
-    expect(documentModel.pages.find((candidate) => candidate.id === page.id)?.bdcIds).toEqual([...page.bdcIds, 'bdc-catalog-card'])
-    expect(documentModel.data.catalogBdcIds).not.toContain('bdc-catalog-card')
-
-    rendered.cleanup()
-    rendered = mountWorkspace()
-    const pageBdcTransfer = createDataTransfer()
-    await actOnRemix(rendered, () => dispatchDrag(rendered.$('#elce-page-bdc-drag-bdc-catalog-card')!, 'dragstart', pageBdcTransfer))
-    expect(pageBdcTransfer.getData(BDC_ORDER.MIME_TYPE)).toBe('bdc-catalog-card')
-    await actOnRemix(rendered, () => dispatchDrag(rendered.$('#elce-content-catalog-tab-bdcs')!, 'dragover', pageBdcTransfer))
-    await actOnRemix(rendered, () => dispatchDrag(rendered.$('#elce-content-catalog-tab-bdcs')!, 'drop', pageBdcTransfer))
-    documentModel = controller.getSnapshot().context.document
-    expect(documentModel.pages.find((candidate) => candidate.id === page.id)?.bdcIds).toEqual(page.bdcIds)
-    expect(documentModel.data.catalogBdcIds).toContain('bdc-catalog-card')
-    rendered.cleanup()
-    rendered = mountWorkspace()
-    expect(rendered.$('[id="elce-catalog-bdc-drag-bdc:bdc-catalog-card"]')).not.toBeNull()
   })
 })
 

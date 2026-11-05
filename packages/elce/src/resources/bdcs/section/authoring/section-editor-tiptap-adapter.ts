@@ -26,7 +26,7 @@ export interface SectionTiptapAdapterOptions {
   readonly bdcId: string
   readonly section: SectionContent
   readonly textFeature?: SectionTextFeature
-  readonly anchorOptions: ElceAnchorExtensionOptions
+  readonly anchorOptions?: ElceAnchorExtensionOptions
   readonly onChange: (change: ElceSectionChange, selection?: SectionChangeSelection) => void
   readonly onToolbarState: (state: SectionToolbarState) => void
 }
@@ -71,18 +71,19 @@ export class SectionTiptapAdapter {
     this.section = options.section
     this.onChange = options.onChange
     this.onToolbarState = options.onToolbarState
+    const anchorExtensions = options.anchorOptions === undefined ? [] : [createElceAnchorExtension({
+      ...options.anchorOptions,
+      registerNodeViewRefresh: (_bdcId, refresh) => {
+        this.anchorNodeViewRefreshers.add(refresh)
+        return () => this.anchorNodeViewRefreshers.delete(refresh)
+      },
+    })]
     this.editor = new Editor({
       element: null,
       extensions: [
         ...SECTION_EDITOR_EXTENSIONS,
         ...(options.textFeature?.extensions ?? []),
-        createElceAnchorExtension({
-          ...options.anchorOptions,
-          registerNodeViewRefresh: (_bdcId, refresh) => {
-            this.anchorNodeViewRefreshers.add(refresh)
-            return () => this.anchorNodeViewRefreshers.delete(refresh)
-          },
-        }),
+        ...anchorExtensions,
       ],
       content: toTiptapContent(options.section.content ?? emptySectionDocument()),
       editorProps: {

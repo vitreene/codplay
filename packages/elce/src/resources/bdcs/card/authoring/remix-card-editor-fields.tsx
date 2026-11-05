@@ -16,7 +16,7 @@ import type { ElceCardEditorActions } from './card-facade-types'
 import type { ResourceTextFieldFeature } from '../../../../core/authoring/resource-text-field-feature'
 import { cardLayoutAcceptsFile, cardLayoutAcceptsMedia, cardToolbarClassName, parseCardMediaReference } from './card-editor-rules'
 import { renderLucideIcon } from '../../../../core/authoring/lucide-static-icon'
-import { countTextValueCharacters } from '../../../../mods/learning/inline-text/learning-inline-text-value'
+import { countAuthoredTextCharacters } from '../../../../core/document/rich-text-utils'
 
 export interface RemixCardEditorFieldsProps {
   readonly bdc: ResourceBdc
@@ -361,7 +361,7 @@ function renderShortTextFields(
       <small
         id={`${idPrefix}-message-count-${bdcId}`}
       >
-        {`${countTextValueCharacters(card.message)} / ${CAROUSEL_CONFIG.textShortMessageMaxLength}`}
+        {`${countAuthoredTextCharacters(card.message)} / ${CAROUSEL_CONFIG.textShortMessageMaxLength}`}
       </small>,
     ]}
   </div>

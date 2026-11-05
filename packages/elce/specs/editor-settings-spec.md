@@ -35,6 +35,12 @@ projection :
   durée reste inférieure à celle du déplacement média. L’ouverture rétablit
   l’opacité à `1`. Ces réglages ne changent pas la transition `move` du média.
 
+Pour une Carte enfant de Carousel, les remplacements du placement s’appliquent
+aux valeurs héritées du parent, puis les valeurs locales non nulles de la
+Carte sont prioritaires. `revelation.byBdcId[cardId]` et
+`revelation.carouselsByBdcId[carouselId].entries[cardId]` portent les mêmes
+références effectives.
+
 La résolution de page reçoit `ContentPage` et `ResourceBdc`. Elle n’exige pas
 `LearningDocument` ni les champs d’organisation Learning ; une fixture avec une
 page et un BDC Section de ressource suffit à exercer l’héritage.
@@ -65,10 +71,6 @@ elles ne sont pas recopiées comme réglages locaux dans les builders.
 
 ## Preuves
 
-- [`editor-settings-resolver.test.ts`](../src/domain/editor-settings/editor-settings-resolver.test.ts)
-  couvre l’héritage projet → parent → Carousel → entrée et vérifie la remise des
-  réglages player groupés. Il vérifie aussi la résolution avec des données
-  `ContentPage`/`ResourceBdc` sans agrégat Learning.
 - [`flux-scene-builder.test.ts`](../src/builders/flux/flux-scene-builder.test.ts)
   vérifie les zones vidéo et fin de page, les événements de visibilité portés
   par la Carte et les actions Capsule portées par son média ou par sa racine

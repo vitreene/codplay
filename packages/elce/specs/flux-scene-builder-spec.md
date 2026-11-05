@@ -224,20 +224,16 @@ builders ne déclarent que leur comportement d’exécution.
 - [`flux-scene-builder.test.ts`](../src/mods/learning/integration/flux-scene-builder.test.ts)
   vérifie les stories, le scrollport, les commentaires d’insertion et la compilation avec les
   définitions réelles `scroll-container` de CodPlay, ainsi que le montage
-  d’une Carte directe vers son perso image ou vidéo, ainsi que le montage d’une
-  Carte enfant dans le slot projeté depuis une ancre exportée. Il vérifie aussi la
-  priorité de ciblage du média ancré (`z-index: 1`), la projection des BDC Carte identifiés par leur Carousel parent, leurs champs,
+  d’une Carte directe vers son perso vidéo. Il vérifie aussi la
+  projection des BDC Carte identifiés par leur Carousel parent, leurs champs,
   leurs médias selon le layout et les plages automatiques finies.
 - [`statistical-graph-placements.test.ts`](../src/mods/learning/integration/statistical-graph-placements.test.ts)
   vérifie les placements Graphe direct Flux et ancré en Section par les
   builders réels, le `z-index` de sa racine ancrée, ainsi que l’état initial
   `enter` du Graphe ancré.
 - [`flux-scene-builder.test.ts`](../src/mods/learning/integration/flux-scene-builder.test.ts)
-  vérifie la zone de révélation de la Carte et ses événements d’entrée/sortie ;
-  il vérifie aussi la déclaration d’entrée de l’image.
-- [`editor-settings-resolver.test.ts`](../src/domain/editor-settings/editor-settings-resolver.test.ts)
-  vérifie l’héritage champ par champ du projet vers le parent Carousel et son
-  entrée.
+  vérifie que la révélation cible la Carte entière lorsqu’elle ne porte pas
+  de média.
 - [`elce-player-composition.test.ts`](../src/mods/learning/reading/learning-player.test.ts)
   exerce le chemin de composition existant entre l’événement du perso média,
   le strap et le déplacement. Ce test ne couvre pas la cible native choisie par
@@ -276,9 +272,7 @@ Elcé.
   navigation, du slot et de la page Flux par Sighty et CodPlay dans un DOM de
   test, ainsi que
   le montage de Cartes avec les composants `img` et `media`, d’une Carte dans
-  une ancre de texte et d’un média selon le layout de Carte. Les tests de
-  révélation pilotent l’observateur réel et vérifient que la racine reste fixe
-  tandis que le média enfant reçoit l’opacité et la translation Capsule.
+  une ancre de texte et d’un média selon le layout de Carte.
 - Le 15 octobre 2026, le style Flux a été dépouillé des déclarations de snap.
   Les 41 tests de composition, le typecheck et le build passent. La vérification
   navigateur d’un BDC plus haut que le viewport restait ouverte dans le

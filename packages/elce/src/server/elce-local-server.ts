@@ -21,6 +21,7 @@ const STYLE_FILES = [
   'packages/elce/src/core/authoring/layout/editor-frame.css',
   'packages/elce/src/app/layout/app-layout.css',
   'packages/elce/src/mods/learning/authoring/learning-workspace.css',
+  'packages/elce/src/mods/quiz-hunt/authoring/quiz-hunt-authoring.css',
   'packages/elce/src/resources/bdcs/question/authoring/question-editor.css',
   'packages/elce/src/core/authoring/media/media-picker.css',
   'packages/elce/src/resources/bdcs/section/authoring/section-editor.css',

@@ -37,12 +37,14 @@ connaît pas le format de reprise du lecteur.
 `saveReaderState()` écrit le signet et l’état suspendu puis committe. Un lecteur
 peut y joindre l’avancement, une complétion arrivée à son repère de fin et les
 objectifs de chapitre calculés par son adaptateur. En 2004, la classe écrit
-`cmi.progress_measure`, le `cmi.completion_status` fourni s’il y en a un, puis
-les mesures des objectifs déclarés au manifeste. Elle n’invente pas un statut
-`incomplete` pendant une simple consultation de page. En 1.2, elle écrit
+`cmi.progress_measure`, les valeurs `cmi.completion_status` et
+`cmi.success_status` fournies, puis les mesures des objectifs déclarés au
+manifeste. Elle n’invente pas un statut `incomplete` pendant une simple
+consultation de page. En 1.2, elle écrit
 `cmi.core.lesson_status` seulement quand l’adaptateur fournit un statut de
-complétion ou de réussite ; aucune mesure de progression 2004 ni progression
-d’objectif n’est écrite.
+complétion ou de réussite ; `successStatus: 'unknown'` y reprend le statut de
+complétion fourni. Aucune mesure de progression 2004 ni progression d’objectif
+n’est écrite.
 `recordInteraction()` écrit ensemble cet état et une interaction immédiate, puis
 committe.
 `recordEvaluationResult()` écrit le même état de lecture, le statut global, les
@@ -89,8 +91,9 @@ uniquement leur transposition en CMI.
   la reprise opaque, la lecture du seuil LMS pour les trois éditions, les
   résultats et objectifs génériques,
   les champs d’interaction 2004 et leur format, l’absence d’interactions 1.2,
-  la progression de page et des objectifs, la complétion différée, l’absence de
-  statut de complétion pendant une consultation ordinaire, les durées de
+  la progression de page et des objectifs, l’écriture des statuts de réussite
+  2004 et la remise à incomplet, la complétion différée, l’absence de statut de
+  complétion pendant une consultation ordinaire, les durées de
   session, la navigation inter-SCO, les limites, le mode lecture, les erreurs
   et la fermeture sans écriture de sortie `suspend`.
 - [`public-api.test.ts`](../src/public-api.test.ts) vérifie l’usage par le point

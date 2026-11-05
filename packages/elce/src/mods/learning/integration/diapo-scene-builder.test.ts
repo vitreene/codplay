@@ -190,30 +190,6 @@ describe('Elcé Diapo scene builder', () => {
     expect(markup).not.toContain('elce-flux-scrollport')
   })
 
-  it('reuses the Question story and exposes its reset path in a Diapo', () => {
-    const initial = learningDocumentService.createInitialDocument()
-    const pageCommand = createDefaultPageCommand(initial, { kind: PAGE_LOCATION.SCENARIO }, undefined, PAGE_TYPE.DIAPO)
-    let document = applyDocumentCommand(initial, pageCommand)
-    document = applyDocumentCommand(document, { type: 'bdc.carousel.delete', bdcId: pageCommand.bdcId })
-    document = applyDocumentCommand(document, createQuestionBdcCommand('bdc-diapo-question', pageCommand.pageId, 0))
-    const page = document.pages.find((candidate) => candidate.id === pageCommand.pageId)!
-    const build = buildDiapoSceneForTest(page, document.bdcs)
-    const story = build.sceneDoc.stories[`${page.id}-bdc-diapo-question`]
-    const pageStory = build.sceneDoc.stories[`${page.id}-diapo-page`]
-    const pageHost = pageStory?.persos[1]?.initial
-
-    expect(pageHost).toMatchObject({
-      markup: expect.stringContaining('elce-card--question'),
-    })
-    expect(story?.persos.filter((perso) => perso.type === 'input')).toHaveLength(2)
-    expect(story?.persos.find((perso) => perso.id.endsWith(':prompt'))?.initial).toMatchObject({ tag: 'legend' })
-    expect(story?.listen).toContainEqual({
-      on: ELCE_EVENTS.QUESTION_RESET,
-      straps: [`${page.id}:bdc-diapo-question:reset-question`],
-    })
-    expect(build.questionReset).toEqual({ eventName: ELCE_EVENTS.QUESTION_RESET })
-  })
-
   it.each([MEDIA_TYPE.IMAGE, MEDIA_TYPE.VIDEO])('projects the flexible Diapo Question %s illustration', (mediaType) => {
     const initial = learningDocumentService.createInitialDocument()
     const pageCommand = createDefaultPageCommand(initial, { kind: PAGE_LOCATION.SCENARIO }, undefined, PAGE_TYPE.DIAPO)

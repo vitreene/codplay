@@ -1,4 +1,8 @@
-# Elcé — export SCORM
+# Learning — export SCORM
+
+Cette spécification décrit l’export SCORM de Learning. Quiz Hunt possède un
+exporteur monoSCO dédié décrit dans la
+[spécification de son mod](./quiz-hunt-mod-spec.md#export-scorm).
 
 ## Rôle
 

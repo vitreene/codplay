@@ -268,6 +268,53 @@ describe('shared SCORM session', () => {
     expect(api.values.has('cmi.completion_status')).toBe(false)
   })
 
+  it('writes reader completion and success status without writing a score', async () => {
+    const api = new FakePipwerksApi()
+    const session = new ScormSession({ version: '2004v4', api })
+    await session.initialize()
+
+    await session.saveReaderState({
+      location: 'result-page',
+      suspendData: '{"state":"finished"}',
+      progress: { measure: 1, completionStatus: 'completed', successStatus: 'passed' },
+    })
+
+    expect(api.values.get('cmi.completion_status')).toBe('completed')
+    expect(api.values.get('cmi.success_status')).toBe('passed')
+    expect(api.values.get('cmi.progress_measure')).toBe('1')
+    expect(api.writes.some(({ parameter }) => parameter.startsWith('cmi.score.'))).toBe(false)
+  })
+
+  it('clears a prior SCORM 2004 verdict when the reader restarts', async () => {
+    const api = new FakePipwerksApi()
+    const session = new ScormSession({ version: '2004v4', api })
+    await session.initialize()
+
+    await session.saveReaderState({
+      location: 'summary',
+      suspendData: '{"state":null}',
+      progress: { measure: 0, completionStatus: 'incomplete', successStatus: 'unknown' },
+    })
+
+    expect(api.values.get('cmi.completion_status')).toBe('incomplete')
+    expect(api.values.get('cmi.success_status')).toBe('unknown')
+    expect(api.writes.some(({ parameter }) => parameter.startsWith('cmi.score.'))).toBe(false)
+  })
+
+  it('maps unknown success to incomplete in SCORM 1.2', async () => {
+    const api = new FakePipwerksApi()
+    const session = new ScormSession({ version: '1.2', api })
+    await session.initialize()
+
+    await session.saveReaderState({
+      location: 'summary',
+      suspendData: '{}',
+      progress: { measure: 0, completionStatus: 'incomplete', successStatus: 'unknown' },
+    })
+
+    expect(api.values.get('cmi.core.lesson_status')).toBe('incomplete')
+  })
+
   it('commits one immediate interaction with its reader state for SCORM 2004', async () => {
     const api = new FakePipwerksApi()
     const session = new ScormSession({ version: '2004v4', api })

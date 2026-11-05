@@ -217,6 +217,31 @@ relationnelles des Graphes existants en `StatisticalGraphContent` JSON puis
 supprime leurs trois tables de détail. Sa migration inverse recrée les lignes
 relationnelles. Les lignes Question/Réponses ne sont pas touchées.
 
+### Base commune aux mods Learning et Quiz Hunt
+
+`openElceProjectDatabase()` charge les migrations SQLite des deux mods, les
+ordonne par identifiant puis les applique à une seule base. `projects.mod_key`
+sépare les catalogues (`learning` par défaut, `quiz-hunt` pour Quiz Hunt) sans
+ajouter d’identité de mod au document. Chaque adaptateur de persistance filtre
+ses lectures et écritures par cette clé et garde ses propres transactions,
+organisation et réglages.
+
+Learning et Quiz Hunt enregistrent les identités, placements et contenus des
+BDC communs dans les mêmes tables relationnelles. Les requêtes d’écriture et
+les conversions de lignes sont préparées par les ressources Section, Question,
+Carte, Carousel et Graphe ; les deux adaptateurs les exécutent dans leurs
+transactions. Quiz Hunt conserve ses réglages de jeu, ses groupes et les
+options couleur/obligatoire des pages dans ses tables propres. Les métadonnées
+média restent dans `media_resources`.
+
+[`quiz-hunt-sqlite-project-persistence.test.ts`](../src/mods/quiz-hunt/persistence/server/sqlite/quiz-hunt-sqlite-project-persistence.test.ts)
+vérifie la sauvegarde et la réouverture d’une Question, d’une Section, d’une
+Carte et de leurs références média dans les tables communes, avec un projet
+Learning dans la même base. Les listes de chaque adaptateur ne retournent que
+les projets de leur mod. Les allers-retours relationnels Learning restent
+couverts par
+[`learning-sqlite-project-persistence.test.ts`](../src/mods/learning/persistence/server/sqlite/learning-sqlite-project-persistence.test.ts).
+
 ## Fichiers média
 
 L’éditeur crée d’abord la ligne `media_resources` avec son nom, son type MIME

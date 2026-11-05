@@ -146,9 +146,6 @@ modifié.
   compile les placements Flux, Diapo, Carousel et Section par les builders et
   le runtime CodPlay réels ; les placements Flux, Diapo et Carousel conservent
   aussi la feuille de couleurs du graphe.
-- [`learning-player-style.test.ts`](../src/mods/learning/reading/learning-player-style.test.ts)
-  vérifie que la feuille du lecteur conserve le cadre du Graphe, les libellés
-  enrichis en HTML et leur couche d’interaction après l’extraction des styles.
 - [`sqlite-project-persistence.test.ts`](../src/mods/learning/persistence/server/sqlite/learning-sqlite-project-persistence.test.ts)
   vérifie l’aller-retour JSON, la migration depuis les anciennes lignes
   relationnelles et son retour, la suppression des tables de détail et la

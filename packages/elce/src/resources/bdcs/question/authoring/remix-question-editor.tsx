@@ -47,14 +47,14 @@ export function renderRemixQuestionEditor(props: QuestionEditorProps): RemixNode
         id={`elce-question-header-actions-${bdcId}`}
         className="elce-bdc-header-actions"
       >
-        {renderAppearanceTrigger({
+        {props.onOpenAppearanceTarget === undefined ? null : renderAppearanceTrigger({
           id: `elce-question-style-${bdcId}`,
           target: { kind: 'bdc', bdcId },
           label: 'Ouvrir le style de la question',
           onOpen: props.onOpenAppearanceTarget,
           className: 'elce-appearance-trigger elce-bdc-style-trigger',
         })}
-        <button
+        {props.canDelete === false ? null : <button
           id={`elce-question-delete-${bdcId}`}
           className="elce-bdc-icon-button elce-bdc-icon-button--danger"
           type="button"
@@ -63,7 +63,7 @@ export function renderRemixQuestionEditor(props: QuestionEditorProps): RemixNode
           mix={on<HTMLButtonElement, 'click'>('click', actions.deleteQuestion)}
         >
           {renderLucideIcon(Trash2, `elce-question-delete-icon-${bdcId}`)}
-        </button>
+        </button>}
       </div>
     </div>
     <div

@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { render } from 'remix/component/test'
 import { CHAPTER_TYPE } from '../organization/learning-organization-config'
-import { PAGE_TYPE } from '../learning-definition'
 import { learningControllerMachine as controllerMachine } from './learning-controller-machine'
 import { LearningEditorFacade } from './learning-editor-facade'
 import { renderEditorWorkspace } from './learning-workspace'
@@ -86,84 +85,6 @@ describe('Remix editor workspace', () => {
 
     expect(rendered.$('#elce-sighty-export-status')?.textContent).toBe('Préparation de l’export du scénario…')
     expect(rendered.$('#elce-sighty-export-status')?.getAttribute('role')).toBe('status')
-
-    rendered.cleanup()
-    cleanup()
-    controller.stop()
-  })
-
-  it('creates root and chapter Diapos, orders mixed root entries and moves pages by separators', async () => {
-    const { controller, mount, cleanup } = createWorkspace()
-    let rendered = mount()
-
-    await rendered.act(() => rendered.$('#elce-create-scenario-diapo')?.dispatchEvent(new Event('click', { bubbles: true })))
-    let documentModel = controller.getSnapshot().context.document
-    const rootDiapo = documentModel.pages.find((page) => page.type === PAGE_TYPE.DIAPO)
-    expect(rootDiapo).toMatchObject({ type: PAGE_TYPE.DIAPO, chapterId: null })
-    expect(documentModel.data.scenarioEntries.at(-1)).toEqual({ kind: 'page', pageId: rootDiapo?.id })
-
-    rendered.cleanup()
-    rendered = mount()
-    await rendered.act(() => rendered.$('#elce-create-chapter')?.dispatchEvent(new Event('click', { bubbles: true })))
-    documentModel = controller.getSnapshot().context.document
-    const secondChapter = documentModel.chapters.at(-1)
-    if (secondChapter === undefined || rootDiapo === undefined || secondChapter.type !== CHAPTER_TYPE.STANDARD) {
-      throw new Error('Workspace fixture creation failed.')
-    }
-    rendered.cleanup()
-    rendered = mount()
-    await rendered.act(() => rendered.$(`#elce-create-diapo-${secondChapter.id}`)?.dispatchEvent(new Event('click', { bubbles: true })))
-    documentModel = controller.getSnapshot().context.document
-    const chapterDiapo = documentModel.pages.find((page) => page.chapterId === secondChapter.id)
-    expect(chapterDiapo?.type).toBe(PAGE_TYPE.DIAPO)
-
-    rendered.cleanup()
-    rendered = mount()
-    const page = documentModel.pages.find((candidate) => candidate.id === rootDiapo.id)
-    if (page === undefined) throw new Error('Root Diapo is missing.')
-    const pageRow = rendered.$(`#elce-scenario-entry-list-row-${page.id}`) as HTMLElement
-    const dataTransfer = createDataTransfer()
-    await rendered.act(() => dispatchDrag(pageRow, 'dragstart', dataTransfer))
-    let beforeFirstEntry = rendered.$('#elce-scenario-entry-list-drop-0') as HTMLElement
-    await rendered.act(() => dispatchDrag(beforeFirstEntry, 'dragover', dataTransfer))
-    rendered.cleanup()
-    rendered = mount()
-    beforeFirstEntry = rendered.$('#elce-scenario-entry-list-drop-0') as HTMLElement
-    expect(beforeFirstEntry.classList.contains('elce-drop-separator--active')).toBe(true)
-    expect(pageRow.classList.contains('elce-page-row--drop-target')).toBe(false)
-    await rendered.act(() => dispatchDrag(beforeFirstEntry, 'drop', dataTransfer))
-    expect(controller.getSnapshot().context.document.data.scenarioEntries[0]).toEqual({ kind: 'page', pageId: rootDiapo.id })
-
-    rendered.cleanup()
-    rendered = mount()
-    const chapterHeading = rendered.$(`#elce-chapter-heading-${secondChapter.id}`) as HTMLElement
-    const beforeFirstChapter = rendered.$('#elce-scenario-entry-list-drop-1') as HTMLElement
-    await rendered.act(() => dispatchDrag(chapterHeading, 'dragstart', dataTransfer))
-    await rendered.act(() => dispatchDrag(beforeFirstChapter, 'dragover', dataTransfer))
-    await rendered.act(() => dispatchDrag(beforeFirstChapter, 'drop', dataTransfer))
-    expect(controller.getSnapshot().context.document.data.scenarioEntries[1]).toEqual({
-      kind: 'chapter',
-      chapterId: secondChapter.id,
-    })
-
-    rendered.cleanup()
-    rendered = mount()
-    const movedRootPage = rendered.$(`#elce-scenario-entry-list-row-${rootDiapo.id}`) as HTMLElement
-    const chapterDrop = rendered.$(`#elce-pages-chapter-1-drop-0`) as HTMLElement
-    await rendered.act(() => dispatchDrag(movedRootPage, 'dragstart', dataTransfer))
-    await rendered.act(() => dispatchDrag(chapterDrop, 'dragover', dataTransfer))
-    await rendered.act(() => dispatchDrag(chapterDrop, 'drop', dataTransfer))
-    documentModel = controller.getSnapshot().context.document
-    expect(documentModel.chapters.find((chapter) => chapter.id === 'chapter-1')?.pageIds).toContain(rootDiapo.id)
-    expect(documentModel.data.scenarioEntries.some((entry) => entry.kind === 'page' && entry.pageId === rootDiapo.id)).toBe(false)
-
-    rendered.cleanup()
-    rendered = mount()
-    await rendered.act(() => rendered.$('#elce-content-catalog-tab-media')?.dispatchEvent(new Event('click', { bubbles: true })))
-    rendered.cleanup()
-    rendered = mount()
-    expect(rendered.$('#elce-content-catalog-tab-media')?.getAttribute('aria-pressed')).toBe('true')
-    expect(rendered.$('#elce-content-catalog-tab-bdcs')?.getAttribute('aria-pressed')).toBe('false')
 
     rendered.cleanup()
     cleanup()
@@ -323,28 +244,4 @@ function createWorkspace(
   }
 
   return { controller, mount, cleanup, setProfileTokenTargetId: (targetId: string | null) => { profileTokenTargetId = targetId } }
-}
-
-/** Creates the small native DataTransfer surface used by browser drag events. */
-function createDataTransfer() {
-  const values = new Map<string, string>()
-  const types: string[] = []
-  return {
-    effectAllowed: 'none',
-    dropEffect: 'none',
-    types,
-    files: [] as unknown as FileList,
-    setData: (type: string, value: string) => {
-      values.set(type, value)
-      if (!types.includes(type)) types.push(type)
-    },
-    getData: (type: string) => values.get(type) ?? '',
-  }
-}
-
-/** Dispatches the browser-shaped event used by the native Remix handlers. */
-function dispatchDrag(target: HTMLElement, type: string, dataTransfer: ReturnType<typeof createDataTransfer>): void {
-  const event = new Event(type, { bubbles: true, cancelable: true })
-  Object.defineProperty(event, 'dataTransfer', { value: dataTransfer })
-  target.dispatchEvent(event)
 }

@@ -150,7 +150,7 @@ export function renderRemixSectionEditor(
           </button>
         </div>
       </div>
-      {renderToolbar(bdc.id, toolbarState, state.session.adapters, handle)}
+    {renderSectionEditorToolbar(bdc.id, toolbarState, state.session.adapters, handle)}
     </div>
     <div
       key={bdc.id}
@@ -208,7 +208,7 @@ export function renderRemixSectionEditor(
 }
 
 /** Renders the Section toolbar with Remix event mixins and Lucide assets. */
-function renderToolbar(
+export function renderSectionEditorToolbar(
   bdcId: string,
   state: SectionToolbarState,
   adapters: Map<string, SectionTiptapAdapter>,

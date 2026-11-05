@@ -34,6 +34,25 @@ d’utilisateurs restent différées. Le détail fonctionnel accepté reste dans
 
 ## Décisions acceptées et formats internes retenus
 
+### Position du Sommaire dans la racine
+
+- Décision acceptée, non implémentée : considérer le Sommaire comme une page
+  racine déplaçable parmi les pages et chapitres de ce niveau. Il n’est plus
+  nécessairement la page de lancement ; son placement dans un chapitre est exclu
+  du périmètre actuel.
+- Écart actuel : la [spécification Sommaire](../specs/summary-profile-spec.md#collecte-et-projection-de-lecture)
+  décrit une entrée fixe en tête et une page 1 imposée. Conserver ce contrat
+  vérifié dans la spécification jusqu’à réalisation et validation du correctif.
+- Action à réaliser : adapter l’ordre documentaire, les commandes et les
+  invariants d’organisation, le déplacement dans l’éditeur et la génération du
+  parcours/départ dans les propriétaires Learning existants. Préserver les accès
+  au Sommaire et la collecte du profil. Ce correctif général est distinct du mod
+  Quiz Hunt ; il ne doit pas être compensé dans ce dernier.
+- Acceptation : placer une page d’accueil avant le Sommaire, déplacer le
+  Sommaire à un autre emplacement racine, vérifier Undo/Redo et la restitution
+  après sauvegarde/réouverture, puis le départ et les accès au Sommaire dans le
+  lecteur réel. Aucun dépôt du Sommaire dans un chapitre.
+
 ### Conservation du profil de preview — implémentée localement le 3 novembre 2026,
 acceptation en attente
 
