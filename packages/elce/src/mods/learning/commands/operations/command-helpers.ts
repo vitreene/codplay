@@ -1,3 +1,4 @@
+import { clearAvatarWordAssociations } from '../../../../resources/bdcs/avatar/domain/avatar-carousel-associations'
 import { BDC_TYPE } from '../../learning-definition'
 import { BDC_LOCATION } from '../../../../core/document/content-location'
 import { insertAt, removeValue, replaceAt } from '../../../../core/document/collection-operations'
@@ -19,10 +20,16 @@ export function withBdc(document: LearningDocument, bdc: LearningBdc): LearningD
 
 /** Removes a BDC from its current collection and applies its new placement. */
 export function placeBdc(document: LearningDocument, bdc: LearningBdc, placement: BdcPlacement): LearningDocument {
+  const changesPage = bdc.pageId !== null && (placement.kind !== BDC_LOCATION.PAGE || placement.pageId !== bdc.pageId)
+  const placedBdcs = changesPage && bdc.type === BDC_TYPE.AVATAR
+    ? clearAvatarWordAssociations(document.bdcs, bdc.id) : document.bdcs
+  const placedBdc = changesPage && bdc.carousel != null
+    ? { ...bdc, carousel: { ...bdc.carousel, cards: bdc.carousel.cards.map((entry) => entry.cue === undefined ? entry : { ...entry, cue: { startAtMs: entry.cue.startAtMs } }) } }
+    : bdc
   const withoutBdc = new LearningDocument({
     ...document.data,
     pages: document.pages.map((page) => ({ ...page, bdcIds: removeValue(page.bdcIds, bdc.id) })),
-    bdcs: document.bdcs.map((candidate) => candidate.type === BDC_TYPE.CAROUSEL && candidate.carousel != null
+    bdcs: placedBdcs.map((candidate) => candidate.type === BDC_TYPE.CAROUSEL && candidate.carousel != null
       ? { ...candidate, carousel: { ...candidate.carousel, cards: candidate.carousel.cards.filter((entry) => entry.bdcId !== bdc.id) } }
       : candidate),
     catalogBdcIds: removeValue(document.data.catalogBdcIds, bdc.id),
@@ -30,7 +37,7 @@ export function placeBdc(document: LearningDocument, bdc: LearningBdc, placement
   switch (placement.kind) {
     case BDC_LOCATION.CATALOG:
       return withBdc(new LearningDocument({ ...withoutBdc.data, catalogBdcIds: [...withoutBdc.data.catalogBdcIds, bdc.id] }), {
-        ...bdc,
+        ...placedBdc,
         pageId: null,
         parentBdcId: null,
       })
@@ -41,7 +48,7 @@ export function placeBdc(document: LearningDocument, bdc: LearningBdc, placement
         { ...page, bdcIds: insertAt(page.bdcIds, bdc.id, placement.index) },
         (candidate) => candidate.id === page.id,
       )
-      return withBdc(new LearningDocument({ ...withoutBdc.data, pages }), { ...bdc, pageId: page.id, parentBdcId: null })
+      return withBdc(new LearningDocument({ ...withoutBdc.data, pages }), { ...placedBdc, pageId: page.id, parentBdcId: null })
     }
     case BDC_LOCATION.PARENT: {
       const parent = findBdc(withoutBdc.bdcs, placement.parentBdcId)
@@ -59,7 +66,7 @@ export function placeBdc(document: LearningDocument, bdc: LearningBdc, placement
         }, placement.index),
       }
       const withParent = withBdc(withoutBdc, { ...parent, carousel })
-      return withBdc(withParent, { ...bdc, pageId: null, parentBdcId: parent.id })
+      return withBdc(withParent, { ...placedBdc, pageId: null, parentBdcId: parent.id })
     }
   }
 }

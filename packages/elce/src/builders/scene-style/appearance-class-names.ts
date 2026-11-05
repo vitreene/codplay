@@ -4,6 +4,7 @@ import type { ResourceBdc, ResourceDocumentData } from '../../resources/document
 import type { ContentPage } from '../../core/document/content-document-types'
 import { CARD_BDC_TYPE, CARD_PRESET_ID } from '../../resources/bdcs/card/card-config'
 import { CAROUSEL_BDC_TYPE } from '../../resources/bdcs/carousel/carousel-config'
+import { AVATAR_BDC_TYPE } from '../../resources/bdcs/avatar/avatar-config'
 import { QUESTION_BDC_TYPE } from '../../resources/bdcs/question/question-config'
 import { SECTION_BDC_TYPE } from '../../resources/bdcs/section/section-config'
 import { STATISTICAL_GRAPH_BDC_TYPE } from '../../resources/bdcs/statistical-graph/statistical-graph-config'
@@ -30,6 +31,7 @@ export type AppearanceSurfaceRole =
   | 'question'
   | 'evaluation-result'
   | 'graph'
+  | 'avatar'
 
 export type AppearanceClassNamesByTarget = Readonly<Record<string, string>>
 export type ResolveAdditionalAppearanceRole = (bdc: ResourceBdc) => AppearanceSurfaceRole | undefined
@@ -163,6 +165,8 @@ function bdcAppearanceRole(
   resolveAdditionalRole?: ResolveAdditionalAppearanceRole,
 ): AppearanceSurfaceRole {
   switch (bdc.type) {
+    case AVATAR_BDC_TYPE:
+      return 'avatar'
     case SECTION_BDC_TYPE:
       return 'section'
     case CARD_BDC_TYPE:

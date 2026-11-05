@@ -7,7 +7,10 @@ import { DIAPO_PAGE_TYPE } from '../../resources/pages/diapo/diapo-config'
 import { FLUX_PAGE_TYPE } from '../../resources/pages/flux/flux-config'
 import { EVALUATION_RESULT_BDC_TYPE, EVALUATION_RESULT_PRESET_ID } from './evaluation/learning-evaluation-config'
 
+import { AVATAR_BDC_TYPE, AVATAR_PRESET_ID } from '../../resources/bdcs/avatar/avatar-config'
+
 export const BDC_TYPE = {
+  AVATAR: AVATAR_BDC_TYPE,
   SECTION: SECTION_BDC_TYPE,
   QUESTION: QUESTION_BDC_TYPE,
   EVALUATION_RESULT: EVALUATION_RESULT_BDC_TYPE,
@@ -22,6 +25,7 @@ export const PAGE_TYPE = {
 } as const
 
 export const DEFAULT_PRESET_ID = {
+  AVATAR: AVATAR_PRESET_ID,
   CAROUSEL: CAROUSEL_PRESET_ID,
   TEXT_IMAGE: CARD_PRESET_ID.TEXT_IMAGE,
   SECTION: SECTION_PRESET_ID,

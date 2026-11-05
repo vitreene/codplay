@@ -13,13 +13,6 @@ import { learningTestStateService } from '../reading/learning-test-state-service
 import { LearningTestStateSession } from './learning-test-state-session'
 import { learningPreviewService } from './learning-preview-service'
 import type { LearningPlayer } from '../reading/learning-player'
-import { authoredTextToPlainText } from '../../../core/document/rich-text-utils'
-import { BDC_TYPE, PAGE_TYPE } from '../learning-definition'
-import {
-  createTemporaryRiveTalkingAvatarPocDemoData,
-  TEMPORARY_RIVE_TALKING_AVATAR_POC_DOCUMENT_ID,
-  TEMPORARY_RIVE_TALKING_AVATAR_POC_PAGE_NAME,
-} from '../../../resources/pages/diapo/rive-talking-avatar-poc/rive-talking-avatar-poc-demo-data'
 
 export interface LearningPreviewSnapshot {
   readonly documentModel: LearningDocument
@@ -211,7 +204,6 @@ export class LearningPreviewSession {
       documentModel: snapshot.documentModel,
       selectedPageId,
       mediaSources: snapshot.mediaSources,
-      temporaryRiveTalkingAvatarByPageId: this.temporaryRiveTalkingAvatarByPageId(snapshot.documentModel, selectedPageId),
       testState: snapshot.testState,
       onTestStateChange: (state) => { void this.updateConsultationState(state) },
       onPageChange: (pageId) => this.handlePageChange(pageId),
@@ -225,27 +217,6 @@ export class LearningPreviewSession {
           this.notify()
         }
       })
-    }
-  }
-
-  /** Limits the file-backed Avatar bridge to the named Diapo in the one POC project. */
-  private temporaryRiveTalkingAvatarByPageId(
-    documentModel: LearningDocument,
-    selectedPageId: PageId | null,
-  ) {
-    if (documentModel.id !== TEMPORARY_RIVE_TALKING_AVATAR_POC_DOCUMENT_ID || selectedPageId === null) return {}
-    const page = documentModel.pages.find((candidate) => candidate.id === selectedPageId)
-    if (page === undefined
-      || page.type !== PAGE_TYPE.DIAPO
-      || authoredTextToPlainText(page.name) !== TEMPORARY_RIVE_TALKING_AVATAR_POC_PAGE_NAME) return {}
-
-    const carousel = documentModel.bdcs.find((bdc) => page.bdcIds.includes(bdc.id) && bdc.type === BDC_TYPE.CAROUSEL)
-    if (carousel?.carousel == null) throw new Error('La Diapo Tête parlante doit contenir un Carousel complet.')
-
-    return {
-      [page.id]: createTemporaryRiveTalkingAvatarPocDemoData(
-        carousel.carousel.cards.map((entry) => entry.bdcId),
-      ),
     }
   }
 

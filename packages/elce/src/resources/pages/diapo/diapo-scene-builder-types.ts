@@ -8,7 +8,6 @@ import type { ElceCardBdcSceneBuilder } from '../../bdcs/card/reading/card-bdc-s
 import type { ElceCarouselSceneBuilder } from '../../bdcs/carousel/reading/carousel-scene-builder'
 import type { BuildAdditionalBdc } from '../additional-bdc-types'
 import type { ResourceInlineTextSceneFeature } from '../../document/resource-inline-text-feature'
-import type { TemporaryRiveTalkingAvatarPocOptions } from './rive-talking-avatar-poc/rive-talking-avatar-poc'
 
 export interface DiapoQuestionReset {
   readonly eventName: string
@@ -24,7 +23,6 @@ export type DiapoSceneBuildOptions = Readonly<{
   readonly carouselSceneBuilder: ElceCarouselSceneBuilder
   readonly inlineTextSceneFeature: ResourceInlineTextSceneFeature
   readonly buildAdditionalBdc?: BuildAdditionalBdc
-  readonly temporaryRiveTalkingAvatarPoc?: TemporaryRiveTalkingAvatarPocOptions
 }>
 
 export interface DiapoSceneBuild {

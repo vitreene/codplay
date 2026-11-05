@@ -47,7 +47,10 @@ export type CreatePageCommandInput = Readonly<{
   placement: PagePlacement
 }>
 
+import type { AvatarCommand } from '../../../resources/bdcs/avatar/authoring/avatar-command-types'
+
 export type LearningDocumentCommand =
+  | AvatarCommand
   | Readonly<{
       type: 'chapter.create'
       chapterId: ChapterId

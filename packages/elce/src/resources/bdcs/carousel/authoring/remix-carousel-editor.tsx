@@ -17,6 +17,7 @@ import { renderAppearanceTrigger } from '../../../../core/authoring/appearance-t
 import { RemixCardEditorFields } from '../../card/authoring/remix-card-editor-fields'
 import { renderRemixStatisticalGraphEditor } from '../../statistical-graph/authoring/remix-statistical-graph-editor'
 import { authoredTextToPlainText } from '../../../../core/document/rich-text-utils'
+import { resolveCarouselCueStarts } from '../../avatar/domain/avatar-carousel-associations'
 
 /** Renders Carousel settings and its ordered illustration BDCs in the Remix runtime. */
 export function RemixCarouselEditor(handle: Handle<ElceCarouselEditorProps>) {
@@ -32,6 +33,32 @@ interface CarouselEditorTransientState {
   readonly beginCardDrag: (bdcId: string) => void
   readonly draggedCardBdcId: () => string | null
   readonly clearDraggedCard: () => void
+}
+
+/** Offers timed word occurrences from the sibling Avatar without copying the transcript. */
+function renderTranscriptAssociation(props: ElceCarouselEditorProps, selected: { readonly entry: ElceCarouselEditorProps['content']['cards'][number]; readonly bdc: ResourceBdc }): RemixNode {
+  const take = props.avatar?.avatar?.take
+  const entries = props.content.cards
+  const index = entries.findIndex((entry) => entry.bdcId === selected.bdc.id)
+  const starts = resolveCarouselCueStarts(props.content)
+  const startAtMs = starts[index] ?? 0
+  const prefix = `elce-carousel-transcript-${selected.bdc.id}`
+  if (take == null && selected.entry.cue === undefined) return null
+  return <div id={prefix}>
+    <p id={`${prefix}-time`}>Début : {(startAtMs / 1000).toFixed(3)} s{index === 0 ? ' · Première carte à zéro' : ''}</p>
+    {take == null ? null : <details id={`${prefix}-details`}>
+      <summary id={`${prefix}-summary`}>Associer à un mot du son</summary>
+      <div id={`${prefix}-words`} style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', padding: '0.75rem' }}>
+        {take.words.map((word, wordIndex) => <button
+          id={`${prefix}-word-${wordIndex}`} type="button"
+          title={`${word.text} · ${(word.startAtMs / 1000).toFixed(3)} s`}
+          aria-pressed={selected.entry.cue?.word?.takeId === take.id && selected.entry.cue.word.wordIndex === wordIndex}
+          disabled={index === 0 || word.startAtMs <= (starts[index - 1] ?? 0) || word.startAtMs >= (starts[index + 1] ?? take.durationMs)}
+          mix={on('click', () => { if (props.avatar !== undefined) props.onAssociateWord?.(selected.bdc.id, props.avatar.id, wordIndex) })}
+        >{word.text} <small id={`${prefix}-word-time-${wordIndex}`}>{(word.startAtMs / 1000).toFixed(3)} s</small></button>)}
+      </div>
+    </details>}
+  </div>
 }
 
 /** Builds settings, view order and the selected child BDC editor from one snapshot. */
@@ -83,6 +110,7 @@ function renderCarouselEditor(props: ElceCarouselEditorProps, state: CarouselEdi
       </div>
     </header>
     {renderCarouselSettings(props)}
+    {selected === undefined ? null : renderTranscriptAssociation(props, selected)}
     <div
       id={`elce-carousel-card-tabs-${bdcId}`}
       className="elce-carousel-editor__views"

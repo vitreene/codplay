@@ -12,7 +12,10 @@ export interface LearningAnchorChange {
   readonly change: ElceSectionChange
 }
 
+import type { AvatarTake } from '../../../resources/bdcs/avatar/domain/avatar-types'
+
 export type LearningDocumentChange =
+  | Readonly<{ kind: 'avatar-take-import'; bdcId: BdcId; file: File; media: MediaMetadata; take: AvatarTake }>
   | Readonly<{ kind: 'anchor'; operation: LearningAnchorChange; historyGroupKey?: string; recordedAt: number; selectionBefore?: SectionSelection; selectionAfter?: SectionSelection }>
   | Readonly<{ kind: 'question-media-import'; bdcId: BdcId; file: File; media: MediaMetadata }>
   | Readonly<{ kind: 'card-media-import'; bdcId: BdcId; file: File; media: MediaMetadata }>

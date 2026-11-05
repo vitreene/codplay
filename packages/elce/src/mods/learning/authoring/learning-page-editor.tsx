@@ -1,6 +1,6 @@
 import { on, type Handle, type RemixNode } from 'remix/component'
 
-import { Activity, BadgeCheck, ClipboardCheck, FileText, Folder, Images, ListChecks, RectangleHorizontal } from 'lucide-static'
+import { UserRound, Activity, BadgeCheck, ClipboardCheck, FileText, Folder, Images, ListChecks, RectangleHorizontal } from 'lucide-static'
 import { BDC_TYPE } from '../learning-definition'
 import { CHAPTER_TYPE_CONFIG } from '../organization/learning-organization-config'
 import { CATALOG_REFERENCE } from '../../../core/catalog/catalog-config'
@@ -26,6 +26,7 @@ import { createAppearanceTargetStyleSheet } from '../../../player/appearance-sce
 import { renderRemixQuestionEditor } from '../../../resources/bdcs/question/authoring/remix-question-editor'
 import { renderRemixEvaluationResultEditor } from './learning-evaluation-result-editor'
 import { renderRemixCardEditor } from '../../../resources/bdcs/card/authoring/remix-card-editor'
+import { RemixAvatarEditor } from '../../../resources/bdcs/avatar/authoring/remix-avatar-editor'
 import { RemixCarouselEditor } from '../../../resources/bdcs/carousel/authoring/remix-carousel-editor'
 import { mediaTypeFromMimeType } from '../../../domain/media/media-resource-service'
 import { renderRemixStatisticalGraphEditor } from '../../../resources/bdcs/statistical-graph/authoring/remix-statistical-graph-editor'
@@ -235,6 +236,7 @@ function renderPageEditor(view: EditorViewModel, actions: LearningEditorFacade, 
     addContentMenu: [
       renderCreateButton('elce-section-create', 'Ajouter un bloc texte', 'Texte', FileText, !availability.canCreateSection, addSection),
       renderCreateButton('elce-question-create', 'Ajouter un bloc quiz', 'Quiz', ListChecks, !availability.canCreateQuestion, addQuestion),
+      renderCreateButton('elce-avatar-create', 'Ajouter un Avatar', 'Avatar', UserRound, !availability.canCreateAvatar, () => { if (page !== undefined && availability.canCreateAvatar) actions.createAvatar(page.id, page.bdcIds.length); state.updateAddContentMenuOpen(false) }),
       renderCreateButton('elce-carousel-create', 'Ajouter un bloc Carousel', 'Carousel', Images, !availability.canCreateCarousel, addCarousel),
       page === undefined ? null : renderCreateButton('elce-card-create', 'Ajouter une carte', 'Carte', RectangleHorizontal, !availability.canCreateStandaloneCard, addStandaloneCard),
       page === undefined ? null : renderCreateButton('elce-statistical-graph-create', 'Ajouter un graphe', 'Graphe', Activity, !availability.canCreateStatisticalGraph, addStatisticalGraph),
@@ -349,6 +351,8 @@ function bdcNavigationPresentation(bdc: LearningBdc): Readonly<{
       return { icon: BadgeCheck, label: 'Résultat' }
     case BDC_TYPE.CAROUSEL:
       return { icon: Images, label: 'Carousel' }
+    case BDC_TYPE.AVATAR:
+      return { icon: UserRound, label: 'Avatar' }
     case BDC_TYPE.CARD:
       return { icon: RectangleHorizontal, label: 'Carte' }
     case BDC_TYPE.STATISTICAL_GRAPH:
@@ -372,6 +376,15 @@ function renderBdcEditor(
     return candidate === undefined ? [] : [candidate]
   })
   switch (bdc.type) {
+    case BDC_TYPE.AVATAR:
+      return bdc.avatar == null ? null : <RemixAvatarEditor
+        bdcId={bdc.id} content={bdc.avatar}
+        audioSource={bdc.avatar.take === null ? undefined : view.mediaSources[bdc.avatar.take.audioMediaId]}
+        onUpdate={(content) => actions.updateAvatar(bdc.id, content)}
+        onImport={(audio, timeline) => actions.importAvatarTake(bdc.id, audio, timeline)}
+        onDelete={() => actions.deleteAvatar(bdc.id)}
+        onOpenAppearanceTarget={state.onOpenAppearanceTarget}
+      />
     case BDC_TYPE.SECTION:
       return renderRemixSectionEditor(bdc, page, state.sectionData.data, actions, {
         session: state.sectionSession,
@@ -433,6 +446,8 @@ function renderBdcEditor(
       return <RemixCarouselEditor
         bdcId={bdc.id}
         content={bdc.carousel}
+        avatar={view.selectedPageBdcs.find((candidate) => candidate.type === BDC_TYPE.AVATAR)}
+        onAssociateWord={(cardBdcId, avatarBdcId, wordIndex) => actions.associateCarouselWord(bdc.id, cardBdcId, avatarBdcId, wordIndex)}
         bdcs={views}
         selectedCardBdcId={view.selectedCarouselCardBdcId}
         mediaById={view.mediaById}
@@ -581,6 +596,9 @@ function dropBdcOnTrash(event: DragEvent, state: PageEditorRenderState): void {
 function deletePageBdc(bdc: LearningBdc, state: PageEditorRenderState): boolean {
   const document = state.current.view.documentModel
   switch (bdc.type) {
+    case BDC_TYPE.AVATAR:
+      state.actions.deleteAvatar(bdc.id)
+      return true
     case BDC_TYPE.SECTION:
       state.actions.deleteSection(bdc.id)
       return true

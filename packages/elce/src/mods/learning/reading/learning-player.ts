@@ -53,10 +53,10 @@ export class LearningPlayer {
     }
     this.document = prepared.document
     this.playbackBySceneKey = Object.fromEntries(
-      Object.entries(options.temporaryRiveTalkingAvatarByPageId ?? {}).map(([pageId, playback]) => [
-        `scene-${pageId}`,
-        { autoStart: playback.autoStart ?? true },
-      ]),
+      prepared.document.pages.flatMap((page) => {
+        const avatar = prepared.document.bdcs.find((bdc) => page.bdcIds.includes(bdc.id) && bdc.avatar?.take != null)?.avatar
+        return avatar == null ? [] : [[`scene-${page.id}`, { autoStart: avatar.autoStart }]]
+      }),
     )
     this.appearanceThemeCssLinks = loadAppearanceThemeCssLinks(
       options.stage.ownerDocument,
@@ -194,7 +194,6 @@ function createLearningPlayerScenarioModel(
     document,
     options.mediaSources,
     options.sceneCache,
-    options.temporaryRiveTalkingAvatarByPageId,
   )
   const scenario = learningScenarioBuilder.build(document, pageSceneCatalog.scenes, selectedPageId, {
     testState,

@@ -247,6 +247,8 @@ function catalogMediaLabel(mediaType: ElceCatalogMediaEntry['mediaType']): strin
   switch (mediaType) {
     case MEDIA_TYPE.IMAGE:
       return 'image'
+    case MEDIA_TYPE.AUDIO:
+      return 'Son'
     case MEDIA_TYPE.VIDEO:
       return 'vidéo'
   }

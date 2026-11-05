@@ -1,3 +1,4 @@
+import { projectCarouselCues } from '../../avatar/domain/avatar-carousel-associations'
 import { CAROUSEL_CONFIG } from '../carousel-config'
 import { CAROUSEL_TRANSITION_OPTIONS } from '../../../revelation/revelation-config'
 import { ELCE_EDITOR_SETTINGS } from '../../../../config/editor-settings'
@@ -92,6 +93,7 @@ export class ElceCarouselService {
 
   /** Validates Carousel settings and unique ordered child BDC relationships. */
   public assertValid(content: CarouselContent): void {
+    projectCarouselCues(content)
     if (content.cards.length === 0) throw new Error('Un BDC Carousel doit contenir au moins une vue.')
     if (!Number.isFinite(content.defaultViewDurationMs) || content.defaultViewDurationMs <= 0) {
       throw new Error('La durée par défaut d’une vue Carousel doit être positive.')

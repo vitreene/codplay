@@ -14,7 +14,6 @@ import { createLearningSceneBuilders } from './learning-scene-builders'
 import { createLearningAdditionalBdcBuilder } from '../evaluation/reading/learning-additional-bdc-builder'
 import type { LearningPlayerOptions } from './learning-player-types'
 import { withPageMediaStop } from '../../../core/reading/media-playback/page-media-playback'
-import type { TemporaryRiveTalkingAvatarPocOptions } from '../../../resources/pages/diapo/rive-talking-avatar-poc/rive-talking-avatar-poc'
 
 const editorSettingsResolver = new ElceEditorSettingsResolver()
 
@@ -24,7 +23,6 @@ export class LearningPageSceneCatalog {
     document: LearningDocument,
     mediaSources: LearningPlayerOptions['mediaSources'],
     cache?: PageSceneCache,
-    temporaryRiveTalkingAvatarByPageId: LearningPlayerOptions['temporaryRiveTalkingAvatarByPageId'] = {},
   ): Readonly<{ scenes: Readonly<Record<string, SightySceneSourceValue>> }> {
   const sceneBuilders = createLearningSceneBuilders()
   const pageIds = scenarioPageIds(document)
@@ -45,6 +43,8 @@ export class LearningPageSceneCatalog {
     const sceneBdcs = pageBdcs.flatMap((bdc) => bdc === undefined ? [] : [bdc]).concat(childBdcs)
     const mediaIds = new Set(sceneBdcs.flatMap((bdc) => {
       switch (bdc.type) {
+        case BDC_TYPE.AVATAR:
+          return bdc.avatar?.take == null ? [] : [bdc.avatar.take.audioMediaId]
         case BDC_TYPE.CARD:
           return bdc.card?.mediaId == null ? [] : [bdc.card.mediaId]
         case BDC_TYPE.QUESTION:
@@ -63,7 +63,6 @@ export class LearningPageSceneCatalog {
       const type = mediaTypeFromMimeType(media.mimeType)
       return type === null ? [] : [[mediaId, type]]
     }))
-    const temporaryRiveTalkingAvatarPoc = temporaryRiveTalkingAvatarByPageId[pageId]
     const editorSettings = editorSettingsResolver.resolvePage(page, document.bdcs, document.data.revelationDefaults)
     const scenePage = {
       id: page.id,
@@ -79,7 +78,6 @@ export class LearningPageSceneCatalog {
       pageMediaSources,
       pageMediaTypes,
       editorSettings,
-      temporaryRiveTalkingAvatarPoc,
     ])
     const cached = cache?.get(pageId)
     if (cached?.signature === signature) {
@@ -103,7 +101,7 @@ export class LearningPageSceneCatalog {
         appearanceClassNamesByTarget,
         sceneBuilders.inlineTextSceneFeature,
       ),
-    }, temporaryRiveTalkingAvatarPoc)
+    })
     const questionReset = scene.questionReset
     const sceneDoc = withPageMediaStop(scene.sceneDoc)
     const styleSheets = [...scene.styleSheets]
@@ -125,16 +123,12 @@ function buildPageScene(
   page: LearningDocument['pages'][number],
   bdcs: LearningDocument['bdcs'],
   options: FluxSceneBuildOptions,
-  temporaryRiveTalkingAvatarPoc?: TemporaryRiveTalkingAvatarPocOptions,
 ) {
   switch (page.type) {
     case PAGE_TYPE.FLUX:
       return buildFluxScene(page, bdcs, options)
     case PAGE_TYPE.DIAPO:
-      return buildDiapoScene(page, bdcs, {
-        ...options,
-        ...(temporaryRiveTalkingAvatarPoc === undefined ? {} : { temporaryRiveTalkingAvatarPoc }),
-      })
+      return buildDiapoScene(page, bdcs, options)
   }
 }
 

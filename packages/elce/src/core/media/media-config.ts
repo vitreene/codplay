@@ -9,6 +9,7 @@ export type MediaType = typeof MEDIA_TYPE[keyof typeof MEDIA_TYPE]
 export const MEDIA_MIME_PREFIX = {
   IMAGE: 'image/',
   VIDEO: 'video/',
+  AUDIO: 'audio/',
 } as const
 
 export const MEDIA_FILE_EXTENSIONS = {

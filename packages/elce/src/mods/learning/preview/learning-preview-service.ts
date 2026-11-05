@@ -5,14 +5,12 @@ import { learningDocumentService } from '../document/learning-document-service'
 import { learningReaderProjectionService } from '../profile/reading/learning-reader-projection-service'
 import type { ProjectTestState } from '../reading/learning-test-state-types'
 import { LearningPlayer } from '../reading/learning-player'
-import type { TemporaryRiveTalkingAvatarPocOptions } from '../../../resources/pages/diapo/rive-talking-avatar-poc/rive-talking-avatar-poc'
 
 /** Describes the Learning content passed to its shared Sighty/CodPlay player. */
 export interface LearningPreviewPlayerOptions {
   readonly documentModel: LearningDocument
   readonly selectedPageId: PageId | null
   readonly mediaSources: Readonly<Record<MediaId, string>>
-  readonly temporaryRiveTalkingAvatarByPageId?: Readonly<Record<PageId, TemporaryRiveTalkingAvatarPocOptions>>
   readonly sceneCache?: PageSceneCache
   readonly testState?: ProjectTestState
   readonly onTestStateChange?: (state: ProjectTestState) => void
@@ -58,9 +56,6 @@ export class LearningPreviewService {
       onTestStateChange: props.onTestStateChange,
       onPageChange: props.onPageChange,
       mediaSources: props.mediaSources,
-      ...(props.temporaryRiveTalkingAvatarByPageId === undefined
-        ? {}
-        : { temporaryRiveTalkingAvatarByPageId: props.temporaryRiveTalkingAvatarByPageId }),
       sceneCache: props.sceneCache,
       onLog: (message, level) => {
         if (level === 'error') console.error(`[Elcé] ${message}`)

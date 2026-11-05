@@ -93,6 +93,12 @@ le montage, l’audio master, les changements de carte en Play et le Seek à
 suspend la voix ; le retour conserve un seul audio et un seul canvas.
 Les mesures figurent dans le
 [relevé navigateur](../notes/assets/talking-head/elce-project-3-acceptance.json).
+La ressource Rive du POC est
+`src/assets/avatars/my-matt-visemes.riv`, servie par Remix sous
+`/assets/elce/assets/avatars/my-matt-visemes.riv` et copiée par Vite dans
+`dist/avatars/`. La version fournie le 5 novembre conserve le profil existant
+et rend un fond transparent. Son empreinte et les contrôles navigateur
+Play/Pause/Seek sont dans le même relevé.
 La télécommande extérieure à la Diapo et le démarrage manuel du POC sont
 décrits dans la [spécification preview](./player-preview-spec.md#télécommande-de-la-diapo-narrée-de-démonstration).
 La composition déclare `sequence:end` à la durée vocale ; sa règle `listen`

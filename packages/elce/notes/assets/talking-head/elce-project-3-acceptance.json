@@ -331,5 +331,30 @@
       "build": "passed; existing chunk size warning",
       "transportLogicChanged": false
     }
+  },
+  "avatarResourceReplacement": {
+    "date": "2026-11-05",
+    "userFile": "packages/elce/dist/avatars/my-matt-visemes.riv",
+    "canonicalSource": "packages/elce/src/assets/avatars/my-matt-visemes.riv",
+    "servedPath": "/assets/elce/assets/avatars/my-matt-visemes.riv",
+    "sizeBytes": 84538,
+    "sha256": "5b475e49eae9fcd63e759c75c4d1866d74c75b0d367240fd0236e009894c5e4a",
+    "sourceAndUserFileIdentical": true,
+    "browserResponseStatus": 200,
+    "browserSha256Matches": true,
+    "profileChanged": false,
+    "runtimeCodeChanged": false,
+    "playAndPause": {
+      "audioTimeSeconds": 9.08878482237295,
+      "canvasWidth": 420,
+      "canvasHeight": 500,
+      "transparentPixels": 173790,
+      "paintedPixels": 36210,
+      "cornerAlpha": 0
+    },
+    "seek7500": "verified through the actual navigation remote",
+    "browserWarningsAndErrors": [],
+    "distUserBackupPreserved": "packages/elce/dist/avatars/x--my-matt-visemes.riv",
+    "buildNotRun": "Asset copied to the existing Vite publicDir; preserve user-owned files currently in dist."
   }
 }

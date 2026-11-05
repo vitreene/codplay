@@ -50,6 +50,48 @@ afficher/masquer le transcript et contrôler le son sont aussi des évolutions.
 Ces extensions orientent les frontières de données sans engager leur réalisation
 dans le POC.
 
+## Intégration auteur proposée — 5 novembre 2026
+
+L’utilisateur propose un BDC Avatar comme point d’entrée vers la captation
+sonore et les réglages de placement. Le Carousel détecte l’Avatar et propose
+alors le transcript pour associer le début d’une carte à un mot horodaté.
+Le cadrage est ouvert au lot 4 ; les comportements ci-dessous sont des
+propositions d’interaction, sans modification des spécifications vérifiées.
+
+Le BDC Avatar pourrait référencer une prise validée contenant l’audio final,
+les occurrences de mots et les visèmes, et porter les réglages de son
+apparition : position, taille et choix de lecture. La captation reste un
+module réutilisable ouvert depuis cet éditeur. L’association des cartes
+consulterait la prise de l’Avatar de la même Diapo ; le Carousel ne posséderait
+pas une copie de son transcript ni un deuxième lecteur de voix.
+
+Dans chaque vue, une commande « Synchroniser avec la voix » ouvrirait le
+transcript. Choisir une occurrence fournirait son début horodaté ; la première
+carte resterait à zéro. L’occurrence dans une prise identifiée permettrait de
+distinguer les mots identiques. Retirer l’Avatar ou remplacer sa prise ne
+conserve pas le lien aux occurrences : l’utilisateur a choisi de supprimer
+ces associations tout en gardant leurs temps de déclenchement. L’association
+et le temps doivent donc rester distincts ; un nouveau transcript ne récupère
+pas automatiquement les liens précédents. L’ordre temporel des cartes doit
+rester vérifiable après leur réorganisation.
+
+Le placement retenu par l’utilisateur est un BDC Avatar de page, à côté du
+Carousel, sans relation parent/enfant entre ces deux BDC. Il maintient la
+séparation entre le réglage de la
+narration et les contenus synchronisés, et permet de conserver un Avatar
+lorsqu’on remplace le contenu principal. Elle demande toutefois une évolution
+explicite du contrat documentaire : une Diapo est aujourd’hui limitée à un
+seul BDC direct. La cardinalité proposée pour cette tranche est un Avatar par
+Diapo ; cette limite reste distincte du placement accepté. Le BDC doit conserver
+son emplacement unique et les circuits de commandes/historique existants.
+
+Le découpage convenu est conservé : éditeur sur fichiers fournis au lot 4,
+puis captation micro/caméra, conversion après saisie et réécoute au lot 5.
+L’accès à la captation décrit le parcours cible du BDC Avatar ; il ne déplace
+pas cette réalisation dans le lot 4. L’audio, Rive et les données de prise doivent
+rejoindre les frontières média et documentaire existantes, après décision de
+leur admission et de leur stockage.
+
 ## Références et observations
 
 - [Présentation Contra](https://contra.com/p/vgBqssvc-viseme-tester-a-free-lip-sync-tool-for-rive-characters).

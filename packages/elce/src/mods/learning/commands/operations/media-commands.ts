@@ -24,7 +24,7 @@ export function attachCardMedia(document: LearningDocument, bdcId: BdcId, media:
 /** Validates Card media references independently of which layout projects them. */
 export function assertCardMediaAllowed(document: LearningDocument, mediaId: MediaId): void {
   const media = document.medias.find((candidate) => candidate.id === mediaId)
-  if (media === undefined || mediaTypeFromMimeType(media.mimeType) === null) {
+  if (media === undefined || (mediaTypeFromMimeType(media.mimeType) === null || mediaTypeFromMimeType(media.mimeType) === MEDIA_TYPE.AUDIO)) {
     fail(`Le média ${mediaId} ne peut pas être rattaché à une Carte.`)
   }
 }
@@ -70,7 +70,7 @@ export function attachSummaryBackgroundMedia(document: LearningDocument, media: 
 export function assertQuestionMediaAllowed(document: LearningDocument, mediaId: MediaId): void {
   const media = document.medias.find((candidate) => candidate.id === mediaId)
   if (media === undefined) fail(`Le média ${mediaId} ne peut pas illustrer une Question.`)
-  if (mediaTypeFromMimeType(media.mimeType) === null) fail(`Le média ${mediaId} ne peut pas illustrer une Question.`)
+  if ((mediaTypeFromMimeType(media.mimeType) === null || mediaTypeFromMimeType(media.mimeType) === MEDIA_TYPE.AUDIO)) fail(`Le média ${mediaId} ne peut pas illustrer une Question.`)
 }
 
 /** Rebinds each BDC from duplicate media records to one canonical record. */
@@ -126,6 +126,9 @@ export function mergeMedia(
     ...document.data,
     bdcs: document.bdcs.map((bdc) => {
       switch (bdc.type) {
+        case BDC_TYPE.AVATAR:
+          return bdc.avatar?.take != null && duplicateIds.has(bdc.avatar.take.audioMediaId)
+            ? { ...bdc, avatar: { ...bdc.avatar, take: { ...bdc.avatar.take, audioMediaId: canonicalMediaId } } } : bdc
         case BDC_TYPE.CARD:
           return bdc.card != null && duplicateIds.has(bdc.card.mediaId ?? '')
             ? { ...bdc, card: { ...bdc.card, mediaId: canonicalMediaId } }

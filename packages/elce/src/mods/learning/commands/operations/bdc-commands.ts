@@ -1,3 +1,5 @@
+import { clearAvatarWordAssociations } from '../../../../resources/bdcs/avatar/domain/avatar-carousel-associations'
+import { createDefaultAvatar } from '../../../../resources/bdcs/avatar/domain/avatar-service'
 import { BDC_TYPE, DEFAULT_PRESET_ID, PAGE_TYPE } from '../../learning-definition'
 import { CARD_LAYOUT_IDS } from '../../../../resources/bdcs/card/card-config'
 import { CAROUSEL_CONFIG } from '../../../../resources/bdcs/carousel/carousel-config'
@@ -86,7 +88,7 @@ export function deleteBdc(document: LearningDocument, bdcId: BdcId): LearningDoc
   return new LearningDocument({
     ...documentWithoutChildren.data,
     pages: documentWithoutChildren.pages.map((page) => ({ ...page, bdcIds: removeValue(page.bdcIds, bdc.id) })),
-    bdcs: documentWithoutChildren.bdcs
+    bdcs: clearAvatarWordAssociations(documentWithoutChildren.bdcs, bdc.id)
       .filter((candidate) => candidate.id !== bdc.id)
       .map((candidate) => candidate.type === BDC_TYPE.CAROUSEL && candidate.carousel != null
         ? { ...candidate, carousel: { ...candidate.carousel, cards: candidate.carousel.cards.filter((entry) => entry.bdcId !== bdc.id) } }
@@ -125,6 +127,7 @@ export function createBdc(
   if (command.placement.kind === BDC_LOCATION.PAGE) {
     const page = findPage(document.pages, command.placement.pageId)
     if (page.type === PAGE_TYPE.DIAPO
+      && command.bdcType !== BDC_TYPE.AVATAR
       && command.bdcType !== BDC_TYPE.CAROUSEL
       && command.bdcType !== BDC_TYPE.QUESTION
       && command.bdcType !== BDC_TYPE.CARD
@@ -218,6 +221,7 @@ export function createBdc(
     presetId: command.presetId,
     pageId: null,
     parentBdcId: null,
+    ...(command.bdcType === BDC_TYPE.AVATAR ? { avatar: createDefaultAvatar() } : {}),
     section: sectionForBdc(command.bdcType, command.bdcId),
     question: questionForBdc(command.bdcType, resources),
     evaluationResult: evaluationResultForBdc(command.bdcType, resources),

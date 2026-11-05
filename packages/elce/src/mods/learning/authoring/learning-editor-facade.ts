@@ -1,3 +1,7 @@
+import { AVATAR_BDC_TYPE, AVATAR_PRESET_ID } from '../../../resources/bdcs/avatar/avatar-config'
+import { parseAvatarTimeline } from '../../../resources/bdcs/avatar/domain/avatar-service'
+import { readAvatarAudioDuration } from '../../../resources/bdcs/avatar/authoring/avatar-audio-duration'
+import type { AvatarContent } from '../../../resources/bdcs/avatar/domain/avatar-types'
 import type { Actor } from 'xstate'
 import { CHAPTER_TYPE } from '../organization/learning-organization-config'
 import { PAGE_TYPE } from '../learning-definition'
@@ -158,6 +162,35 @@ export class LearningEditorFacade {
   /** Permanently deletes an unused BDC from the catalogue. */
   public deleteCatalogBdc(bdcId: BdcId): void {
     this.apply({ type: 'bdc.delete', bdcId })
+  }
+
+  /** Creates the page's one sibling Avatar through the existing command queue. */
+  public createAvatar(pageId: PageId, index: number): void {
+    this.apply({ type: 'bdc.create', bdcId: createStableId('bdc-avatar'), bdcType: AVATAR_BDC_TYPE, presetId: AVATAR_PRESET_ID, placement: { kind: BDC_LOCATION.PAGE, pageId, index } })
+  }
+
+  /** Updates placement and playback settings without changing the current take. */
+  public updateAvatar(bdcId: BdcId, avatar: AvatarContent): void {
+    this.apply({ type: 'bdc.avatar.update', bdcId, avatar })
+  }
+
+  /** Deletes the Avatar and its word links while retaining the Carousel times. */
+  public deleteAvatar(bdcId: BdcId): void {
+    this.apply({ type: 'bdc.avatar.delete', bdcId })
+  }
+
+  /** Reads local take files and submits their audio to the common persisted import circuit. */
+  public async importAvatarTake(bdcId: BdcId, audio: File, timeline: File): Promise<void> {
+    const imported = this.mediaResourceService.createImport(audio)
+    if (imported === null || !imported.media.mimeType.startsWith('audio/')) throw new Error('Choisissez un fichier audio.')
+    const durationMs = await readAvatarAudioDuration(audio)
+    const take = parseAvatarTimeline(JSON.parse(await timeline.text()), { id: createStableId('take'), audioMediaId: imported.media.id, durationMs })
+    this.controller.send({ type: 'avatar.take.file.import', bdcId, file: audio, media: imported.media, take })
+  }
+
+  /** Reassociates one view with a specific occurrence of the current voice transcript. */
+  public associateCarouselWord(bdcId: BdcId, cardBdcId: BdcId, avatarBdcId: BdcId, wordIndex: number): void {
+    this.apply({ type: 'bdc.carousel.word.set', bdcId, cardBdcId, avatarBdcId, wordIndex })
   }
 
   /** Creates a Section BDC at the requested page position. */

@@ -31,6 +31,15 @@
 - Ask the user questions when implementation certainty is below 95%.
 - Before any analysis or modification, reread the applicable specifications and contracts in the repository; do not rely on conversation summaries or assumptions.
 - For every browser validation or other MCP-backed task, inspect both the local MCP server configuration and the complete live tool inventory offered by the current session before starting. Compare configured servers with the tools actually exposed here and review their names and descriptions; do not decide availability from a name-only search for `browser` or `Safari`. Use only the exposed tools, and never infer availability from installed applications, previous sessions, or another machine. If a configured server has no callable tools in this session, report that work as pending instead of launching a different local application or treating it as equivalent.
+- During browser validation, bring the configured, already connected browser
+  to the foreground and select the intended tab yourself. Do not ask the user
+  to focus Safari or make Elcé visible. When Safari Technology Preview is the
+  verified connected browser, activate it with
+  `osascript -e 'tell application "/Applications/Safari Technology Preview.app" to activate'`
+  (using the required execution permission when sandboxed), select its tab
+  through Safari MCP, and verify `document.visibilityState` and
+  `document.hasFocus()` before editing. Preserve the application's normal
+  focus and edit-access rules; never simulate visibility or bypass its locks.
 - Do not add a rule to a specification merely to record this working instruction or to compensate for not having reread it. Update specifications only for behavior that has been implemented and verified; keep decisions that are open or agreed but unapplied in the active plan.
 - Respect established specs strictly. Do not patch behavior opportunistically when the implementation diverges from the spec.
 - If a gap, ambiguity, or design failure is discovered, stop and discuss how to enrich or correct the spec before changing the implementation.

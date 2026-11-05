@@ -37,6 +37,8 @@ export class LearningDocumentChangeService {
           selectionBefore: event.selectionBefore,
           selectionAfter: event.selectionAfter,
         }
+      case 'avatar.take.file.import':
+        return { kind: 'avatar-take-import', bdcId: event.bdcId, file: event.file, media: event.media, take: event.take }
       case 'question.media.file.import':
         return { kind: 'question-media-import', bdcId: event.bdcId, file: event.file, media: event.media }
       case 'card.media.file.import':
@@ -83,7 +85,8 @@ export class LearningDocumentChangeService {
     }
     if (operation.kind !== 'question-media-import'
       && operation.kind !== 'card-media-import'
-      && operation.kind !== 'summary-media-import') {
+      && operation.kind !== 'summary-media-import'
+      && operation.kind !== 'avatar-take-import') {
       return { operation, mediaCreated: false, mediaSource: null }
     }
     if (operation.kind === 'summary-media-import'
@@ -113,6 +116,8 @@ export class LearningDocumentChangeService {
         return learningDocumentService.createDefaultPageCommand(document, operation.placement, operation.name, operation.pageType)
       case 'anchor':
         return this.anchorDropService.createDocumentCommand(operation.operation.sectionBdcId, operation.operation.change)
+      case 'avatar-take-import':
+        return { type: 'bdc.avatar.take.set', bdcId: operation.bdcId, take: { ...operation.take, audioMediaId: operation.media.id }, ...(mediaCreated ? { media: operation.media } : {}) }
       case 'question-media-import':
         return mediaCreated
           ? { type: 'bdc.question.media.attach', bdcId: operation.bdcId, media: operation.media }
@@ -138,7 +143,8 @@ export class LearningDocumentChangeService {
 
   /** Checks the immutable change kind without requiring a session instance. */
   public static isImportChange(change: LearningDocumentChange | undefined): boolean {
-    return change?.kind === 'card-media-import'
+    return change?.kind === 'avatar-take-import'
+      || change?.kind === 'card-media-import'
       || change?.kind === 'question-media-import'
       || change?.kind === 'summary-media-import'
       || (change?.kind === 'anchor' && change.operation.change.kind === 'file-drop')
@@ -182,6 +188,7 @@ export class LearningDocumentChangeService {
           }),
         }
       case 'question-media-import':
+      case 'avatar-take-import':
       case 'card-media-import':
       case 'summary-media-import':
         return { kind: 'commit', groupKey: null, recordHistory: true, recordedAt: Date.now(), selectCreatedPage: false }

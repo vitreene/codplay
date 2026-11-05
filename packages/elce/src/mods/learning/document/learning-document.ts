@@ -3,7 +3,7 @@ import type { LearningBdc, LearningChapter, LearningDocumentData, LearningPage, 
 import { authoredTextToPlainText } from '../../../core/document/rich-text-utils'
 import { isRichTextDocument, parseInlineTextTokens } from '../inline-text/learning-inline-text-value'
 
-export const ELCE_DOCUMENT_VERSION = 10 as const
+export const ELCE_DOCUMENT_VERSION = 11 as const
 
 /** Owns the serializable Learning document value and its versioned codec. */
 export class LearningDocument {
@@ -55,7 +55,7 @@ export class LearningDocument {
 
   /** Rehydrates legacy document versions and supplies Card transition defaults. */
   public static fromJSON(value: unknown): LearningDocument {
-    if (!isRecord(value) || (value.version !== 7 && value.version !== 8 && value.version !== 9 && value.version !== ELCE_DOCUMENT_VERSION)) {
+    if (!isRecord(value) || (value.version !== 7 && value.version !== 8 && value.version !== 9 && value.version !== 10 && value.version !== ELCE_DOCUMENT_VERSION)) {
       const version = isRecord(value) ? value.version : undefined
       throw new Error(`Version de document Elcé non supportée : ${String(version)}`)
     }
@@ -65,7 +65,7 @@ export class LearningDocument {
         ? migrateV9Document(migrateV8Document(value))
         : value.version === 9
           ? migrateV9Document(value)
-          : value as unknown as LearningDocumentData
+          : { ...value, version: ELCE_DOCUMENT_VERSION } as unknown as LearningDocumentData
     return new LearningDocument(normalizeQuestionAnswerLabels(data))
   }
 }
