@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { CodPlay, type SceneDoc } from 'codplay'
 import { RIVE_COMPONENTS } from '../src/rive'
-import { registerRiveResource } from '../src/rive/rive-preload'
+import { registerRiveResource } from '../src/rive/core/rive-preload'
 import { createViewModelFixture } from './rive/view-model-fixture'
 
 /** Declares independent narrative commands, including a runtime event on its story. */

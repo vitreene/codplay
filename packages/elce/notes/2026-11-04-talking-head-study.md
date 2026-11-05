@@ -151,6 +151,32 @@ de propriétés et `StateMachineInstance.bindViewModelInstance` dans
 Le fichier charge et le binding fonctionne avec cette version. Aucune mise à
 jour de Rive n’est donc démontrée nécessaire pour ce périmètre.
 
+### Runtime ESM pour Remix
+
+Le build Remix refusait `@rive-app/canvas/rive.js` parce que le paquet
+`@rive-app/canvas@2.38.3` expose ce point d’entrée CommonJS, sans runtime ESM.
+L’option `scripts.external` de Remix conserve un import dans l’import map ; elle
+ne convertit pas son format. L’API avancée bas niveau convenant déjà au host
+CodPlay, le composant V2 emploie maintenant
+`@rive-app/canvas-advanced-single@2.38.3` : son point d’entrée est
+`canvas_advanced_single.mjs`, son initialiseur par défaut fournit le runtime,
+et le module embarque son WASM. Le fichier installé mesure 2 703 300 octets.
+Seul `@codplay/component-v2` change de dépendance ; le composant historique
+dans `packages/authoring/components/rive` reste inchangé.
+
+Safari a chargé `rive-preload.ts` depuis l’asset server Remix et initialisé le
+runtime (`load` et `makeRenderer` disponibles). La démo CodPlay V2 a servi le
+même module et le fichier Matt réel ; sa telco a basculé en lecture puis en
+pause et retour au début. Le test du projet `Projet 2` dans Elcé n’exerce pas
+encore cette story : la page lisible Page A est un flux avec Carousel et la
+Diapo Page B est vide. L’aperçu standard ne transmet pas l’option temporaire
+`temporaryRiveTalkingAvatarByPageId`. Ce raccord reste dans le plan.
+
+Sources : [Remix — Assets](https://docs.remix.run/assets/),
+[paquet canvas](https://github.com/rive-app/rive-wasm/blob/master/js/npm/canvas/package.json),
+[paquet canvas-advanced-single](https://github.com/rive-app/rive-wasm/blob/master/js/npm/canvas_advanced_single/package.json),
+[API bas niveau](https://github.com/rive-app/rive-wasm/blob/master/js/src/rive_advanced.mjs.d.ts).
+
 L’[API Rive documentée](https://rive.app/docs/runtimes/web/data-binding)
 sépare la définition du ViewModel de ses instances, recommande le binding sur
 la state machine lorsqu’elle existe et précise que les valeurs liées sont
@@ -265,6 +291,60 @@ cette admission. La constante `AUDIO` ne constitue pas une chaîne audio déjà
 opérationnelle. Audio, `.riv` et données de pistes nécessitent donc une décision
 d’admission et de stockage dans le circuit existant ; aucun dépôt parallèle
 ne doit compenser ce manque.
+
+## Reprise du Projet 3 — 5 novembre 2026
+
+Le serveur confirme le Projet 3 à la révision 2 avec sa Diapo « Tête parlante —
+Interstellar » et quatre Cartes. La preview standard sur 5175 monte le rig et
+lit le MP3 ; les cartes suivent l’horloge master. Les commandes de diagnostic
+appellent la telco de l’instance déjà montée par cette preview. Elles ne
+construisent pas une composition de remplacement. Le Seek à 7,5 s présente la
+deuxième carte avec l’audio à 7,5 s ; le retour à 1 s présente la première,
+puis Pause conserve le temps et le canvas pendant 1,2 s. La sortie vers Page A
+suspend l’ancien audio ; le retour réutilise son nœud, avec un seul canvas.
+Le placement flottant actuel recouvre du texte ; son acceptation responsive
+reste ouverte.
+
+Le test builder narré passe, mais ne prouve que la présence déclarative de
+`elce:page:finished` à 14 446 ms. En Play réel, le temps franchit cette date
+sans notification publique et `finishedPages` reste vide. Une reproduction
+CodPlay distincte, sans Elcé, Rive ou média, confirme la frontière :
+
+- un `eventimes` auteur `test:compiled` à 100 ms, `visibility: 'public'`,
+  applique bien l’action `content: 'compiled-reached'`, sans notification ;
+- un événement `test:scheduled` à 150 ms injecté par `instance.events.emit`
+  avec la même visibilité applique son action et publie sa notification ;
+- à 349 ms, les deux actions sont projetées et seule la notification
+  `test:scheduled` est reçue.
+
+Cette comparaison n’établit pas un besoin de modifier CodPlay. La déclaration
+Elcé utilisait une occurrence métier compilée au lieu du circuit de fin déjà
+disponible. Après la précision de l’utilisateur, la correction reste dans
+Elcé : `sequence:end` à 14 446 ms et une règle `listen.emit` publient
+`elce:page:finished` avec `{ pageId }`. La fin terminale et le signal métier
+gardent leurs rôles distincts ; le handler Sighty existant traite la fin de
+page. La proposition d’étendre le moteur et son ajout au plan Player ont été
+retirés. Aucune modification d’implémentation de CodPlay n’est nécessaire.
+
+La preview réelle du Projet 3 vérifie ce raccord : un Seek à 14 446 ms ne
+publie rien et ne termine pas la séquence ; une lecture depuis 13 500 ms
+publie une seule fin métier à 14 446 ms, suspend la voix et marque la page
+terminée sans navigation. Un reset suivi de la lecture complète republie une
+seule fin à la même date. Le build Elcé passe et les suites ciblées conservent
+68 succès sur 70, avec les deux échecs déjà relevés avant cette correction.
+Le typecheck signale indépendamment une variable `title` inutilisée dans le
+builder Graphe ; elle n’est pas modifiée dans ce travail.
+
+Le serveur Remix sert le MP3 avec `Content-Type: audio/mpeg`, sans
+`Content-Length` dans la réponse HEAD observée. Safari annonce `duration =
+Infinity` et ne signale pas `ended` dans ce parcours. Ce constat média reste
+à qualifier séparément ; la reproduction sans audio démontre qu’il n’explique
+pas à lui seul la publication manquante.
+
+Le [relevé](./assets/talking-head/elce-project-3-acceptance.json) conserve
+les mesures, la reproduction et les deux échecs de tests avant modification
+de cette reprise. Les actions restantes sont dans le
+[plan](../plan/2026-11-04-talking-head-plan.md#g3--publication-de-la-fin-vocale).
 
 ## Évaluation préliminaire du local
 

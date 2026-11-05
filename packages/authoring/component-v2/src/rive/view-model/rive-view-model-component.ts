@@ -4,9 +4,9 @@ import type {
   RiveArtboard,
   RiveDocumentTarget,
   RiveViewModelInstance,
-} from '../rive-context'
-import { RiveStateMachineComponent } from '../rive-state-machine-component'
-import type { RiveInputValues, RiveViewModelInitial } from '../rive-types'
+} from '../core/rive-context'
+import { RiveStateMachineComponent } from '../state-machine/rive-state-machine-component'
+import type { RiveInputValues, RiveViewModelInitial } from '../core/rive-types'
 import { resolveRiveViewModelTransition } from './rive-view-model-transition'
 
 type PropertyBinding =

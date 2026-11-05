@@ -11,7 +11,7 @@ import {
   type RiveFile,
   type RiveRuntime,
 } from '../src'
-import { registerRiveResource } from '../src/rive/rive-preload'
+import { registerRiveResource } from '../src/rive/core/rive-preload'
 
 function emptyServices(): ComponentServices {
   return {

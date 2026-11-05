@@ -29,6 +29,8 @@
     "@codplay/capsule-automation": "*",
     "@codplay/component-v2": "*",
     "@codplay/scene-factory": "*",
+    "@codplay/story": "*",
+    "@codplay/remote": "*",
     "@codplay/sighty": "*",
     "@codplay/sighty-scorm": "*",
     "@tiptap/core": "^3.31.4",

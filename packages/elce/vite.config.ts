@@ -16,6 +16,8 @@ export default defineConfig({
       { find: '@codplay/exclusive-sync', replacement: resolve(__dirname, '../authoring/exclusive-sync/src/index.ts') },
       { find: '@codplay/scene-factory/capsule-distribution', replacement: resolve(__dirname, '../authoring/scene-factory/src/capsule-distribution.ts') },
       { find: '@codplay/scene-factory/capsule-preset', replacement: resolve(__dirname, '../authoring/scene-factory/src/capsule-preset.ts') },
+      { find: '@codplay/story/rive-talking-avatar', replacement: resolve(__dirname, '../authoring/story/rive-talking-avatar/index.ts') },
+      { find: '@codplay/remote/remote', replacement: resolve(__dirname, '../authoring/remote/src/remote.ts') },
       { find: '@codplay/sighty', replacement: resolve(__dirname, '../sighty/src/index.ts') },
       { find: /^@codplay\/sighty-scorm$/, replacement: resolve(__dirname, '../sighty-scorm/src/index.ts') },
       { find: '@codplay/sighty-scorm/session', replacement: resolve(__dirname, '../sighty-scorm/src/scorm-session.ts') },

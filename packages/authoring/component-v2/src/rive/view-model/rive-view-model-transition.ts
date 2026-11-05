@@ -1,5 +1,5 @@
 import type { ComponentActionOccurrence } from 'codplay'
-import type { RiveInputValues, RiveViewModelActionPayload } from '../rive-types'
+import type { RiveInputValues, RiveViewModelActionPayload } from '../core/rive-types'
 
 type ValueTransition = Readonly<{
   from: RiveInputValues

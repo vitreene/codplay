@@ -386,8 +386,11 @@ Le preload reste dans un service de ressources distinct. Son cycle est :
 Cette chaîne décrit trois opérations séparées. Le preload peut être exécuté
 comme précondition explicite d’une entrée Sighty, mais il ne doit pas être
 déclenché par le reset et ne doit pas être caché dans une primitive de cycle de
-vie d’instance. La surface exacte d’une éventuelle commodité Sighty sera
-validée en M0.
+vie d’instance. Pour une scène directe compilée, Sighty attend
+`owner.engine.prepareScene(compiledScene)` avant `owner.instances.create` ; cette
+préparation des bibliothèques reste distincte du preload des ressources et de
+l’initialisation de l’instance. Les scènes de paquets restent préparées par
+`owner.prepare()` dans leur loader.
 
 ### 4.5. Passerelle unique d’événements vers une scène
 
@@ -623,6 +626,7 @@ déjà rattachées à un contrat accepté peuvent être corrigées.
 | `mountSlot`/`detachSlot` | Décision auteur du 2026-09-16 : le fichier déclaratif du scénario est la surface publique de composition | Primitives retirées de l’API ; montage et détachement conservés en interne uniquement |
 | Passerelle événementielle interne et couplage telco `on/off` | Passerelle interne déjà présente ; déclaration de couplage dans le scénario | Conforme après décision KISS : la scène telco émet les événements publics ; Sighty accroche en interne le binding actif ; `on`/`off` restent optionnels et volontaires, sans nouvelle API |
 | Événements ponctuels envoyés à une scène active | Contrat de passerelle §4.5 ; décision utilisateur du 2026-10-10 | La passerelle émet seulement l’événement CodPlay, sans capturer ni restaurer la lecture ; un test runtime vérifie que l’envoi ne déclenche pas `telco.seek()` |
+| Préparation des bibliothèques CodPlay pour les scènes directes | Spécification façade CodPlay, section « Propriétaire, préparation et instances » ; contrat Sighty §4.5 | **Acceptée le 2026-11-04, implémentée.** Sighty attend `owner.engine.prepareScene(compiledScene)` avant `owner.instances.create` lorsque le build direct déclare des bibliothèques. Le preload de ressources et le loader de paquets gardent leurs circuits actuels. Les tests Sighty passent ; l’acceptance Safari reste suivie en M8. |
 
 La spécification Sighty et le plan de reconstruction décrivent désormais le
 reset logique CodPlay sur l’instance conservée. Toute mention résiduelle de
@@ -816,6 +820,27 @@ Exécuter la suite complète applicable :
 Une catégorie ne peut être omise qu’avec une analyse causale écrite prouvant
 qu’elle n’est pas affectée.
 
+### M8 — préparation runtime des scènes directes
+
+- `src/runtime/scene-manager.ts` : préparer les bibliothèques d’un build direct
+  via `owner.engine.prepareScene(compiledScene)` avant de créer son occurrence.
+- `tests/runtime-features.spec.ts` : prouver l’ordre préparation/création pour
+  une scène directe initiale et une scène différée, l’absence de chargement de
+  bibliothèque pour une scène qui n’en déclare pas, et la réutilisation d’une
+  bibliothèque déjà chargée. Préserver le chemin `owner.prepare()` des scènes
+  empaquetées.
+- Acceptance : tests et typecheck Sighty, puis Safari MCP sur le vrai
+  LearningPlayer Elcé avec rig et audio, jusqu’à Play, Seek et fin de voix.
+  Reporter dans la spécification Sighty le comportement vérifié.
+
+Résultat courant : tests Sighty, typecheck et build passent. Safari MCP monte le
+rig Rive depuis la scène directe ; les seeks à 1 s et 7,5 s mettent à jour le
+temps CodPlay, la carte du Carousel et le rendu canvas Rive. Après Pause à
+7,5 s, l’empreinte PNG du canvas et le temps sont identiques avant et après
+1,2 s. Play naturel et fin de voix restent à vérifier : la page rapporte
+`document.hidden = true`, et Safari Technology Preview ne peut pas être activé
+dans cette session.
+
 ## 7. Critères d’acceptation structurels
 
 Les recherches et revues de code doivent confirmer :
@@ -878,6 +903,7 @@ introduire une commande parallèle ou contourner sa coordination.
 | M5 — configuration/DRY | En cours | héritage `idle` transmis sans surcharge Sighty ; énumération et localisation du graphe mutualisées ; `scenarioState.active` suit le pointeur à l’initialisation, aux navigations, aux replis, au reset et aux mutations ; revue globale à poursuivre sur les parcours différés |
 | M6 — nettoyage | En cours | contrôles obsolètes de Demo 1 supprimés avec leur CSS et leur preuve dédiée ; Demo 4 nettoyée, avec hôtes physiques distincts pour le menu et le conteneur chapitre ; Demo 3 ne possède plus de relais direct ni de file locale et passe par l’action déclarée et la passerelle Sighty ; les démos 1 et 2 restent différées |
 | M7 — validation | En cours | Sighty : 51 tests et typecheck ; component-v2 : 48 tests et typecheck ; CodPlay : 711 tests et typecheck ; démos : typecheck et build ; les tests vérifient l’envoi d’événement sans seek automatique et l’effet d’un événement `entry` après la lecture normale ; l’utilisateur confirme Demo 3, Demo 4 et Quiz Hunt. Demo 2 et Demo 5 restent sous vigilance lors des relectures ; la matrice générale, le cycle de vie restant et les démos 1 à 3 restent différés |
+| M8 — préparation runtime des scènes directes | En cours | implémenté ; tests couvrent l’ordre direct/différé, l’absence de chargement sans bibliothèque requise et la réutilisation ; typecheck/build passent ; Safari confirme le montage Rive et les seeks 1 s/7,5 s ; Play et fin restent à vérifier |
 
 Le plan reste `En cours` : M4 est terminé, tandis que la validation complète
 du runtime et l’évaluation différée des démos 1 à 3 restent à poursuivre.

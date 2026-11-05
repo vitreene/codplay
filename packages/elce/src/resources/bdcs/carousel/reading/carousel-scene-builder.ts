@@ -67,6 +67,14 @@ export class ElceCarouselSceneBuilder {
   public build(input: CarouselSceneBuildInput): CarouselSceneBuild {
     const { pageId, bdcId, content } = input
     const displayMode = input.displayMode ?? 'content'
+    const navigation = input.navigation ?? 'points'
+    const pageCompletion = input.pageCompletion ?? 'last-card'
+    if (navigation === 'none' && displayMode !== 'scene') {
+      throw new Error('La navigation Carousel ne peut être retirée que dans une scène pleine page.')
+    }
+    if (pageCompletion === 'external' && displayMode !== 'scene') {
+      throw new Error('La fin externe de page Carousel exige une scène pleine page.')
+    }
     const prefix = `${pageId}:${bdcId}`
     const rootId = `${pageId}-${bdcId}`
     const capsulePartId = `${prefix}:carousel:capsule`
@@ -131,7 +139,7 @@ export class ElceCarouselSceneBuilder {
       if (entry === undefined || viewBuild === undefined) throw new Error(`La vue Carousel ${child.id} est introuvable.`)
       return [
         ...createCarouselCardPersos(prefix, cardMountTarget, child, entry.bdc, viewBuild, firstCardBdcId, displayMode === 'scene'),
-        ...(diapoRootId !== undefined && child.id === lastCardBdcId
+        ...(diapoRootId !== undefined && child.id === lastCardBdcId && pageCompletion === 'last-card'
           ? [createCarouselCompletionMarker(
             input.pageId,
             input.bdcId,
@@ -144,7 +152,7 @@ export class ElceCarouselSceneBuilder {
     })
     const selectionEvent = `${prefix}:select-card`
     const storyId = input.storyId ?? `${pageId}-${bdcId}`
-    const navigationPersos = content.cards.map((entry, index) => {
+    const navigationPersos = navigation === 'none' ? [] : content.cards.map((entry, index) => {
       const child = capsuleResult.children.find((candidate) => candidate.id === entry.bdcId)
       const bdc = input.cards.find((candidate) => candidate.id === entry.bdcId)
       if (child === undefined || bdc === undefined) throw new Error(`La vue Carousel ${entry.bdcId} n’a pas de placement résolu.`)
@@ -191,8 +199,11 @@ export class ElceCarouselSceneBuilder {
           parentIntroRef,
           parentOutroRef,
           appearanceClassNameForBdc(bdcId, input.appearanceClassNamesByTarget),
+          navigation,
         )]),
-        ...(diapoRootId === undefined ? [] : [createDiapoNavigationHost(diapoRootId, rootId, navigationPartId)]),
+        ...(diapoRootId === undefined || navigation === 'none'
+          ? []
+          : [createDiapoNavigationHost(diapoRootId, rootId, navigationPartId)]),
         ...cardPersos,
         ...mediaPersos,
         ...contentPersos,
@@ -314,6 +325,7 @@ function createDiapoCarouselRoot(
   introTransitionRef: string,
   outroTransitionRef: string,
   appearanceClassName: string,
+  navigation: 'points' | 'none',
 ): PersoDoc<string> {
   return {
     id: rootId,
@@ -330,6 +342,7 @@ function createDiapoCarouselRoot(
         'elce-card--carousel',
         'elce-diapo-content',
         'elce-diapo-carousel-root',
+        ...(navigation === 'none' ? ['elce-diapo-carousel-root--no-navigation'] : []),
         appearanceClassName,
         ...capsuleClassName.split(/\s+/),
       ].join(' '),

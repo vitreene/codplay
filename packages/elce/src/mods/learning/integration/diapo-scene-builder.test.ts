@@ -22,6 +22,8 @@ import { appearanceScopeClassName, pageAppearanceClassNames } from '../../../bui
 import { createLearningSceneBuilders } from '../reading/learning-scene-builders'
 import { createLearningAdditionalBdcBuilder } from '../evaluation/reading/learning-additional-bdc-builder'
 import { LearningDocument } from '../document/learning-document'
+import type { TemporaryRiveTalkingAvatarPocOptions } from '../../../resources/pages/diapo/rive-talking-avatar-poc/rive-talking-avatar-poc'
+import { ELCE_ENGINE_CAPABILITIES } from '../../../player/elce-player-engine'
 
 const editorSettingsResolver = new ElceEditorSettingsResolver()
 
@@ -126,6 +128,91 @@ describe('Elcé Diapo scene builder', () => {
       root: `${page.id}-${command.bdcId}-diapo-end-scrollport`,
       enter: [{ name: ELCE_EVENTS.PAGE_FINISHED, data: { pageId: page.id }, visibility: 'public' }],
     })
+  })
+
+  it('syncs a temporary narrated avatar with Carousel word cues and voice completion', () => {
+    const initial = learningDocumentService.createInitialDocument()
+    const pageCommand = createDefaultPageCommand(initial, { kind: PAGE_LOCATION.SCENARIO }, undefined, PAGE_TYPE.DIAPO)
+    let document = applyDocumentCommand(initial, pageCommand)
+    document = applyDocumentCommand(document, createCardBdcCommand(
+      'bdc-diapo-poc-card-2', pageCommand.bdcId, 1, DEFAULT_PRESET_ID.TEXT_SHORT,
+    ))
+    document = applyDocumentCommand(document, createCardBdcCommand(
+      'bdc-diapo-poc-card-3', pageCommand.bdcId, 2, DEFAULT_PRESET_ID.TEXT_SHORT,
+    ))
+    document = applyDocumentCommand(document, createCardBdcCommand(
+      'bdc-diapo-poc-card-4', pageCommand.bdcId, 3, DEFAULT_PRESET_ID.TEXT_SHORT,
+    ))
+    const carousel = document.bdcs.find((bdc) => bdc.id === pageCommand.bdcId)!
+    const cardBdcIds = carousel.carousel!.cards.map((card) => card.bdcId)
+    const originalPlaybackMode = carousel.carousel!.playbackMode
+    const page = document.pages.find((candidate) => candidate.id === pageCommand.pageId)!
+    const avatarOptions: TemporaryRiveTalkingAvatarPocOptions = {
+      profile: {
+        document: { src: '/test-avatar.riv', artboard: 'Avatar', width: 420, height: 500 },
+        viewModel: {
+          stateMachine: 'Avatar_SM',
+          viewModel: 'AvatarVM',
+          instance: 'Avatar',
+          blendSpeed: 18,
+          values: { isTalking: false, v100: 0 },
+        },
+      },
+      voice: { src: '/test-voice.mp3', durationMs: 4000 },
+      frames: [{ startAt: 0, values: { v100: 100 } }],
+      words: [1000, 2000, 3000].map((startAtMs, index) => ({
+        text: `mot-${index + 1}`,
+        startAtMs,
+        endAtMs: startAtMs + 200,
+      })),
+      cardCues: cardBdcIds.map((bdcId, index) => ({
+        bdcId,
+        ...(index === 0 ? {} : { wordIndex: index - 1 }),
+      })),
+    }
+    const build = buildDiapoSceneForTest(page, document.bdcs, {
+      temporaryRiveTalkingAvatarPoc: avatarOptions,
+    })
+    const story = build.sceneDoc.stories[`${page.id}-diapo-page`]
+    const carouselRoot = story?.persos.find((perso) => perso.id === `${page.id}-${carousel.id}-diapo-end-scrollport`)
+    const avatarStage = story?.persos.find((perso) => perso.id === `rive-talking-avatar-${page.id}-stage`)
+    const voice = story?.persos.find((perso) => perso.id === `rive-talking-avatar-${page.id}-voice`)
+    const cardIntroEvents = (story?.eventimes ?? []).flatMap((event) => {
+      if (typeof event.name !== 'string'
+        || !event.name.startsWith(`${page.id}:${carousel.id}:card:`)
+        || !event.name.endsWith(':intro')) return []
+      return [{ name: event.name, startAt: event.startAt }]
+    })
+    const sequenceEndEvent = story?.eventimes?.find((event) => event.name === 'sequence:end')
+    const codplay = new CodPlay({
+      pauseOnDocumentHidden: false,
+      engine: { ...ELCE_ENGINE_CAPABILITIES, idle: false },
+    })
+
+    expect(document.bdcs.find((bdc) => bdc.id === pageCommand.bdcId)?.carousel?.playbackMode).toBe(originalPlaybackMode)
+    expect(carouselRoot?.initial).toMatchObject({
+      className: expect.stringContaining('elce-diapo-carousel-root--no-navigation'),
+    })
+    expect(story?.persos.some((perso) => perso.id.endsWith('-navigation-host'))).toBe(false)
+    expect(story?.persos.some((perso) => perso.id.endsWith('-completion-marker'))).toBe(false)
+    expect(avatarStage?.initial).toMatchObject({
+      move: { target: `${page.id}-${carousel.id}-diapo-end-scrollport` },
+      style: { width: 'clamp(9rem, 32cqw, 18rem)', aspectRatio: '420 / 500' },
+    })
+    expect(voice?.initial).toMatchObject({ tag: 'audio', src: '/test-voice.mp3', sync: 'master' })
+    expect(cardIntroEvents.map(({ name, startAt }) => ({ name, startAt }))).toEqual([
+      { name: `${page.id}:${carousel.id}:card:${cardBdcIds[1]}:intro`, startAt: 1000 },
+      { name: `${page.id}:${carousel.id}:card:${cardBdcIds[2]}:intro`, startAt: 2000 },
+      { name: `${page.id}:${carousel.id}:card:${cardBdcIds[3]}:intro`, startAt: 3000 },
+    ])
+    expect(sequenceEndEvent).toMatchObject({ startAt: 4000 })
+    expect(story?.listen).toContainEqual({
+      on: 'sequence:end',
+      emit: [{ name: ELCE_EVENTS.PAGE_FINISHED, visibility: 'public', data: { pageId: page.id } }],
+    })
+    const compiledScene = codplay.build({ scene: build.sceneDoc })
+    expect(compiledScene.ok).toBe(true)
+    codplay.destroy()
   })
 
   it('uses the Photo wrapper as the visible view root in a Diapo Carousel', () => {

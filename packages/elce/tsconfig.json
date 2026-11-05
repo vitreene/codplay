@@ -13,6 +13,8 @@
       "@codplay/exclusive-sync": ["../authoring/exclusive-sync/src/index.ts"],
       "@codplay/scene-factory/capsule-distribution": ["../authoring/scene-factory/src/capsule-distribution.ts"],
       "@codplay/scene-factory/capsule-preset": ["../authoring/scene-factory/src/capsule-preset.ts"],
+      "@codplay/story/rive-talking-avatar": ["../authoring/story/rive-talking-avatar/index.ts"],
+      "@codplay/remote/remote": ["../authoring/remote/src/remote.ts"],
       "@codplay/sighty": ["../sighty/src/index.ts"],
       "@codplay/sighty-scorm": ["../sighty-scorm/src/index.ts"],
       "@codplay/sighty-scorm/session": ["../sighty-scorm/src/scorm-session.ts"],

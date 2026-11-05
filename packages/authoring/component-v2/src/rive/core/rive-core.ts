@@ -6,15 +6,11 @@ import type {
 
 import { RiveDocumentComponent } from './rive-document-component'
 import { getRiveRuntime } from './rive-preload'
-import { RiveStateMachineComponent } from './rive-state-machine-component'
-import { RiveViewModelComponent } from './view-model/rive-view-model-component'
-import { validateRiveViewModelAction, validateRiveViewModelInitial } from './view-model/rive-view-model-validation'
-import {
-  validateRiveAction,
-  validateRiveInitial,
-  validateRiveStateMachineAction,
-  validateRiveStateMachineInitial,
-} from './rive-validation'
+import { RiveStateMachineComponent } from '../state-machine/rive-state-machine-component'
+import { validateRiveStateMachineAction, validateRiveStateMachineInitial } from '../state-machine/rive-state-machine-validation'
+import { RiveViewModelComponent } from '../view-model/rive-view-model-component'
+import { validateRiveViewModelAction, validateRiveViewModelInitial } from '../view-model/rive-view-model-validation'
+import { validateRiveAction, validateRiveInitial } from './rive-validation'
 
 /** Engine-owned Rive runtime declaration. */
 export const RIVE_LIBRARY: RuntimeLibraryDefinition = {

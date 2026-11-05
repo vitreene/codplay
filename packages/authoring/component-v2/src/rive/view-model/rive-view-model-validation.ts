@@ -1,6 +1,7 @@
 import type { ValidationFunction } from 'codplay'
 import { isComponentRecord, reportInvalidComponentValue } from 'codplay/runtime/components/component-validation'
-import { validateRiveAction, validateRiveInputValues, validateRiveStateMachineInitial } from '../rive-validation'
+import { validateRiveAction, validateRiveInputValues } from '../core/rive-validation'
+import { validateRiveStateMachineInitial } from '../state-machine/rive-state-machine-validation'
 
 /** Validates the explicit native selection and optional initial property overrides. */
 export const validateRiveViewModelInitial: ValidationFunction = (value, context) => {

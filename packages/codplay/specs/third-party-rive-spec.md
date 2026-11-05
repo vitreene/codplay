@@ -29,6 +29,16 @@ Le découpage est volontairement composé :
 Le host est le seul composant Rive qui reçoit `move`. La state machine ne
 produit pas de markup et ne connaît pas le DOM.
 
+## Organisation du code auteur
+
+Dans `packages/authoring/component-v2/src/rive/`, `core/` contient le host,
+le preload, les types et validations transversales, et l’assemblage de
+l’engine. `state-machine/` possède son composant et sa validation ; sa classe
+sert de base au composant isolé dans `view-model/`, qui possède aussi ses
+transitions et sa validation. `src/rive/index.ts` réexporte ces composants.
+La composition des stories est séparée dans `packages/authoring/story/` et
+consomme l’API des composants sans s’installer dans leur package.
+
 ## Surface auteur
 
 ### Document Rive
@@ -185,6 +195,8 @@ Un geste narratif doit être porté explicitement par les données CodPlay.
 ## Propriété des ressources et du rendu
 
 - `RIVE_LIBRARY` est préparée une fois par engine et injectée aux classes ;
+  dans `component-v2`, le runtime bas niveau vient de
+  `@rive-app/canvas-advanced-single@2.38.3`, chargé en ESM par le preload ;
 - `RIVE_PRELOAD_STRATEGIES` charge le fichier et conserve la ressource dans le
   cache du package ;
 - `RiveDocumentComponent` possède le renderer, l’artboard et les instances
@@ -196,6 +208,10 @@ Un geste narratif doit être porté explicitement par les données CodPlay.
   reconstruit son artboard ;
 - le host avance et dessine en phase `commit`, après les contributions logiques
   de la state machine ;
+- aucun composant Rive ne possède d’horloge ni de boucle de rendu autonome :
+  `advance` et `draw` ne reçoivent du temps que dans les animations
+  enregistrées sur la présentation CodPlay ; l’état `playing` ou un broadcast
+  `START` n’avance rien sans progression CodPlay ;
 - un retour temporel reconstruit l’artboard.
 
 Avant de libérer ou reconstruire l’artboard, le host demande aux composants
@@ -211,6 +227,10 @@ après son artboard, dans les deux ordres de déclaration auteur.
 
 Le runtime ne charge pas de ressource dans un constructeur ou dans `update()`.
 Le host lit uniquement une ressource déjà préparée par le preload.
+
+La [story d’avatar Rive parlant](../../authoring/story/specs/rive-talking-avatar-story-spec.md)
+assemble ces composants avec une voix et des pistes déjà horodatées. Son
+contrat de construction reste distinct du binding natif décrit ici.
 
 ## Validation
 
@@ -228,6 +248,10 @@ persistant ne recrée pas la machine à chaque mise à jour.
 vérifie le passage du document par la frontière de preload. Ces fixtures
 possèdent leurs artboards, runtime et state machines synthétiques ; elles ne
 lisent pas la scène de démonstration.
+Le module ESM est aussi servi et initialisé par l’asset server Remix Elcé ; la
+démo CodPlay V2 charge le même paquet avec le fichier Matt réel. La validation
+de l’intégration à l’aperçu d’un projet Elcé reste suivie dans le
+[plan tête parlante](../../elce/plan/2026-11-04-talking-head-plan.md).
 
 [`rive-view-model.spec.ts`](../../authoring/component-v2/tests/rive-view-model.spec.ts)
 vérifie les sélections, types natifs, défauts, deltas nuls et broadcasts, ainsi
@@ -247,3 +271,8 @@ commandes bouche/tête, événements au même instant, broadcasts, retour tempor
 resize CSS, destruction et remontage. Les phases natives libres ne servent pas
 de critère d’égalité d’image. La persistance applicative Elcé, le nouveau
 scénario de démo et les autres familles Rive restent hors de cette preuve.
+Le POC Elcé exerce aussi le chemin réel Sighty/CodPlay : un Seek telco à 1 s
+puis à 7,5 s change le rendu du canvas Rive ; après Pause à 7,5 s, le rendu et
+le temps restent stables pendant 1,2 s. Ces observations sont suivies dans le
+[plan tête parlante](../../elce/plan/2026-11-04-talking-head-plan.md). Le Play
+naturel et la fin restent à vérifier avec une page visible.

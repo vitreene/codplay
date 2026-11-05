@@ -8,8 +8,9 @@ let runtimePromise: Promise<RiveRuntime> | undefined
 
 /** Loads the Rive WASM runtime once for the component package. */
 export function getRiveRuntime(): Promise<RiveRuntime> {
-  runtimePromise ??= import('@rive-app/canvas').then(({ RuntimeLoader }) =>
-    RuntimeLoader.awaitInstance() as unknown as Promise<RiveRuntime>,
+  runtimePromise ??= import('@rive-app/canvas-advanced-single').then(
+    ({ default: loadRiveRuntime }) =>
+      loadRiveRuntime() as unknown as Promise<RiveRuntime>,
   )
 
   return runtimePromise

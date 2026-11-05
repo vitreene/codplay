@@ -11,12 +11,12 @@ import type {
   RiveDocumentTarget,
   RiveStateMachineInput,
   RiveStateMachineInstance,
-} from './rive-context'
+} from '../core/rive-context'
 import type {
   RiveInputValues,
   RiveStateMachineActionPayload,
   RiveStateMachineInitial,
-} from './rive-types'
+} from '../core/rive-types'
 
 type RivePlayback = 'playing' | 'paused' | 'stopped'
 

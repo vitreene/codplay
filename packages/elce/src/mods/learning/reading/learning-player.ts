@@ -1,5 +1,6 @@
 import type { SightyScenarioDefinition } from '@codplay/sighty'
 import { createScrollContainerSourceAdapter } from '@codplay/component-v2/scroll-container'
+import { RIVE_PRELOAD_STRATEGIES } from '@codplay/component-v2'
 import { ELCE_EVENTS, ELCE_SCENARIO } from './learning-reading-events'
 import { learningScenarioBuilder } from './learning-scenario-builder'
 import { validateHtmlElementMethodActions } from '../../../core/reading/markup-validation/html-element-method-validation'
@@ -24,6 +25,7 @@ import { ELCE_ENGINE_CAPABILITIES } from '../../../player/elce-player-engine'
 import { ElceEditorSettingsResolver } from '../../../domain/editor-settings/editor-settings-resolver'
 import { learningProfileService } from '../profile/domain/learning-profile-service'
 import { learningReaderProjectionService } from '../profile/reading/learning-reader-projection-service'
+import { bindLearningNavigationRemote, type LearningPagePlayback } from './navigation-remote/learning-navigation-remote'
 
 const editorSettingsResolver = new ElceEditorSettingsResolver()
 
@@ -35,6 +37,8 @@ export class LearningPlayer {
   private removeMenuDrawerListeners: (() => void) | undefined
   private removePageMediaPlayback: (() => void) | undefined
   private removePageChangeSubscription: (() => void) | undefined
+  private removeNavigationRemote: (() => void) | undefined
+  private readonly playbackBySceneKey: LearningPagePlayback
   private readonly appearanceThemeCssLinks: AppearanceThemeCssLinks
   private readonly document: LearningPlayerOptions['document']
 
@@ -48,6 +52,12 @@ export class LearningPlayer {
       startPageId: prepared.startPageId,
     }
     this.document = prepared.document
+    this.playbackBySceneKey = Object.fromEntries(
+      Object.entries(options.temporaryRiveTalkingAvatarByPageId ?? {}).map(([pageId, playback]) => [
+        `scene-${pageId}`,
+        { autoStart: playback.autoStart ?? true },
+      ]),
+    )
     this.appearanceThemeCssLinks = loadAppearanceThemeCssLinks(
       options.stage.ownerDocument,
       appearanceThemeCssAssetPathsForDocument(prepared.document),
@@ -77,6 +87,7 @@ export class LearningPlayer {
               options.onLog?.(diagnostic.message, diagnostic.severity === 'warning' ? 'warn' : 'error')
             },
           },
+          preload: { strategies: RIVE_PRELOAD_STRATEGIES },
           htmlHost: { sourceAdapterFactories: [createScrollContainerSourceAdapter] },
           ...(options.frameScheduler === undefined ? {} : { frameScheduler: options.frameScheduler }),
           pauseOnDocumentHidden: false,
@@ -96,7 +107,21 @@ export class LearningPlayer {
       ELCE_SCENARIO.CONTENT_SLOT,
       (error) => this.options.onLog?.(`Arrêt des médias de la page impossible : ${String(error)}`, 'error'),
     )
-    await this.runtime.api.play(ELCE_SCENARIO.LAYOUT_SCENE)
+    const hasNarration = Object.keys(this.playbackBySceneKey).length > 0
+    if (hasNarration) {
+      this.removeNavigationRemote = bindLearningNavigationRemote(
+        this.options.stage,
+        this.runtime.api,
+        this.playbackBySceneKey,
+        (message) => this.options.onLog?.(`Télécommande Elcé : ${message}`, 'error'),
+      )
+    }
+    const automaticScenes = this.runtime.api.scenarioState.current
+      .map(({ sceneKey }) => sceneKey)
+      .filter((sceneKey) => this.playbackBySceneKey[sceneKey]?.autoStart !== false)
+    await (hasNarration
+      ? this.runtime.api.playAll(automaticScenes)
+      : this.runtime.api.play(ELCE_SCENARIO.LAYOUT_SCENE))
     this.removeMenuDrawerListeners = bindLearningMenuDrawer(this.options.stage, this.runtime.api)
     const refreshed = await this.runtime.api.dispatch({ name: ELCE_EVENTS.PRESENTATION_REFRESH })
     if (!refreshed) this.options.onLog?.('La présentation Elcé n’a pas pu être actualisée.', 'warn')
@@ -113,6 +138,8 @@ export class LearningPlayer {
   public destroy(): void {
     if (this.destroyed) return
     this.destroyed = true
+    this.removeNavigationRemote?.()
+    this.removeNavigationRemote = undefined
     this.removeMenuDrawerListeners?.()
     this.removeMenuDrawerListeners = undefined
     this.removePageMediaPlayback?.()
@@ -167,6 +194,7 @@ function createLearningPlayerScenarioModel(
     document,
     options.mediaSources,
     options.sceneCache,
+    options.temporaryRiveTalkingAvatarByPageId,
   )
   const scenario = learningScenarioBuilder.build(document, pageSceneCatalog.scenes, selectedPageId, {
     testState,

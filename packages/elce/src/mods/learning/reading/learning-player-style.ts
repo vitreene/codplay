@@ -1,4 +1,5 @@
 import { LEARNING_LAYOUT_STYLE_RULES } from './learning-layout-style'
+import { LEARNING_NAVIGATION_REMOTE_STYLE } from './navigation-remote/learning-navigation-remote-style'
 import { FLUX_PLAYER_STYLE_RULES } from '../../../resources/pages/flux/reading/flux-player-style'
 import { DIAPO_PLAYER_STYLE_RULES } from '../../../resources/pages/diapo/reading/diapo-player-style'
 import { CARD_PLAYER_STYLE_RULES } from '../../../resources/bdcs/card/reading/card-player-style'
@@ -21,7 +22,7 @@ const PLAYER_STYLE_RULES = [
 ].sort(([left], [right]) => left - right)
 
 /** Reassembles the original layout and resource rules in their authored cascade order. */
-export const LEARNING_PLAYER_STYLE_SHEET = `${PLAYER_STYLE_RULES.map(([, cssText]) => cssText).join('')}\n`
+export const LEARNING_PLAYER_STYLE_SHEET = `${PLAYER_STYLE_RULES.map(([, cssText]) => cssText).join('')}\n${LEARNING_NAVIGATION_REMOTE_STYLE}`
 
 /** Returns the Learning-owned layout and resource style sheet. */
 export function createLearningPlayerStyleSheet(): string {

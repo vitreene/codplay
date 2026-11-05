@@ -650,6 +650,23 @@ occurrences et ne déclenche pas le preload. `runtime.mutate` publie une
 nouvelle version validée du graphe selon la politique `preserve`, `rewind`,
 `reset` ou `reload`.
 
+Avant `owner.instances.create`, le runtime prépare les bibliothèques CodPlay
+déclarées par une scène directe au moyen de
+`owner.engine.prepareScene(build.compiledScene)`. Il n’appelle cette méthode
+que si `compiledScene.requirements.libraries` contient une entrée. La
+préparation est attendue avant la création de l’occurrence ; la déduplication
+des bibliothèques déjà chargées reste la responsabilité de CodPlay. Le preload
+des ressources reste séparé. Les scènes issues d’un paquet sont déjà
+préparées par `owner.prepare()` dans le loader Sighty : le runtime ne répète pas
+cette préparation. Le test
+[`runtime-features.spec.ts`](../tests/runtime-features.spec.ts) vérifie
+l’ordre pour les scènes directes et différées, l’absence de chargement quand
+aucune bibliothèque n’est requise, et la réutilisation d’une bibliothèque
+entre deux scènes. La vérification Rive sur le player Elcé est suivie dans le
+[plan de tête parlante](../../elce/plan/2026-11-04-talking-head-plan.md) et
+utilise son
+[fixture MCP](../../elce/src/mods/learning/integration/browser/rive-talking-avatar-poc-mcp.ts).
+
 `runtime.styles` reçoit les feuilles CSS fournies par l’application hôte. Sighty
 les enregistre par `owner.preload.css.set()` avant le montage. Une feuille
 `styleSheet` fournie avec une scène suit ce même canal CSS, dans le slot stable

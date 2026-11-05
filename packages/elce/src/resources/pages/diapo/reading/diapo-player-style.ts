@@ -33,6 +33,10 @@ export const DIAPO_PLAYER_STYLE_RULES = [
   border: 0;
   border-radius: 0;
   background: transparent;
+}
+
+.elce-diapo-carousel-root--no-navigation {
+  grid-template-rows: minmax(0, 1fr);
 }`],
   [45, `
 

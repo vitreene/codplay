@@ -21,7 +21,14 @@
 ## Actions et acceptation
 
 1. [x] Installer la version publiée dans `packages/elce/package.json` et
-   réconcilier le lockfile ; vérifier l’absence de RC4 résiduelle.
+   réconcilier le lockfile ; vérifier l’absence de RC4 résiduelle. L’audit de
+   tous les manifestes confirme qu’Elcé est l’unique déclaration directe de
+   `remix`; le lockfile ne résout qu’un `remix@3.1.0`. Chaque paquet
+   `@remix-run/*` n’a qu’une résolution, avec sa propre version de paquet.
+   Au signalement, `node_modules/remix` était encore `3.0.0-rc.4` alors que
+   manifeste et lockfile indiquaient `3.1.0` : ce décalage installé causait
+   l’import SSR non exporté. La réconciliation a remis `3.1.0` et restauré
+   `semver@7.8.6`, absent de l’arbre installé.
 2. [x] Migrer les imports de production et de tests, `tsconfig.json`, JSX,
    serveur d’assets et HMR ; adapter les appels modifiés à contrat constant.
 3. [x] Vérifier compilation réelle des assets et des JSON, serveur/API/SQLite,
@@ -34,7 +41,18 @@
    composant auteur, module HMR et API en HTTP 200 ; une modification CSS
    temporaire déclenche `browser:reload` via SSE et actualise la feuille servie.
    La feuille est restaurée, le serveur arrêté et sa base temporaire retirée.
-4. [ ] Vérifier le navigateur si un outil est exposé. Brave est configuré mais
-   absent de l’inventaire callable actuel : garder cette acceptation en attente.
+   Recontrôle sur le workspace courant : `npm ls remix semver --all` passe,
+   le build passe et le typecheck garde seulement l’erreur `title` préexistante.
+   Un Vite neuf charge maintenant `/src/server/elce-local-server.ts` en SSR
+   avec succès. Le dernier lancement utilisateur franchit aussi l’ancien
+   échec d’export Remix, puis s’arrête sur `COMMONJS_NOT_SUPPORTED` dans
+   `@rive-app/canvas/rive.js`. Le test serveur et HMR restent à reprendre après
+   résolution de ce point dans le
+   [plan tête parlante](./2026-11-04-talking-head-plan.md). La suite passe
+   583/595 tests ; une erreur Tiptap asynchrone préexistante reste également
+   signalée.
+4. [ ] Vérifier le navigateur sur le workspace courant. Safari MCP est
+   configuré et callable ; l’acceptation reste en attente tant que le serveur
+   s’arrête à la compilation du runtime Rive CommonJS.
 5. [x] Actualiser les spécifications propriétaires pour les adaptations
    implémentées et vérifiées ; conserver ce plan pour les preuves manquantes.

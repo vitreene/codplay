@@ -19,6 +19,8 @@ export interface CarouselSceneBuildInput {
   readonly revelationSettings: ResolvedCarouselRevelationSettings
   readonly playerSettings: ElceResolvedPlayerSettings
   readonly displayMode?: 'content' | 'scene'
+  readonly navigation?: 'points' | 'none'
+  readonly pageCompletion?: 'last-card' | 'external'
   readonly completionEventRootId?: string
   readonly appearanceClassNamesByTarget?: AppearanceClassNamesByTarget
 }

@@ -74,6 +74,37 @@ Le chemin image testé entre la région de contenu et l’élément `img` compte
 éléments : `section` de contenu, `section` Carousel, `div` racine Photo,
 `div.elce-carousel-media`, puis `img.cp-img-inner`.
 
+## Composition temporaire Avatar/Carousel vérifiée
+
+Le pont de POC `temporaryRiveTalkingAvatarByPageId` permet au player Learning
+de composer la factory `createRiveTalkingAvatarStory` dans la story unique de
+la Diapo Carousel. Il ne crée ni second BDC direct ni champ documentaire.
+Les occurrences de mots fournies sont projetées en durées du Carousel
+automatique existant, sans modifier le document source. Pour cette composition,
+les points et le marqueur de dernière carte sont absents. Les pages ordinaires
+conservent leur circuit.
+
+Le test narré de
+[`diapo-scene-builder.test.ts`](../src/mods/learning/integration/diapo-scene-builder.test.ts)
+vérifie cette construction et sa compilation avec ses propres données.
+Safari MCP, le 5 novembre 2026, vérifie dans la preview standard du Projet 3
+le montage, l’audio master, les changements de carte en Play et le Seek à
+1 s/7,5 s ; Pause conserve le temps et le canvas. La sortie vers Page A
+suspend la voix ; le retour conserve un seul audio et un seul canvas.
+Les mesures figurent dans le
+[relevé navigateur](../notes/assets/talking-head/elce-project-3-acceptance.json).
+La télécommande extérieure à la Diapo et le démarrage manuel du POC sont
+décrits dans la [spécification preview](./player-preview-spec.md#télécommande-de-la-diapo-narrée-de-démonstration).
+La composition déclare `sequence:end` à la durée vocale ; sa règle `listen`
+publie `elce:page:finished` avec `{ pageId }` par `emit`. Le handler Sighty
+existant termine la page sans navigation, tandis que la lecture devient
+terminale. Safari MCP vérifie la fin à 14 446 ms, l’absence de publication par
+Seek seul et une seule publication après reset puis lecture complète. Ce
+raccord appartient au constructeur de page, la factory Avatar n’ajoute aucune
+fin. L’acceptation complète de ce POC reste au
+[plan G3](../plan/2026-11-04-talking-head-plan.md#g3--publication-de-la-fin-vocale).
+Le contrat de fin ci-dessous concerne les variantes ordinaires vérifiées.
+
 ## Fin fonctionnelle de Diapo
 
 Chaque variante publie exactement le signal public déjà employé par les pages
@@ -90,8 +121,9 @@ atteignent leur marqueur de fin.
 `buildScenario` transmet ce signal à l’action Sighty existante qui marque la
 page comme terminée et met à jour le verrouillage de la navigation. Le signal
 ne déclenche pas lui-même la navigation. La scène reste montée et peut
-continuer à être lue. `scene:end` et `sequence:end` ne servent pas à cette fin
-fonctionnelle.
+continuer à être lue. Ces variantes ordinaires n’emploient ni `scene:end` ni
+`sequence:end` pour leur fin fonctionnelle. La composition narrée décrite
+ci-dessus termine sa lecture à la durée vocale et publie le même signal métier.
 
 ## Preuves
 

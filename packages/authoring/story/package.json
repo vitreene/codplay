@@ -1,0 +1,22 @@
+{
+  "name": "@codplay/story",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./rive-talking-avatar/index.ts",
+    "./rive-talking-avatar": "./rive-talking-avatar/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@codplay/component-v2": "*",
+    "codplay": "*"
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1",
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.9"
+  }
+}

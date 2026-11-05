@@ -46,10 +46,19 @@ présent plan restent propriétaires du mod actuel, désormais nommé Learning.
 
 La [note tête parlante](../notes/2026-11-04-talking-head-study.md) et son
 [plan de cadrage](./2026-11-04-talking-head-plan.md) suivent le composant Rive
-ViewModel, la narration Diapo/Carousel et la captation réutilisable. Le lot 0
-ViewModel est **Fini** et couvert par la
-[spécification Rive](../../codplay/specs/third-party-rive-spec.md) ; la nouvelle
-démo, l’intégration Elcé et la captation restent dans les lots suivants.
+ViewModel, la narration Diapo/Carousel et la captation réutilisable. Les lots
+0 à 2 sont **Finis** : composant, démo validée et story réutilisable séparés
+dans leurs packages respectifs. Ils sont couverts par les spécifications
+[Rive](../../codplay/specs/third-party-rive-spec.md) et
+[story d’avatar](../../authoring/story/specs/rive-talking-avatar-story-spec.md).
+Le lot 3 est **En cours** dans « Projet 3 » : la Diapo à quatre cartes et
+l’avatar se montent dans la preview standard ; Play/Pause et Seek sont observés.
+La fin vocale se raccorde dans Elcé au signal de fin existant selon G3 ;
+la proposition de modification du moteur CodPlay est retirée.
+La télécommande partagée est dans la barre de navigation, avec démarrage sur
+Play, Pause, Seek et replay vérifiés dans Safari. Le placement responsive et
+l’affichage initial de l’avatar restent à achever avant l’édition (lot 4) et
+la captation (lot 5).
 
 ## Étude distincte de l’onglet Style
 

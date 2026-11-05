@@ -4,8 +4,6 @@ import { isComponentRecord, reportInvalidComponentValue } from 'codplay/runtime/
 import type {
   RiveActionPayload,
   RiveInitial,
-  RiveStateMachineActionPayload,
-  RiveStateMachineInitial,
 } from './rive-types'
 
 type ValidationContext = Parameters<ValidationFunction>[1]
@@ -46,25 +44,6 @@ export function validateRiveAction(value: unknown, context: ValidationContext): 
   }
 }
 
-/** Validates the stable configuration owned by the state-machine component. */
-export function validateRiveStateMachineInitial(value: unknown, context: ValidationContext): void {
-  if (!isComponentRecord(value)) {
-    reportInvalidComponentValue(context, 'AUTHOR_RIVE_STATE_MACHINE_INITIAL_INVALID', 'Rive state-machine initial state must be a plain object.')
-    return
-  }
-  if (typeof value.stateMachine !== 'string' || value.stateMachine.length === 0) {
-    reportInvalidComponentValue(context, 'AUTHOR_RIVE_STATE_MACHINE_NAME_INVALID', 'stateMachine must be a non-empty string.', 'stateMachine')
-  }
-  validateRiveInputValues(value.inputs, context, 'inputs')
-}
-
-/** Validates one generic named-input patch projected onto a Rive state machine. */
-export function validateRiveStateMachineAction(value: unknown, context: ValidationContext): void {
-  validateRiveAction(value, context)
-  if (!isComponentRecord(value)) return
-  validateRiveInputValues(value.inputs, context, 'inputs')
-}
-
 /** Validates optional named input values without inspecting native Rive data. */
 export function validateRiveInputValues(
   value: unknown,
@@ -86,6 +65,4 @@ export function validateRiveInputValues(
 export type {
   RiveActionPayload,
   RiveInitial,
-  RiveStateMachineActionPayload,
-  RiveStateMachineInitial,
 }

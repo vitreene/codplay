@@ -14,6 +14,10 @@ import { buildQuestionBdcStory, buildQuestionCardPreset } from '../../bdcs/quest
 import type { DiapoSceneBuild, DiapoSceneBuildOptions } from './diapo-scene-builder-types'
 import { addViewportExpansionToScene } from '../../viewport-expansion/viewport-expansion-builder'
 import { appearanceClassNameForBdc, appearanceClassNameForPage } from '../../../builders/scene-style/appearance-class-names'
+import {
+  appendTemporaryRiveTalkingAvatarPocToDiapoStory,
+  createTemporaryRiveTalkingAvatarPocCarouselContent,
+} from './rive-talking-avatar-poc/rive-talking-avatar-poc'
 
 const statisticalGraphSceneBuilder = new ElceStatisticalGraphSceneBuilder()
 
@@ -34,11 +38,19 @@ export function buildDiapoScene(
   if (bdc?.type === CAROUSEL_BDC_TYPE) {
     const carouselBuild = buildCarousel(page, bdc, bdcs, options)
     const pageStory = createDiapoCarouselPageStory(page, bdc, { ...carouselBuild.story, id: storyId }, options)
+    const narratedPageStory = options.temporaryRiveTalkingAvatarPoc === undefined
+      ? pageStory
+      : appendTemporaryRiveTalkingAvatarPocToDiapoStory(
+        pageStory,
+        page.id,
+        `${page.id}-${bdc.id}-diapo-end-scrollport`,
+        options.temporaryRiveTalkingAvatarPoc,
+      )
     return {
       sceneDoc: {
         ...addViewportExpansionToScene({
           id: `elce-diapo-${page.id}`,
-          stories: { [storyId]: pageStory },
+          stories: { [storyId]: narratedPageStory },
         }, options.editorSettings.player.interactions.viewportExpansion),
       },
       styleSheets: [carouselBuild.styleSheet],
@@ -234,6 +246,8 @@ function buildCarousel(
   if (carousel.carousel == null) throw new Error(`Le BDC Carousel ${carousel.id} de la Diapo est incomplet.`)
   const revelationSettings = options.editorSettings.revelation.carouselsByBdcId[carousel.id]
   if (revelationSettings === undefined) throw new Error(`Les réglages de révélation du Carousel ${carousel.id} sont absents.`)
+  const carouselContent = carousel.carousel
+  const temporaryRiveTalkingAvatarPoc = options.temporaryRiveTalkingAvatarPoc
   const views = carousel.carousel.cards.map((entry) => {
     const child = bdcs.find((candidate) => candidate.id === entry.bdcId)
     if (child === undefined) throw new Error(`La vue ${entry.bdcId} du Carousel ${carousel.id} est introuvable.`)
@@ -242,13 +256,17 @@ function buildCarousel(
   return options.carouselSceneBuilder.build({
     pageId: page.id,
     bdcId: carousel.id,
-    content: carousel.carousel,
+    content: temporaryRiveTalkingAvatarPoc === undefined
+      ? carouselContent
+      : createTemporaryRiveTalkingAvatarPocCarouselContent(carouselContent, temporaryRiveTalkingAvatarPoc),
     cards: views,
     mediaSources: options.mediaSources ?? {},
     mediaTypes: options.mediaTypes ?? {},
     revelationSettings,
     playerSettings: options.editorSettings.player,
     displayMode: 'scene',
+    navigation: temporaryRiveTalkingAvatarPoc === undefined ? 'points' : 'none',
+    pageCompletion: temporaryRiveTalkingAvatarPoc === undefined ? 'last-card' : 'external',
     storyId: `${page.id}-diapo-page`,
     completionEventRootId: `${page.id}-${carousel.id}-diapo-end-scrollport`,
     appearanceClassNamesByTarget: options.appearanceClassNamesByTarget,
