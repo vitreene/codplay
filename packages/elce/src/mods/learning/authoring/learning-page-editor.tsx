@@ -380,6 +380,7 @@ function renderBdcEditor(
       return bdc.avatar == null ? null : <RemixAvatarEditor
         bdcId={bdc.id} content={bdc.avatar}
         audioSource={bdc.avatar.take === null ? undefined : view.mediaSources[bdc.avatar.take.audioMediaId]}
+        onInsert={(audio, timeline) => actions.importAvatarTake(bdc.id, audio, timeline)}
         onUpdate={(content) => actions.updateAvatar(bdc.id, content)}
         onDelete={() => actions.deleteAvatar(bdc.id)}
         onOpenAppearanceTarget={state.onOpenAppearanceTarget}

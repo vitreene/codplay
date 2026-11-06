@@ -81,6 +81,9 @@ droite du lecteur sur la même ligne. Le transcript vient avant son bilan de
 mots et de durée, avec un espacement court. « Capture live » ouvre une modale
 dédiée ; elle indique que la captation réelle n’est pas encore disponible.
 L’import fichier par fichier n’est pas proposé.
+La modale garde les mêmes dimensions en passant entre « Réglages », « Capture »
+et les onglets de source. Sa largeur et sa hauteur sont limitées par la fenêtre ;
+son contenu défile à l’intérieur.
 
 ## Preuves
 
@@ -120,6 +123,10 @@ L’import fichier par fichier n’est pas proposé.
   « Capture live » partagent une ligne, le bouton étant à droite et coloré ;
   le transcript précède le bilan statistique avec 6 px entre les deux blocs.
   L’affichage n’a modifié aucune donnée du projet.
+- Le 6 novembre, Safari MCP confirme que la modale garde 608 × 672 px sur
+  « Réglages » et « Capture » à grande largeur, puis 411 × 672 px sur les deux
+  onglets principaux et les trois sources audio à largeur réduite. Aucun appel
+  API ni changement du document projet n’a été effectué.
 
 La suite complète de persistance, Undo/Redo, réassociation et affichage initial
 du rig reste à vérifier dans le

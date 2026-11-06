@@ -36,23 +36,26 @@
    suite Elcé, typecheck et build et comparer les échecs à la référence.
    Les six suites ciblées passent 52 tests ; build réussi. La suite complète
    conserve 583 réussites et les mêmes 11 échecs sur 594 tests, sans nouveau
-   défaut ; le typecheck conserve uniquement le `title` inutilisé préexistant.
+   défaut. Le typecheck passe désormais après retrait de la variable `title`
+   locale redondante du builder Graphe ; ses tests ciblés passent 15/15.
    Le vrai lancement `npm run dev` sert document, entrée, runtime JSX,
    composant auteur, module HMR et API en HTTP 200 ; une modification CSS
    temporaire déclenche `browser:reload` via SSE et actualise la feuille servie.
    La feuille est restaurée, le serveur arrêté et sa base temporaire retirée.
    Recontrôle sur le workspace courant : `npm ls remix semver --all` passe,
-   le build passe et le typecheck garde seulement l’erreur `title` préexistante.
+   le build et le typecheck passent ; les 15 tests ciblés du builder Graphe
+   passent également.
    Un Vite neuf charge maintenant `/src/server/elce-local-server.ts` en SSR
-   avec succès. Le dernier lancement utilisateur franchit aussi l’ancien
-   échec d’export Remix, puis s’arrête sur `COMMONJS_NOT_SUPPORTED` dans
-   `@rive-app/canvas/rive.js`. Le test serveur et HMR restent à reprendre après
-   résolution de ce point dans le
-   [plan tête parlante](./2026-11-04-talking-head-plan.md). La suite passe
+   avec succès. Un lancement antérieur s’arrêtait sur
+   `COMMONJS_NOT_SUPPORTED` dans `@rive-app/canvas/rive.js`. Après le
+   redémarrage du serveur par l’utilisateur le 6 novembre, Safari charge le
+   catalogue et le Projet 3 ; le montage Rive en preview reste à qualifier dans
+   le [plan tête parlante](./2026-11-04-talking-head-plan.md). La suite passe
    583/595 tests ; une erreur Tiptap asynchrone préexistante reste également
    signalée.
-4. [ ] Vérifier le navigateur sur le workspace courant. Safari MCP est
-   configuré et callable ; l’acceptation reste en attente tant que le serveur
-   s’arrête à la compilation du runtime Rive CommonJS.
+4. [x] Vérifier le navigateur sur le workspace courant. Après redémarrage du
+   serveur, Safari affiche le catalogue Elcé puis le Projet 3 et ses éditeurs
+   Avatar/Carousel ; HMR se connecte sans erreur console. La preview Rive et
+   l’insertion audio restent suivies dans le plan talking-head.
 5. [x] Actualiser les spécifications propriétaires pour les adaptations
    implémentées et vérifiées ; conserver ce plan pour les preuves manquantes.

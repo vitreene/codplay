@@ -11,10 +11,26 @@ rationale dans l’[étude](../notes/2026-11-04-talking-head-study.md).
 
 - Module web réutilisable, connecteur Elcé vers Diapo/Carousel ; lecture par
   les circuits existants. Mac est le poste de développement, sans variante OS.
-- Micro + caméra tête/regard ; nouvelle prise, conversion vers une voix choisie
-  après saisie, puis réécoute. Corps, mains et montage reportés.
-- Évaluer navigateur et serveur avant le repli SaaS de référence. Aucune app
-  native ni installation d’outil sur le poste auteur.
+- Le module web de captation est réutilisable hors Elcé. Traiter l’audio
+  d’abord ; différer la captation vidéo à une étape ultérieure.
+- Capacités audio distinctes : capture micro et import locaux ; TTS, STT,
+  alignement et transformation vocale gardent chacun leur opération. Le STT
+  ElevenLabs reste le fournisseur courant jusqu’à qualification d’un fournisseur
+  local ; le code doit permettre ce remplacement sans coupler le STT aux temps
+  de l’alignement. Les visèmes Azure 22 sont générés localement depuis les temps
+  caractère, selon la démo. Garder une seule action
+  « Préparer et insérer » comme orchestration auteur, sans fusionner les
+  permissions ni les fournisseurs sous une validation globale de clé. Le token
+  n’est utilisé que par l’appel ElevenLabs choisi et reste en mémoire par
+  défaut ; sa mémorisation dans le `localStorage` du navigateur est facultative.
+  Il ne rejoint jamais le document, l’API projet, les médias ni SQLite. Le
+  proxy de secrets robuste reste une évolution ultérieure.
+- Aucune clé n’est nécessaire pour le micro, l’import audio, les traitements
+  locaux ou la génération de visèmes. Une erreur de permission ElevenLabs ne
+  bloque que l’opération distante concernée. Le fournisseur STT local et la
+  voie d’alignement caractère restent à qualifier avant de remplacer les appels
+  distants présents dans le code. Aucun modèle local ne devient une dépendance
+  sans qualification. Aucune app native ni installation d’outil.
 - Voix finale = durée et fin fonctionnelle de la page. Première carte à zéro,
   suivantes au début du mot choisi ; occurrences distinguées. Au retrait de
   l’Avatar ou au remplacement de sa prise, supprimer les associations aux mots
@@ -57,7 +73,8 @@ rationale dans l’[étude](../notes/2026-11-04-talking-head-study.md).
   Safari vérifie le rig avec son profil existant, Play/Pause et Seek ;
   le canvas contient le personnage et un fond transparent.
 - Captation, données, rendu et connecteurs séparés pour réemploi dans Editor,
-  les mods et d’autres projets. Préparer 3D, multi-personnages et montage futur.
+  les mods et d’autres projets. Le rendu 3D/multi-personnages et le montage
+  restent des évolutions futures.
 - Dans Elcé et Editor, les widgets sont des stories ou scènes produites par
   des factories depuis un objet de configuration, puis ajoutées au projet ;
   chaque éditeur proposera à terme son catalogue. La tête parlante est le
@@ -77,11 +94,11 @@ rationale dans l’[étude](../notes/2026-11-04-talking-head-study.md).
 | Lot | Propriétaire et résultat attendu |
 | --- | --- |
 | 0 — Fini | `authoring/component-v2/src/rive/view-model/` : composant distinct, cycle de state machine partagé, Seek narratif et durée de vie native vérifiés. |
-| 1 — Fini | `demos/src/v2/demos/rive-view-model/` : rig, MP3 et JSON fournis, voix maître, visèmes et mots synchronisés ; animations internes Rive préservées. Démo validée par l’utilisateur. La piste caméra reste au lot 5. |
+| 1 — Fini | `demos/src/v2/demos/rive-view-model/` : rig, MP3 et JSON fournis, voix maître, visèmes et mots synchronisés ; animations internes Rive préservées. Démo validée par l’utilisateur. La piste caméra est différée après validation de la capture audio. |
 | 2 — Fini | `authoring/component-v2/src/rive/` porte les composants ; `authoring/story/rive-talking-avatar/` porte la story réutilisable et son guide ; `isTalking` reste le booléen canonique. |
 | 3 — En cours | `resources/bdcs/carousel/reading/`, `resources/pages/diapo/`, `mods/learning/reading/`, `mods/learning/preview/` et `src/server/elce-local-server.ts` : composer le Carousel et le BDC Avatar persistant sur la Diapo réelle du Projet 3, avec quatre cartes et les occurrences retenues du transcript. Servir les assets Rive et audio depuis le boundary Remix existant. La voix maître règle la durée, le Carousel n’affiche pas ses points et la fin publique est émise à la fin de la voix. Garder les pages ordinaires inchangées. |
-| 4 — En cours, cadrage | Éditeurs Diapo/Carousel + commandes/persistance sur les fichiers fournis : BDC Avatar à côté du Carousel, réglages de placement et association des cartes aux occurrences du transcript. La captation micro/caméra reste au lot 5. |
-| 5 | Module de prise web + connecteur Elcé : micro/caméra, conversion après saisie, réécoute et attribution des ressources à la page. |
+| 4 — En cours, cadrage | Éditeurs Diapo/Carousel + commandes/persistance sur les fichiers fournis : BDC Avatar à côté du Carousel, réglages de placement et association des cartes aux occurrences du transcript. La capture audio reste au lot 5 ; la vidéo est différée. |
+| 5 — En cours | `packages/authoring/audio-capture/` : module audio réutilisable, fournisseur ElevenLabs et connexion par token ; Elcé n’enregistre que la prise finale choisie par son circuit média existant. La vidéo est différée. |
 
 Le premier POC utilisait le pont
 `LearningPlayerOptions.temporaryRiveTalkingAvatarByPageId`. Le lot 4 l’a
@@ -91,11 +108,183 @@ remettre en cause le BDC retenu pour cette tranche. La preview de validation
 utilise le document Projet 3 conservé par le serveur de projets, pas un fixture
 en mémoire.
 
+## Lot 5 — module audio réutilisable : phases 1 et 2 En cours
+
+Le périmètre utilisateur du 5 novembre remplace l’entrée micro/caméra
+indifférenciée : le module autonome commence par audio ; TTS, STT et
+transformation vocale utilisent actuellement leurs opérations ElevenLabs
+séparées. Le STT local reste l’évolution visée, après qualification. La vidéo
+attend la validation de cette partie. Les candidats STT et alignement sont dans
+l’[étude talking-head](../notes/2026-11-04-talking-head-study.md#audit-local-complémentaire-et-recommandations--5-novembre-2026),
+à requalifier sur les sons français du Projet 3 avant de finaliser le parcours.
+La référence aux endpoints et à la frontière de clé est dans la même
+[étude](../notes/2026-11-04-talking-head-study.md#référence-api-elevenlabs-du-5-novembre-2026).
+
+1. **Implémentation corrigée ; acceptation ElevenLabs en cours** —
+   `packages/authoring/audio-capture/` : reprendre le premier panneau réel
+   d’AniMattor. Il propose dix voix prédéfinies, avec George sélectionné, avant
+   tout appel de compte ; la synthèse peut donc appeler directement son endpoint
+   avec une voix choisie. « Charger mes voix » est une action distincte et
+   facultative. AniMattor appelle `GET /v1/voices`, mais la documentation
+   ElevenLabs marque cette route obsolète ; Elcé emploie l’API actuelle paginée
+   `GET /v2/voices`. Si la clé n’a pas `voices_read`, garder les voix
+   prédéfinies, signaler que cette permission manque seulement pour la liste du
+   compte, et laisser les autres opérations disponibles selon leurs propres
+   permissions. Ne jamais traiter le résultat du chargement de voix comme une
+   validation globale de la clé. Un gestionnaire partagé lit les propriétés
+   d’erreur actuelles (`code`, `type`, `message`, `request_id`) et l’ancien
+   `status`, puis indique l’opération concernée sans prétendre qu’une clé est
+   invalide si l’API ne le dit pas. La clé reste en mémoire par défaut et peut
+   être mémorisée uniquement dans le `localStorage` après opt-in ; elle ne passe
+   jamais au document/projet, à son API, aux médias, à SQLite ni aux journaux.
+   Le raccord reste indépendant d’Elcé ; l’app fournit seulement le point
+   d’entrée Capture live et son style. L’appel navigateur direct demeure une
+   étape locale provisoire ; l’étude d’un proxy de secrets robuste est
+   ultérieure. Contrat de référence et constat de l’API dans l’
+   [étude talking-head](../notes/2026-11-04-talking-head-study.md#référence-api-elevenlabs-du-5-novembre-2026).
+2. **En cours — opérations audio et raccord de sortie.** Séparer le TTS, le
+   STT, l’alignement et la transformation vocale, chacun raccordé à son
+   opération propre. Conserver ElevenLabs pour le STT pendant cette tranche ;
+   préparer son remplacement ultérieur en gardant le résultat STT au texte et
+   l’alignement des temps dans une opération distincte. Le même module garde
+   l’enregistrement microphone et l’import audio locaux. La génération des
+   visèmes reste locale et n’appelle pas ElevenLabs. L’auteur
+   réécoute et choisit la piste
+   finale. Après une génération TTS, une icône permet de télécharger le MP3 ;
+   son commentaire ID3v2.4 contient le texte exact prononcé en UTF-8. Cette
+   métadonnée est ajoutée à la copie téléchargée, sans modifier la piste
+   utilisée pour l’aperçu ou l’insertion. L’action unique « Préparer et
+   insérer » orchestre les traitements requis, fabrique le son et le JSON de
+   timeline, puis attend l’application de la prise dans le BDC. Elle ne présume
+   pas qu’une clé autorise chaque opération. Les boutons séparés de
+   transcription et d’alignement sont retirés ; la transformation reste une
+   option explicite. « Préparer et insérer » appelle ElevenLabs STT seulement
+   si le transcript est vide, puis Forced Alignment séparément si ses temps
+   caractère manquent. Les deux opérations sont isolées dans des modules
+   distincts ; le STT demande uniquement le texte, sans granularité temporelle.
+   Le choix local reste à qualifier avant son remplacement.
+   Le connecteur Elcé utilise l’import média et la commande de prise déjà
+   présents ; placement et réglages de l’Avatar sont conservés. La clé reste
+   dans le navigateur et n’accompagne jamais les fichiers. Les onglets sont
+   ordonnés « Capture », « Piste audio », « Réglages ». Avec une clé et sans
+   piste, Capture est sélectionné ; après génération, enregistrement ou
+   chargement, Piste audio est activé et sélectionné. À la réouverture, il reste
+   sélectionné si la piste existe. Sans piste, Capture est sélectionné même
+   sans clé ; Capture, Piste audio désactivé et Réglages restent visibles. Les
+   trois sources restent accessibles ; seules les opérations ElevenLabs
+   requièrent une clé. Les sources sont « Générer une voix », « Microphone » et
+   « Charger audio ». L’action
+   « Préparer et insérer » est visuellement principale. Garder les libellés et
+   retours nécessaires, sans textes explicatifs ajoutés. « Charger audio »
+   présente seulement « Choisir un fichier », sans légende ni libellé répété ;
+   le bouton ouvre directement le sélecteur natif pendant son clic utilisateur
+   (`showPicker`, avec repli navigateur). Après le choix, la piste est ajoutée
+   et sélectionnée dans « Piste audio » sans appel API.
+   La modale garde les
+   mêmes dimensions entre ses onglets, avec des limites responsive ; son
+   contenu défile à l’intérieur si nécessaire.
+3. **En cours — timeline des visèmes selon la démo.** Dans
+   `packages/authoring/audio-capture/`, reprendre `buildTimeline` et les règles
+   françaises Azure 22 d’AniMattor. Le TTS garde son alignement caractère ; pour
+  une prise, « Préparer et insérer » transcrit seulement si le texte est vide,
+  puis force l’alignement caractère du son final, y compris après transformation.
+   Générer les 22 propriétés `v100`–`v121` et le JSON `words`/`visemes` attendu
+   par Elcé. Les règles retenues sont celles du français du Projet 3 ; aucune
+   timeline n’est produite à partir d’une estimation micro live. L’acceptation
+   restante compare la timeline générée à la phrase française de référence et
+   vérifie le transfert et la lecture dans le BDC Avatar.
+4. Cadrer la capture vidéo séparément après validation de l’audio.
+
+Acceptation de la phase 1 : Safari confirme que « Capture » est le premier
+onglet et devient la sélection par défaut à l’ouverture/réouverture avec une
+clé, ainsi que les trois sources audio et l’absence de textes explicatifs
+statiques. « Piste audio » se place entre Capture et Réglages ; il est
+désactivé tant qu’aucune piste n’existe et devient sélectionné après création
+ou chargement. « Préparer et insérer » est visuellement l’action principale.
+La modale garde les dimensions mesurées sur chaque onglet : 608 ×
+672 px en largeur normale et 411 × 672 px en largeur réduite. Le 6 novembre,
+Safari MCP vérifie sans exposer la clé que Capture reste sélectionné et ses
+trois sources visibles, que Piste audio reste visible mais désactivé sans piste,
+que le TTS est désactivé et que le microphone reste disponible. La sélection
+réelle d’un fichier sans clé, l’aperçu et l’activation de Piste audio restent à
+vérifier sans appel API.
+Les voix prédéfinies sont visibles dès l’ouverture, avec George sélectionné ;
+avec une clé saisie, la génération devient disponible
+après saisie du texte sans charger les voix du compte. « Charger mes voix »
+remplace les choix par les voix du compte quand `GET /v2/voices` réussit.
+Quand cette opération retourne `voices_read` manquant, les voix prédéfinies
+restent sélectionnées et disponibles, et le message désigne seulement la
+permission de lister le compte. Les erreurs modernes et anciennes sont
+distinguées sans exposer la clé ; chaque erreur inclut la référence de requête
+si l’API la fournit. Une clé non mémorisée ne reste qu’en mémoire ; une
+mémorisation cochée écrit aussitôt uniquement dans le `localStorage` du
+navigateur, et le décochage efface cette entrée. Inspection des données
+envoyées au serveur projet : aucun token dans le document, l’API, les médias,
+SQLite ni les journaux. Ces vérifications ne génèrent pas d’audio facturé.
+
+`npm run typecheck` du module réussit. Safari confirme dix voix prédéfinies,
+George sélectionné et l’absence d’appel API pendant ce contrôle. L’ancienne
+requête réelle de liste avait indiqué `voices_read` manquant ; l’acceptation
+reste ouverte pour le chargement v2 dans l’interface et pour les opérations
+autorisées par la clé. Aucun TTS payant n’a été envoyé.
+
+Acceptation restante de la phase 2 : qualifier le STT local et l’alignement du
+français sur l’audio capté ou importé, sans clé ElevenLabs ; vérifier que la
+génération locale Azure 22 reçoit les temps caractère sans appel API. Vérifier
+séparément le TTS et la transformation vocale ElevenLabs, chaque erreur restant
+liée à sa propre opération. Comparer les fichiers créés par « Préparer et
+insérer » à la sortie de la démo, puis suivre le transfert, la persistance, la
+réouverture et la lecture du BDC Avatar sans envoyer le token à Elcé. Vérifier
+aussi le téléchargement TTS : bouton visible seulement
+pour la voix générée, fichier MP3 lisible et texte associé présent dans le
+champ commentaire ID3. L’icône est intégrée au module ; cette acceptation reste
+à faire sur un TTS réel. Aucun appel TTS réel n’a été envoyé pendant ce travail.
+Pour « Charger audio », vérifier dans Safari que l’action ouvre le sélecteur,
+que le fichier choisi crée une piste locale avec aperçu et nom, puis sélectionne
+« Piste audio » sans appel ElevenLabs. Le 6 novembre, l’utilisateur a signalé
+que le bouton ne déclenchait pas le sélecteur. Le code ouvre maintenant le
+sélecteur natif depuis le gestionnaire du bouton ; l’ouverture réelle et le
+choix d’un fichier restent à vérifier en Safari normal ; l’ouverture du
+sélecteur depuis Safari MCP n’est pas une preuve fiable.
+Les opérations payantes de TTS et de transformation attendent un essai
+explicitement autorisé ; aucune génération payante n’a été tentée pendant la
+correction du connecteur. Le typecheck de `audio-capture` et celui d’Elcé
+passent depuis le 6 novembre après retrait du `title` inutilisé du builder
+Graphe. Safari confirme la présentation de l’action unique ; l’acceptation
+navigateur de l’insertion réelle reste à faire. Safari confirme aussi les trois
+onglets dans l’ordre demandé, Piste audio désactivé sans piste puis sélectionné
+après chargement d’un WAV local temporaire, et le style principal du bouton
+« Préparer et insérer ». Le bouton n’a pas été déclenché ; aucun appel
+ElevenLabs ni transfert au BDC n’a eu lieu pendant ce contrôle.
+
+État non final, 6 novembre : « Préparer et insérer » appelle ElevenLabs STT si
+le transcript est vide et Forced Alignment séparément si ses temps caractère
+manquent. Décision utilisateur du 6 novembre : garder ElevenLabs pour le STT
+dans cette tranche et séparer les opérations afin de préparer l’adaptation
+locale. Le STT transmet le texte seul (`timestamps_granularity=none`) ;
+l’alignement produit les mots et caractères horodatés. Le générateur local de
+visèmes dépend uniquement des types de timing partagés. Le fournisseur local
+reste à qualifier avant remplacement. Constat du
+5 novembre : l’ancien contrôle « Transcrire le son » atteint
+`POST /v1/speech-to-text` avec `scribe_v2`, le fichier audio et les timestamps
+mot. ElevenLabs répond `401 unauthorized` en signalant la permission
+`speech_to_text` manquante. Cette réponse concerne le STT ; elle ne doit ni
+masquer les autres réglages ni être interprétée comme l’échec du TTS. Un
+transcript collé évite le STT, mais le code demande encore la permission
+Forced Alignment pour produire les caractères horodatés.
+
 ## Décisions restantes
 
-- **T2 :** mesurer qualité, délai, mémoire et synchronisation des traitements
-  navigateur/serveur avant de choisir les modèles ou le repli SaaS. Étude à
-  conduire dès le cadrage ; choix requis avant le lot 5.
+- **T2 — qualification du fournisseur local :** comparer sur les
+  mêmes prises françaises le STT et l’alignement mot/caractère locaux, en
+  commençant par les candidats de l’étude et en vérifiant les options plus
+  récentes. Mesurer la précision, le temps, la mémoire, la licence et la forme
+  éditable de sortie ; ne pas intégrer de modèle avant ce contrôle. Générer
+  localement les 22 visèmes Azure du rig ; garder OpenFaceFX + MFA français
+  (15 formes Oculus) comme piste distincte, sans supposer l’équivalence des
+  jeux. HeadAudio/Talking Avatar restent des candidats d’estimation live et
+  Rhubarb un témoin A–H/X. Détails et limites dans la
+  [note d’étude](../notes/2026-11-04-talking-head-study.md#audit-local-complémentaire-et-recommandations--5-novembre-2026).
 - **T3 :** relever les contraintes de composition Avatar/Carousel et de fin à
   la durée de voix avec le player et le signal public existants. Le modèle de
   widgets sera réexaminé après collecte des contraintes des autres candidats.
@@ -131,8 +320,9 @@ en mémoire.
   Le rendu observé recouvre une partie du Carousel. La composition sans
   recouvrement est appliquée au lot 4. Preuves et analyse dans l’[étude](../notes/2026-11-04-talking-head-study.md#reprise-du-projet-3--5-novembre-2026).
 - **T4 :** schéma persistant des prises/pistes et admission audio/Rive/données
-  dans le catalogue média Elcé ; préparer le montage futur. L’emplacement du
-  module de captation reste à choisir avant le lot 5.
+  dans le catalogue média Elcé ; préparer le montage futur. Le module partagé
+  est localisé dans `packages/authoring/audio-capture/` ; l’attache de la piste
+  finale réutilise le service média Elcé existant.
 - **T5 :** format et précision de réduction temporelle ; restitution du regard
   selon les capacités réelles du rig, sans contrôle indépendant identifié.
 - **D1/D2 :** la télécommande est intégrée à la barre de navigation et le
@@ -204,8 +394,9 @@ accéder à la captation et aux réglages, dont la position ; sa présence activ
 dans le Carousel l’accès au transcript et le choix d’un mot horodaté.
 Le BDC Avatar est placé dans la Diapo à côté du Carousel. Il n’est ni une vue
 ni un enfant du Carousel. Le lot 4 conserve les fichiers audio, transcript et
-visèmes fournis ; le module de captation micro/caméra, la conversion après
-saisie et la réécoute restent au lot 5, selon l’ordre convenu.
+visèmes fournis ; le module de captation audio, la conversion après saisie et
+la réécoute restent au lot 5. La capture vidéo est différée jusqu’à validation
+de ce parcours.
 Décision du 5 novembre sur le retrait de l’Avatar ou le remplacement de sa
 prise : supprimer les liens aux occurrences du transcript, en conservant
 leurs temps de déclenchement. Ne pas conserver d’associations « À réassocier »
@@ -272,9 +463,9 @@ a été appliquée en mémoire à une copie désérialisée du Projet 3 : les
 déplacements 3e→1re et 4e→1re laissent une première carte à zéro, sans lien, et
 une séquence croissante ; le déplacement 4e avant 3e conserve son lien
 `Saturne` mais le rend hors ordre et non sélectionnable, puis le retour le
-réactive à 13 526 ms. Aucune donnée du Projet 3 n’a été écrite. Le build Elcé
-passe ; le typecheck reste bloqué uniquement par `TS6133` sur `title` dans
-`statistical-graph-scene-builder.ts:72`. Le drag UI, la sauvegarde/réouverture
+réactive à 13 526 ms. Aucune donnée du Projet 3 n’a été écrite. Le build et le
+typecheck Elcé passent depuis le 6 novembre, après retrait de la variable
+locale `title` inutilisée. Le drag UI, la sauvegarde/réouverture
 et la suite complète restent à vérifier. Le rejet API observé séparément
 atteint `assertAvatarContent` ; le document local examiné est valide, mais le
 document entrant qui a déclenché ce rejet n’a pas été capturé.
@@ -388,8 +579,8 @@ canvas ne peint pas encore le rig. L’acceptation des autres positions et de
 l’affichage initial restent ouvertes ; le lot 4 reste En cours.
 Le build Elcé du 5 novembre passe avec `vite build --emptyOutDir false`, en
 préservant `dist/avatars/` ; l’avertissement de taille de chunk préexiste. Le
-typecheck signale uniquement `TS6133` sur `title` inutilisé dans
-`statistical-graph-scene-builder.ts:72`, fichier hors de cette tranche.
+typecheck Elcé passe depuis le 6 novembre après retrait de la variable locale
+`title` inutilisée dans `statistical-graph-scene-builder.ts:72`.
 
 ## Acceptation et clôture
 
@@ -403,7 +594,7 @@ typecheck signale uniquement `TS6133` sur `title` inutilisé dans
   41 mots du JSON fourni. Elle utilise directement les propriétés/valeurs,
   le décalage bouche de 50 ms et la voix maître. Play, Seek et animations
   natives ont été vérifiés dans Safari MCP ; l’utilisateur valide le rendu.
-  La piste de tête issue de capture caméra reste au lot 5.
+  La piste de tête issue de capture caméra est différée après validation audio.
 - Lot 2 clos : composants dans `component-v2`, story autonome dans le package
   `authoring/story/rive-talking-avatar/`, guide dans ce dossier, fin de scène
   laissée à l’appelant et booléen `isTalking` unifié. **72 tests component-v2

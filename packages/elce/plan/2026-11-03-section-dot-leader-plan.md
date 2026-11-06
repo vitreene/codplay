@@ -33,8 +33,8 @@
    d’actions viewport Flux, empreinte CSS et observation de fin de page.
    Les deux suites serveur/SQLite passent hors sandbox (24 tests) ; le bac à
    sable refusait leurs ports locaux avec `EPERM`.
-   Le typecheck ne signale plus que la variable `title` inutilisée à la ligne
-   72 de `statistical-graph-scene-builder.ts`, fichier inchangé par cette tranche.
+   Le typecheck Elcé passe maintenant après suppression de la variable `title`
+   redondante dans `statistical-graph-scene-builder.ts`.
 4. [ ] Vérifier dans le navigateur baseline, resize, textes longs, focus,
    styles enrichis, persistance et preview. Brave est configuré localement,
    mais aucun outil de navigateur n’est exposé dans cette session ; cette

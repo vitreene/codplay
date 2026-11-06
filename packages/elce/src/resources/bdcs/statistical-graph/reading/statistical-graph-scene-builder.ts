@@ -69,7 +69,6 @@ export class ElceStatisticalGraphSceneBuilder {
     const plainContent = flattenGraphText(content)
     const renderingContent = transposeStatisticalGraphContent(plainContent)
     const renderingRichContent = transposeStatisticalGraphContent(content)
-    const title = plainContent.title.trim() || 'Graphe'
     const hasTitle = plainContent.title.trim().length > 0
     const hasOverline = plainContent.overline.trim().length > 0
     const hasEditorial = plainContent.editorialText.trim().length > 0

@@ -12,6 +12,7 @@ export default defineConfig({
       { find: 'codplay', replacement: resolve(__dirname, '../codplay/src/index.ts') },
       { find: /^ace\/(.*)/, replacement: resolve(__dirname, '../codplay/src/ace/$1') },
       { find: 'ace', replacement: resolve(__dirname, '../codplay/src/ace/index.ts') },
+      { find: '@codplay/audio-capture', replacement: resolve(__dirname, '../authoring/audio-capture/src/index.ts') },
       { find: '@codplay/capsule-automation', replacement: resolve(__dirname, '../authoring/capsule-automation/src/index.ts') },
       { find: '@codplay/exclusive-sync', replacement: resolve(__dirname, '../authoring/exclusive-sync/src/index.ts') },
       { find: '@codplay/scene-factory/capsule-distribution', replacement: resolve(__dirname, '../authoring/scene-factory/src/capsule-distribution.ts') },

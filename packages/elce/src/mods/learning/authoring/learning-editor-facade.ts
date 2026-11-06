@@ -179,13 +179,44 @@ export class LearningEditorFacade {
     this.apply({ type: 'bdc.avatar.delete', bdcId })
   }
 
-  /** Reads local take files and submits their audio to the common persisted import circuit. */
+  /** Reads the generated take files and waits for the common persisted import circuit to apply them. */
   public async importAvatarTake(bdcId: BdcId, audio: File, timeline: File): Promise<void> {
     const imported = this.mediaResourceService.createImport(audio)
     if (imported === null || !imported.media.mimeType.startsWith('audio/')) throw new Error('Choisissez un fichier audio.')
     const durationMs = await readAvatarAudioDuration(audio)
     const take = parseAvatarTimeline(JSON.parse(await timeline.text()), { id: createStableId('take'), audioMediaId: imported.media.id, durationMs })
-    this.controller.send({ type: 'avatar.take.file.import', bdcId, file: audio, media: imported.media, take })
+    await new Promise<void>((resolve, reject) => {
+      let wasQueued = false
+      let settled = false
+      let subscription: { unsubscribe(): void } | null = null
+      const finish = (error?: Error): void => {
+        if (settled) return
+        settled = true
+        subscription?.unsubscribe()
+        if (error === undefined) resolve()
+        else reject(error)
+      }
+      const inspectImport = (): void => {
+        const context = this.controller.getSnapshot().context
+        const appliedTake = context.document.bdcs.find((bdc) => bdc.id === bdcId)?.avatar?.take
+        if (appliedTake?.id === take.id) {
+          finish()
+          return
+        }
+        const queued = context.documentChanges.some((change) =>
+          change.kind === 'avatar-take-import' && change.take.id === take.id)
+        if (queued) {
+          wasQueued = true
+          return
+        }
+        if (wasQueued) finish(new Error('Elcé n’a pas pu enregistrer la prise dans l’Avatar.'))
+        else finish(new Error('L’éditeur Elcé n’a pas accepté la prise de l’Avatar.'))
+      }
+
+      subscription = this.controller.subscribe(inspectImport)
+      this.controller.send({ type: 'avatar.take.file.import', bdcId, file: audio, media: imported.media, take })
+      inspectImport()
+    })
   }
 
   /** Reassociates one view with a specific occurrence of the current voice transcript. */

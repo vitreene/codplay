@@ -25,8 +25,9 @@
     "generate:appearance": "node scripts/generate-appearance-palette-metadata.mjs"
   },
   "dependencies": {
-    "@codplay/exclusive-sync": "*",
+    "@codplay/audio-capture": "*",
     "@codplay/capsule-automation": "*",
+    "@codplay/exclusive-sync": "*",
     "@codplay/component-v2": "*",
     "@codplay/scene-factory": "*",
     "@codplay/story": "*",

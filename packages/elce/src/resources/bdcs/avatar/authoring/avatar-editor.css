@@ -53,3 +53,17 @@
   color: #727a75;
   font-size: 0.9rem;
 }
+
+.elce-avatar-editor__capture-module {
+  --audio-capture-ink: #293936;
+  --audio-capture-field: #fffdf8;
+  --audio-capture-border: #d5d1c7;
+  --audio-capture-primary: #46726b;
+  --audio-capture-primary-ink: #fffdf8;
+}
+
+.elce-avatar-capture-dialog {
+  box-sizing: border-box;
+  height: min(42rem, calc(100vh - 2rem));
+  height: min(42rem, calc(100dvh - 2rem));
+}

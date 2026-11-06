@@ -1,15 +1,19 @@
 import { on, type Handle } from 'remix/component'
 import { Maximize2, Mic, Minimize2, Trash2, X } from 'lucide-static'
+import { registerAudioCaptureElement } from '@codplay/audio-capture'
 import type { AvatarContent } from '../domain/avatar-types'
 import { AVATAR_POSITIONS } from '../avatar-config'
 import type { AppearanceTarget } from '../../../../domain/appearance/appearance-target-types'
 import { renderAppearanceTrigger } from '../../../../core/authoring/appearance-trigger'
 import { renderLucideIcon } from '../../../../core/authoring/lucide-static-icon'
 
+registerAudioCaptureElement()
+
 interface AvatarEditorProps {
   readonly bdcId: string
   readonly content: AvatarContent
   readonly audioSource?: string
+  readonly onInsert: (audio: File, timeline: File) => Promise<void>
   readonly onUpdate: (content: AvatarContent) => void
   readonly onDelete: () => void
   readonly onOpenAppearanceTarget: (target: AppearanceTarget, triggerId: string) => void
@@ -124,9 +128,8 @@ export function RemixAvatarEditor(handle: Handle<AvatarEditorProps>) {
 
       <dialog
         id={captureDialogId}
-        className="elce-export-dialog"
+        className="elce-export-dialog elce-avatar-capture-dialog"
         aria-labelledby={`elce-avatar-capture-title-${bdcId}`}
-        aria-describedby={`elce-avatar-capture-description-${bdcId}`}
       >
         <div id={`elce-avatar-capture-content-${bdcId}`} className="elce-export-dialog__content">
           <header id={`elce-avatar-capture-header-${bdcId}`} className="elce-export-dialog__header">
@@ -142,9 +145,21 @@ export function RemixAvatarEditor(handle: Handle<AvatarEditorProps>) {
               {renderLucideIcon(X, `elce-avatar-capture-close-icon-${bdcId}`)}
             </button>
           </header>
-          <p id={`elce-avatar-capture-description-${bdcId}`}>
-            La capture micro et caméra sera disponible dans le module dédié. La prise actuelle et son transcript restent conservés.
-          </p>
+          <codplay-audio-capture
+            id={`elce-avatar-capture-module-${bdcId}`}
+            className="elce-avatar-editor__capture-module"
+            mix={on<HTMLElement, 'audio-capture-insert'>('audio-capture-insert', async (event) => {
+              event.preventDefault()
+              const dialog = event.currentTarget.closest('dialog')
+              try {
+                await handle.props.onInsert(event.detail.audio, event.detail.timeline)
+                event.detail.complete()
+                if (dialog instanceof HTMLDialogElement && dialog.open) dialog.close()
+              } catch (error) {
+                event.detail.complete(error instanceof Error ? error.message : String(error))
+              }
+            })}
+          />
         </div>
       </dialog>
     </section>
