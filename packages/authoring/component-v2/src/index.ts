@@ -45,6 +45,7 @@ export {
   RIVE_LIBRARY,
   RiveDocumentComponent,
   RiveStateMachineComponent,
+  RiveViewModelComponent,
   RIVE_PRELOAD_STRATEGIES,
 } from './rive'
 export type {
@@ -65,6 +66,11 @@ export type {
   RiveStateMachineInitial,
   RiveStateMachineInput,
   RiveStateMachineInstance,
+  RiveViewModel,
+  RiveViewModelInstance,
+  RiveViewModelProperty,
+  RiveViewModelInitial,
+  RiveViewModelActionPayload,
 } from './rive'
 export {
   AVATAR_COMPONENTS,

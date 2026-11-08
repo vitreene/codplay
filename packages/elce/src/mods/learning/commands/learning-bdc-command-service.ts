@@ -1,3 +1,4 @@
+import { applyAvatarCommand } from './operations/avatar-commands'
 import type { LearningDocument } from '../document/learning-document'
 import type { LearningDocumentCommand } from './learning-document-command-types'
 import type { LearningCommandResourceServices } from './learning-command-resource-services'
@@ -42,6 +43,12 @@ export class LearningBdcCommandService {
     switch (command.type) {
       case 'bdc.create':
         return this.create(document, command)
+      case 'bdc.avatar.update':
+      case 'bdc.avatar.take.set':
+      case 'bdc.carousel.word.set':
+        return applyAvatarCommand(document, command, this.resources.carouselService)
+      case 'bdc.avatar.delete':
+        return deleteBdc(document, command.bdcId)
       case 'bdc.delete':
         return deleteCatalogBdc(document, command.bdcId)
       case 'bdc.question.update':
@@ -49,7 +56,7 @@ export class LearningBdcCommandService {
       case 'bdc.evaluation-result.update':
         return updateEvaluationResult(document, command.bdcId, command.evaluationResult, this.resources)
       case 'bdc.carousel.update':
-        return updateCarousel(document, command.bdcId, command.carousel, this.resources)
+        return updateCarousel(document, command.bdcId, command.carousel, this.resources, command.movedBdcId)
       case 'bdc.card.update':
         return updateCard(document, command.bdcId, command.card, this.resources)
       case 'bdc.statistical-graph.update':

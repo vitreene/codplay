@@ -43,6 +43,8 @@ export class LearningPageSceneCatalog {
     const sceneBdcs = pageBdcs.flatMap((bdc) => bdc === undefined ? [] : [bdc]).concat(childBdcs)
     const mediaIds = new Set(sceneBdcs.flatMap((bdc) => {
       switch (bdc.type) {
+        case BDC_TYPE.AVATAR:
+          return bdc.avatar?.take == null ? [] : [bdc.avatar.take.audioMediaId]
         case BDC_TYPE.CARD:
           return bdc.card?.mediaId == null ? [] : [bdc.card.mediaId]
         case BDC_TYPE.QUESTION:
@@ -69,7 +71,14 @@ export class LearningPageSceneCatalog {
       appearance: page.appearance,
       chapterType: sceneChapterType,
     }
-    const signature = JSON.stringify([scenePage, sceneBdcs, document.data.appearance, pageMediaSources, pageMediaTypes, editorSettings])
+    const signature = JSON.stringify([
+      scenePage,
+      sceneBdcs,
+      document.data.appearance,
+      pageMediaSources,
+      pageMediaTypes,
+      editorSettings,
+    ])
     const cached = cache?.get(pageId)
     if (cached?.signature === signature) {
       return [`scene-${page.id}`, cached.source]

@@ -409,7 +409,7 @@ function resolveAnchorCard(
   return {
     content: card.card,
     layoutId: card.presetId as CardLayoutId,
-    media: mediaMetadata === undefined || source === undefined || mediaType === null
+    media: mediaMetadata === undefined || source === undefined || mediaType === null || mediaType === 'audio'
       ? null
       : { source, type: mediaType },
     ...(usesImageTitle ? {

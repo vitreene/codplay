@@ -12,7 +12,10 @@ import type { ElceProjectSummary } from '../../../infrastructure/project-api/pro
 import type { ProjectSessionOperation, ProjectSessionPort } from '../../../app/projects/project-session-types'
 import type { LearningSelection, SectionSelection } from './learning-selection-service'
 
+import type { AvatarTake } from '../../../resources/bdcs/avatar/domain/avatar-types'
+
 export type LearningCompositionEvent =
+  | Readonly<{ type: 'avatar.take.file.import'; bdcId: BdcId; file: File; media: MediaMetadata; take: AvatarTake }>
   | Readonly<{ type: 'carousel.card.select'; bdcId: string | null }>
   | Readonly<{ type: 'catalog.tab.select'; tabId: CatalogTabType }>
   | Readonly<{ type: 'section.change'; sectionBdcId: string; change: ElceSectionChange; historyGroupKey?: string; selectionBefore?: SectionSelection; selectionAfter?: SectionSelection }>

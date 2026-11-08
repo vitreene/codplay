@@ -256,6 +256,25 @@ export const V2_DEMO_REGISTRY: readonly V2DemoDefinition[] = [
     },
   },
   {
+    id: "rive-view-model",
+    path: "?demo=rive-view-model",
+    title: "Rive — visèmes du modèle Matt",
+    description:
+      "La piste voix et sous-titres de la démo Rive pilote le ViewModel du rig Matt dans le player V2.",
+    load: async () => {
+      const [module, stylesheet] = await Promise.all([
+        import("./demos/rive-view-model/main"),
+        import("./demos/rive-view-model/style.css?url"),
+      ]);
+      return {
+        createScene: module.createScene,
+        stylesheetUrl: resolveStylesheetUrl(stylesheet.default),
+        engineCapabilities: module.engineCapabilities,
+        preloadStrategies: module.preloadStrategies,
+      };
+    },
+  },
+  {
     id: "avatar",
     path: "?demo=avatar",
     title: "Avatar — composants spécialisés",
@@ -305,6 +324,7 @@ const V2_FAME_DEMO_IDS = [
   "chrono",
   "threejs-grid",
   "rive",
+  "rive-view-model",
   "stroke-path",
 ] as const;
 

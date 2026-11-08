@@ -37,7 +37,7 @@ export class ElceCarouselFacade {
     cards: readonly ResourceBdc[],
     revelationDefaults: RevelationTransitionDefaults,
   ): ElceCarouselEditorActions {
-    const updateCarousel = (carousel: CarouselContent): void => this.dispatch({ type: 'bdc.carousel.update', bdcId, carousel })
+    const updateCarousel = (carousel: CarouselContent, movedBdcId?: BdcId): void => this.dispatch({ type: 'bdc.carousel.update', bdcId, carousel, movedBdcId })
     const updateCarouselFrom = (transform: (current: CarouselContent) => CarouselContent): void => updateCarousel(transform(content))
     const cardActions = this.cardFacade.createEditorActions(cards)
     /** Imports one supported file through the controller's serialized media queue. */
@@ -126,7 +126,10 @@ export class ElceCarouselFacade {
         this.dispatch({ type: 'bdc.statistical-graph.delete', bdcId: graphBdcId })
         if (selectedBdcId === graphBdcId) this.selectCard(next.cards[0]?.bdcId ?? null)
       },
-      moveCard: (cardBdcId, index) => updateCarouselFrom((current) => this.carouselService.moveCard(current, cardBdcId, index)),
+      moveCard: (cardBdcId, index) => updateCarousel(
+        this.carouselService.moveCard(content, cardBdcId, index),
+        cardBdcId,
+      ),
       setDefaultViewDurationSeconds: (seconds) => updateCarouselFrom((current) => this.carouselService.setDefaultViewDuration(current, seconds * 1000)),
       setPlaybackMode: (mode) => updateCarouselFrom((current) => this.carouselService.setPlaybackMode(current, mode)),
       setRepeatCount: (count) => updateCarouselFrom((current) => this.carouselService.setRepeatCount(current, count)),

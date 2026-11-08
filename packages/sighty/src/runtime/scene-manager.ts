@@ -52,10 +52,13 @@ export class RuntimeSceneManager<SceneKey extends string, SlotName extends strin
     return builds
   }
 
-  /** Compiles and preloads one scene without creating an occurrence. */
+  /** Compiles and prepares one scene without creating an occurrence. */
   async ensureScene(sceneKey: SceneKey): Promise<SightyRuntimeBuild> {
     const existingBuild = this.state.compiledBuilds.get(sceneKey)
-    if (existingBuild !== undefined) return existingBuild
+    if (existingBuild !== undefined) {
+      await this.prepareRuntimeLibraries(sceneKey, existingBuild)
+      return existingBuild
+    }
 
     const source = await this.state.scenario.resolveScene(sceneKey)
     if (source === undefined) throw new Error(`La ressource de scène Sighty ${sceneKey} est absente.`)
@@ -66,10 +69,18 @@ export class RuntimeSceneManager<SceneKey extends string, SlotName extends strin
     if (!result.ok) {
       throw new Error(`La scène Sighty ${sceneKey} est invalide. ${diagnosticDetails(result.diagnostics.errors)}`)
     }
+    await this.prepareRuntimeLibraries(sceneKey, result)
     await this.preloadScenes(new Map([[sceneKey, result]]))
     this.installSceneStyleSheet(sceneKey, styleSheet)
     this.state.compiledBuilds.set(sceneKey, result)
     return result
+  }
+
+  /** Prepares direct-scene engine libraries without repeating package preparation. */
+  private async prepareRuntimeLibraries(sceneKey: SceneKey, build: SightyRuntimeBuild): Promise<void> {
+    if (this.state.packagedSceneKeys.has(sceneKey)) return
+    if ((build.compiledScene.requirements.libraries?.length ?? 0) === 0) return
+    await this.state.owner.engine.prepareScene(build.compiledScene)
   }
 
   /** Ensures the layout and every scene used by one target composition exist. */

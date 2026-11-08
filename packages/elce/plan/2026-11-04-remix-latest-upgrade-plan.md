@@ -21,15 +21,25 @@
 ## Actions et acceptation
 
 1. [x] Installer la version publiée dans `packages/elce/package.json` et
-   réconcilier le lockfile ; vérifier l’absence de RC4 résiduelle.
+   réconcilier le lockfile ; vérifier l’absence de RC4 résiduelle. L’audit de
+   tous les manifestes confirme qu’Elcé est l’unique déclaration directe de
+   `remix`; le lockfile ne résout qu’un `remix@3.1.0`. Chaque paquet
+   `@remix-run/*` n’a qu’une résolution, avec sa propre version de paquet.
+   Au signalement, `node_modules/remix` était encore `3.0.0-rc.4` alors que
+   manifeste et lockfile indiquaient `3.1.0` : ce décalage installé causait
+   l’import SSR non exporté. La réconciliation a remis `3.1.0` et restauré
+   `semver@7.8.6`, absent de l’arbre installé.
 2. [x] Migrer les imports de production et de tests, `tsconfig.json`, JSX,
    serveur d’assets et HMR ; adapter les appels modifiés à contrat constant.
 3. [x] Vérifier compilation réelle des assets et des JSON, serveur/API/SQLite,
    rendu Remix, édition/Undo/Redo Tiptap, preview et cycle de vie ; exécuter
    suite Elcé, typecheck et build et comparer les échecs à la référence.
-   Les six suites ciblées passent 52 tests ; build réussi. Les échecs
-   restants sont suivis ci-dessous ; la validation globale reste rouge.
-   Le typecheck conserve le `title` inutilisé.
+   Les six suites ciblées passent 52 tests ; build réussi. La suite complète
+   relevée sur `elce-avatar` conserve 583 réussites sur 595, avec une erreur
+   Tiptap asynchrone déjà signalée. Le typecheck passe après retrait de la
+   variable `title` locale redondante du builder Graphe ; ses tests ciblés
+   passent 15/15. L’inventaire de tests diffère sur `elce` après les retraits
+   demandés le 4 novembre ; revalider le workspace intégré avant clôture.
    Le vrai lancement `npm run dev` sert document, entrée, runtime JSX,
    composant auteur, module HMR et API en HTTP 200 ; une modification CSS
    temporaire déclenche `browser:reload` via SSE et actualise la feuille servie.
@@ -57,8 +67,12 @@
      retrait du parcours catalogue obsolète. Aucun changement de production.
    - `elce-local-server.test.ts:48` : délai dépassé dans la suite complète,
      succès dans le groupe ciblé (1) ; qualifier la cause de cette instabilité.
-   - Typecheck : `statistical-graph-scene-builder.ts:72`, variable inutilisée.
-5. [ ] Vérifier le navigateur si un outil est exposé. Brave est configuré mais
-   absent de l’inventaire callable actuel : garder cette acceptation en attente.
+   - [x] Le typecheck est rétabli après retrait de `title` dans le builder
+     Graphe ; les 15 tests ciblés passent sur `elce-avatar`. Revalider après
+     intégration des deux branches.
+5. [x] Vérifier le navigateur sur le workspace courant. Après redémarrage du
+   serveur, Safari affiche le catalogue Elcé puis le Projet 3 et ses éditeurs
+   Avatar/Carousel ; HMR se connecte sans erreur console. La preview Rive et
+   l’insertion audio restent suivies dans le plan talking-head.
 6. [x] Actualiser les spécifications propriétaires pour les adaptations
    implémentées et vérifiées ; conserver ce plan pour les preuves manquantes.

@@ -53,7 +53,8 @@ export class ElceAnchorDropService {
       })
     }
     for (const media of document.medias) {
-      switch (mediaTypeFromMimeType(media.mimeType)) {
+      const mediaType = mediaTypeFromMimeType(media.mimeType)
+      switch (mediaType) {
         case MEDIA_TYPE.IMAGE:
           mediaEntries.push({
             key: `${CATALOG_REFERENCE.MEDIA}:${media.id}`,
@@ -62,11 +63,12 @@ export class ElceAnchorDropService {
             reference: { kind: CATALOG_REFERENCE.MEDIA, mediaId: media.id },
           })
           break
+        case MEDIA_TYPE.AUDIO:
         case MEDIA_TYPE.VIDEO:
           mediaEntries.push({
             key: `${CATALOG_REFERENCE.MEDIA}:${media.id}`,
             name: media.name,
-            mediaType: MEDIA_TYPE.VIDEO,
+            mediaType,
             reference: { kind: CATALOG_REFERENCE.MEDIA, mediaId: media.id },
           })
           break
@@ -80,6 +82,7 @@ export class ElceAnchorDropService {
   /** Creates a typed, stable target for one accepted file drop. */
   public createFileDropTarget(file: File, pageId: PageId): ElceAnchorDropTarget | null {
     const mediaImport = mediaResourceService.createImport(file)
+    if (mediaImport !== null && mediaImport.media.mimeType.startsWith('audio/')) return null
     switch (mediaImport) {
       case null:
         return null
@@ -329,7 +332,7 @@ function createReusableMediaDropTarget(
 /** Builds the stable Card reference created by one accepted file drop. */
 function createMediaDropTarget(media: MediaMetadata, pageId: PageId): ElceAnchorDropTarget {
   const mediaType = mediaTypeFromMimeType(media.mimeType)
-  if (mediaType === null) throw new Error(`Type média non pris en charge : ${media.mimeType}`)
+  if (mediaType === null || mediaType === 'audio') throw new Error(`Type média non pris en charge : ${media.mimeType}`)
   const preset = ANCHOR_MEDIA_PRESETS[mediaType]
   const bdcId = createStableId('bdc-card')
   return {

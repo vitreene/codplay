@@ -17,6 +17,7 @@ import type { ElceDocumentStore, MediaBlob } from '../../../infrastructure/index
 import { ProjectEditorLock } from '../../../app/sync/project-editor-lock'
 import { LearningEditorContextProvider } from '../composition/learning-editor-context'
 import { LearningPageEditor } from './learning-page-editor'
+import { createAvatarDocumentFixture, createAvatarTakeFixture } from '../integration/fixtures/avatar-document-fixture'
 
 describe('Remix production page editor', () => {
   let cleanup: (() => void | Promise<void>) | undefined
@@ -299,6 +300,93 @@ describe('Remix production page editor', () => {
     cleanup = undefined
     expect(unsubscribeSpy).toHaveBeenCalledOnce()
     controller.stop()
+  })
+
+  it('renders Avatar controls in the shared BDC style and selects transcript times per Card', async () => {
+    const controller = createActor(controllerMachine, { input: {} })
+    controller.start()
+    controller.send({ type: 'document.replace', document: createAvatarDocumentFixture() })
+    controller.send({ type: 'editor.access.activate' })
+    controller.send({ type: 'page.select', pageId: 'page-avatar' })
+    const actions = new LearningEditorFacade(controller)
+    const rendered = render(<LearningEditorContextProvider controller={controller} actions={actions}>
+      <LearningPageEditor canMoveBdcToPage={actions.authoring.canMoveBdcToPage.bind(actions)} onOpenAppearanceTarget={() => undefined} />
+    </LearningEditorContextProvider>)
+    cleanup = () => {
+      rendered.cleanup()
+      controller.stop()
+    }
+
+    await actOnRemix(rendered, () => Promise.resolve())
+    const avatarEditor = rendered.$('#elce-avatar-editor-avatar-test')
+    expect(avatarEditor?.classList.contains('elce-card-editor')).toBe(true)
+    expect(rendered.$('#elce-avatar-start-avatar-test')).toBeNull()
+    expect(rendered.$('#elce-avatar-delete-icon-avatar-test')).not.toBeNull()
+    expect((rendered.$('#elce-avatar-width-avatar-test') as HTMLInputElement).type).toBe('range')
+    expect((rendered.$('#elce-avatar-width-avatar-test') as HTMLInputElement).max).toBe('5')
+    expect(avatarEditor?.querySelector('input[type="file"]')).toBeNull()
+    expect(rendered.$('#elce-avatar-transcript-avatar-test')?.textContent).toBe('Bonjour encore encore')
+    expect(rendered.$('#elce-avatar-capture-dialog-avatar-test')?.classList.contains('elce-export-dialog')).toBe(true)
+
+    const captureDialog = rendered.$('#elce-avatar-capture-dialog-avatar-test') as HTMLDialogElement
+    captureDialog.showModal = () => { captureDialog.open = true }
+    captureDialog.close = () => { captureDialog.open = false }
+    await actOnRemix(rendered, () => rendered.$('#elce-avatar-capture-open-avatar-test')?.click())
+    expect(captureDialog.open).toBe(true)
+    await actOnRemix(rendered, () => rendered.$('#elce-avatar-capture-close-avatar-test')?.click())
+    expect(captureDialog.open).toBe(false)
+
+    await actOnRemix(rendered, () => rendered.$('#elce-carousel-card-tab-card-two')?.click())
+    const cardEditor = rendered.$('#elce-carousel-card-editor-card-two')
+    const transcript = rendered.$('#elce-carousel-transcript-card-two-details')
+    const radio = rendered.$('#elce-carousel-transcript-card-two-word-1') as HTMLInputElement
+    expect(cardEditor?.contains(transcript)).toBe(true)
+    expect(radio.type).toBe('radio')
+    expect(radio.value).toBe('2400')
+    expect((rendered.$('#elce-carousel-card-duration-card-two') as HTMLInputElement).value).toBe('encore')
+    expect(transcript?.textContent).not.toContain('2.400')
+
+    const replacementTake = createAvatarTakeFixture('take-replacement', 350)
+    const replacementTakeWithFutureWord = {
+      ...replacementTake,
+      words: [...replacementTake.words, { text: 'plus tard', startAtMs: 9000, endAtMs: 9400 }],
+    }
+    await actOnRemix(rendered, () => controller.send({
+      type: 'document.apply',
+      command: { type: 'bdc.avatar.take.set', bdcId: 'avatar-test', take: replacementTakeWithFutureWord },
+    }))
+    await actOnRemix(rendered, () => rendered.$('#elce-carousel-card-tab-card-two')?.click())
+    expect(rendered.$('#elce-carousel-card-duration-caption-card-two')?.textContent).toBe('Durée (sec.)')
+    expect((rendered.$('#elce-carousel-card-duration-card-two') as HTMLInputElement).value).toBe('4.4')
+    expect((rendered.$('#elce-carousel-transcript-card-two-word-0') as HTMLInputElement).disabled).toBe(true)
+    expect(rendered.$('#elce-carousel-transcript-card-two-choice-0')?.classList.contains('is-disabled')).toBe(true)
+    expect((rendered.$('#elce-carousel-transcript-card-two-word-2') as HTMLInputElement).value).toBe('7150')
+    expect((rendered.$('#elce-carousel-transcript-card-two-word-2') as HTMLInputElement).disabled).toBe(false)
+    await actOnRemix(rendered, () => rendered.$('#elce-carousel-transcript-card-two-choice-2')?.click())
+    let currentCarousel = controller.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === 'carousel-test')?.carousel
+    expect(currentCarousel?.cards.map((entry) => entry.durationMs)).toEqual([7150, 4400, 450])
+    expect(currentCarousel?.cards[2]?.cue?.word).toBeUndefined()
+
+    await actOnRemix(rendered, () => rendered.$('#elce-carousel-card-tab-card-three')?.click())
+    expect((rendered.$('#elce-carousel-transcript-card-three-word-3') as HTMLInputElement).value).toBe('9000')
+    expect((rendered.$('#elce-carousel-transcript-card-three-word-3') as HTMLInputElement).disabled).toBe(false)
+    await actOnRemix(rendered, () => rendered.$('#elce-carousel-transcript-card-three-choice-3')?.click())
+    currentCarousel = controller.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === 'carousel-test')?.carousel
+    expect(currentCarousel?.cards.map((entry) => entry.durationMs)).toEqual([7150, 1850, 3000])
+    expect(currentCarousel?.cards[2]?.cue?.word).toEqual({ avatarBdcId: 'avatar-test', takeId: 'take-replacement', wordIndex: 3 })
+
+    await actOnRemix(rendered, () => {
+      const position = rendered.$('#elce-avatar-position-avatar-test') as HTMLSelectElement
+      position.value = 'bottom-right'
+      position.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(controller.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === 'avatar-test')?.avatar?.placement.position).toBe('bottom-right')
+    await actOnRemix(rendered, () => {
+      const width = rendered.$('#elce-avatar-width-avatar-test') as HTMLInputElement
+      width.value = '5'
+      width.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(controller.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === 'avatar-test')?.avatar?.placement.widthPercent).toBe(60)
   })
 
   it('imports Question, standalone Card, and multi-file Carousel media through the shared XState queue', async () => {

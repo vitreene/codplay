@@ -77,6 +77,9 @@ de celui du paquet `remix`. La branche RC4 et ses anciens runtimes `ui` et
 - [`elce-local-server.ts`](../src/server/elce-local-server.ts) sert le document
   Remix et ses assets, puis réutilise ou lance le serveur projet API sur
   `127.0.0.1:5181`. La réponse HTML fournit l’import map Remix et les styles.
+  Le module partagé `packages/authoring/audio-capture/src` est autorisé par
+  `allowFiles` et servi depuis son mount `audioCapture`, afin que l’éditeur
+  puisse importer `@codplay/audio-capture` sans déplacer son code dans Elcé.
   Le mount `vendor` expose le `node_modules` racine et `elceVendor` expose
   `packages/elce/node_modules` sous `/assets/elceVendor/`. Ces deux mounts
   suivent la résolution des workspaces npm ; Remix 3.1.0 et son runtime
@@ -111,6 +114,18 @@ de celui du paquet `remix`. La branche RC4 et ses anciens runtimes `ui` et
   sans serveur Vite navigateur supplémentaire.
   Le chargeur de composants est `componentHmr()` depuis
   `remix/component-hmr/assets` ; il complète le chargeur JSON existant.
+
+Le 5 novembre 2026, après redémarrage du serveur local, Safari MCP a chargé
+l’éditeur du Projet 3 et ouvert « Capture live » avec le module audio partagé.
+La requête initialement en erreur vers `browser-entry.tsx` ne renvoie plus de
+500. Après la correction du 5 novembre, Safari MCP y voit dix voix de démo
+avec Aria sélectionnée ; une clé temporaire non persistée et un texte activent
+le contrôle TTS sans envoyer de requête API. La case de mémorisation reste
+décochée et aucune clé n’est présente dans `localStorage`. Le typecheck du
+module partagé passe. Le chargement réel des voix du compte et les appels
+ElevenLabs autorisés restent au [lot 5 du plan talking
+head](../plan/2026-11-04-talking-head-plan.md#lot-5--module-audio-réutilisable--phase-1-en-cours) ;
+aucune génération payante n’a été faite.
 
 ## Imports JSON locaux
 
@@ -202,6 +217,11 @@ Le suivi de l'intégration et de l'acceptation globale reste dans le
   complète avec la RC4 conserve 583 tests réussis et les mêmes 11 échecs sur
   594 tests ; le typecheck conserve seulement l’erreur préexistante `TS6133`
   sur `title` dans `statistical-graph-scene-builder.ts`.
+- Le 6 novembre 2026, le typecheck Elcé passe après retrait de la variable
+  locale `title` inutilisée de `statistical-graph-scene-builder.ts`. Safari
+  ouvre le catalogue, puis le Projet 3 et ses éditeurs Avatar/Carousel sur
+  `localhost:5175` après le redémarrage du serveur ; la console ne signale que
+  la connexion HMR.
 - Le même jour, `npm run dev` lance le vrai superviseur et le serveur avec
   une base temporaire et des ports libres. Les requêtes HTTP sur le document,
   l’entrée auteur, le runtime JSX `@remix-run/component`, une vue auteur,

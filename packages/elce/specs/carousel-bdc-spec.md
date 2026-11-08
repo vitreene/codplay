@@ -28,10 +28,16 @@ nouveau BDC.
 
 `CarouselContent` contient la durée commune, le mode manuel ou automatique, le
 nombre fini de répétitions, le ratio, la transition et la liste ordonnée
-`cards` d’entrées `{ bdcId, durationMs }`. Chaque entrée référence un BDC Carte
-ou Graphe enfant. La durée particulière appartient à l’entrée du
-Carousel ; `null` signifie que la durée commune s’applique. Un Carousel doit
-contenir au moins une vue.
+`cards` d’entrées `{ bdcId, durationMs, cue? }`. Chaque entrée référence un BDC
+Carte ou Graphe enfant. La durée particulière appartient à l’entrée du
+Carousel ; `null` signifie que la durée commune s’applique. Dans une Diapo
+narrée, `durationMs` reste la source de vérité : les débuts de vue sont calculés
+en cumulant ces durées. Une association facultative de transcript identifie
+l’Avatar, la prise et l’index de l’occurrence ; son temps sert à recalculer les
+durées concernées pendant l’édition, sans être stocké comme début absolu. Le
+contrat d’association est détaillé dans la
+[spécification du BDC Avatar](./avatar-bdc-spec.md). Un Carousel doit contenir
+au moins une vue.
 
 Chaque BDC Carte porte dans `card` tous les champs : surtitre (`overline`),
 titre, description, message (250 caractères maximum), note, légende et
@@ -100,6 +106,14 @@ dans le même Carousel, avec le layout, le cadrage et la position du média de l
 Carte cible. Chaque ressource importée conserve sa propre référence média.
 Les boutons d’ajout de vue affichent « Carte » et « Graphe » sous leur icône ;
 leur nom accessible conserve la description complète.
+
+Dans une Diapo narrée, l’association de transcript est éditée dans chaque BDC
+Carte enfant, avec un bouton radio caché par occurrence. Elle n’apparaît pas
+comme un sélecteur global dans le Carousel. Le champ alterne entre « Mot
+associé » avec le mot choisi et la durée de la vue, sous le libellé
+« Durée (sec.) ». Sans association, la durée reste éditable. Les temps des mots
+sont convertis en intervalles de durées lors de l’édition ; le BDC Avatar
+précise le comportement de retrait, de remplacement et de réassociation.
 
 Le Carousel règle aussi le mode, la durée commune, le ratio, la transition et
 le nombre de passages automatiques supplémentaires. Les valeurs initiales

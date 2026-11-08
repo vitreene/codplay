@@ -18,6 +18,8 @@
       "@codplay/sighty": ["../sighty/src/index.ts"],
       "@codplay/component-v2": ["../authoring/component-v2/src/index.ts"],
       "@codplay/component-v2/*": ["../authoring/component-v2/src/*"],
+      "@codplay/story": ["../authoring/story/rive-talking-avatar/index.ts"],
+      "@codplay/story/*": ["../authoring/story/*"],
       // Keep the same priority order as build/resolve-codplay-authoring.ts.
       "@codplay/*": [
         "../authoring/components/*/src/index.ts",

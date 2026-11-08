@@ -4,11 +4,59 @@ import { ELCE_EDITOR_SETTINGS } from '../../../../config/editor-settings'
 import type { CarouselPlaybackMode } from '../carousel-config'
 import type { CarouselTransition } from '../../../revelation/revelation-types'
 import type { BdcId } from '../../../../core/document/content-document-types'
-import type { CarouselAspectRatio, CarouselContent } from './carousel-types'
+import type { CarouselAspectRatio, CarouselBdcEntry, CarouselContent, CarouselCueWordReference } from './carousel-types'
 import type { RevelationTransitionDefaults } from '../../../revelation/revelation-types'
 import { ElceEditorSettingsResolver } from '../../../../domain/editor-settings/editor-settings-resolver'
 
 const editorSettingsResolver = new ElceEditorSettingsResolver()
+
+/** Resolves each view's start by accumulating its authored duration. */
+export function resolveCarouselViewStarts(content: CarouselContent): readonly number[] {
+  return content.cards.reduce<number[]>((starts, _entry, index) => [
+    ...starts,
+    index === 0 ? 0 : starts[index - 1]! + (content.cards[index - 1]!.durationMs ?? content.defaultViewDurationMs),
+  ], [])
+}
+
+export type LegacyCarouselContent = Omit<CarouselContent, 'cards'> & Readonly<{
+  cards: readonly (Omit<CarouselBdcEntry, 'cue'> & Readonly<{
+    cue?: Readonly<{ startAtMs?: number; word?: CarouselCueWordReference }>
+  }>)[]
+}>
+
+/** Converts v11 absolute cue starts into persisted per-view durations. */
+export function migrateLegacyCarouselCueDurations(
+  content: LegacyCarouselContent,
+  voiceDurationMs?: number,
+): CarouselContent {
+  if (!content.cards.some((entry) => entry.cue?.startAtMs !== undefined)) {
+    return { ...content, cards: content.cards.map(({ cue, ...entry }) => ({
+      ...entry,
+      ...(cue?.word === undefined ? {} : { cue: { word: cue.word } }),
+    })) }
+  }
+  const starts = content.cards.reduce<number[]>((times, entry, index) => [
+    ...times,
+    entry.cue?.startAtMs ?? (index === 0 ? 0 : times[index - 1]! + (content.cards[index - 1]!.durationMs ?? content.defaultViewDurationMs)),
+  ], [])
+  const cards = content.cards.map((entry, index) => {
+    const startAtMs = starts[index]!
+    const fallbackDuration = entry.durationMs ?? content.defaultViewDurationMs
+    const endAtMs = starts[index + 1]
+      ?? (voiceDurationMs !== undefined && voiceDurationMs > startAtMs ? voiceDurationMs : startAtMs + fallbackDuration)
+    const durationMs = endAtMs > startAtMs ? endAtMs - startAtMs : fallbackDuration
+    const { cue, ...card } = entry
+    return {
+      ...card,
+      durationMs,
+      ...(cue?.word === undefined ? {} : { cue: { word: cue.word } }),
+    }
+  })
+  return {
+    ...content,
+    cards,
+  }
+}
 
 /** Owns Carousel playback settings and its ordered illustration BDC relationships. */
 export class ElceCarouselService {
@@ -44,6 +92,72 @@ export class ElceCarouselService {
     if (entry === undefined) return content
     cards.splice(Math.max(0, Math.min(index, cards.length)), 0, entry)
     return { ...content, cards }
+  }
+
+  /** Recalculates per-view durations from word associations and free views. */
+  public reconcileCueDurations(
+    content: CarouselContent,
+    changedBdcId: BdcId | undefined,
+    resolveWordStartAt: (word: CarouselCueWordReference) => number | undefined,
+    voiceDurationMs?: number,
+    options: Readonly<{ clearLaterAssociationsOvertaken?: boolean }> = {},
+  ): CarouselContent {
+    if (voiceDurationMs === undefined && !content.cards.some((entry) => entry.cue !== undefined)) return content
+    const changedIndex = changedBdcId === undefined ? -1 : content.cards.findIndex((entry) => entry.bdcId === changedBdcId)
+    if (changedBdcId !== undefined && changedIndex < 0) return content
+    const changedStartAtMs = changedIndex < 0 ? undefined : content.cards[changedIndex]?.cue?.word === undefined
+      ? undefined : resolveWordStartAt(content.cards[changedIndex]!.cue!.word)
+    const cards: readonly CarouselBdcEntry[] = content.cards.map((entry, index) => {
+      if (index === 0 && entry.cue !== undefined) {
+        const { cue: _cue, ...withoutCue } = entry
+        return withoutCue
+      }
+      const laterWordStartAtMs = entry.cue?.word === undefined ? undefined : resolveWordStartAt(entry.cue.word)
+      if (options.clearLaterAssociationsOvertaken === true && index > changedIndex
+        && changedStartAtMs !== undefined && laterWordStartAtMs !== undefined && laterWordStartAtMs <= changedStartAtMs) {
+        const { cue: _cue, ...withoutCue } = entry
+        return withoutCue
+      }
+      return entry
+    })
+    const markers = cards.slice(1).reduce<Readonly<{ values: readonly Readonly<{ index: number; startAtMs: number }>[]; lastStartAtMs: number }>>(
+      (result, entry, offset) => {
+        const index = offset + 1
+        const word = entry.cue?.word
+        const startAtMs = word === undefined ? undefined : resolveWordStartAt(word)
+        if (startAtMs === undefined || startAtMs <= result.lastStartAtMs) return result
+        return { values: [...result.values, { index, startAtMs }], lastStartAtMs: startAtMs }
+      },
+      { values: [{ index: 0, startAtMs: 0 }], lastStartAtMs: 0 },
+    ).values
+    const durations = cards.map((entry) => entry.durationMs ?? content.defaultViewDurationMs)
+    markers.slice(1).forEach((next, markerIndex) => {
+      const previous = markers[markerIndex]!
+      const count = next.index - previous.index
+      const durationMs = (next.startAtMs - previous.startAtMs) / count
+      Array.from({ length: count }, (_, offset) => previous.index + offset)
+        .forEach((index) => { durations[index] = durationMs })
+    })
+    const lastMarker = markers.at(-1)!
+    const tailCount = cards.length - lastMarker.index
+    if (tailCount > 0 && voiceDurationMs !== undefined && voiceDurationMs > lastMarker.startAtMs) {
+      const remainingMs = voiceDurationMs - lastMarker.startAtMs
+      const tailIndices = Array.from({ length: tailCount }, (_, offset) => lastMarker.index + offset)
+      const preFinalIndices = tailIndices.slice(0, -1)
+      const preFinalDuration = preFinalIndices.reduce((total, index) => total + durations[index]!, 0)
+      if (preFinalDuration >= remainingMs) {
+        const durationMs = remainingMs / tailCount
+        tailIndices.forEach((index) => { durations[index] = durationMs })
+      }
+      if (preFinalDuration < remainingMs) {
+        const finalIndex = tailIndices.at(-1)!
+        durations[finalIndex] = remainingMs - preFinalDuration
+      }
+    }
+    return {
+      ...content,
+      cards: cards.map((entry, index) => ({ ...entry, durationMs: durations[index]! })),
+    }
   }
 
   /** Changes the shared automatic duration used by entries without an override. */

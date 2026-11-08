@@ -348,6 +348,9 @@ une expression ou toute autre fonctionnalité d’application peut utiliser les
 valeurs nommées de ce composant pour piloter les inputs de la state machine.
 Voir [`src/rive/README.md`](src/rive/README.md).
 
+La story réutilisable d’avatar parlant est publiée séparément dans
+`@codplay/story/rive-talking-avatar`.
+
 ## Scroll container
 
 Le guide complet et accessible du composant se trouve dans

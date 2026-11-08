@@ -2,7 +2,7 @@ import { CATALOG_REFERENCE } from './catalog-config'
 import { MEDIA_TYPE } from '../media/media-config'
 import type { BdcId, MediaId, MediaMetadata, PageId } from '../document/content-document-types'
 
-export type ElceCatalogMediaType = typeof MEDIA_TYPE.IMAGE | typeof MEDIA_TYPE.VIDEO
+export type ElceCatalogMediaType = typeof MEDIA_TYPE.IMAGE | typeof MEDIA_TYPE.VIDEO | typeof MEDIA_TYPE.AUDIO
 
 export type ElceCatalogReference =
   | Readonly<{ kind: typeof CATALOG_REFERENCE.BDC; bdcId: BdcId }>

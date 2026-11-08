@@ -28,6 +28,7 @@ export interface RemixCardEditorFieldsProps {
   readonly allowMultipleMediaFiles?: boolean
   readonly importMediaFiles?: (bdcId: BdcId, files: readonly File[]) => void
   readonly toolbarContent?: RemixNode
+  readonly belowToolbarContent?: RemixNode
   readonly toolbarEnd?: RemixNode
   readonly textFieldFeature?: ResourceTextFieldFeature
 }
@@ -35,7 +36,7 @@ export interface RemixCardEditorFieldsProps {
 /** Renders the shared Card fields in the Remix runtime. */
 export function RemixCardEditorFields(handle: Handle<RemixCardEditorFieldsProps>) {
   return () => {
-    const { bdc, mediaById, actions, idPrefix, imageAspectRatio, allowMultipleMediaFiles, importMediaFiles, toolbarContent, toolbarEnd, textFieldAttributes, textFieldFeature } = handle.props
+    const { bdc, mediaById, actions, idPrefix, imageAspectRatio, allowMultipleMediaFiles, importMediaFiles, toolbarContent, belowToolbarContent, toolbarEnd, textFieldAttributes, textFieldFeature } = handle.props
     switch (bdc.type) {
       case CARD_BDC_TYPE:
         switch (bdc.card) {
@@ -54,6 +55,7 @@ export function RemixCardEditorFields(handle: Handle<RemixCardEditorFieldsProps>
               allowMultipleMediaFiles === true,
               importMediaFiles,
               toolbarContent,
+              belowToolbarContent,
               toolbarEnd,
               textFieldAttributes,
               textFieldFeature,
@@ -77,6 +79,7 @@ function renderCardFields(
   allowMultipleMediaFiles: boolean,
   importMediaFiles: RemixCardEditorFieldsProps['importMediaFiles'],
   toolbarContent: RemixCardEditorFieldsProps['toolbarContent'],
+  belowToolbarContent: RemixCardEditorFieldsProps['belowToolbarContent'],
   toolbarEnd: RemixCardEditorFieldsProps['toolbarEnd'],
   textFieldAttributes: RemixCardEditorFieldsProps['textFieldAttributes'],
   textFieldFeature: ResourceTextFieldFeature | undefined,
@@ -96,6 +99,7 @@ function renderCardFields(
         toolbarEnd,
       ]}
     </div>
+    {belowToolbarContent}
     {renderCardContent(bdcId, presetId, card, mediaById, actions, idPrefix, imageAspectRatio, allowMultipleMediaFiles, importMediaFiles, textFieldAttributes, textFieldFeature)}
   </div>
 }

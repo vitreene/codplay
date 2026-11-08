@@ -40,7 +40,18 @@
 - Ask the user questions when implementation certainty is below 95%.
 - Before any analysis or modification, reread the applicable specifications and contracts in the repository; do not rely on conversation summaries or assumptions.
 - For every browser validation or other MCP-backed task, inspect both the local MCP server configuration and the complete live tool inventory offered by the current session before starting. Compare configured servers with the tools actually exposed here and review their names and descriptions; do not decide availability from a name-only search for `browser` or `Safari`. Use only the exposed tools, and never infer availability from installed applications, previous sessions, or another machine. If a configured server has no callable tools in this session, report that work as pending instead of launching a different local application or treating it as equivalent.
-- Do not put working instructions in specifications. Maintain the owning internal specification whenever an accepted change implements and verifies behavior; keep open or agreed-but-unapplied decisions in the working plan.
+- During browser validation, bring the configured, already connected browser
+  to the foreground and select the intended tab yourself. Do not ask the user
+  to focus Safari or make Elcé visible. When Safari Technology Preview is the
+  verified connected browser, activate it with
+  `osascript -e 'tell application "/Applications/Safari Technology Preview.app" to activate'`
+  (using the required execution permission when sandboxed), select its tab
+  through Safari MCP, and verify `document.visibilityState` and
+  `document.hasFocus()` before editing. Preserve the application's normal
+  focus and edit-access rules; never simulate visibility or bypass its locks.
+- Do not put working instructions in specifications. Maintain the owning
+  internal specification whenever an accepted change implements and verifies
+  behavior; keep open or agreed-but-unapplied decisions in the working plan.
 - Respect established specs strictly. Do not patch behavior opportunistically when the implementation diverges from the spec.
 - If a gap, ambiguity, or design failure is discovered, stop and discuss how to enrich or correct the spec before changing the implementation.
 - V2 demos are instruments for advancing CodPlay, not local demo products. They exercise the real project contracts, expose missing or incorrect core behavior, and provide the concrete acceptance path for fixing it. When a demo fails, first investigate and correct the applicable CodPlay contract or runtime; a demo-local change is allowed only to express the authored scenario or to make the fixture observe the agreed behavior, never to hide, compensate for, or replace a missing core capability.

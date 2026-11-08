@@ -1,3 +1,5 @@
+import { assertAvatarContent } from '../../../../resources/bdcs/avatar/domain/avatar-service'
+import { AVATAR_PRESET_ID } from '../../../../resources/bdcs/avatar/avatar-config'
 import { BDC_TYPE, DEFAULT_PRESET_ID, PAGE_TYPE } from '../../learning-definition'
 import { CARD_LAYOUT_IDS } from '../../../../resources/bdcs/card/card-config'
 import { SCENARIO_ENTRY_KIND } from '../../organization/learning-organization-config'
@@ -126,11 +128,15 @@ export function assertDocumentInvariants(document: LearningDocument, resources: 
       case PAGE_TYPE.FLUX:
         break
       case PAGE_TYPE.DIAPO: {
-        if (page.bdcIds.length > 1) fail(`Une Diapo ne peut contenir qu’un seul BDC direct : ${page.id}`)
+        const avatars = page.bdcIds.filter((id) => bdcById.get(id)?.type === BDC_TYPE.AVATAR)
+        const principal = page.bdcIds.filter((id) => bdcById.get(id)?.type !== BDC_TYPE.AVATAR)
+        if (avatars.length > 1 || principal.length > 1) fail(`Une Diapo accepte un contenu principal et un seul Avatar : ${page.id}`)
         const carouselCount = page.bdcIds.filter((bdcId) => bdcById.get(bdcId)?.type === BDC_TYPE.CAROUSEL).length
+        if (avatars.length === 1 && carouselCount !== 1) fail(`Un Avatar de Diapo doit être placé à côté de son Carousel : ${page.id}`)
         const unsupportedBdc = page.bdcIds.find((bdcId) => {
           const type = bdcById.get(bdcId)?.type
           switch (type) {
+            case BDC_TYPE.AVATAR:
             case BDC_TYPE.CAROUSEL:
             case BDC_TYPE.QUESTION:
             case BDC_TYPE.CARD:
@@ -155,7 +161,18 @@ export function assertDocumentInvariants(document: LearningDocument, resources: 
   }
 
   for (const bdc of document.bdcs) {
+    if (bdc.type !== BDC_TYPE.AVATAR && bdc.avatar != null) fail(`Payload Avatar inattendu : ${bdc.id}`)
     switch (bdc.type) {
+      case BDC_TYPE.AVATAR: {
+        if (bdc.presetId !== AVATAR_PRESET_ID || bdc.avatar == null || bdc.parentBdcId !== null || bdc.section != null || bdc.question != null
+          || bdc.card != null || bdc.carousel != null || bdc.statisticalGraph != null || bdc.evaluationResult != null) fail(`BDC Avatar incomplet : ${bdc.id}`)
+        if (bdc.pageId !== null && document.pages.find((page) => page.id === bdc.pageId)?.type !== PAGE_TYPE.DIAPO) fail('Un Avatar doit être placé dans une Diapo.')
+        assertAvatarContent(bdc.avatar)
+        if (bdc.avatar.take !== null && !document.medias.some((media) => media.id === bdc.avatar?.take?.audioMediaId && media.mimeType.startsWith('audio/'))) {
+          fail(`La voix de l’Avatar ${bdc.id} doit référencer un média audio.`)
+        }
+        break
+      }
       case BDC_TYPE.QUESTION: {
         if (bdc.question === null || bdc.section !== null || bdc.parentBdcId !== null || bdc.statisticalGraph != null) fail(`Bdc Question incomplet : ${bdc.id}`)
         resources.questionService.assertValid(bdc.question)
@@ -187,6 +204,17 @@ export function assertDocumentInvariants(document: LearningDocument, resources: 
           fail(`Bdc Carousel incomplet : ${bdc.id}`)
         }
         resources.carouselService.assertValid(bdc.carousel)
+        for (const [index, entry] of bdc.carousel.cards.entries()) {
+          const word = entry.cue?.word
+          if (word === undefined) continue
+          const avatar = bdcById.get(word.avatarBdcId)
+          const take = avatar?.avatar?.take
+          const wordExists = take?.words[word.wordIndex] !== undefined
+          if (avatar?.pageId !== bdc.pageId || bdc.pageId === null || take == null || take.id !== word.takeId
+            || !wordExists || index === 0) {
+            fail('Association de mot incohérente avec la prise ou la Diapo du Carousel.')
+          }
+        }
         if (bdc.parentBdcId !== null) fail(`Un bdc Carousel ne peut pas être enfant d’un autre BDC : ${bdc.id}`)
         break
       }

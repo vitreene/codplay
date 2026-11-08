@@ -157,7 +157,10 @@ export class LearningLayoutSceneBuilder {
                 markup: `<div id="elce-navigation-controls-root" class="${navigationClassName}" data-summary-button-visible="false">
                   <!-- data-part="elce:navigation:previous" -->
                   ${summaryAnchor}
-                  <!-- data-part="elce:navigation:status" -->
+                  <div id="elce-navigation-center" class="elce-player-navigation__center">
+                    <!-- data-part="elce:navigation:status" -->
+                    <div id="elce-navigation-remote" class="elce-player-navigation__remote" hidden></div>
+                  </div>
                   <!-- data-part="elce:navigation:next" -->
                 </div>`,
               },

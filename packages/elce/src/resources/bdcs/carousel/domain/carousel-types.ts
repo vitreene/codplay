@@ -11,9 +11,14 @@ export interface CarouselAspectRatio {
 export interface CarouselBdcEntry {
   readonly bdcId: BdcId
   readonly durationMs: number | null
+  readonly cue?: Readonly<{
+    word: Readonly<{ avatarBdcId: string; takeId: string; wordIndex: number }>
+  }>
   readonly introTransitionRef: RevelationTransitionRef | null
   readonly outroTransitionRef: RevelationTransitionRef | null
 }
+
+export type CarouselCueWordReference = NonNullable<NonNullable<CarouselBdcEntry['cue']>['word']>
 
 export interface CarouselContent {
   readonly defaultViewDurationMs: number

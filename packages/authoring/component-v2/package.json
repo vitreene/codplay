@@ -11,7 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@rive-app/canvas": "^2.38.3",
+    "@rive-app/canvas-advanced-single": "2.38.3",
     "codplay": "*",
     "three": "^0.185.0"
   },

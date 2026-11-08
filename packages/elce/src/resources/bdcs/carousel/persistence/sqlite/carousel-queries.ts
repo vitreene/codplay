@@ -38,6 +38,9 @@ export function carouselContentFromSqliteRows(row: SqliteRow, placementRows: rea
       .map((entry) => ({
         bdcId: sqliteStringValue(entry, 'content_block_id'),
         durationMs: sqliteNullableNumber(entry, 'duration_ms'),
+        ...(sqliteNullableText(entry, 'cue_json') === null
+          ? {}
+          : { cue: JSON.parse(sqliteStringValue(entry, 'cue_json')) as NonNullable<CarouselContent['cards'][number]['cue']> }),
         introTransitionRef: sqliteNullableText(entry, 'intro_transition_ref') as CarouselContent['cards'][number]['introTransitionRef'],
         outroTransitionRef: sqliteNullableText(entry, 'outro_transition_ref') as CarouselContent['cards'][number]['outroTransitionRef'],
       })),

@@ -1,0 +1,286 @@
+{
+  "runtimeVersion": "2.38.3",
+  "artboards": [
+    {
+      "name": "Matt Visemes",
+      "bounds": {
+        "minX": 0,
+        "minY": 0,
+        "maxX": 420,
+        "maxY": 500
+      },
+      "stateMachines": [
+        "Matt_Visemes_SM"
+      ]
+    },
+    {
+      "name": "Watermark",
+      "bounds": {
+        "minX": 0,
+        "minY": 0,
+        "maxX": 1920,
+        "maxY": 1080
+      },
+      "stateMachines": [
+        "State Machine 1"
+      ]
+    },
+    {
+      "name": "NuRiveBrandmark01",
+      "bounds": {
+        "minX": 0,
+        "minY": 0,
+        "maxX": 800,
+        "maxY": 800
+      },
+      "stateMachines": [
+        "State Machine 1"
+      ]
+    },
+    {
+      "name": "NuRiveWordmark01",
+      "bounds": {
+        "minX": 0,
+        "minY": 0,
+        "maxX": 800,
+        "maxY": 400
+      },
+      "stateMachines": [
+        "State Machine 1"
+      ]
+    }
+  ],
+  "viewModels": [
+    {
+      "name": "VisemesVM",
+      "instanceNames": [
+        "Instance"
+      ],
+      "properties": [
+        {
+          "name": "isTalking",
+          "type": "boolean",
+          "defaultValue": false
+        },
+        {
+          "name": "v100",
+          "type": "number",
+          "defaultValue": 100
+        },
+        {
+          "name": "v101",
+          "type": "number",
+          "defaultValue": 0
+        },
+        {
+          "name": "v102",
+          "type": "number",
+          "defaultValue": 0
+        },
+        {
+          "name": "v103",
+          "type": "number",
+          "defaultValue": 0
+        },
+        {
+          "name": "v104",
+          "type": "number",
+          "defaultValue": 0
+        },
+        {
+          "name": "v105",
+          "type": "number",
+          "defaultValue": 0
+        },
+        {
+          "name": "v106",
+          "type": "number",
+          "defaultValue": 0
+        },
+        {
+          "name": "v107",
+          "type": "number",
+          "defaultValue": 0
+        },
+        {
+          "name": "v108",
+          "type": "number",
+          "defaultValue": 0
+        },
+        {
+          "name": "v109",
+          "type": "number",
+          "defaultValue": 0
+        },
+        {
+          "name": "v110",
+          "type": "number",
+          "defaultValue": 0
+        },
+        {
+          "name": "v111",
+          "type": "number",
+          "defaultValue": 0
+        },
+        {
+          "name": "v112",
+          "type": "number",
+          "defaultValue": 0
+        },
+        {
+          "name": "v113",
+          "type": "number",
+          "defaultValue": 0
+        },
+        {
+          "name": "v114",
+          "type": "number",
+          "defaultValue": 0
+        },
+        {
+          "name": "v115",
+          "type": "number",
+          "defaultValue": 0
+        },
+        {
+          "name": "v116",
+          "type": "number",
+          "defaultValue": 0
+        },
+        {
+          "name": "v117",
+          "type": "number",
+          "defaultValue": 0
+        },
+        {
+          "name": "v118",
+          "type": "number",
+          "defaultValue": 0
+        },
+        {
+          "name": "v119",
+          "type": "number",
+          "defaultValue": 0
+        },
+        {
+          "name": "v120",
+          "type": "number",
+          "defaultValue": 0
+        },
+        {
+          "name": "v121",
+          "type": "number",
+          "defaultValue": 0
+        },
+        {
+          "name": "headTilt",
+          "type": "number",
+          "defaultValue": 50
+        },
+        {
+          "name": "headX",
+          "type": "number",
+          "defaultValue": 50
+        },
+        {
+          "name": "headY",
+          "type": "number",
+          "defaultValue": 50
+        }
+      ]
+    }
+  ],
+  "rendering": {
+    "neutral": {
+      "hash": "a54ddcc1",
+      "nonTransparentPixels": 302400
+    },
+    "mouth": {
+      "hash": "2e2b835e",
+      "nonTransparentPixels": 302400
+    },
+    "restored": {
+      "hash": "a54ddcc1",
+      "nonTransparentPixels": 302400
+    },
+    "headX": {
+      "hash": "767722b",
+      "nonTransparentPixels": 302400
+    },
+    "headY": {
+      "hash": "67b682df",
+      "nonTransparentPixels": 302400
+    },
+    "tilt": {
+      "hash": "47f340a",
+      "nonTransparentPixels": 302400
+    },
+    "finalRestored": {
+      "hash": "a54ddcc1",
+      "nonTransparentPixels": 302400
+    }
+  },
+  "isolation": {
+    "first": {
+      "headX": 0,
+      "neutral": 0,
+      "closedMouth": 100
+    },
+    "second": {
+      "headX": 50,
+      "neutral": 100,
+      "closedMouth": 0
+    }
+  },
+  "temporalComparisons": [
+    {
+      "seconds": 1,
+      "talking": false,
+      "changedPixels": 48,
+      "pixelsAboveTen": 0,
+      "maxChannelDifference": 1
+    },
+    {
+      "seconds": 1,
+      "talking": true,
+      "changedPixels": 43,
+      "pixelsAboveTen": 0,
+      "maxChannelDifference": 1
+    },
+    {
+      "seconds": 3,
+      "talking": false,
+      "changedPixels": 356,
+      "pixelsAboveTen": 0,
+      "maxChannelDifference": 1
+    },
+    {
+      "seconds": 3,
+      "talking": true,
+      "changedPixels": 470,
+      "pixelsAboveTen": 0,
+      "maxChannelDifference": 1
+    },
+    {
+      "seconds": 5,
+      "talking": false,
+      "changedPixels": 541,
+      "pixelsAboveTen": 0,
+      "maxChannelDifference": 1
+    },
+    {
+      "seconds": 5,
+      "talking": true,
+      "changedPixels": 561,
+      "pixelsAboveTen": 0,
+      "maxChannelDifference": 1
+    }
+  ],
+  "inspectedOn": "2026-11-04",
+  "source": {
+    "name": "my-matt-visemes.riv",
+    "bytes": 84538,
+    "sha256": "e668aee807a3100c379838cd2b2cc81c3ab9215c71652d7dadd5f7b9b56cf67f"
+  },
+  "scope": "Native Rive inspection in an isolated local browser page; no CodPlay integration acceptance."
+}

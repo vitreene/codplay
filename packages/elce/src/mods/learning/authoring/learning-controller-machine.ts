@@ -80,6 +80,7 @@ function createLearningControllerServices(documentCommands: LearningDocumentComm
     'question.media.file.import',
     'card.media.file.import',
     'summary.media.file.import',
+    'avatar.take.file.import',
   ],
   additionalEventTypes: ['carousel.card.select', 'catalog.tab.select'],
   createInitialCompositionState: (_input, _document) => ({ catalogTab: CATALOG_TAB.AVAILABLE_BDCS }),

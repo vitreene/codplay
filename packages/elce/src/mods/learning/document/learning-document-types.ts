@@ -32,7 +32,7 @@ export interface LearningBdc extends ResourceBdc {
 
 export interface LearningDocumentData extends ResourceDocumentData {
   readonly id: string
-  readonly version: 10
+  readonly version: 12
   readonly name: string
   readonly revelationDefaults: RevelationTransitionDefaults
   readonly summary: SummarySettings

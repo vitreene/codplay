@@ -38,6 +38,7 @@ export interface EditorViewModel {
 }
 
 export interface LearningPageBdcAvailability {
+  readonly canCreateAvatar: boolean
   readonly canCreateQuestion: boolean
   readonly canCreateSection: boolean
   readonly canCreateEvaluationResult: boolean
@@ -71,6 +72,8 @@ export class LearningAuthoringService {
       : selectedPage.bdcIds.flatMap((bdcId) => {
           const bdc = documentModel.bdcs.find((candidate) => candidate.id === bdcId)
           switch (bdc?.type) {
+            case BDC_TYPE.AVATAR:
+              return bdc.avatar == null ? [] : [bdc]
             case BDC_TYPE.SECTION:
               return bdc.section === null ? [] : [bdc]
             case BDC_TYPE.QUESTION:
@@ -109,7 +112,7 @@ export class LearningAuthoringService {
       selectedPageBdcs,
       pageHasQuestion: selectedPageBdcs.some((bdc) => bdc.type === BDC_TYPE.QUESTION),
       pageHasCarousel: selectedPageBdcs.some((bdc) => bdc.type === BDC_TYPE.CAROUSEL),
-      pageHasContent: selectedPageBdcs.length > 0,
+      pageHasContent: selectedPageBdcs.some((bdc) => bdc.type !== BDC_TYPE.AVATAR),
       mediaById,
       catalogContents: this.anchorDropService.catalogContents(documentModel.data),
     }
@@ -125,6 +128,7 @@ export class LearningAuthoringService {
       && view.documentModel.chapters.find((chapter) => chapter.id === page.chapterId)?.type === CHAPTER_TYPE.EVALUATION
 
     return {
+      canCreateAvatar: isDiapo && view.pageHasCarousel && !view.selectedPageBdcs.some((bdc) => bdc.type === BDC_TYPE.AVATAR),
       canCreateQuestion: (isFlux || isDiapo)
         && !view.pageHasQuestion
         && (!isDiapo || !view.pageHasContent),

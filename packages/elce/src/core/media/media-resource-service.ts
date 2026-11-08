@@ -3,7 +3,7 @@ import { createStableId } from '../document/stable-id'
 import type { MediaId, MediaMetadata } from '../document/content-document-types'
 import type { ElceMediaImport } from './media-resource-types'
 
-export type SupportedMediaType = typeof MEDIA_TYPE.IMAGE | typeof MEDIA_TYPE.VIDEO
+export type SupportedMediaType = typeof MEDIA_TYPE.IMAGE | typeof MEDIA_TYPE.VIDEO | typeof MEDIA_TYPE.AUDIO
 
 /** Derives the supported render category from a resource's persisted MIME type. */
 export function mediaTypeFromMimeType(mimeType: string): SupportedMediaType | null {
@@ -12,6 +12,8 @@ export function mediaTypeFromMimeType(mimeType: string): SupportedMediaType | nu
       return MEDIA_TYPE.IMAGE
     case mimeType.startsWith(MEDIA_MIME_PREFIX.VIDEO):
       return MEDIA_TYPE.VIDEO
+    case mimeType.startsWith(MEDIA_MIME_PREFIX.AUDIO):
+      return MEDIA_TYPE.AUDIO
     default:
       return null
   }

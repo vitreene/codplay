@@ -27,6 +27,10 @@
   margin-bottom: 0.85rem;
 }
 
+.elce-carousel-editor__settings-panel > .elce-carousel-editor__settings {
+  margin-bottom: 0;
+}
+
 .elce-carousel-editor__setting,
 .elce-carousel-editor__ratio,
 .elce-carousel-editor__view-duration {
@@ -167,6 +171,13 @@
   background: #52776f;
 }
 
+.elce-carousel-editor__transcript-words > .elce-carousel-editor__view-tab.is-disabled {
+  border-color: #e0ded8;
+  color: #747a77;
+  background: #f4f3ef;
+  cursor: not-allowed;
+}
+
 .elce-carousel-editor__view-add {
   border-style: dashed;
 }
@@ -203,6 +214,46 @@
   width: 7rem;
 }
 
+.elce-carousel-editor__view-duration--word input {
+  width: 10rem;
+}
+
+.elce-carousel-editor__transcript {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0.35rem 0 0.65rem;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid #d6d3ca;
+  border-radius: 0.5rem;
+}
+
+.elce-carousel-editor__transcript summary {
+  display: flex;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin-left: auto;
+  align-items: center;
+  justify-content: center;
+  color: #526b66;
+  background: transparent;
+  cursor: pointer;
+  list-style: none;
+}
+
+.elce-carousel-editor__transcript summary::-webkit-details-marker {
+  display: none;
+}
+
+.elce-carousel-editor__transcript summary:hover {
+  border-radius: 0.35rem;
+  background: #f3f6f3;
+}
+
+.elce-carousel-editor__transcript[open] summary .lucide-chevron-down,
+.elce-carousel-editor__transcript:not([open]) summary .lucide-chevron-up {
+  display: none;
+}
+
 .elce-carousel-editor__delete {
   margin-left: 0;
   padding: var(--elce-icon-padding);
@@ -212,6 +263,46 @@
 .elce-carousel-editor__delete:disabled {
   cursor: not-allowed;
   opacity: 0.4;
+}
+
+.elce-carousel-editor__transcript-words {
+  display: flex;
+  width: 100%;
+  box-sizing: border-box;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  align-items: center;
+  padding: 0.5rem 0;
+}
+
+.elce-carousel-editor__transcript:not([open]) > .elce-carousel-editor__transcript-words {
+  display: none;
+}
+
+.elce-carousel-editor__transcript-words > .elce-carousel-editor__view-tab {
+  min-width: 0;
+  min-height: 1.5rem;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.7rem;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.elce-carousel-editor__transcript-radio {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.elce-carousel-editor__transcript-radio:focus-visible + span {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
 }
 
 .elce-carousel-text-fields,

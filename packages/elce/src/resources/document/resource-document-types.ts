@@ -6,7 +6,10 @@ import type { CardContent } from '../bdcs/card/domain/card-types'
 import type { StatisticalGraphContent } from '../bdcs/statistical-graph/domain/statistical-graph-types'
 import type { SectionContent } from '../bdcs/section/domain/section-types'
 
+import type { AvatarContent } from '../bdcs/avatar/domain/avatar-types'
+
 export interface ResourceBdc extends ContentBdc {
+  readonly avatar?: AvatarContent | null
   readonly section: SectionContent | null
   readonly question: QuestionContent | null
   readonly carousel?: CarouselContent | null

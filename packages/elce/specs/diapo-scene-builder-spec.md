@@ -74,6 +74,62 @@ Le chemin image testé entre la région de contenu et l’élément `img` compte
 éléments : `section` de contenu, `section` Carousel, `div` racine Photo,
 `div.elce-carousel-media`, puis `img.cp-img-inner`.
 
+## Composition d’un Avatar narré
+
+Une Diapo peut contenir un BDC Avatar direct à côté de son unique BDC de
+contenu. Le player Learning refuse plus d’un Avatar ou plus d’un BDC de contenu
+direct. La composition Avatar décrite ici s’applique au Carousel lorsqu’il
+référence une prise complète ; l’éditeur, les données de prise et les
+associations par carte sont décrits dans la
+[spécification du BDC Avatar](./avatar-bdc-spec.md).
+
+Pour une prise complète, le builder résout sa source audio depuis le catalogue
+et ajoute la factory `createRiveTalkingAvatarStory` à la story unique de la
+page. Les associations de mots ont déjà été converties en durées par entrée
+dans les commandes d’édition ; le builder Carousel calcule les débuts de vue en
+cumulant ces durées et ne projette aucun temps absolu issu du transcript. Le
+Carousel garde son builder existant ; il masque ses points et laisse la fin
+fonctionnelle au constructeur de page. Sans prise, la Diapo conserve le rendu
+ordinaire du Carousel. Les pages ordinaires ne changent pas de circuit.
+
+La racine de page devient une grille responsive 1/1. La racine Carousel remplit
+son rectangle complet, sans la limite de largeur commune aux autres BDC et sans
+marge latérale. Le cadre de l’Avatar est un autre élément de cette même cellule
+(`grid-area: 1 / 1`), placé sur les bords haut/bas et gauche/droite selon le
+réglage `placement`. Sa marge au bord peint est fixe à 16 px ; son décalage
+compense le vide transparent du canvas. Sa largeur suit le réglage et la taille
+de la Diapo ; son z-index le place au-dessus du Carousel et la grille ne
+réserve aucun espace à l’Avatar. Les classes de placement sont locales à Elcé.
+Les proportions mesurées du rig et les preuves responsive figurent dans la
+[spécification Avatar](./avatar-bdc-spec.md).
+
+Le test narré de
+[`diapo-scene-builder.test.ts`](../src/mods/learning/integration/diapo-scene-builder.test.ts)
+vérifie la racine commune, l’absence d’espace réservé, le placement et la
+largeur responsive avec ses propres données. Safari MCP, le 5 novembre 2026,
+mesure dans la preview du Projet 3 le même rectangle pour racine et Carousel à
+1280 × 756 et 390 × 844 ; l’Avatar configuré en haut à droite apparaît au-dessus
+après Play, sans chevauchement du texte ni débordement horizontal mobile. Les
+mesures sont dans le
+[relevé navigateur](../notes/assets/talking-head/elce-project-3-acceptance.json).
+La visibilité du rig avant le premier Play reste à qualifier et le plan garde
+cette acceptation ouverte.
+
+La voix maître détermine la durée de la story ; `sequence:end` à cette durée
+publie `elce:page:finished` avec `{ pageId }` par `listen.emit`. Le handler
+Sighty existant termine la page sans navigation. Safari MCP vérifie la fin à
+14 446 ms, l’absence de publication par Seek seul et une seule publication
+après reset puis lecture complète. Ce raccord appartient au constructeur de
+page ; la factory Avatar n’ajoute aucune fin.
+
+La ressource Rive fournie le 5 novembre conserve le profil et rend un fond
+transparent. Elle est servie par Remix sous
+`/assets/elce/assets/avatars/my-matt-visemes.riv` et copiée par Vite dans
+`dist/avatars/`. Son empreinte et les contrôles navigateur Play/Pause/Seek sont
+dans le même relevé. La télécommande reste hors de la scène et son contrat est
+décrit dans la [spécification preview](./player-preview-spec.md#télécommande-de-la-diapo-narrée-de-démonstration).
+Le contrat de fin ci-dessous concerne aussi les variantes ordinaires vérifiées.
+
 ## Fin fonctionnelle de Diapo
 
 Chaque variante publie exactement le signal public déjà employé par les pages
@@ -90,8 +146,9 @@ atteignent leur marqueur de fin.
 `buildScenario` transmet ce signal à l’action Sighty existante qui marque la
 page comme terminée et met à jour le verrouillage de la navigation. Le signal
 ne déclenche pas lui-même la navigation. La scène reste montée et peut
-continuer à être lue. `scene:end` et `sequence:end` ne servent pas à cette fin
-fonctionnelle.
+continuer à être lue. Ces variantes ordinaires n’emploient ni `scene:end` ni
+`sequence:end` pour leur fin fonctionnelle. La composition narrée décrite
+ci-dessus termine sa lecture à la durée vocale et publie le même signal métier.
 
 ## Preuves
 

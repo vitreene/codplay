@@ -108,6 +108,54 @@ et peut réutiliser son cache HTTP. Tant qu’un transfert reste en attente, le
 lecteur crée une URL objet depuis le Blob conservé localement. Après
 confirmation du transfert d’une image, le Blob n’est pas requis par le lecteur.
 
+### Télécommande de la Diapo narrée de démonstration
+
+Pour une Diapo qui porte un BDC Avatar avec une prise, le lecteur monte la
+télécommande partagée `@codplay/remote/remote` dans
+`#elce-navigation-remote`, à l’intérieur de la barre de navigation. Elle reste
+extérieure à la scène Diapo. Le statut de page et les commandes
+Précédent/Suivant restent présents. La présentation affiche Play/Pause,
+Revenir au début et le curseur de progression ; les vitesses et les diagnostics
+de la télécommande partagée sont masqués. Sur écran large, les boutons de
+navigation, les commandes de transport, le curseur et le compteur de page
+partagent le même centre vertical ; le compteur suit le curseur sur la même
+ligne. À 800 px et en dessous, les
+commandes de transport occupent une seconde ligne de la même barre.
+
+`bindLearningNavigationRemote` utilise `runtime.getInstance(sceneKey).telco`
+sur la sélection du slot `content`. Les commandes et les abonnements de
+progression appartiennent à la télécommande existante. Un changement de page
+détruit l’ancienne télécommande et ses abonnements ; une page sans
+configuration masque son emplacement. La destruction du player libère cette
+liaison avant le runtime.
+
+`LearningPlayer` dérive le démarrage de la Diapo du `playbackMode` de son
+Carousel : Manuel laisse la page narrée à zéro jusqu’au clic Play ; Automatique
+l’autorise au démarrage. À l’initialisation, `runtime.playAll` démarre les
+scènes actives autorisées. À chaque entrée sur une page en attente, l’observateur
+du slot la suspend par sa telco avant le clic Play. Les pages ordinaires
+conservent leur démarrage. Le champ persistant `avatar.autoStart` n’influence
+pas la lecture.
+
+Les deux tests de
+[`learning-navigation-remote.test.ts`](../src/mods/learning/reading/navigation-remote/learning-navigation-remote.test.ts)
+emploient Sighty et les vraies instances avec leurs propres scènes : attente
+de Play, Pause, Seek, fin/replay et retrait/remontage des commandes. Safari MCP
+vérifie le 5 novembre 2026 la preview standard du Projet 3 : audio à zéro et
+suspendu avant Play, Pause stable pendant 1,2 s, Seek à 7,5 s avec la deuxième
+carte, fin vocale puis replay, disparition des commandes sur Page A et retour
+à zéro sans duplication. Les commandes restent dans la barre à 1280 × 756 et
+390 × 844, sans débordement horizontal. Le mode Manuel conserve la première
+carte visible à zéro avant Play. Mesures dans le
+[relevé](../notes/assets/talking-head/elce-project-3-acceptance.json).
+L’alignement est mesuré à 1280 × 756 : les six éléments visibles ont leur
+centre vertical à 724 px. À 390 × 844, chaque rangée conserve son propre
+centre commun, sans débordement horizontal. Le test de styles et le build
+passent après ce changement de CSS.
+Le placement de l’Avatar et son affichage initial dans le canvas sont suivis
+dans la [spécification du BDC Avatar](./avatar-bdc-spec.md) et le lot 4 du
+[plan talking head](../plan/2026-11-04-talking-head-plan.md#lot-4--intégration-auteur--implémentation-en-cours).
+
 ### Sources de style du scénario
 
 La preview et l’export consomment le même scénario produit par

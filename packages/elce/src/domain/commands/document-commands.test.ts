@@ -211,7 +211,7 @@ describe('Elcé document commands', () => {
       presetId: DEFAULT_PRESET_ID.TEXT_SHORT,
     })
     expect(() => applyDocumentCommand(document, createQuestionBdcCommand('bdc-diapo-question', pageCommand.pageId, 1)))
-      .toThrow('Une Diapo ne peut contenir qu’un seul BDC direct')
+      .toThrow('Une Diapo accepte un contenu principal et un seul Avatar')
 
     document = applyDocumentCommand(document, { type: 'bdc.card.delete', bdcId: 'bdc-diapo-card' })
     document = applyDocumentCommand(document, createQuestionBdcCommand('bdc-diapo-question', pageCommand.pageId, 0))
@@ -662,7 +662,7 @@ describe('Elcé document commands', () => {
     const current = learningDocumentService.createInitialDocument()
     const restored = LearningDocument.fromJSON({ ...current.toJSON(), version: 8 })
 
-    expect(restored.data.version).toBe(10)
+    expect(restored.data.version).toBe(12)
     expect(restored.pages[0]?.allowEarlyExit).toBeUndefined()
   })
 

@@ -217,7 +217,7 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
     })
   }
 
-  /** Creates a project from its browser-owned v10 document unless its id already exists. */
+  /** Creates a project from its browser-owned Learning document unless its id already exists. */
   public async createProject(document: LearningDocument): Promise<CreateProjectResult> {
     return this.database.transaction(async (transaction) => {
       const now = new Date().toISOString()
@@ -398,7 +398,7 @@ async function readStoredProject(database: ProjectDatabase, projectId: string): 
 
   const projectRow = projectRows[0]!
   const version = numberValue(projectRow, 'format_version')
-  if (version !== 7 && version !== 8 && version !== 9 && version !== 10) {
+  if (version !== 7 && version !== 8 && version !== 9 && version !== 10 && version !== 11 && version !== 12) {
     throw new Error(`Version documentaire SQLite non prise en charge : ${String(projectRow.format_version)}`)
   }
   const document = await readDocument(database, projectRow)
@@ -412,7 +412,7 @@ async function readStoredProject(database: ProjectDatabase, projectId: string): 
 async function readDocument(database: ProjectDatabase, projectRow: SqlRow): Promise<LearningDocument> {
   const projectId = stringValue(projectRow, 'project_id')
   const [chapterRows, pageRows, scenarioRows, catalogPageRows, mediaRows, blockRows, placementRows,
-    sectionRows, questionRows, answerRows, resultRows, carouselRows, cardRows,
+    avatarRows, sectionRows, questionRows, answerRows, resultRows, carouselRows, cardRows,
     statisticalGraphRows] = await Promise.all([
     queryRows(database, 'SELECT * FROM chapters WHERE project_id = ?', [projectId]),
     queryRows(database, 'SELECT * FROM pages WHERE project_id = ?', [projectId]),
@@ -421,6 +421,7 @@ async function readDocument(database: ProjectDatabase, projectRow: SqlRow): Prom
     queryRows(database, 'SELECT * FROM media_resources WHERE project_id = ? ORDER BY position', [projectId]),
     queryRows(database, CONTENT_BLOCKS_SQLITE_SELECT, [projectId]),
     queryRows(database, CONTENT_BLOCK_PLACEMENTS_SQLITE_SELECT, [projectId]),
+    queryRows(database, 'SELECT content_block_id, content_json FROM avatars WHERE project_id = ?', [projectId]),
     queryRows(database, SECTION_SQLITE_SELECT, [projectId]),
     queryRows(database, QUESTION_SQLITE_SELECT, [projectId]),
     queryRows(database, QUESTION_ANSWERS_SQLITE_SELECT, [projectId]),
@@ -431,6 +432,7 @@ async function readDocument(database: ProjectDatabase, projectRow: SqlRow): Prom
   ])
 
   const placementsByBlock = new Map(placementRows.map((row) => [stringValue(row, 'content_block_id'), row]))
+  const avatarsByBlock = new Map(avatarRows.map((row) => [stringValue(row, 'content_block_id'), row]))
   const sectionsByBlock = new Map(sectionRows.map((row) => [stringValue(row, 'content_block_id'), row]))
   const questionsByBlock = new Map(questionRows.map((row) => [stringValue(row, 'content_block_id'), row]))
   const carouselsByBlock = new Map(carouselRows.map((row) => [stringValue(row, 'content_block_id'), row]))
@@ -442,6 +444,7 @@ async function readDocument(database: ProjectDatabase, projectRow: SqlRow): Prom
   const bdcs = blockRows.map((row) => bdcFromRows(
     row,
     placementsByBlock,
+    avatarsByBlock,
     sectionsByBlock,
     questionsByBlock,
     answerRows,
@@ -533,6 +536,7 @@ function pageFromRow(row: SqlRow, scenarioRows: readonly SqlRow[], placementRows
 function bdcFromRows(
   row: SqlRow,
   placementsByBlock: ReadonlyMap<string, SqlRow>,
+  avatarsByBlock: ReadonlyMap<string, SqlRow>,
   sectionsByBlock: ReadonlyMap<string, SqlRow>,
   questionsByBlock: ReadonlyMap<string, SqlRow>,
   answerRows: readonly SqlRow[],
@@ -544,6 +548,7 @@ function bdcFromRows(
 ): LearningBdc {
   const id = stringValue(row, 'content_block_id')
   const placement = placementsByBlock.get(id) ?? {}
+  const avatar = avatarsByBlock.get(id)
   const section = sectionsByBlock.get(id)
   const question = questionsByBlock.get(id)
   const carousel = carouselsByBlock.get(id)
@@ -553,6 +558,7 @@ function bdcFromRows(
   return {
     ...contentBlockFromSqliteRows(row, placement),
     type: stringValue(row, 'content_block_type') as LearningBdc['type'],
+    ...(avatar === undefined ? {} : { avatar: JSON.parse(stringValue(avatar, 'content_json')) as NonNullable<LearningBdc['avatar']> }),
     section: section === undefined ? null : sectionContentFromSqliteRow(section),
     question: question === undefined ? null : questionContentFromSqliteRows(question, answerRows),
     evaluationResult: resultContentFromRows(id, resultRows),
@@ -724,6 +730,12 @@ async function insertBdcPlacement(
     introTransitionRef: placement.kind === 'parent' ? placement.introTransitionRef : null,
     outroTransitionRef: placement.kind === 'parent' ? placement.outroTransitionRef : null,
   }))
+  if (placement.kind !== 'parent') return
+  const cue = document.bdcs.find((parent) => parent.id === placement.parentBdcId)?.carousel?.cards.find((entry) => entry.bdcId === bdc.id)?.cue
+  if (cue === undefined) return
+  await queryRows(database,
+    'UPDATE content_block_placements SET cue_json = ? WHERE project_id = ? AND content_block_id = ?',
+    [JSON.stringify(cue), document.id, bdc.id])
 }
 
 /** Converts the document’s parallel arrays into one discriminated placement. */
@@ -753,6 +765,7 @@ function normalizePlacement(document: LearningDocument, bdc: LearningBdc): Norma
           outroTransitionRef: entry.outroTransitionRef,
         }
       }
+      case BDC_TYPE.AVATAR:
       case BDC_TYPE.SECTION:
       case BDC_TYPE.QUESTION:
       case BDC_TYPE.EVALUATION_RESULT:
@@ -777,6 +790,9 @@ function normalizePlacement(document: LearningDocument, bdc: LearningBdc): Norma
 /** Inserts the detail row matching one BDC type. */
 async function insertBdcDetail(database: ProjectDatabase, projectId: string, bdc: LearningBdc): Promise<void> {
   switch (bdc.type) {
+    case BDC_TYPE.AVATAR:
+      await queryRows(database, 'INSERT INTO avatars (project_id, content_block_id, content_json) VALUES (?, ?, ?)', [projectId, bdc.id, JSON.stringify(requireValue(bdc.avatar, `Avatar manquant : ${bdc.id}`))])
+      return
     case BDC_TYPE.SECTION: {
       const section = requireValue(bdc.section, `Section manquante : ${bdc.id}`)
       await executePreparedQuery(database, prepareSectionInsert(projectId, bdc.id, section))

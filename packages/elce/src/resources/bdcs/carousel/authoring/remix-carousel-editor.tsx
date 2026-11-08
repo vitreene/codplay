@@ -1,4 +1,4 @@
-import { Activity, GripVertical, RectangleHorizontal, Trash2 } from 'lucide-static'
+import { Activity, ChevronDown, ChevronUp, GripVertical, RectangleHorizontal, Trash2 } from 'lucide-static'
 import {
   CAROUSEL_ASPECT_RATIO_OPTIONS,
   CAROUSEL_CONFIG,
@@ -32,6 +32,65 @@ interface CarouselEditorTransientState {
   readonly beginCardDrag: (bdcId: string) => void
   readonly draggedCardBdcId: () => string | null
   readonly clearDraggedCard: () => void
+}
+
+/** Offers timestamp-valued radio choices inside each eligible Carousel Card. */
+function renderTranscriptAssociation(
+  props: ElceCarouselEditorProps,
+  selected: { readonly entry: ElceCarouselEditorProps['content']['cards'][number]; readonly bdc: ResourceBdc },
+  cardIndex: number,
+): RemixNode {
+  const avatar = props.avatar
+  const take = avatar?.avatar?.take
+  if (take == null || avatar === undefined || selected.bdc.type !== 'card' || cardIndex === 0 || props.onAssociateWord === undefined) return null
+  const previousWordStartAtMs = props.content.cards.slice(0, cardIndex).reduce((previousStartAtMs, entry) => {
+    const reference = entry.cue?.word
+    if (reference?.avatarBdcId !== avatar.id || reference.takeId !== take.id) return previousStartAtMs
+    const wordStartAtMs = take.words[reference.wordIndex]?.startAtMs
+    return wordStartAtMs !== undefined && wordStartAtMs > previousStartAtMs ? wordStartAtMs : previousStartAtMs
+  }, 0)
+  const prefix = `elce-carousel-transcript-${selected.bdc.id}`
+  return <details id={`${prefix}-details`} className="elce-carousel-editor__transcript" open={true}>
+    <summary
+      id={`${prefix}-summary`}
+      aria-label="Afficher ou masquer les mots du son"
+      title="Afficher ou masquer les mots du son"
+    >
+      {renderLucideIcon(ChevronUp, `${prefix}-expanded-icon`)}
+      {renderLucideIcon(ChevronDown, `${prefix}-collapsed-icon`)}
+    </summary>
+    <div id={`${prefix}-words`} className="elce-carousel-editor__transcript-words" role="radiogroup" aria-label="Choisir un mot du son">
+      {take.words.map((word, wordIndex) => {
+        const selectedWord = selected.entry.cue?.word
+        const checked = selectedWord?.avatarBdcId === avatar.id && selectedWord.takeId === take.id && selectedWord.wordIndex === wordIndex
+        const disabled = word.startAtMs <= previousWordStartAtMs
+        return <label
+          id={`${prefix}-choice-${wordIndex}`}
+          key={`${take.id}-${wordIndex}`}
+          className={`elce-carousel-editor__view-tab${checked ? ' is-active' : ''}${disabled ? ' is-disabled' : ''}`}
+          aria-disabled={disabled}
+        >
+          <input
+            id={`${prefix}-word-${wordIndex}`}
+            className="elce-carousel-editor__transcript-radio"
+            type="radio"
+            name={`${prefix}-choice`}
+            value={word.startAtMs}
+            checked={checked}
+            aria-label={`${word.text}, occurrence ${wordIndex + 1}`}
+            disabled={disabled}
+            mix={on<HTMLInputElement, 'change'>('change', (event) => {
+              const startAtMs = Number(event.currentTarget.value)
+              if (event.currentTarget.checked && startAtMs === word.startAtMs) {
+                props.onAssociateWord?.(selected.bdc.id, avatar.id, wordIndex, startAtMs)
+              }
+            })}
+          />
+          <span id={`${prefix}-word-label-${wordIndex}`}>{word.text}</span>
+        </label>
+      })}
+    </div>
+  </details>
 }
 
 /** Builds settings, view order and the selected child BDC editor from one snapshot. */
@@ -139,168 +198,176 @@ function renderCarouselEditor(props: ElceCarouselEditorProps, state: CarouselEdi
 /** Renders Carousel playback, timing, transition and ratio controls. */
 function renderCarouselSettings(props: ElceCarouselEditorProps): RemixNode {
   const { bdcId, content, actions } = props
-  return <div
-    id={`elce-carousel-settings-${bdcId}`}
-    className="elce-carousel-editor__settings"
+  const hasWordAssociations = content.cards.some((entry) => entry.cue !== undefined)
+  return <section
+    id={`elce-carousel-settings-panel-${bdcId}`}
+    className="elce-carousel-editor__settings-panel"
   >
-    <label
-      id={`elce-carousel-playback-label-${bdcId}`}
-      className="elce-carousel-editor__setting"
+    <div
+      id={`elce-carousel-settings-${bdcId}`}
+      className="elce-carousel-editor__settings"
     >
-      <span
-        id={`elce-carousel-playback-caption-${bdcId}`}
-      >
-        Lecture
-      </span>
-      <select
-        id={`elce-carousel-playback-${bdcId}`}
-        aria-label="Mode de lecture du Carousel"
-        mix={on<HTMLSelectElement, 'change'>('change', (event) => actions.setPlaybackMode(event.currentTarget.value as typeof content.playbackMode))}
-      >
-        {CAROUSEL_PLAYBACK_MODE_OPTIONS.map((option) => <option
-          id={`elce-carousel-playback-option-${bdcId}-${option.value}`}
-          key={option.value}
-          value={option.value}
-          selected={option.value === content.playbackMode}
-        >
-          {option.label}
-        </option>)}
-      </select>
-    </label>
-    {content.playbackMode === CAROUSEL_PLAYBACK_MODE.AUTOMATIC
-      ? <label
-        id={`elce-carousel-repeat-label-${bdcId}`}
-        className="elce-carousel-editor__setting elce-carousel-editor__setting--repeat"
+      <label
+        id={`elce-carousel-playback-label-${bdcId}`}
+        className="elce-carousel-editor__setting"
       >
         <span
-          id={`elce-carousel-repeat-caption-${bdcId}`}
+          id={`elce-carousel-playback-caption-${bdcId}`}
         >
-          Répéter
+          Lecture
         </span>
-        <input
-          id={`elce-carousel-repeat-${bdcId}`}
-          type="number"
-          min={CAROUSEL_CONFIG.minimumRepeatCount}
-          max={CAROUSEL_CONFIG.maximumRepeatCount}
-          step="1"
-          aria-label="Nombre de répétitions du Carousel"
-          value={content.repeatCount ?? CAROUSEL_CONFIG.defaultRepeatCount}
-          mix={on<HTMLInputElement, 'input'>('input', (event) => submitRepeatCount(event.currentTarget.valueAsNumber, actions.setRepeatCount))}
-        />
-        <span
-          id={`elce-carousel-repeat-unit-${bdcId}`}
+        <select
+          id={`elce-carousel-playback-${bdcId}`}
+          aria-label="Mode de lecture du Carousel"
+          mix={on<HTMLSelectElement, 'change'>('change', (event) => actions.setPlaybackMode(event.currentTarget.value as typeof content.playbackMode))}
         >
-          fois
-        </span>
+          {CAROUSEL_PLAYBACK_MODE_OPTIONS.map((option) => <option
+            id={`elce-carousel-playback-option-${bdcId}-${option.value}`}
+            key={option.value}
+            value={option.value}
+            selected={option.value === content.playbackMode}
+          >
+            {option.label}
+          </option>)}
+        </select>
       </label>
-      : null}
-    <label
-      id={`elce-carousel-duration-label-${bdcId}`}
-      className="elce-carousel-editor__setting"
-    >
-      <span
-        id={`elce-carousel-duration-caption-${bdcId}`}
-      >
-        Durée par vue
-      </span>
-      <div
-        id={`elce-carousel-duration-control-${bdcId}`}
-        className="elce-carousel-editor__duration-control"
-      >
-        <input
-          id={`elce-carousel-duration-${bdcId}`}
-          type="range"
-          min={CAROUSEL_CONFIG.minimumViewDurationSeconds}
-          max={CAROUSEL_CONFIG.maximumViewDurationSeconds}
-          step="1"
-          aria-label="Durée par défaut d’une vue en secondes"
-          value={content.defaultViewDurationMs / 1000}
-          mix={on<HTMLInputElement, 'input'>('input', (event) => submitPositiveNumber(event.currentTarget.valueAsNumber, actions.setDefaultViewDurationSeconds))}
-        />
-        <output
-          id={`elce-carousel-duration-value-${bdcId}`}
+      {hasWordAssociations ? null : <>
+        {content.playbackMode === CAROUSEL_PLAYBACK_MODE.AUTOMATIC
+          ? <label
+            id={`elce-carousel-repeat-label-${bdcId}`}
+            className="elce-carousel-editor__setting elce-carousel-editor__setting--repeat"
+          >
+            <span
+              id={`elce-carousel-repeat-caption-${bdcId}`}
+            >
+              Répéter
+            </span>
+            <input
+              id={`elce-carousel-repeat-${bdcId}`}
+              type="number"
+              min={CAROUSEL_CONFIG.minimumRepeatCount}
+              max={CAROUSEL_CONFIG.maximumRepeatCount}
+              step="1"
+              aria-label="Nombre de répétitions du Carousel"
+              value={content.repeatCount ?? CAROUSEL_CONFIG.defaultRepeatCount}
+              mix={on<HTMLInputElement, 'input'>('input', (event) => submitRepeatCount(event.currentTarget.valueAsNumber, actions.setRepeatCount))}
+            />
+            <span
+              id={`elce-carousel-repeat-unit-${bdcId}`}
+            >
+              fois
+            </span>
+          </label>
+          : null}
+        <label
+          id={`elce-carousel-duration-label-${bdcId}`}
+          className="elce-carousel-editor__setting"
         >
-          {`${content.defaultViewDurationMs / 1000} s`}
-        </output>
-      </div>
-    </label>
-    <label
-      id={`elce-carousel-transition-label-${bdcId}`}
-      className="elce-carousel-editor__setting"
-    >
-      <span
-        id={`elce-carousel-transition-caption-${bdcId}`}
-      >
-        Transition
-      </span>
-      <select
-        id={`elce-carousel-transition-${bdcId}`}
-        aria-label="Transition entre les vues"
-        mix={on<HTMLSelectElement, 'change'>('change', (event) => {
-          if (event.currentTarget.value !== '') actions.setTransition(event.currentTarget.value as NonNullable<typeof actions.transitionPreset>)
-        })}
-      >
-        {[
-          actions.transitionPreset === null
-            ? <option
-              id={`elce-carousel-transition-option-custom-${bdcId}`}
-              key="custom"
-              value=""
-              disabled={true}
-              selected={true}
-            >
-              Personnalisée
-            </option>
-            : null,
-          ...CAROUSEL_TRANSITION_OPTIONS.map((option) => <option
-            id={`elce-carousel-transition-option-${bdcId}-${option.value}`}
-            key={option.value}
-            value={option.value}
-            selected={option.value === actions.transitionPreset}
+          <span
+            id={`elce-carousel-duration-caption-${bdcId}`}
           >
-            {option.label}
-          </option>),
-        ]}
-      </select>
-    </label>
-    <label
-      id={`elce-carousel-ratio-label-${bdcId}`}
-      className="elce-carousel-editor__setting"
-    >
-      <span
-        id={`elce-carousel-ratio-caption-${bdcId}`}
-      >
-        Ratio
-      </span>
-      <select
-        id={`elce-carousel-ratio-${bdcId}`}
-        aria-label="Ratio du Carousel"
-        mix={on<HTMLSelectElement, 'change'>('change', (event) => submitAspectRatio(event.currentTarget.value, actions.setAspectRatio))}
-      >
-        {[
-          aspectRatioOptionValue(content.aspectRatio) === LEGACY_RATIO_OPTION
-            ? <option
-              id={`elce-carousel-ratio-option-legacy-${bdcId}`}
-              key={LEGACY_RATIO_OPTION}
-              value={LEGACY_RATIO_OPTION}
-              disabled={true}
-              selected={true}
-            >
-              {`Ratio actuel (${content.aspectRatio.width}:${content.aspectRatio.height})`}
-            </option>
-            : null,
-          ...CAROUSEL_ASPECT_RATIO_OPTIONS.map((option) => <option
-            id={`elce-carousel-ratio-option-${bdcId}-${option.value}`}
-            key={option.value}
-            value={option.value}
-            selected={option.value === aspectRatioOptionValue(content.aspectRatio)}
+            Durée par vue
+          </span>
+          <div
+            id={`elce-carousel-duration-control-${bdcId}`}
+            className="elce-carousel-editor__duration-control"
           >
-            {option.label}
-          </option>),
-        ]}
-      </select>
-    </label>
-  </div>
+            <input
+              id={`elce-carousel-duration-${bdcId}`}
+              type="range"
+              min={CAROUSEL_CONFIG.minimumViewDurationSeconds}
+              max={CAROUSEL_CONFIG.maximumViewDurationSeconds}
+              step="1"
+              aria-label="Durée par défaut d’une vue en secondes"
+              value={content.defaultViewDurationMs / 1000}
+              mix={on<HTMLInputElement, 'input'>('input', (event) => submitPositiveNumber(event.currentTarget.valueAsNumber, actions.setDefaultViewDurationSeconds))}
+            />
+            <output
+              id={`elce-carousel-duration-value-${bdcId}`}
+            >
+              {`${content.defaultViewDurationMs / 1000} s`}
+            </output>
+          </div>
+        </label>
+      </>}
+      <label
+        id={`elce-carousel-transition-label-${bdcId}`}
+        className="elce-carousel-editor__setting"
+      >
+        <span
+          id={`elce-carousel-transition-caption-${bdcId}`}
+        >
+          Transition
+        </span>
+        <select
+          id={`elce-carousel-transition-${bdcId}`}
+          aria-label="Transition entre les vues"
+          mix={on<HTMLSelectElement, 'change'>('change', (event) => {
+            if (event.currentTarget.value !== '') actions.setTransition(event.currentTarget.value as NonNullable<typeof actions.transitionPreset>)
+          })}
+        >
+          {[
+            actions.transitionPreset === null
+              ? <option
+                id={`elce-carousel-transition-option-custom-${bdcId}`}
+                key="custom"
+                value=""
+                disabled={true}
+                selected={true}
+              >
+                Personnalisée
+              </option>
+              : null,
+            ...CAROUSEL_TRANSITION_OPTIONS.map((option) => <option
+              id={`elce-carousel-transition-option-${bdcId}-${option.value}`}
+              key={option.value}
+              value={option.value}
+              selected={option.value === actions.transitionPreset}
+            >
+              {option.label}
+            </option>),
+          ]}
+        </select>
+      </label>
+      <label
+        id={`elce-carousel-ratio-label-${bdcId}`}
+        className="elce-carousel-editor__setting"
+      >
+        <span
+          id={`elce-carousel-ratio-caption-${bdcId}`}
+        >
+          Ratio
+        </span>
+        <select
+          id={`elce-carousel-ratio-${bdcId}`}
+          aria-label="Ratio du Carousel"
+          mix={on<HTMLSelectElement, 'change'>('change', (event) => submitAspectRatio(event.currentTarget.value, actions.setAspectRatio))}
+        >
+          {[
+            aspectRatioOptionValue(content.aspectRatio) === LEGACY_RATIO_OPTION
+              ? <option
+                id={`elce-carousel-ratio-option-legacy-${bdcId}`}
+                key={LEGACY_RATIO_OPTION}
+                value={LEGACY_RATIO_OPTION}
+                disabled={true}
+                selected={true}
+              >
+                {`Ratio actuel (${content.aspectRatio.width}:${content.aspectRatio.height})`}
+              </option>
+              : null,
+            ...CAROUSEL_ASPECT_RATIO_OPTIONS.map((option) => <option
+              id={`elce-carousel-ratio-option-${bdcId}-${option.value}`}
+              key={option.value}
+              value={option.value}
+              selected={option.value === aspectRatioOptionValue(content.aspectRatio)}
+            >
+              {option.label}
+            </option>),
+          ]}
+        </select>
+      </label>
+    </div>
+  </section>
 }
 
 /** Renders one selectable view tab that can also reorder its Carousel BDC. */
@@ -368,25 +435,38 @@ function renderSelectedCard(
   selectedCardBdcId: string | null,
 ): RemixNode {
   const { content, mediaById, actions } = props
+  const cardIndex = content.cards.findIndex((entry) => entry.bdcId === selected.bdc.id)
+  const wordAssociation = selected.entry.cue?.word
+  const take = props.avatar?.avatar?.take
+  const associatedWord = take == null || wordAssociation === undefined
+    || wordAssociation.avatarBdcId !== props.avatar?.id || wordAssociation.takeId !== take.id
+    ? undefined
+    : take.words[wordAssociation.wordIndex]
   const durationControl = <label
     id={`elce-carousel-card-duration-label-${selected.bdc.id}`}
-    className="elce-carousel-editor__view-duration"
+    className={associatedWord === undefined ? 'elce-carousel-editor__view-duration' : 'elce-carousel-editor__view-duration elce-carousel-editor__view-duration--word'}
   >
-    <span
-      id={`elce-carousel-card-duration-caption-${selected.bdc.id}`}
-    >
-      Durée (sec.)
+    <span id={`elce-carousel-card-duration-caption-${selected.bdc.id}`}>
+      {associatedWord !== undefined ? 'Mot associé' : 'Durée (sec.)'}
     </span>
-    <input
-      id={`elce-carousel-card-duration-${selected.bdc.id}`}
-      type="number"
-      min="0.1"
-      step="0.1"
-      placeholder={String(content.defaultViewDurationMs / 1000)}
-      aria-label="Durée particulière de cette vue en secondes"
-      value={selected.entry.durationMs === null ? '' : selected.entry.durationMs / 1000}
-      mix={on<HTMLInputElement, 'input'>('input', (event) => submitOptionalPositiveNumber(event.currentTarget.value, selected.bdc.id, actions.setCardDurationSeconds))}
-    />
+    {associatedWord !== undefined
+      ? <input
+        id={`elce-carousel-card-duration-${selected.bdc.id}`}
+        type="text"
+        readOnly={true}
+        aria-label="Mot choisi pour cette vue"
+        value={associatedWord.text}
+      />
+      : <input
+        id={`elce-carousel-card-duration-${selected.bdc.id}`}
+        type="number"
+        min="0.1"
+        step="0.1"
+        placeholder={String(content.defaultViewDurationMs / 1000)}
+        aria-label="Durée particulière de cette vue en secondes"
+        value={selected.entry.durationMs === null ? '' : selected.entry.durationMs / 1000}
+        mix={on<HTMLInputElement, 'input'>('input', (event) => submitOptionalPositiveNumber(event.currentTarget.value, selected.bdc.id, actions.setCardDurationSeconds))}
+      />}
   </label>
   return <div
     id={`elce-carousel-card-editor-${selected.bdc.id}`}
@@ -405,6 +485,7 @@ function renderSelectedCard(
         allowMultipleMediaFiles={true}
         importMediaFiles={actions.importMediaFiles}
         toolbarContent={durationControl}
+        belowToolbarContent={renderTranscriptAssociation(props, selected, cardIndex)}
         toolbarEnd={<div
           id={`elce-carousel-card-header-actions-${selected.bdc.id}`}
           className="elce-bdc-header-actions elce-carousel-card-header-actions"

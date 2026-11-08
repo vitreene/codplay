@@ -28,6 +28,7 @@ import { ELCE_CAROUSEL_RUNTIME_KEY, selectCarouselCardStrap } from '../../../../
 import { appendClassToMarkupElement, sceneClassRule, sceneStyleClassName } from '../../../../builders/scene-style/scene-style-classes'
 import { appearanceClassNameForBdc } from '../../../../builders/scene-style/appearance-class-names'
 import type { ResourceInlineTextSceneFeature } from '../../../document/resource-inline-text-feature'
+import { resolveCarouselViewStarts } from '../domain/carousel-service'
 
 const statisticalGraphSceneBuilder = new ElceStatisticalGraphSceneBuilder()
 
@@ -65,14 +66,23 @@ export class ElceCarouselSceneBuilder {
 
   /** Projects Carousel settings and illustrative BDCs into a CodPlay story. */
   public build(input: CarouselSceneBuildInput): CarouselSceneBuild {
-    const { pageId, bdcId, content } = input
+    const { pageId, bdcId } = input
+    const content = input.content
     const displayMode = input.displayMode ?? 'content'
+    const navigation = input.navigation ?? 'points'
+    const pageCompletion = input.pageCompletion ?? 'last-card'
+    if (navigation === 'none' && displayMode !== 'scene') {
+      throw new Error('La navigation Carousel ne peut être retirée que dans une scène pleine page.')
+    }
+    if (pageCompletion === 'external' && displayMode !== 'scene') {
+      throw new Error('La fin externe de page Carousel exige une scène pleine page.')
+    }
     const prefix = `${pageId}:${bdcId}`
     const rootId = `${pageId}-${bdcId}`
     const capsulePartId = `${prefix}:carousel:capsule`
     const navigationPartId = `${prefix}:carousel:navigation`
     const diapoRootId = displayMode === 'scene' ? input.completionEventRootId ?? rootId : undefined
-    const schedule = resolveCardSchedule(input)
+    const schedule = resolveCardSchedule({ ...input, content })
     const parentIntroRef = input.revelationSettings.defaults.intro
     const parentOutroRef = input.revelationSettings.defaults.outro
     const capsule = new AutoCapsule({
@@ -131,7 +141,7 @@ export class ElceCarouselSceneBuilder {
       if (entry === undefined || viewBuild === undefined) throw new Error(`La vue Carousel ${child.id} est introuvable.`)
       return [
         ...createCarouselCardPersos(prefix, cardMountTarget, child, entry.bdc, viewBuild, firstCardBdcId, displayMode === 'scene'),
-        ...(diapoRootId !== undefined && child.id === lastCardBdcId
+        ...(diapoRootId !== undefined && child.id === lastCardBdcId && pageCompletion === 'last-card'
           ? [createCarouselCompletionMarker(
             input.pageId,
             input.bdcId,
@@ -144,7 +154,7 @@ export class ElceCarouselSceneBuilder {
     })
     const selectionEvent = `${prefix}:select-card`
     const storyId = input.storyId ?? `${pageId}-${bdcId}`
-    const navigationPersos = content.cards.map((entry, index) => {
+    const navigationPersos = navigation === 'none' ? [] : content.cards.map((entry, index) => {
       const child = capsuleResult.children.find((candidate) => candidate.id === entry.bdcId)
       const bdc = input.cards.find((candidate) => candidate.id === entry.bdcId)
       if (child === undefined || bdc === undefined) throw new Error(`La vue Carousel ${entry.bdcId} n’a pas de placement résolu.`)
@@ -191,8 +201,11 @@ export class ElceCarouselSceneBuilder {
           parentIntroRef,
           parentOutroRef,
           appearanceClassNameForBdc(bdcId, input.appearanceClassNamesByTarget),
+          navigation,
         )]),
-        ...(diapoRootId === undefined ? [] : [createDiapoNavigationHost(diapoRootId, rootId, navigationPartId)]),
+        ...(diapoRootId === undefined || navigation === 'none'
+          ? []
+          : [createDiapoNavigationHost(diapoRootId, rootId, navigationPartId)]),
         ...cardPersos,
         ...mediaPersos,
         ...contentPersos,
@@ -229,19 +242,20 @@ export class ElceCarouselSceneBuilder {
 /** Resolves Carousel entry durations into the ranges consumed by CapsuleDistribution. */
 function resolveCardSchedule(input: CarouselSceneBuildInput): readonly ScheduledView[] {
   const cardById = new Map(input.cards.map((bdc) => [bdc.id, bdc]))
-  let endMs = 0
-  const authoredBounds = input.content.cards.map((entry) => {
+  const starts = resolveCarouselViewStarts(input.content)
+  const authoredBounds = input.content.cards.map((entry, index) => {
     const bdc = cardById.get(entry.bdcId)
     if (bdc === undefined || (bdc.type !== 'card' && bdc.type !== 'statistical-graph')) {
       throw new Error(`Le BDC ${entry.bdcId} du Carousel est introuvable ou non illustratif.`)
     }
     const durationMs = entry.durationMs ?? input.content.defaultViewDurationMs
-    const startMs = endMs
-    endMs += durationMs
+    const startMs = starts[index]!
+    const endMs = startMs + durationMs
     return { entry, bdc, startMs, endMs }
   })
+  const clipDurationMs = authoredBounds.at(-1)?.endMs ?? 0
   const distribution = CapsuleDistribution.compute({
-    clipDurationMs: endMs,
+    clipDurationMs,
     mode: CapsulePreset.resolve({ capsuleType: CAPSULE_TYPE.carousel }).mode,
     children: authoredBounds.map(({ entry, startMs, endMs: cardEndMs }) => ({
       trackId: entry.bdcId,
@@ -314,6 +328,7 @@ function createDiapoCarouselRoot(
   introTransitionRef: string,
   outroTransitionRef: string,
   appearanceClassName: string,
+  navigation: 'points' | 'none',
 ): PersoDoc<string> {
   return {
     id: rootId,
@@ -330,6 +345,7 @@ function createDiapoCarouselRoot(
         'elce-card--carousel',
         'elce-diapo-content',
         'elce-diapo-carousel-root',
+        ...(navigation === 'none' ? ['elce-diapo-carousel-root--no-navigation'] : []),
         appearanceClassName,
         ...capsuleClassName.split(/\s+/),
       ].join(' '),

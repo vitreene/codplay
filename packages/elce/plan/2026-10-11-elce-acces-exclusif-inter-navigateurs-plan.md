@@ -211,6 +211,14 @@ autoriser d'écriture.
 
 ## Avancement et preuves encore requises
 
+### Continuité du cadre au retour de focus — vérifiée le 5 novembre 2026
+
+Le cadre suit maintenant la présence du projet ouvert, tandis que l’accès
+continue de piloter séparément l’inertie. Safari MCP a conservé le défilement
+central pendant l’aller-retour de focus et le changement réel d’onglet. Le
+contrat et ses preuves sont dans
+[`editor-window-access-spec.md`](../specs/editor-window-access-spec.md).
+
 La classe générique, le droit SQLite, le transfert par le coordinateur
 existant, la lecture confirmée, la copie de secours et le média doublon sous
 suspension sont implémentés. Leurs tests ciblés passent ; typecheck, build et

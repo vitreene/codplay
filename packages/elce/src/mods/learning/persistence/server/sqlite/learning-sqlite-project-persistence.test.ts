@@ -36,6 +36,7 @@ import { LearningSqliteProjectPersistence } from './learning-sqlite-project-pers
 import { createSqliteDatabase } from 'remix/data-table/sqlite'
 import type { SqliteDatabase } from 'remix/data-table/sqlite'
 import type { RichTextDocument } from '../../../../../resources/document/rich-text-types'
+import { createAvatarDocumentFixture } from '../../../integration/fixtures/avatar-document-fixture'
 
 describe('SQLite project persistence through the Remix API', () => {
   let database: SqliteDatabase | undefined
@@ -48,7 +49,39 @@ describe('SQLite project persistence through the Remix API', () => {
     temporaryDirectory = undefined
   })
 
-  it('migrates a fresh database and round-trips the v10 scenario and BDC relations', async () => {
+  it('persists the sibling Avatar, word associations, durations and audio through the existing API', async () => {
+    temporaryDirectory = await mkdtemp(join(tmpdir(), 'elce-avatar-persistence-'))
+    const databaseFile = join(temporaryDirectory, 'project.sqlite')
+    database = await openProjectDatabase(databaseFile)
+    const persistence = new LearningSqliteProjectPersistence(database)
+    const router = createLearningApiRouter(persistence, new MediaApiController(
+      persistence, createMediaFileStorage(join(temporaryDirectory, 'files')), join(temporaryDirectory, 'incoming'),
+    ))
+    const source = createAvatarDocumentFixture()
+    expect((await router.fetch(jsonRequest('POST', '/api/projects', source.toJSON()))).status).toBe(201)
+    const headers = await reserve(router, source.id)
+    const bytes = Uint8Array.from({ length: 44 }, (_, index) => index)
+    const mediaUrl = `http://elce.test/api/projects/${source.id}/media/voice-test`
+    expect((await router.fetch(new Request(mediaUrl, { method: 'PUT', headers, body: bytes }))).status).toBe(201)
+    const audio = await router.fetch(new Request(mediaUrl))
+    expect(audio.status).toBe(200)
+    expect(audio.headers.get('Content-Type')).toContain('audio/wav')
+    expect(new Uint8Array(await audio.arrayBuffer())).toEqual(bytes)
+    const range = await router.fetch(new Request(mediaUrl, { headers: { Range: 'bytes=8-15' } }))
+    expect(range.status).toBe(206)
+    expect(new Uint8Array(await range.arrayBuffer())).toEqual(bytes.slice(8, 16))
+
+    await database.close()
+    database = await openProjectDatabase(databaseFile)
+    const reopened = new LearningSqliteProjectPersistence(database)
+    const restored = (await reopened.findProject(source.id))!.document
+    expect(restored.bdcs.find((bdc) => bdc.id === 'avatar-test')?.avatar).toEqual(source.bdcs.find((bdc) => bdc.id === 'avatar-test')?.avatar)
+    expect(restored.bdcs.find((bdc) => bdc.id === 'carousel-test')?.carousel?.cards).toEqual(source.bdcs.find((bdc) => bdc.id === 'carousel-test')?.carousel?.cards)
+    expect(restored.data.version).toBe(12)
+    expect((await reopened.findMediaFile(source.id, 'voice-test'))?.storageKey).toBeTruthy()
+  })
+
+  it('migrates a fresh database and round-trips the v12 scenario and BDC relations', async () => {
     database = await openProjectDatabase(':memory:')
     const persistence = new LearningSqliteProjectPersistence(database)
     const router = createLearningApiRouter(persistence)
@@ -132,7 +165,7 @@ describe('SQLite project persistence through the Remix API', () => {
       throw new Error('The second facade-created Card was not placed after the first one.')
     }
     const secondSaved = await saveAndReload()
-    expect(secondSaved.data.version).toBe(10)
+    expect(secondSaved.data.version).toBe(12)
     expect(secondSaved.pages.find((page) => page.id === pageId)?.bdcIds).toContain(firstCardId)
     expect(secondSaved.pages.find((page) => page.id === pageId)?.bdcIds).toContain(secondCardId)
     actor.stop()
@@ -184,7 +217,7 @@ describe('SQLite project persistence through the Remix API', () => {
     const body = await opened.json() as { document: ReturnType<LearningDocument['toJSON']> }
     const restored = LearningDocument.fromJSON(body.document)
 
-    expect(restored.data.version).toBe(10)
+    expect(restored.data.version).toBe(12)
     expect(restored.bdcs.find((bdc) => bdc.id === 'bdc-card-photo')?.card?.message).toEqual(richMessage)
     expect(restored.bdcs.find((bdc) => bdc.id === 'bdc-question')?.question?.answers[0]?.label).toBe('Réponse conservée')
   })
@@ -216,7 +249,7 @@ describe('SQLite project persistence through the Remix API', () => {
     const page = await database.exec(rawSql(
       'SELECT allow_early_exit FROM pages WHERE project_id = ?', ['project-v8-page-setting'],
     ))
-    expect(migrated.rows?.[0]?.format_version).toBe(10)
+    expect(migrated.rows?.[0]?.format_version).toBe(11)
     expect(page.rows?.[0]?.allow_early_exit).toBeNull()
   })
 
