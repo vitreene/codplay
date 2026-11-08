@@ -46,11 +46,15 @@ chapitre ou une page ferme ces réglages. Les pages conservent l’ordre du
 document et aucun contrôle de glisser-déposer ou de réordonnancement n’est
 exposé. La page ou le chapitre actif se rend au centre ; la barre commune porte
 Prévisualiser, les erreurs de preview et les statuts d’export.
+Les entrées de premier niveau du Scénario ont un espacement vertical légèrement
+augmenté ; l’espacement des listes imbriquées reste celui de Learning.
 
 Une page marquée obligatoire porte une icône d’exclamation accessible dans la
 liste du Scénario, à la place du libellé « Obligatoire ». Dans les réglages de la
 page sélectionnée, le libellé et la case à cocher « Obligatoire » restent
 présents, avec la même icône à côté de la case.
+Quand une page a aussi une couleur, l’icône d’exclamation précède sa pastille
+dans la ligne du Scénario.
 
 Les actions auteur qui reprennent le nom ou le rôle d’une action Learning
 reprennent aussi son icône fonctionnelle : Plus pour ajouter, Corbeille pour
@@ -60,8 +64,9 @@ de page et de BDC réutilisent les commandes partagées.
 
 La configuration du Sommaire, les groupes de couleurs et les Cartes des
 résultats sont édités dans la zone centrale du Sommaire. Sa section Aperçu
-regroupe le seed, Random, le tirage et le choix de l’épreuve qui déclenche le
-jeton. Sans choix explicite, cette épreuve reste tirée par le seed. Le panneau
+regroupe le seed, Random, le tirage et les réglages de l’extra. La case
+« Activer l’extra » est placée à côté du choix de la Question qui déclenche le
+jeton. Sans choix explicite, cette Question reste tirée par le seed. Le panneau
 Réglages suit la sélection : une page de banque expose sa couleur et son statut
 obligatoire ; une banque expose son nom et son rôle. Ces réglages sont des vues
 du document Quiz Hunt et passent par sa facade auteur.
@@ -71,6 +76,12 @@ Learning : au-dessus de 1200 px les deux panneaux sont ouverts par défaut ; de
 801 à 1200 px, seul Scénario l’est ; à 800 px et moins, les deux sont fermés et
 un seul peut être ouvert à la fois. Échap referme le panneau mobile et restitue
 le focus à sa commande de réouverture.
+
+La Configuration du jeu affiche et saisit la durée de partie, le délai avant
+indice et la durée du retour en secondes. Le document conserve ces valeurs en
+millisecondes pour le runtime et la persistance ; la conversion se
+fait dans les champs auteur. L’aperçu exprime également en secondes le délai
+calculé avant l’offre du jeton.
 
 ## Lecture
 

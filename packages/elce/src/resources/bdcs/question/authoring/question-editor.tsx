@@ -109,31 +109,31 @@ export function renderQuestionEditor(props: QuestionEditorProps): RemixNode {
             {typeConfig.note}
           </p>
           : null}
-        <ol
-          id={`elce-question-answers-${bdcId}`}
-          className="elce-question-answers"
-        >
-          {question.answers.map((answer, index) => renderQuestionAnswer(answer, index, actions))}
-        </ol>
-        {typeConfig.editableAnswers
-          ? <button
-            id={`elce-question-add-answer-${bdcId}`}
-            className="elce-question-add-answer elce-add-content-action"
-            type="button"
-            aria-label="Ajouter une réponse"
-            title="Ajouter une réponse"
-            mix={on<HTMLButtonElement, 'click'>('click', actions.addAnswer)}
-          >
-            {renderLucideIcon(Plus, `elce-question-add-answer-icon-${bdcId}`)}
-            <span
-              id={`elce-question-add-answer-label-${bdcId}`}
-              className="elce-add-content-action__label"
-            >
-              Réponse
-            </span>
-          </button>
-          : null}
       </div>
+      <ol
+        id={`elce-question-answers-${bdcId}`}
+        className="elce-question-answers"
+      >
+        {question.answers.map((answer, index) => renderQuestionAnswer(answer, index, actions))}
+      </ol>
+      {typeConfig.editableAnswers
+        ? <button
+          id={`elce-question-add-answer-${bdcId}`}
+          className="elce-question-add-answer elce-add-content-action"
+          type="button"
+          aria-label="Ajouter une réponse"
+          title="Ajouter une réponse"
+          mix={on<HTMLButtonElement, 'click'>('click', actions.addAnswer)}
+        >
+          {renderLucideIcon(Plus, `elce-question-add-answer-icon-${bdcId}`)}
+          <span
+            id={`elce-question-add-answer-label-${bdcId}`}
+            className="elce-add-content-action__label"
+          >
+            Réponse
+          </span>
+        </button>
+        : null}
     </div>
   </article>
 }

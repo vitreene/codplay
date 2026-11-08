@@ -18,6 +18,7 @@ import {
   findQuizHuntClueVideoBdc,
   quizHuntPageSceneStoryId,
   quizHuntQuestionRevealEvent,
+  quizHuntQuestionResetKey,
   quizHuntVideoStartEvent,
   QUIZ_HUNT_VIDEO_EVENT,
 } from './quiz-hunt-page-scene-catalog'
@@ -29,11 +30,11 @@ import {
   QUIZ_HUNT_LAYOUT_EVENT,
   QUIZ_HUNT_SLOT,
 } from './quiz-hunt-layout-scene'
-import { buildQuizHuntResultScene } from './quiz-hunt-result-scene'
+import { buildQuizHuntResultScenes, QUIZ_HUNT_RESULT_EVENT } from './quiz-hunt-result-scene'
 import type { QuizHuntGameState, QuizHuntGameOutcome, QuizHuntTrialStatus } from './quiz-hunt-game-state-types'
 import type { QuizHuntSavedGameState } from '../persistence/quiz-hunt-game-state-persistence'
 
-export type QuizHuntSceneKey = 'scene-layout' | 'scene-summary' | 'scene-basket' | 'scene-result' | `scene-page-${string}`
+export type QuizHuntSceneKey = 'scene-layout' | 'scene-summary' | 'scene-basket' | 'scene-result-success' | 'scene-result-failure' | `scene-page-${string}`
 export type QuizHuntSlotName = typeof QUIZ_HUNT_SLOT[keyof typeof QUIZ_HUNT_SLOT]
 
 export type { QuizHuntGameState } from './quiz-hunt-game-state-types'
@@ -44,10 +45,18 @@ export interface QuizHuntScenarioModel {
   readonly scenario: SightyScenarioDefinition<QuizHuntSceneKey, QuizHuntSlotName>
 }
 
+type QuizHuntResultMetrics = Readonly<{
+  elapsedMs: number
+  answeredCount: number
+  correctCount: number
+}>
+
 const ROOT_VIEW = 'quiz-hunt'
 const ROOT_CONTENT_PATH = `${ROOT_VIEW}/${QUIZ_HUNT_SLOT.CONTENT}`
 const SUMMARY_VIEW = 'summary'
 const SUMMARY_PATH = `${ROOT_CONTENT_PATH}/${SUMMARY_VIEW}`
+const RESULT_SUCCESS_VIEW = 'result-success'
+const RESULT_FAILURE_VIEW = 'result-failure'
 export const QUIZ_HUNT_MENU_PROJECT_EVENT = 'quiz-hunt:menu:project'
 const QUESTION_REVEAL_DUE_PREFIX = 'quiz-hunt:question:reveal-due:'
 const EXTRA_OFFER_DUE_PREFIX = 'quiz-hunt:extra:offer-due:'
@@ -72,6 +81,7 @@ export function createQuizHuntScenarioModel(
   persistGameState?: (value: QuizHuntSavedGameState) => Promise<void>,
   loadGameState?: () => Promise<QuizHuntSavedGameState | null>,
   onRestartRequested?: () => void,
+  showAuthoringGridDebug = false,
 ): QuizHuntScenarioModel {
   const run = context === 'release' ? savedRun : null
   const game = createQuizHuntGameCatalog(document, context, run?.seed)
@@ -84,10 +94,10 @@ export function createQuizHuntScenarioModel(
     revealedPageIds: new Set<string>(),
   }
   const pageScenes = buildQuizHuntPageSceneCatalog(document, game, mediaSources)
-  const summary = buildQuizHuntSummaryScene(document, game)
+  const summary = buildQuizHuntSummaryScene(document, game, showAuthoringGridDebug)
   const basket = buildQuizHuntBasketScene(document, game)
   const layout = buildQuizHuntLayoutScene()
-  const result = buildQuizHuntResultScene(document, mediaSources)
+  const results = buildQuizHuntResultScenes(document, mediaSources)
   const summaryPageId = document.pages.find((page) => page.type === 'summary')?.id
   const contentGraph = createContentGraph(
     document,
@@ -102,7 +112,8 @@ export function createQuizHuntScenarioModel(
     'scene-layout': { sceneDoc: layout.sceneDoc, styleSheet: layout.styleSheet },
     'scene-summary': summary,
     'scene-basket': { sceneDoc: basket.sceneDoc, styleSheet: basket.styleSheet },
-    'scene-result': { sceneDoc: result.sceneDoc, styleSheet: result.styleSheet },
+    'scene-result-success': { sceneDoc: results.success.sceneDoc, styleSheet: results.success.styleSheet },
+    'scene-result-failure': { sceneDoc: results.failure.sceneDoc, styleSheet: results.failure.styleSheet },
     ...pageScenes as Readonly<Record<`scene-page-${string}`, SightySceneSourceValue>>,
   }
 
@@ -134,10 +145,6 @@ export function createQuizHuntScenarioModel(
                   start: 'basket',
                   views: { basket: { showMode: 'maintain', view: { scene: 'scene-basket' } } },
                 },
-                [QUIZ_HUNT_SLOT.RESULT]: {
-                  start: 'result',
-                  views: { result: { showMode: 'maintain', view: { scene: 'scene-result' } } },
-                },
               },
             },
           },
@@ -157,10 +164,20 @@ function createContentGraph(
   clueVideoPageIds: ReadonlySet<string>,
   startPageId?: string,
 ): SightyViewMap<QuizHuntSceneKey, QuizHuntSlotName> {
+  const pagesById = new Map(document.pages.map((page) => [page.id, page]))
+  const chaptersById = new Map(document.chapters.map((chapter) => [chapter.id, chapter]))
   const rootPages = document.scenarioEntries.flatMap((entry) => {
-    if (entry.kind !== 'page') return []
-    const page = document.pages.find((candidate) => candidate.id === entry.pageId)
-    return page === undefined ? [] : [page]
+    if (entry.kind === 'page') {
+      const page = pagesById.get(entry.pageId)
+      return page === undefined ? [] : [page]
+    }
+    const chapter = chaptersById.get(entry.chapterId)
+    return chapter?.type === 'introduction'
+      ? chapter.pageIds.flatMap((pageId) => {
+        const page = pagesById.get(pageId)
+        return page === undefined ? [] : [page]
+      })
+      : []
   })
   const summary = rootPages.find((page) => page.type === 'summary')
   if (summary === undefined) throw new Error('La page Sommaire doit appartenir aux entrées racine du scénario Quiz Hunt.')
@@ -175,6 +192,9 @@ function createContentGraph(
           : { [PAGE_FINISHED_EVENT]: { go: { path: contentPath(nextPage) } } }
       return [viewId, {
         showMode: 'reset',
+        ...(page.type === 'summary' ? {
+          replace: { transition: 'mask-reveal', shape: 'circle', split: 'cells', cellX: 8, cellY: 8 },
+        } : {}),
         view: { scene: page.type === 'summary' ? 'scene-summary' : `scene-page-${page.id}` },
         actions,
       }]
@@ -192,11 +212,25 @@ function createContentGraph(
 
   return {
     start: contentViewId(requestedRootPage ?? rootPages[0] ?? summary),
-    views: { ...rootViews, ...trialViews, ...finalViews },
+    views: {
+      ...rootViews,
+      ...trialViews,
+      ...finalViews,
+      [RESULT_SUCCESS_VIEW]: {
+        showMode: 'reset',
+        replace: { transition: 'curtain' },
+        view: { scene: 'scene-result-success' },
+      },
+      [RESULT_FAILURE_VIEW]: {
+        showMode: 'reset',
+        replace: { transition: 'curtain' },
+        view: { scene: 'scene-result-failure' },
+      },
+    },
   }
 }
 
-/** Creates one bank-question route that reveals the shared Question after the clue delay. */
+/** Creates one bank-question route that resets the shared Question and reveals it after the clue delay. */
 function createTrialView(
   trial: QuizHuntGameQuestion,
   document: QuizHuntDocument,
@@ -216,16 +250,17 @@ function createTrialView(
     ]
     : []
   const entry: CodPlayEventime = {
-    name: `${isFinal ? 'quiz-hunt:final' : 'quiz-hunt:trial'}:enter:${pageId}`,
+    name: isFinal ? `quiz-hunt:final:enter:${pageId}` : QUESTION_EVENTS.RESET,
     events: [
       { name: quizHuntQuestionRevealEvent(pageId), startAt: retry ? 0 : document.settings.clueDelayMs, visibility: 'story' },
-      { name: questionRevealDueEvent(pageId), startAt: retry ? 0 : document.settings.clueDelayMs, visibility: 'public', data: { pageId } },
+      ...(!isFinal ? [{ name: questionRevealDueEvent(pageId), startAt: retry ? 0 : document.settings.clueDelayMs, visibility: 'public' as const, data: { pageId } }] : []),
       ...videoStartEvents,
       ...extraEvents,
     ],
   }
   return {
     showMode: 'reset',
+    replace: { transition: 'fade' },
     accessBy: isFinal
       ? 'guard:quiz-hunt:final-access'
       : retry ? 'guard:quiz-hunt:retry-access' : 'guard:quiz-hunt:trial-access',
@@ -235,7 +270,7 @@ function createTrialView(
   }
 }
 
-/** Creates actions for the root sequence, gameplay loop, timer, and result overlay. */
+/** Creates actions for the root sequence, gameplay loop, timer and terminal pages. */
 function createRootEventActions(
   game: QuizHuntGameCatalog,
 ): Readonly<Record<string, SightyViewAction<QuizHuntSceneKey, QuizHuntSlotName>>> {
@@ -251,11 +286,18 @@ function createRootEventActions(
       action: 'action:quiz-hunt:timer-expired',
     },
     [QUIZ_HUNT_BASKET_EVENT.TIMER_EXPIRED_DURING_FEEDBACK]: { action: 'action:quiz-hunt:defer-expiry' },
+    [QUIZ_HUNT_LAYOUT_EVENT.RESULT_SUCCESS]: {
+      go: { path: `${ROOT_CONTENT_PATH}/${RESULT_SUCCESS_VIEW}` },
+      action: 'action:quiz-hunt:project-result',
+    },
+    [QUIZ_HUNT_LAYOUT_EVENT.RESULT_FAILURE]: {
+      go: { path: `${ROOT_CONTENT_PATH}/${RESULT_FAILURE_VIEW}` },
+      action: 'action:quiz-hunt:project-result',
+    },
     ...Object.fromEntries(game.trials.map((trial) => [questionRevealDueEvent(trial.page.id), {
       action: 'action:quiz-hunt:start-timer',
     }])),
     ...(game.finalPageId === null ? {} : {
-      [questionRevealDueEvent(game.finalPageId)]: { action: 'action:quiz-hunt:start-timer' },
       'quiz-hunt:final:open': {
         go: { path: `${ROOT_CONTENT_PATH}/${finalViewId(game.finalPageId)}` },
         action: 'action:quiz-hunt:enter-final',
@@ -281,6 +323,7 @@ function createRootEventActions(
     }])),
     ...Object.fromEntries(game.trials.map((trial) => [retryTrialReadyEvent(trial.page.id), {
       go: { path: `${ROOT_CONTENT_PATH}/${retryTrialViewId(trial.page.id)}` },
+      reset: [quizHuntQuestionResetKey(trial.page.id)],
       action: 'action:quiz-hunt:enter-trial',
     }])),
     ...Object.fromEntries(game.trials.map((trial) => [feedbackFinishedEvent(trial.page.id), {
@@ -313,7 +356,6 @@ function createScenarioActions(
         name: QUIZ_HUNT_BASKET_EVENT.TIMER_PROJECT,
         data: { remainingMs: state.timerRemainingMs },
       }, { scope: 'story', storyId: 'main' })
-      if (state.screen === 'result' && state.outcome !== null) await showResult(send, state.outcome, state, document)
       if (!isResume) await persistGameState?.({ seed: game.seed, state, savedAt: Date.now() })
     },
     'action:quiz-hunt:enter-trial': createEnterTrialAction(document, game, videoPlayback),
@@ -331,12 +373,12 @@ function createScenarioActions(
     'action:quiz-hunt:collect-extra': createCollectExtraAction(document, game),
     'action:quiz-hunt:drop-extra-target': createDropExtraTargetAction(document, game),
     'action:quiz-hunt:restart': async () => onRestartRequested?.(),
+    'action:quiz-hunt:project-result': createProjectResultAction(),
     'action:quiz-hunt:return-to-summary': async ({ context, updateContext, send }) => {
       const state = readGameState(context.game, document, game)
       const summaryState = { ...state, screen: 'menu' as const }
       await updateContext({ game: summaryState })
       await projectGame(summaryState, game, send)
-      await send('scene-result', { name: 'quiz-hunt:result:hide' }, { scope: 'story', storyId: 'main' })
     },
   }
   if (persistGameState === undefined) return actions
@@ -385,7 +427,7 @@ function createScenarioGuards(
     },
     'guard:quiz-hunt:final-access': ({ event, sceneKey, context }) => {
       if (game.finalPageId === null || sceneKey !== `scene-page-${game.finalPageId}`
-        || event?.sourceSceneKey !== 'scene-summary' || event.name !== 'quiz-hunt:final:open') return false
+        || event?.sourceSceneKey !== 'scene-basket' || event.name !== 'quiz-hunt:final:open') return false
       const state = readRecord(context.game)
       const basket = readRecord(state.basket)
       return state.screen === 'menu'
@@ -435,11 +477,11 @@ function createEnterFinalAction(
 ): SightyActionHandler<QuizHuntSceneKey, QuizHuntSlotName> {
   return async function enterFinal({ event, context, updateContext, send }): Promise<void> {
     const pageId = game.finalPageId
-    if (pageId === null || event.name !== 'quiz-hunt:final:open' || event.sourceSceneKey !== 'scene-summary') return
+    if (pageId === null || event.name !== 'quiz-hunt:final:open' || event.sourceSceneKey !== 'scene-basket') return
     const state = readGameState(context.game, document, game)
     if (state.screen !== 'menu' || state.outcome !== null || !isFinalReady(state, game)) return
     await updateContext({ game: { ...pauseGameTimer(state), screen: 'final', activeFinalId: pageId } })
-    await send('scene-basket', { name: QUIZ_HUNT_BASKET_EVENT.TIMER_PAUSE }, { scope: 'story', storyId: 'main' })
+    await send('scene-basket', { name: QUIZ_HUNT_BASKET_EVENT.TIMER_STOP }, { scope: 'story', storyId: 'main' })
   }
 }
 
@@ -504,8 +546,7 @@ function createStartTimerAction(
     const pageId = typeof event.data?.pageId === 'string' ? event.data.pageId : undefined
     const state = readGameState(context.game, document, game)
     const isActiveTrial = state.screen === 'trial' && state.activeTrialId === pageId
-    const isActiveFinal = state.screen === 'final' && state.activeFinalId === pageId
-    if (pageId === undefined || (!isActiveTrial && !isActiveFinal)) return
+    if (pageId === undefined || !isActiveTrial) return
     videoPlayback.revealedPageIds.add(pageId)
     const videoStatus = videoPlayback.statusByPageId.get(pageId)
     if (videoStatus === 'pending' || videoStatus === 'playing' || state.timerStartedAtMs !== null) return
@@ -608,7 +649,10 @@ function createFinishFeedbackAction(
     await updateContext({ game: nextState })
     await send('scene-basket', { name: QUIZ_HUNT_BASKET_EVENT.TIMER_FEEDBACK_FINISHED }, { scope: 'story', storyId: 'main' })
     await projectGame(nextState, game, send)
-    if (outcome !== null && (timedOut || isFinal)) await showResult(send, outcome, nextState, document)
+    if (outcome !== null && (timedOut || isFinal)) {
+      await send('scene-basket', { name: QUIZ_HUNT_BASKET_EVENT.TIMER_STOP }, { scope: 'story', storyId: 'main' })
+      await routeResult(send, outcome, createResultMetrics(document, game, state, isFinal))
+    }
     if (!timedOut && !isFinal && nextState.timerRemainingMs > 0) {
       await send('scene-basket', {
         name: QUIZ_HUNT_BASKET_EVENT.TIMER_PLAY,
@@ -618,7 +662,7 @@ function createFinishFeedbackAction(
   }
 }
 
-/** Converts an immediate timeout into the loss presentation above the summary. */
+/** Converts an immediate timeout into the failure result page. */
 function createTimerExpiredAction(
   document: QuizHuntDocument,
   game: QuizHuntGameCatalog,
@@ -635,8 +679,9 @@ function createTimerExpiredAction(
       outcome: 'failure' as const,
     }
     await updateContext({ game: nextState })
+    await send('scene-basket', { name: QUIZ_HUNT_BASKET_EVENT.TIMER_STOP }, { scope: 'story', storyId: 'main' })
     await projectGame(nextState, game, send)
-    await showResult(send, 'failure', nextState, document)
+    await routeResult(send, 'failure', createResultMetrics(document, game, nextState, false))
   }
 }
 
@@ -748,28 +793,67 @@ async function projectGame(
     data: {
       basket: state.basket,
       finalReady: state.outcome === null && isFinalReady(state, game),
+      restartAvailable: state.outcome !== null && state.screen === 'menu',
     },
   }, { scope: 'story', storyId: 'main' })
 }
 
-/** Sends the result projection to the persistent overlay scene. */
-async function showResult(
+/** Routes the active game content to the authored page for its terminal outcome. */
+async function routeResult(
   send: SightyActionContext<QuizHuntSceneKey, QuizHuntSlotName>['send'],
   outcome: QuizHuntGameOutcome,
-  state: QuizHuntGameState,
-  document: QuizHuntDocument,
+  metrics: QuizHuntResultMetrics,
 ): Promise<void> {
-  const foundCount = document.settings.groups.filter((group) => state.basket[group.id] !== null).length
-  const usedMs = Math.max(0, document.settings.timeBudgetMs - state.timerRemainingMs)
-  const totalSeconds = Math.floor(usedMs / 1_000)
-  await send('scene-result', {
-    name: 'quiz-hunt:result:project',
-    data: {
-      outcome,
-      summary: `${foundCount} / ${document.settings.groups.length} couleurs trouvées`,
-      time: `${String(Math.floor(totalSeconds / 60)).padStart(2, '0')}:${String(totalSeconds % 60).padStart(2, '0')}`,
-    },
+  await send('scene-layout', {
+    name: QUIZ_HUNT_LAYOUT_EVENT.RESULT_ROUTE,
+    data: { outcome, ...metrics },
   }, { scope: 'story', storyId: 'main' })
+}
+
+/** Calculates elapsed timer time and unique answered and correct questions. */
+function createResultMetrics(
+  document: QuizHuntDocument,
+  game: QuizHuntGameCatalog,
+  state: QuizHuntGameState,
+  finalAnswered: boolean,
+): QuizHuntResultMetrics {
+  const trialStatuses = game.trials.map((trial) => state.trialStatus[trial.page.id])
+  const finalCorrect = finalAnswered && state.outcome === 'success'
+  return {
+    elapsedMs: Math.max(0, document.settings.timeBudgetMs - timerRemainingAtResult(state, document.settings.timeBudgetMs)),
+    answeredCount: trialStatuses.filter((status) => status === 'success' || status === 'failed').length + Number(finalAnswered),
+    correctCount: trialStatuses.filter((status) => status === 'success').length + Number(finalCorrect),
+  }
+}
+
+/** Captures the current remaining time, including a timer segment that is still running. */
+function timerRemainingAtResult(state: QuizHuntGameState, budgetMs: number): number {
+  const elapsed = state.timerStartedAtMs === null ? 0 : Math.max(0, Date.now() - state.timerStartedAtMs)
+  return clampTimer(state.timerRemainingMs - elapsed, budgetMs)
+}
+
+/** Projects the recorded terminal metrics onto the visible result page. */
+function createProjectResultAction(): SightyActionHandler<QuizHuntSceneKey, QuizHuntSlotName> {
+  return async function projectResult({ event, send }): Promise<void> {
+    const outcome = event.name === QUIZ_HUNT_LAYOUT_EVENT.RESULT_SUCCESS ? 'success' : 'failure'
+    const sceneKey = outcome === 'success' ? 'scene-result-success' : 'scene-result-failure'
+    const elapsedMs = typeof event.data?.elapsedMs === 'number' && Number.isFinite(event.data.elapsedMs)
+      ? Math.max(0, event.data.elapsedMs)
+      : 0
+    const elapsedSeconds = Math.floor(elapsedMs / 1_000)
+    const elapsedTime = `${String(Math.floor(elapsedSeconds / 60)).padStart(2, '0')}:${String(elapsedSeconds % 60).padStart(2, '0')}`
+    await send(sceneKey, {
+      name: QUIZ_HUNT_RESULT_EVENT.ELAPSED_TIME,
+      data: { content: `Temps passé : ${elapsedTime}` },
+    }, { scope: 'story', storyId: 'main' })
+    if (outcome !== 'failure') return
+    const answeredCount = typeof event.data?.answeredCount === 'number' ? Math.max(0, event.data.answeredCount) : 0
+    const correctCount = typeof event.data?.correctCount === 'number' ? Math.max(0, event.data.correctCount) : 0
+    await send(sceneKey, {
+      name: QUIZ_HUNT_RESULT_EVENT.QUESTION_STATS,
+      data: { content: `Questions répondues : ${answeredCount} · réponses correctes : ${correctCount}` },
+    }, { scope: 'story', storyId: 'main' })
+  }
 }
 
 /** Creates the stable game state used by author preview and a new release run. */

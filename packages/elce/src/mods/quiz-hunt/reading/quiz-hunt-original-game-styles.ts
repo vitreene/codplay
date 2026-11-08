@@ -137,7 +137,8 @@ export const QUIZ_HUNT_ORIGINAL_GAME_STYLES = String.raw`
 
 .quiz-hunt-grid.is-hidden,
 .quiz-question-fieldset.is-hidden,
-.quiz-hunt-final-button.is-hidden {
+.quiz-hunt-final-button.is-hidden,
+.quiz-hunt-summary-restart.is-hidden {
   display: none;
 }
 
@@ -158,6 +159,25 @@ export const QUIZ_HUNT_ORIGINAL_GAME_STYLES = String.raw`
     -0.06em -0.06em 0.14em rgba(15, 23, 42, 0.1);
   cursor: pointer;
   text-shadow: 0 0.08em 0.16em rgba(15, 23, 42, 0.28);
+}
+
+.quiz-hunt-grid-tile.is-authoring-debug {
+  position: relative;
+}
+
+.quiz-hunt-grid-tile.is-authoring-debug::after {
+  position: absolute;
+  inset-inline: 0.15em;
+  bottom: 0.48em;
+  overflow: hidden;
+  content: attr(data-quiz-hunt-debug-label);
+  font-size: 0.44em;
+  font-style: italic;
+  font-weight: 500;
+  line-height: 1.1;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .quiz-hunt-grid-tile.is-success {
@@ -188,6 +208,10 @@ export const QUIZ_HUNT_ORIGINAL_GAME_STYLES = String.raw`
   flex: 1 1 auto;
 }
 
+.quiz-hunt-basket-restart-slot {
+  flex: 1 1 auto;
+}
+
 .quiz-hunt-basket-slot {
   min-height: 4.25rem;
   padding: 0.625rem;
@@ -203,7 +227,8 @@ export const QUIZ_HUNT_ORIGINAL_GAME_STYLES = String.raw`
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 
-.quiz-hunt-final-button {
+.quiz-hunt-final-button,
+.quiz-hunt-summary-restart {
   width: 100%;
   padding: 0.625em;
   border: none;
@@ -212,6 +237,11 @@ export const QUIZ_HUNT_ORIGINAL_GAME_STYLES = String.raw`
   color: #fff;
   font-weight: 700;
   cursor: pointer;
+}
+
+.quiz-hunt-summary-restart:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 2px;
 }
 
 .quiz-hunt-chrono-timer {
@@ -326,60 +356,12 @@ export const QUIZ_HUNT_ORIGINAL_GAME_STYLES = String.raw`
   pointer-events: auto;
 }
 
-.quiz-hunt-result-overlay {
-  grid-area: stack;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 0;
-  min-height: 0;
-  padding: 1.25em;
-  background-color: rgba(15, 23, 42, 0.6);
-}
-
-.quiz-hunt-result-overlay.is-hidden {
-  opacity: 0;
-  pointer-events: none;
-}
-
-.quiz-hunt-result-overlay.is-visible {
-  pointer-events: auto;
-}
-
-.quiz-hunt-result-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5em;
-  width: min(100%, 26.25em);
-  padding: 1.5em 2em;
-  border-radius: 1em;
-  background: #fff;
-}
-
-.quiz-hunt-result-verdict-slot {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 700;
-}
-
-.quiz-hunt-result-summary-slot {
-  margin: 0;
-}
-
-.quiz-hunt-result-time-slot {
-  margin: 0;
-  color: #475569;
-}
-
-.quiz-hunt-result-verdict.is-passed,
 .quiz-hunt-answer-icon-correction.is-correct,
 .quiz-hunt-answer-icon-correction.is-missed-correct,
 .quiz-hunt-question-result.is-correct {
   color: #16a34a;
 }
 
-.quiz-hunt-result-verdict.is-failed,
 .quiz-hunt-answer-icon-correction.is-incorrect,
 .quiz-hunt-question-result.is-incorrect {
   color: #dc2626;
@@ -534,9 +516,6 @@ export const QUIZ_HUNT_ORIGINAL_GAME_STYLES = String.raw`
     width: 100%;
   }
 
-  .quiz-hunt-result-card {
-    padding: 1.25em;
-  }
 }
 .quiz-hunt-layout {
   grid-template-rows: minmax(0, 1fr) auto;
@@ -544,15 +523,6 @@ export const QUIZ_HUNT_ORIGINAL_GAME_STYLES = String.raw`
 
 #quiz-hunt-layout-root {
   position: relative;
-}
-
-#quiz-hunt-layout-result-host {
-  position: absolute;
-  inset: 0;
-  z-index: 20;
-  min-width: 0;
-  min-height: 0;
-  pointer-events: none;
 }
 
 #quiz-hunt-layout-main-zone {
@@ -632,14 +602,6 @@ export const QUIZ_HUNT_ORIGINAL_GAME_STYLES = String.raw`
 
 .quiz-hunt-extra-token-inventory.is-dragging {
   pointer-events: none;
-}
-
-.quiz-hunt-result-overlay {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  box-sizing: border-box;
 }
 
 #quiz-hunt-basket-root {

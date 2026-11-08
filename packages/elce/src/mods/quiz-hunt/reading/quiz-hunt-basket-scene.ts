@@ -19,6 +19,8 @@ export const QUIZ_HUNT_BASKET_EVENT = {
   TIMER_FEEDBACK_FINISHED: 'quiz-hunt:timer:feedback-finished',
   FINAL_READY: 'quiz-hunt:menu:final:ready',
   FINAL_LOCKED: 'quiz-hunt:menu:final:locked',
+  RESTART_AVAILABLE: 'quiz-hunt:menu:restart:available',
+  RESTART_LOCKED: 'quiz-hunt:menu:restart:locked',
 } as const
 
 const TIMER_RENDER_EVENT = 'quiz-hunt:basket:timer:render'
@@ -76,6 +78,7 @@ export function buildQuizHuntBasketScene(
             createBasketLayout(),
             ...groups.flatMap((group, index) => createBasketSlot(group, index)),
             ...(finalPage === undefined ? [] : [createFinalButton(finalPage)]),
+            createRestartButton(),
             createTimerDisplay(budgetMs),
             createTimerNeedle(budgetMs),
             createTimerElapsedRing(budgetMs),
@@ -106,6 +109,7 @@ function createBasketLayout(): BasketPerso {
         </div>
         <div id="quiz-hunt-basket-tools" class="quiz-hunt-basket-tools">
           <div id="quiz-hunt-basket-final-slot" class="quiz-hunt-basket-final-slot" data-part="quiz-hunt:basket:final"></div>
+          <div id="quiz-hunt-basket-restart-slot" class="quiz-hunt-basket-restart-slot" data-part="quiz-hunt:basket:restart"></div>
         </div>
       </div>`,
     },
@@ -178,6 +182,32 @@ function createFinalButton(page: QuizHuntPage): BasketPerso {
         attr: { disabled: false },
       },
       [QUIZ_HUNT_BASKET_EVENT.FINAL_LOCKED]: {
+        className: { add: 'is-hidden' },
+        attr: { disabled: true },
+      },
+    },
+  }
+}
+
+/** Creates the terminal restart control that is available from the Sommaire. */
+function createRestartButton(): BasketPerso {
+  return {
+    id: 'quiz-hunt-basket-restart',
+    type: 'tag',
+    initial: {
+      tag: 'button',
+      content: 'Recommencer',
+      attr: { id: 'quiz-hunt-basket-restart-button', type: 'button', disabled: true, 'aria-label': 'Recommencer la partie' },
+      className: 'quiz-hunt-summary-restart is-hidden',
+      move: { target: 'quiz-hunt:basket:restart' },
+    },
+    emit: { click: { event: { name: 'quiz-hunt:game:restart', visibility: 'public' } } },
+    actions: {
+      [QUIZ_HUNT_BASKET_EVENT.RESTART_AVAILABLE]: {
+        className: { remove: 'is-hidden' },
+        attr: { disabled: false },
+      },
+      [QUIZ_HUNT_BASKET_EVENT.RESTART_LOCKED]: {
         className: { add: 'is-hidden' },
         attr: { disabled: true },
       },
@@ -369,6 +399,7 @@ function projectBasket(
         return { name: `quiz-hunt:basket:word:${index}`, data: { content: page?.name ?? '—' } }
       }),
       { name: data?.finalReady === true ? QUIZ_HUNT_BASKET_EVENT.FINAL_READY : QUIZ_HUNT_BASKET_EVENT.FINAL_LOCKED },
+      { name: data?.restartAvailable === true ? QUIZ_HUNT_BASKET_EVENT.RESTART_AVAILABLE : QUIZ_HUNT_BASKET_EVENT.RESTART_LOCKED },
     ],
   }
 }

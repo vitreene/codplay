@@ -229,6 +229,7 @@ export class QuizHuntPreviewSession {
       mediaSources,
       startPageId: selectedPageId ?? undefined,
       context: this.projectId === null ? 'authoring' : 'release',
+      showAuthoringGridDebug: documentModel.settings.authoringGridDebug,
       onLog: (message, level) => {
         if (level === 'error') console.error(`[Quiz Hunt] ${message}`)
       },

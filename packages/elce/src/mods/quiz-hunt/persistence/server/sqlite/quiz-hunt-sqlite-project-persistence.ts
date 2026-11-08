@@ -436,6 +436,7 @@ async function readDocument(database: ProjectDatabase, projectRow: SqlRow): Prom
         feedbackDelayMs: sqliteNumberValue(settingRow, 'feedback_delay_ms'),
         extraEnabled: sqliteNumberValue(settingRow, 'extra_enabled') !== 0,
         extraTriggerPageId: sqliteNullableText(settingRow, 'extra_trigger_page_id'),
+        authoringGridDebug: sqliteNumberValue(settingRow, 'authoring_grid_debug') !== 0,
       },
     },
   })
@@ -511,8 +512,9 @@ async function synchronizeQuizHuntSettings(database: ProjectDatabase, document: 
   await queryRows(database, `
     INSERT INTO quiz_hunt_settings (
       project_id, menu_presentation, success_card_bdc_id, failure_card_bdc_id,
-      seed, random, time_budget_ms, clue_delay_ms, feedback_delay_ms, extra_enabled, extra_trigger_page_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      seed, random, time_budget_ms, clue_delay_ms, feedback_delay_ms, extra_enabled,
+      extra_trigger_page_id, authoring_grid_debug
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(project_id) DO UPDATE SET
       menu_presentation = excluded.menu_presentation,
       success_card_bdc_id = excluded.success_card_bdc_id,
@@ -520,10 +522,12 @@ async function synchronizeQuizHuntSettings(database: ProjectDatabase, document: 
       seed = excluded.seed, random = excluded.random, time_budget_ms = excluded.time_budget_ms,
       clue_delay_ms = excluded.clue_delay_ms, feedback_delay_ms = excluded.feedback_delay_ms,
       extra_enabled = excluded.extra_enabled,
-      extra_trigger_page_id = excluded.extra_trigger_page_id
+      extra_trigger_page_id = excluded.extra_trigger_page_id,
+      authoring_grid_debug = excluded.authoring_grid_debug
   `, [document.id, 'grid', settings.successCardBdcId, settings.failureCardBdcId,
     settings.seed, Number(settings.random), settings.timeBudgetMs,
-    settings.clueDelayMs, settings.feedbackDelayMs, Number(settings.extraEnabled), settings.extraTriggerPageId])
+    settings.clueDelayMs, settings.feedbackDelayMs, Number(settings.extraEnabled), settings.extraTriggerPageId,
+    Number(settings.authoringGridDebug)])
   await queryRows(database, 'DELETE FROM quiz_hunt_groups WHERE project_id = ?', [document.id])
   for (const [position, group] of settings.groups.entries()) {
     await queryRows(database, `

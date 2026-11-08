@@ -39,9 +39,14 @@ export class QuizHuntEditorFacade {
     )
   }
 
-  /** Creates a game page inside its owning Question or Finale bank. */
-  public createPage(chapterId: string, name: string): void {
-    this.apply({ type: 'page.create', chapterId, name })
+  /** Creates a page inside a game bank or the optional Introduction chapter. */
+  public createPage(chapterId: string | null, name: string): void {
+    this.controller.send({ type: 'page.create', chapterId, name })
+  }
+
+  /** Deletes one authored page while preserving its chapter and referenced media. */
+  public deletePage(pageId: string): void {
+    this.apply({ type: 'page.delete', pageId })
   }
 
   /** Renames one bank without changing its role. */

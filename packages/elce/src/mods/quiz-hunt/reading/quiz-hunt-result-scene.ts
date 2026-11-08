@@ -1,5 +1,4 @@
 import type { SceneDoc } from 'codplay/scene/types'
-import type { CompiledRecord } from 'codplay'
 import type { MediaType } from '../../../core/media/media-config'
 import { mediaTypeFromMimeType } from '../../../domain/media/media-resource-service'
 import { ElceCardBdcSceneBuilder } from '../../../resources/bdcs/card/reading/card-bdc-scene-builder'
@@ -11,29 +10,54 @@ import { createQuizHuntInlineTextSceneFeature } from './quiz-hunt-inline-text-sc
 
 type ResultScenePerso = SceneDoc<string>['stories'][string]['persos'][number]
 type ResultOutcome = 'success' | 'failure'
+type ResultScene = Readonly<{ sceneDoc: SceneDoc<string>; styleSheet: string }>
+
+export const QUIZ_HUNT_RESULT_EVENT = {
+  ELAPSED_TIME: 'quiz-hunt:result:elapsed-time',
+  QUESTION_STATS: 'quiz-hunt:result:question-stats',
+} as const
 
 const RESULT_PRESENTATION_STYLES = `
-.quiz-hunt-result-card .elce-card {
+.quiz-hunt-result-page {
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+  gap: 1rem;
   width: 100%;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: clamp(1rem, 3vw, 2rem);
+  overflow-y: auto;
 }
 
+.quiz-hunt-result-title { margin: 0; }
+
 .quiz-hunt-result-content { min-width: 0; }
+
+.quiz-hunt-result-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35em;
+  margin-top: 1rem;
+  font-weight: 700;
+}
+
+.quiz-hunt-result-metrics p { margin: 0; }
 
 .quiz-hunt-result-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75em;
-  margin-top: 0.75em;
+  margin-top: auto;
+  padding-top: 0.5em;
 }
 
 .quiz-hunt-result-return,
 .quiz-hunt-result-restart {
-  padding: 0.5em 0.75em;
+  min-height: 2.75em;
+  padding: 0.5em 0.85em;
   border: 1px solid #cbd5e1;
   border-radius: 0.5em;
   background: #fff;
@@ -43,16 +67,18 @@ const RESULT_PRESENTATION_STYLES = `
   cursor: pointer;
 }
 
-@media (max-width: 40em) {
-  .quiz-hunt-result-card { padding: 1.25em; }
+.quiz-hunt-result-return:focus-visible,
+.quiz-hunt-result-restart:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 2px;
 }
 `
 
-/** Builds the original verdict overlay around the author's outcome Card BDC. */
-export function buildQuizHuntResultScene(
+/** Builds the editable success and failure Cards as normal game-content views. */
+export function buildQuizHuntResultScenes(
   document: QuizHuntDocument,
   mediaSources: Readonly<Record<string, string>> = {},
-): Readonly<{ sceneDoc: SceneDoc<string>; styleSheet: string }> {
+): Readonly<{ success: ResultScene; failure: ResultScene }> {
   const successBdc = document.bdcs.find((bdc) => bdc.id === document.settings.successCardBdcId)
   const failureBdc = document.bdcs.find((bdc) => bdc.id === document.settings.failureCardBdcId)
   if (successBdc?.card == null || failureBdc?.card == null) throw new Error('Les deux Cartes de résultat Quiz Hunt sont requises.')
@@ -63,115 +89,103 @@ export function buildQuizHuntResultScene(
     const type = mediaTypeFromMimeType(media.mimeType)
     return type === null ? [] : [[media.id, type]]
   }))
-  const success = cardBuilder.build({ pageId: 'quiz-hunt-result', containerBdcId: successBdc.id, bdc: successBdc, mediaSources, mediaTypes })
-  const failure = cardBuilder.build({ pageId: 'quiz-hunt-result', containerBdcId: failureBdc.id, bdc: failureBdc, mediaSources, mediaTypes })
-  const outcomes = [
-    { outcome: 'success' as const, markup: success.markup, contentPersos: success.contentPersos, mediaPersos: success.mediaPersos },
-    { outcome: 'failure' as const, markup: failure.markup, contentPersos: failure.contentPersos, mediaPersos: failure.mediaPersos },
-  ]
-
-  return {
-    sceneDoc: {
-      id: 'quiz-hunt-result-scene',
-      stories: {
-        main: {
-          id: 'main',
-          initial: { move: '@root' },
-          listen: [
-            { on: 'quiz-hunt:result:project', straps: ['quiz-hunt-result-project'] },
-            { on: 'quiz-hunt:result:return', straps: ['quiz-hunt-result-hide'] },
-          ],
-          straps: {
-            'quiz-hunt-result-project': ({ event }) => projectResult(event.data),
-            'quiz-hunt-result-hide': () => ({ events: [
-              { name: 'quiz-hunt:result:hide-success' },
-              { name: 'quiz-hunt:result:hide-failure' },
-            ] }),
+  /** Builds one outcome view from its configured result Card. */
+  const buildOutcome = (outcome: ResultOutcome, bdcId: string): ResultScene => {
+    const bdc = document.bdcs.find((candidate) => candidate.id === bdcId)
+    if (bdc?.card == null) throw new Error(`La Carte Quiz Hunt de résultat ${outcome} est absente.`)
+    const pageId = `quiz-hunt-result-${outcome}`
+    const card = cardBuilder.build({ pageId, containerBdcId: bdc.id, bdc, mediaSources, mediaTypes })
+    return {
+      sceneDoc: {
+        id: `${pageId}-scene`,
+        stories: {
+          main: {
+            id: 'main',
+            initial: { move: '@root' },
+            persos: [
+              createResultPage(outcome, card.markup),
+              createResultElapsedTime(outcome),
+              ...(outcome === 'failure' ? [createResultQuestionStats(outcome)] : []),
+              createResultReturnButton(outcome),
+              createResultRestartButton(outcome),
+              ...card.contentPersos,
+              ...card.mediaPersos,
+            ],
           },
-          persos: outcomes.flatMap(({ outcome, markup, contentPersos, mediaPersos }) => [
-            createResultOverlay(outcome, markup),
-            createResultSummary(outcome),
-            createResultTime(outcome),
-            createResultReturnButton(outcome),
-            createResultRestartButton(outcome),
-            ...contentPersos,
-            ...mediaPersos,
-          ]),
         },
       },
-    },
-    styleSheet: `${CARD_PLAYER_STYLE_RULES.map(([, cssText]) => cssText).join('\n')}\n${success.styleSheet}\n${failure.styleSheet}\n${RESULT_PRESENTATION_STYLES}`,
+      styleSheet: `${CARD_PLAYER_STYLE_RULES.map(([, cssText]) => cssText).join('\n')}\n${card.styleSheet}\n${RESULT_PRESENTATION_STYLES}`,
+    }
+  }
+
+  return {
+    success: buildOutcome('success', successBdc.id),
+    failure: buildOutcome('failure', failureBdc.id),
   }
 }
 
-/** Creates one result overlay with the original verdict, summary, and time slots. */
-function createResultOverlay(outcome: ResultOutcome, cardMarkup: string): ResultScenePerso {
-  const overlayId = `quiz-hunt-result-${outcome}-overlay`
-  const showEvent = `quiz-hunt:result:show-${outcome}`
-  const hideEvent = `quiz-hunt:result:hide-${outcome}`
-  const verdict = outcome === 'success' ? 'Partie réussie !' : 'Partie échouée'
-  const verdictClass = outcome === 'success' ? 'is-passed' : 'is-failed'
+/** Creates one terminal content page around its existing authored Card. */
+function createResultPage(outcome: ResultOutcome, cardMarkup: string): ResultScenePerso {
+  const pageId = `quiz-hunt-result-${outcome}`
+  const title = outcome === 'success' ? 'Partie réussie !' : 'Partie échouée'
   return {
-    id: overlayId,
+    id: `${pageId}-page`,
     type: 'layout',
     initial: {
       move: '@root',
-      className: 'quiz-hunt-result-overlay is-hidden',
-      markup: `<div id="${overlayId}-root" class="quiz-hunt-result-overlay is-hidden">
-        <div id="${overlayId}-card" class="quiz-hunt-result-card">
-          <p id="${overlayId}-verdict" class="quiz-hunt-result-verdict ${verdictClass}">${verdict}</p>
-          <p id="${overlayId}-summary" class="quiz-hunt-result-summary-slot" data-part="quiz-hunt:result:${outcome}:summary"></p>
-          <p id="${overlayId}-time" class="quiz-hunt-result-time-slot" data-part="quiz-hunt:result:${outcome}:time"></p>
-          <div id="${overlayId}-content" class="quiz-hunt-result-content">${cardMarkup}</div>
-          <div id="${overlayId}-actions" class="quiz-hunt-result-actions">
-            <div id="${overlayId}-restart-host" data-part="quiz-hunt:result:${outcome}:restart"></div>
-            <div id="${overlayId}-return-host" data-part="quiz-hunt:result:${outcome}:return"></div>
+      className: 'quiz-hunt-result-page',
+      markup: `<section id="${pageId}-root" class="quiz-hunt-result-page">
+        <h1 id="${pageId}-title" class="quiz-hunt-result-title">${title}</h1>
+        <div id="${pageId}-content" class="quiz-hunt-result-content">
+          ${cardMarkup}
+          <div id="${pageId}-metrics" class="quiz-hunt-result-metrics">
+            <div id="${pageId}-elapsed-time-host" data-part="quiz-hunt:result:${outcome}:elapsed-time"></div>
+            ${outcome === 'failure' ? `<div id="${pageId}-question-stats-host" data-part="quiz-hunt:result:${outcome}:question-stats"></div>` : ''}
           </div>
         </div>
-      </div>`,
+        <nav id="${pageId}-actions" class="quiz-hunt-result-actions" aria-label="Actions de fin de partie">
+          <div id="${pageId}-return-host" data-part="quiz-hunt:result:${outcome}:return"></div>
+          <div id="${pageId}-restart-host" data-part="quiz-hunt:result:${outcome}:restart"></div>
+        </nav>
+      </section>`,
     },
-    actions: {
-      [showEvent]: {
-        className: { add: 'is-visible', remove: 'is-hidden' },
-        style: { opacity: { from: 0, to: 1, duration: 300 } },
-      },
-      [hideEvent]: {
-        className: { add: 'is-hidden', remove: 'is-visible' },
-        style: { opacity: 0 },
-      },
-    },
+    actions: {},
   }
 }
 
-/** Creates the result summary value inside the original card. */
-function createResultSummary(outcome: ResultOutcome): ResultScenePerso {
+/** Receives the elapsed game time for the terminal result page. */
+function createResultElapsedTime(outcome: ResultOutcome): ResultScenePerso {
+  const pageId = `quiz-hunt-result-${outcome}`
   return {
-    id: `quiz-hunt-result-${outcome}-summary-value`,
+    id: `${pageId}-elapsed-time`,
     type: 'tag',
     initial: {
-      tag: 'span',
+      tag: 'p',
       content: '',
-      move: { target: `quiz-hunt:result:${outcome}:summary` },
+      className: 'quiz-hunt-result-elapsed-time',
+      move: { target: `quiz-hunt:result:${outcome}:elapsed-time` },
     },
-    actions: { [`quiz-hunt:result:${outcome}:summary`]: null },
+    actions: { [QUIZ_HUNT_RESULT_EVENT.ELAPSED_TIME]: null },
   }
 }
 
-/** Creates the elapsed-time value inside the original card. */
-function createResultTime(outcome: ResultOutcome): ResultScenePerso {
+/** Receives the answered and correct question counts on the failure page. */
+function createResultQuestionStats(outcome: ResultOutcome): ResultScenePerso {
+  const pageId = `quiz-hunt-result-${outcome}`
   return {
-    id: `quiz-hunt-result-${outcome}-time-value`,
+    id: `${pageId}-question-stats`,
     type: 'tag',
     initial: {
-      tag: 'span',
+      tag: 'p',
       content: '',
-      move: { target: `quiz-hunt:result:${outcome}:time` },
+      className: 'quiz-hunt-result-question-stats',
+      move: { target: `quiz-hunt:result:${outcome}:question-stats` },
     },
-    actions: { [`quiz-hunt:result:${outcome}:time`]: null },
+    actions: { [QUIZ_HUNT_RESULT_EVENT.QUESTION_STATS]: null },
   }
 }
 
-/** Creates the return control that restores the saved verdict on the Sommaire. */
+/** Creates the action that leaves a terminal page for the Sommaire. */
 function createResultReturnButton(outcome: ResultOutcome): ResultScenePerso {
   return {
     id: `quiz-hunt-result-${outcome}-return`,
@@ -188,7 +202,7 @@ function createResultReturnButton(outcome: ResultOutcome): ResultScenePerso {
   }
 }
 
-/** Creates the existing restart action alongside the original result card. */
+/** Creates the action that starts a new game from a terminal page. */
 function createResultRestartButton(outcome: ResultOutcome): ResultScenePerso {
   return {
     id: `quiz-hunt-result-${outcome}-restart`,
@@ -202,23 +216,5 @@ function createResultRestartButton(outcome: ResultOutcome): ResultScenePerso {
     },
     emit: { click: { event: { name: 'quiz-hunt:game:restart', visibility: 'public' } } },
     actions: {},
-  }
-}
-
-/** Projects the verdict and original count/time values to the matching overlay. */
-function projectResult(data: Readonly<Record<string, unknown>> | undefined): Readonly<{
-  events: readonly Readonly<{ name: string; data?: CompiledRecord }>[]
-}> | undefined {
-  const outcome = data?.outcome
-  if (outcome !== 'success' && outcome !== 'failure') return undefined
-  const summary = typeof data?.summary === 'string' ? data.summary : ''
-  const time = typeof data?.time === 'string' ? data.time : ''
-  return {
-    events: [
-      { name: `quiz-hunt:result:${outcome}:summary`, data: { content: summary } },
-      { name: `quiz-hunt:result:${outcome}:time`, data: { content: time } },
-      { name: `quiz-hunt:result:hide-${outcome === 'success' ? 'failure' : 'success'}` },
-      { name: `quiz-hunt:result:show-${outcome}` },
-    ],
   }
 }

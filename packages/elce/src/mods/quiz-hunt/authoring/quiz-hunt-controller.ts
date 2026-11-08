@@ -19,7 +19,8 @@ export type QuizHuntCommand =
   | Readonly<{ type: 'document.rename'; name: string }>
   | Readonly<{ type: 'chapter.rename'; chapterId: string; name: string }>
   | Readonly<{ type: 'page.rename'; pageId: string; name: string }>
-  | Readonly<{ type: 'page.create'; chapterId: string; name: string }>
+  | Readonly<{ type: 'page.create'; chapterId: string | null; name: string }>
+  | Readonly<{ type: 'page.delete'; pageId: string }>
   | Readonly<{ type: 'page.color.set'; pageId: string; colorId: string | null }>
   | Readonly<{ type: 'page.mandatory.set'; pageId: string; mandatory: boolean }>
   | Readonly<{ type: 'group.set'; group: QuizHuntGroup }>
@@ -85,6 +86,7 @@ function applyCommand(documents: QuizHuntDocumentService, document: QuizHuntDocu
     case 'chapter.rename': return documents.renameChapter(document, command.chapterId, command.name)
     case 'page.rename': return documents.renamePage(document, command.pageId, command.name)
     case 'page.create': return documents.createPage(document, command.chapterId, command.name)
+    case 'page.delete': return documents.deletePage(document, command.pageId)
     case 'page.color.set': return documents.setPageColor(document, command.pageId, command.colorId)
     case 'page.mandatory.set': return documents.setMandatory(document, command.pageId, command.mandatory)
     case 'group.set': return documents.setGroup(document, command.group)
@@ -213,6 +215,9 @@ export function createQuizHuntControllerMachine(documents = new QuizHuntDocument
         : { pageId: document.pages[0]?.id ?? null, chapterId: null, sectionSelection: null },
       afterCommand: (document, command, current, selectCreatedPage, selectionAfter) => {
         if (command.type === 'page.create' && selectCreatedPage) return { pageId: document.pages.at(-1)?.id ?? null, chapterId: null, sectionSelection: null }
+        if (command.type === 'page.delete' && current.pageId === command.pageId) {
+          return { pageId: document.pages.find((page) => page.type === 'summary')?.id ?? document.pages[0]?.id ?? null, chapterId: null, sectionSelection: null }
+        }
         const sectionSelection = selectionAfter?.sectionSelection ?? current.sectionSelection
         return {
           ...current,

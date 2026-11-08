@@ -90,7 +90,7 @@ function createWorkspaceInteraction(summarySettingsOpen = false): QuizHuntWorksp
   return {
     panelVisibility: { outline: true, properties: true },
     summarySettingsOpen,
-    introductionPage: null,
+    introductionFolderOpen: false,
     resultPage: null,
     getDraggedBdcId: () => null,
     onSetDraggedBdcId: () => undefined,
@@ -101,6 +101,7 @@ function createWorkspaceInteraction(summarySettingsOpen = false): QuizHuntWorksp
     trashAnimationToken: 0,
     onTrashDropSuccess: () => undefined,
     onSetSummarySettingsOpen: () => undefined,
+    onSetIntroductionFolderOpen: () => undefined,
     onSelectIntroductionPage: () => undefined,
     onSelectResultPage: () => undefined,
     onSetPanelVisibility: () => undefined,

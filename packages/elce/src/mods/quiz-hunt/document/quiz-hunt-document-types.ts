@@ -2,12 +2,13 @@ import type { ContentChapter, ContentPage } from '../../../core/document/content
 import type { ResourceDocumentData } from '../../../resources/document/resource-document-types'
 
 export type QuizHuntBankRole = 'questions' | 'finals'
+export type QuizHuntChapterRole = QuizHuntBankRole | 'introduction'
 
 export const QUIZ_HUNT_COLOR_SLOT_COUNT = 4
 
 export interface QuizHuntChapter extends ContentChapter {
   readonly name: string
-  readonly type: QuizHuntBankRole
+  readonly type: QuizHuntChapterRole
 }
 
 export interface QuizHuntPage extends ContentPage {
@@ -38,6 +39,7 @@ export interface QuizHuntSettings {
   readonly feedbackDelayMs: number
   readonly extraEnabled: boolean
   readonly extraTriggerPageId: string | null
+  readonly authoringGridDebug: boolean
 }
 
 export interface QuizHuntDocument extends ResourceDocumentData {

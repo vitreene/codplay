@@ -17,9 +17,16 @@ export interface QuizHuntPlayerOptions {
   readonly startPageId?: string
   readonly context?: 'authoring' | 'release'
   readonly gameStatePersistence?: QuizHuntGameStatePersistence
+  readonly showAuthoringGridDebug?: boolean
   readonly onPageChange?: (pageId: string) => void
   readonly onLog?: (message: string, level?: 'info' | 'warn' | 'error') => void
 }
+
+type QuizHuntTokenDropObservation = Readonly<{
+  isInInventory: boolean
+  isDragging: boolean
+  pageId: string | undefined
+}>
 
 /** Owns the real Sighty/CodPlay runtime used to play one Quiz Hunt document. */
 export class QuizHuntPlayer {
@@ -28,8 +35,10 @@ export class QuizHuntPlayer {
   private readonly statePersistence: QuizHuntGameStatePersistence | undefined
   private trialPageIds: ReadonlySet<string> = new Set()
   private removeSlotChange: (() => void) | undefined
-  private activePointerId: number | null = null
-  private dropTargetPageId: string | null = null
+  private readonly pointerEventTarget: EventTarget
+  private readonly pendingTokenDrops = new WeakMap<PointerEvent, QuizHuntTokenDropObservation>()
+  private readonly handlePointerEndCapture: EventListener = (event) => this.captureTokenDropTarget(event as PointerEvent)
+  private readonly handlePointerEnd: EventListener = (event) => this.dispatchTokenDrop(event as PointerEvent)
   private destroyed = false
 
   /** Builds one complete Quiz Hunt scenario and installs its host-side drop hit-test. */
@@ -38,15 +47,14 @@ export class QuizHuntPlayer {
     this.statePersistence = options.context === 'release'
       ? options.gameStatePersistence ?? new QuizHuntGameStateApiClient()
       : options.gameStatePersistence
-    const ownerWindow = options.stage.ownerDocument.defaultView
-    ownerWindow?.addEventListener('pointerdown', this.handlePointerDown, true)
-    ownerWindow?.addEventListener('pointerup', this.handlePointerUpCapture, true)
-    ownerWindow?.addEventListener('pointercancel', this.handlePointerCancelCapture, true)
+    this.pointerEventTarget = options.stage.ownerDocument.defaultView ?? options.stage
+    this.pointerEventTarget.addEventListener('pointerup', this.handlePointerEndCapture, true)
+    this.pointerEventTarget.addEventListener('pointercancel', this.handlePointerEndCapture, true)
     options.stage.addEventListener('play', this.handleVideoPlayback, true)
     options.stage.addEventListener('pause', this.handleVideoPlayback, true)
     options.stage.addEventListener('ended', this.handleVideoPlayback, true)
-    options.stage.addEventListener('pointerup', this.handlePointerUp)
-    options.stage.addEventListener('pointercancel', this.handlePointerCancel)
+    options.stage.addEventListener('pointerup', this.handlePointerEnd, true)
+    options.stage.addEventListener('pointercancel', this.handlePointerEnd, true)
   }
 
   /** Initializes Sighty and starts the persistent game layout. */
@@ -68,6 +76,7 @@ export class QuizHuntPlayer {
           this.options.onLog?.(`Le redémarrage Quiz Hunt a échoué : ${String(error)}`, 'error')
         })
       }, 0),
+      this.options.showAuthoringGridDebug ?? false,
     )
     this.trialPageIds = new Set(model.game.trials.map((trial) => trial.page.id))
     const runtime = new ReadingRuntime(model.scenario, {
@@ -127,60 +136,53 @@ export class QuizHuntPlayer {
   public destroy(): void {
     if (this.destroyed) return
     this.destroyed = true
-    const ownerWindow = this.options.stage.ownerDocument.defaultView
-    ownerWindow?.removeEventListener('pointerdown', this.handlePointerDown, true)
-    ownerWindow?.removeEventListener('pointerup', this.handlePointerUpCapture, true)
-    ownerWindow?.removeEventListener('pointercancel', this.handlePointerCancelCapture, true)
+    this.pointerEventTarget.removeEventListener('pointerup', this.handlePointerEndCapture, true)
+    this.pointerEventTarget.removeEventListener('pointercancel', this.handlePointerEndCapture, true)
     this.options.stage.removeEventListener('play', this.handleVideoPlayback, true)
     this.options.stage.removeEventListener('pause', this.handleVideoPlayback, true)
     this.options.stage.removeEventListener('ended', this.handleVideoPlayback, true)
-    this.options.stage.removeEventListener('pointerup', this.handlePointerUp)
-    this.options.stage.removeEventListener('pointercancel', this.handlePointerCancel)
+    this.options.stage.removeEventListener('pointerup', this.handlePointerEnd, true)
+    this.options.stage.removeEventListener('pointercancel', this.handlePointerEnd, true)
     this.removeSlotChange?.()
     this.removeSlotChange = undefined
     this.runtime?.destroy()
     this.runtime = null
   }
 
-  /** Records only pointer captures that begin on the layout-owned extra token. */
-  private readonly handlePointerDown = (event: PointerEvent): void => {
-    if (!(event.target instanceof Element)) return
-    if (event.target.closest('.quiz-hunt-extra-token') === null) return
-    this.activePointerId = event.pointerId
-    this.dropTargetPageId = null
+  /** Captures the inventory state and intended question before Sighty closes the pointer capture. */
+  private captureTokenDropTarget(event: PointerEvent): void {
+    const token = this.options.stage.querySelector<HTMLElement>('.quiz-hunt-extra-token')
+    if (token === null) return
+
+    const isInInventory = token.classList.contains('quiz-hunt-extra-token-inventory')
+    const isDragging = token.classList.contains('is-dragging')
+    const capturedOnToken = event.target instanceof Node && token.contains(event.target)
+    if (!isDragging && !capturedOnToken) return
+
+    const pageId = event.type === 'pointerup'
+      ? inspectTrialUnderPointer(this.options.stage, token, event, this.trialPageIds)
+      : undefined
+    this.pendingTokenDrops.set(event, { isInInventory, isDragging, pageId })
   }
 
-  /** Resolves the tile beneath the captured token from the shared owner document. */
-  private readonly handlePointerUpCapture = (event: PointerEvent): void => {
-    if (event.pointerId !== this.activePointerId) return
-    const elements = this.options.stage.ownerDocument.elementsFromPoint(event.clientX, event.clientY)
-    const target = elements.flatMap((element) => {
-      if (element.closest('.quiz-hunt-extra-token') !== null) return []
-      const tile = element.closest<HTMLElement>('[data-quiz-hunt-page-id]')
-      const pageId = tile?.dataset.quizHuntPageId
-      return tile !== null && this.options.stage.contains(tile) && pageId !== undefined && this.trialPageIds.has(pageId)
-        ? [pageId]
-        : []
-    })[0]
-    this.dropTargetPageId = target ?? null
-  }
+  /** Dispatches one completed token drag at the same capture phase used by the Sighty demo. */
+  private dispatchTokenDrop(event: PointerEvent): void {
+    const observation = this.pendingTokenDrops.get(event)
+    if (observation === undefined) return
+    this.pendingTokenDrops.delete(event)
 
-  /** Publishes the resolved tile identity to the scenario after CodPlay ends capture. */
-  private readonly handlePointerUp = (event: PointerEvent): void => {
-    if (event.pointerId !== this.activePointerId) return
-    this.dispatchDropTarget()
-  }
-
-  /** Captures cancellation before the stage listener returns the token to inventory. */
-  private readonly handlePointerCancelCapture = (event: PointerEvent): void => {
-    if (event.pointerId !== this.activePointerId) return
-    this.dropTargetPageId = null
-  }
-
-  /** Returns a canceled token through the same Sighty validation path as an invalid drop. */
-  private readonly handlePointerCancel = (event: PointerEvent): void => {
-    if (event.pointerId !== this.activePointerId) return
-    this.dispatchDropTarget()
+    const { isInInventory, isDragging, pageId } = observation
+    if (!isDragging) return
+    const targetPageId = event.type === 'pointerup' && isInInventory ? pageId : undefined
+    const runtime = this.runtime
+    if (this.destroyed || runtime === null) return
+    void runtime.api.dispatch({
+      name: QUIZ_HUNT_LAYOUT_EVENT.EXTRA_DROP_TARGET,
+      sourceSceneKey: 'scene-layout',
+      data: targetPageId === undefined ? {} : { pageId: targetPageId },
+    }).catch((error: unknown) => {
+      this.options.onLog?.(`Le dépôt du jeton Quiz Hunt a échoué : ${String(error)}`, 'error')
+    })
   }
 
   /** Forwards native playback changes from Quiz Hunt Question videos into Sighty. */
@@ -207,31 +209,36 @@ export class QuizHuntPlayer {
     })
   }
 
-  /** Sends one public intent and clears the transient DOM hit-test result. */
-  private dispatchDropTarget(): void {
-    const pageId = this.dropTargetPageId
-    this.activePointerId = null
-    this.dropTargetPageId = null
-    const runtime = this.runtime
-    if (this.destroyed || runtime === null) return
-    void runtime.api.dispatch({
-      name: QUIZ_HUNT_LAYOUT_EVENT.EXTRA_DROP_TARGET,
-      sourceSceneKey: 'scene-layout',
-      data: { pageId },
-    }).catch((error: unknown) => {
-      this.options.onLog?.(`Le dépôt du jeton Quiz Hunt a échoué : ${String(error)}`, 'error')
-    })
-  }
-
-  /** Maps a selected page or Sommaire scene back to its document ID. */
+  /** Maps selected content, including terminal views, back to its document page ID. */
   private pageIdForScene(sceneKey: QuizHuntSceneKey | undefined): string | undefined {
     if (sceneKey === undefined) return undefined
-    if (sceneKey === 'scene-summary') return this.options.document.pages.find((page) => page.type === 'summary')?.id
+    if (sceneKey === 'scene-summary' || sceneKey === 'scene-result-success' || sceneKey === 'scene-result-failure') {
+      return this.options.document.pages.find((page) => page.type === 'summary')?.id
+    }
     const pageId = sceneKey.startsWith('scene-page-') ? sceneKey.slice('scene-page-'.length) : undefined
     return pageId !== undefined && this.options.document.pages.some((page) => page.id === pageId)
       ? pageId
       : undefined
   }
+}
+
+/** Finds one drawn Question tile under the pointer, excluding the captured token itself. */
+function inspectTrialUnderPointer(
+  stage: HTMLElement,
+  token: HTMLElement,
+  event: PointerEvent,
+  trialPageIds: ReadonlySet<string>,
+): string | undefined {
+  const elements = stage.ownerDocument.elementsFromPoint(event.clientX, event.clientY)
+  const belowToken = elements.filter((element) => element !== token && !token.contains(element))
+  const tileElement = belowToken.find((element) => (
+    stage.contains(element) && element.closest('[data-quiz-hunt-page-id]') !== null
+  ))
+  const tile = tileElement?.closest<HTMLElement>('[data-quiz-hunt-page-id]') ?? null
+  const pageId = tile?.dataset.quizHuntPageId
+  return tile !== null && stage.contains(tile) && pageId !== undefined && trialPageIds.has(pageId)
+    ? pageId
+    : undefined
 }
 
 /** Assigns one stable CodPlay instance identity to each scene in the scenario. */

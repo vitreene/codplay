@@ -13,6 +13,7 @@ import { createEmptyRichTextDocument } from '../../../resources/bdcs/section/dom
 import type { SectionContent } from '../../../resources/bdcs/section/domain/section-types'
 import type { MediaMetadata } from '../../../core/document/content-document-types'
 import { normalizeQuizHuntExtraTrigger } from './quiz-hunt-extra-trigger'
+import { normalizeQuizHuntFinalColors } from './quiz-hunt-final-color.ts'
 import type { QuizHuntDocument, QuizHuntGroup, QuizHuntSettings } from './quiz-hunt-document-types'
 
 /** Owns Quiz Hunt authoring operations without depending on a Learning document. */
@@ -20,7 +21,7 @@ export class QuizHuntDocumentService {
   private readonly questions = new ElceQuestionService()
   private readonly cards = new ElceCardService()
 
-  /** Creates the root summary and the two independently named question banks. */
+  /** Creates the root summary and the two game banks. */
   public createInitialDocument(id = createStableId('quiz-hunt'), name = 'Quiz Hunt'): QuizHuntDocument {
     const summaryId = createStableId('summary')
     const questionsId = createStableId('questions')
@@ -53,12 +54,20 @@ export class QuizHuntDocumentService {
         {
           id: successCardBdcId, type: CARD_BDC_TYPE, presetId: CARD_PRESET_ID.TEXT_SHORT,
           pageId: null, parentBdcId: null, section: null, question: null,
-          card: this.cards.createDefault(),
+          card: {
+            ...this.cards.createDefault(),
+            title: 'Bravo !',
+            message: 'Vous avez remporté la partie.',
+          },
         },
         {
           id: failureCardBdcId, type: CARD_BDC_TYPE, presetId: CARD_PRESET_ID.TEXT_SHORT,
           pageId: null, parentBdcId: null, section: null, question: null,
-          card: this.cards.createDefault(),
+          card: {
+            ...this.cards.createDefault(),
+            title: 'Partie terminée',
+            message: 'Vous pouvez recommencer pour tenter de gagner, ou revenir au sommaire.',
+          },
         },
       ],
       medias: [],
@@ -80,6 +89,7 @@ export class QuizHuntDocumentService {
         feedbackDelayMs: 2_000,
         extraEnabled: true,
         extraTriggerPageId: null,
+        authoringGridDebug: false,
       },
     }
   }
@@ -97,13 +107,16 @@ export class QuizHuntDocumentService {
     return this.withProjectIdentity(this.createInitialDocument(), createStableId('quiz-hunt'), `Quiz Hunt ${index}`)
   }
 
-  /** Adds a new Question to its Questions or Finales bank. */
-  public createPage(document: QuizHuntDocument, chapterId: string, name: string): QuizHuntDocument {
+  /** Adds a normal page to a game chapter or the optional Introduction chapter. */
+  public createPage(document: QuizHuntDocument, chapterId: string | null, name: string): QuizHuntDocument {
+    if (chapterId === null) return this.createIntroductionPage(document, name)
     const chapter = document.chapters.find((candidate) => candidate.id === chapterId)
     if (chapter === undefined) throw new Error('La banque demandée est absente.')
+    if (chapter.type === 'introduction' && chapter.pageIds.length > 0) return document
     const pageId = createStableId('page')
     const bdcId = createStableId('bdc')
-    return {
+    const isIntroductionPage = chapter.type === 'introduction'
+    return normalizeQuizHuntFinalColors({
       ...document,
       pages: [...document.pages, { id: pageId, name, type: 'flux', chapterId, bdcIds: [bdcId], colorId: null, mandatory: false }],
       chapters: document.chapters.map((candidate) => candidate.id === chapterId
@@ -111,14 +124,58 @@ export class QuizHuntDocumentService {
         : candidate),
       bdcs: [...document.bdcs, {
         id: bdcId,
-        type: QUESTION_BDC_TYPE,
-        presetId: QUESTION_PRESET_ID,
+        type: isIntroductionPage ? SECTION_BDC_TYPE : QUESTION_BDC_TYPE,
+        presetId: isIntroductionPage ? SECTION_PRESET_ID : QUESTION_PRESET_ID,
         pageId,
         parentBdcId: null,
-        question: this.questions.createDefault(),
-        section: null,
+        question: isIntroductionPage ? null : this.questions.createDefault(),
+        section: isIntroductionPage
+          ? { title: '', markup: '', content: createEmptyRichTextDocument(), revelation: { intro: null, outro: null } }
+          : null,
       }],
+    })
+  }
+
+  /** Creates the optional content page and its chapter when opening an older project. */
+  private createIntroductionPage(document: QuizHuntDocument, name: string): QuizHuntDocument {
+    const chapter = document.chapters.find((candidate) => candidate.type === 'introduction')
+    if (chapter?.pageIds.length) return document
+    if (chapter !== undefined) return this.createPage(document, chapter.id, name)
+
+    const introductionId = createStableId('introduction')
+    const summaryIndex = document.scenarioEntries.findIndex((entry) => (
+      entry.kind === 'page' && document.pages.some((page) => page.id === entry.pageId && page.type === 'summary')
+    ))
+    const withIntroductionChapter = {
+      ...document,
+      chapters: [...document.chapters, { id: introductionId, name: 'Introduction', type: 'introduction' as const, pageIds: [] }],
+      scenarioEntries: insertAt(document.scenarioEntries, { kind: 'chapter' as const, chapterId: introductionId }, summaryIndex < 0 ? 0 : summaryIndex),
     }
+    return this.createPage(withIntroductionChapter, introductionId, name)
+  }
+
+  /** Deletes one optional page and its placed BDC tree while retaining its chapter and media. */
+  public deletePage(document: QuizHuntDocument, pageId: string): QuizHuntDocument {
+    const page = document.pages.find((candidate) => candidate.id === pageId)
+    if (page === undefined || page.type === 'summary') return document
+    const removedBdcIds = new Set(page.bdcIds)
+    /** Collects every nested BDC owned by the deleted page's direct content. */
+    const collectChildren = (parentBdcId: string): string[] => document.bdcs
+      .filter((bdc) => bdc.parentBdcId === parentBdcId)
+      .flatMap((bdc) => [bdc.id, ...collectChildren(bdc.id)])
+    page.bdcIds.flatMap(collectChildren).forEach((bdcId) => removedBdcIds.add(bdcId))
+    return normalizeQuizHuntExtraTrigger({
+      ...document,
+      pages: document.pages.filter((candidate) => candidate.id !== pageId),
+      chapters: document.chapters.map((chapter) => ({
+        ...chapter,
+        pageIds: removeValue(chapter.pageIds, pageId),
+      })),
+      scenarioEntries: document.scenarioEntries.filter((entry) => entry.kind !== 'page' || entry.pageId !== pageId),
+      catalogPageIds: removeValue(document.catalogPageIds, pageId),
+      catalogBdcIds: document.catalogBdcIds.filter((bdcId) => !removedBdcIds.has(bdcId)),
+      bdcs: document.bdcs.filter((bdc) => !removedBdcIds.has(bdc.id)),
+    })
   }
 
   /** Changes a bank title while preserving its identity, role, and contents. */
@@ -136,18 +193,18 @@ export class QuizHuntDocumentService {
     if (colorId !== null && !document.settings.groups.some((group) => group.id === colorId)) {
       throw new Error('La couleur choisie est absente du sommaire.')
     }
-    return normalizeQuizHuntExtraTrigger({
+    return normalizeQuizHuntExtraTrigger(normalizeQuizHuntFinalColors({
       ...document,
       pages: document.pages.map((page) => page.id === pageId ? { ...page, colorId } : page),
-    })
+    }))
   }
 
   /** Marks a bank page for guaranteed selection without imposing a response gate. */
   public setMandatory(document: QuizHuntDocument, pageId: string, mandatory: boolean): QuizHuntDocument {
-    return normalizeQuizHuntExtraTrigger({
+    return normalizeQuizHuntExtraTrigger(normalizeQuizHuntFinalColors({
       ...document,
       pages: document.pages.map((page) => page.id === pageId ? { ...page, mandatory } : page),
-    })
+    }))
   }
 
   /** Adds or updates an authored group without changing existing question references. */

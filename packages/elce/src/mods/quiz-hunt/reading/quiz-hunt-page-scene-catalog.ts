@@ -15,6 +15,7 @@ import { buildDiapoScene } from '../../../resources/pages/diapo/diapo-scene-buil
 import { ElceCarouselSceneBuilder } from '../../../resources/bdcs/carousel/reading/carousel-scene-builder'
 import { QUESTION_PLAYER_STYLE_RULES } from '../../../resources/bdcs/question/reading/question-player-style'
 import { QUESTION_PRESETS } from '../../../resources/bdcs/question/question-presets'
+import { QUESTION_EVENTS } from '../../../resources/bdcs/question/question-config'
 import { SECTION_PRESETS } from '../../../resources/bdcs/section/section-presets'
 import { DOT_LEADER_STYLE_SHEET } from '../../../resources/bdcs/section/dot-leader/dot-leader-style'
 import { STATISTICAL_GRAPH_PLAYER_STYLE_RULES } from '../../../resources/bdcs/statistical-graph/reading/statistical-graph-player-style'
@@ -242,20 +243,37 @@ export function buildQuizHuntPageSceneCatalog(
     const pageScene = page.type === 'diapo'
       ? buildDiapoSceneForQuizHunt(page, document, options)
       : buildFluxScene(page, document.bdcs, options)
-    const sceneDoc = page.chapterId === null
-      ? pageScene.sceneDoc
-      : buildQuizHuntGamePageScene(pageScene.sceneDoc, page, document, game)
+    const chapter = document.chapters.find((candidate) => candidate.id === page.chapterId)
+    const isBankPage = chapter?.type === 'questions' || chapter?.type === 'finals'
+    const sceneDoc = isBankPage ? buildQuizHuntGamePageScene(pageScene.sceneDoc, page, document, game) : pageScene.sceneDoc
+    const questionReset = pageScene.questionReset
     const styleSheet = [
       QUIZ_HUNT_RESOURCE_STYLE_SHEET,
       QUIZ_HUNT_CLUE_STYLE_SHEET,
       ...pageScene.styleSheets,
-      ...(page.chapterId === null ? [] : [QUIZ_HUNT_GAME_PAGE_STYLE_SHEET]),
+      ...(isBankPage ? [QUIZ_HUNT_GAME_PAGE_STYLE_SHEET] : []),
     ].filter((css) => css.length > 0).join('\n')
-    const source: SightySceneSourceValue = styleSheet.length === 0
+    const source: SightySceneSourceValue = styleSheet.length === 0 && questionReset === undefined
       ? sceneDoc
-      : { sceneDoc, styleSheet }
+      : {
+        sceneDoc,
+        ...(styleSheet.length === 0 ? {} : { styleSheet }),
+        ...(questionReset === undefined ? {} : { onReset: createQuizHuntQuestionResetHandler(page.id) }),
+      }
     return [[`scene-page-${page.id}`, source]]
   }))
+}
+
+/** Resets only the shared Question story requested by a Quiz Hunt retry. */
+function createQuizHuntQuestionResetHandler(pageId: string): NonNullable<Extract<SightySceneSourceValue, { sceneDoc: SceneDoc<string> }>['onReset']> {
+  return (keys) => keys.includes('all') || keys.includes(quizHuntQuestionResetKey(pageId))
+    ? { name: QUESTION_EVENTS.RESET, data: { pageId } }
+    : undefined
+}
+
+/** Names the Sighty reset key scoped to one authored Quiz Hunt question page. */
+export function quizHuntQuestionResetKey(pageId: string): string {
+  return `quiz-hunt:question-reset:${pageId}`
 }
 
 /** Frames a bank page in the original clue panel and reveals its common Question on schedule. */

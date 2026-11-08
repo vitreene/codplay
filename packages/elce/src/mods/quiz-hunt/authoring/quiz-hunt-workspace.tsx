@@ -53,7 +53,7 @@ export interface QuizHuntWorkspaceView {
 export interface QuizHuntWorkspaceInteraction {
   readonly panelVisibility: EditorPanelVisibility
   readonly summarySettingsOpen: boolean
-  readonly introductionPage: QuizHuntIntroductionPage
+  readonly introductionFolderOpen: boolean
   readonly resultPage: QuizHuntResultPage
   readonly getDraggedBdcId: () => string | null
   readonly onSetDraggedBdcId: (bdcId: string | null) => void
@@ -64,13 +64,13 @@ export interface QuizHuntWorkspaceInteraction {
   readonly trashAnimationToken: number
   readonly onTrashDropSuccess: () => void
   readonly onSetSummarySettingsOpen: (open: boolean) => void
-  readonly onSelectIntroductionPage: (page: QuizHuntIntroductionPage) => void
+  readonly onSetIntroductionFolderOpen: (open: boolean) => void
+  readonly onSelectIntroductionPage: (pageId: string) => void
   readonly onSelectResultPage: (page: QuizHuntResultPage) => void
   readonly onSetPanelVisibility: (panel: EditorPanelName, open: boolean, triggerId?: string) => void
 }
 
 export type QuizHuntResultPage = 'overview' | 'success' | 'failure' | null
-export type QuizHuntIntroductionPage = 'overview' | 'settings' | null
 
 /** Renders the Quiz Hunt outline, selected page, and author settings. */
 export function renderQuizHuntWorkspace(
@@ -81,7 +81,9 @@ export function renderQuizHuntWorkspace(
   interaction: QuizHuntWorkspaceInteraction,
 ): RemixNode {
   const selectedPage = view.document.pages.find((page) => page.id === view.selection.pageId)
-  const selectedChapter = view.document.chapters.find((chapter) => chapter.id === view.selection.chapterId)
+  const selectedChapter = view.document.chapters.find((chapter) => (
+    chapter.id === (view.selection.chapterId ?? selectedPage?.chapterId)
+  ))
   const summarySettingsOpen = interaction.summarySettingsOpen
   const selectedBdcs = selectedPage === undefined
     ? []
@@ -99,15 +101,13 @@ export function renderQuizHuntWorkspace(
           ? renderResultFolderLanding()
           : renderResultPage(view.document, interaction.resultPage, actions, mediaById)}
       </div>
-      : interaction.introductionPage !== null
+      : interaction.introductionFolderOpen
         ? <div id="quiz-hunt-introduction-page-host" className="elce-remix-center-column">
-          {interaction.introductionPage === 'overview'
-            ? renderIntroductionFolderLanding()
-            : renderIntroductionPage(view.document, actions)}
+          {renderIntroductionFolderLanding()}
         </div>
       : summarySettingsOpen
       ? <div id="quiz-hunt-summary-host" className="elce-remix-center-column">
-        {renderSummaryWorkspace(view.document, actions, interaction)}
+        {renderSummaryWorkspace(view.document, actions)}
       </div>
       : selectedPage === undefined
         ? <div id="elce-remix-chapter-settings-host" className="elce-remix-center-column">
@@ -140,12 +140,13 @@ function renderQuizHuntScenarioPanel(
   interaction: QuizHuntWorkspaceInteraction,
 ): RemixNode {
   const chapters = view.document.scenarioEntries.flatMap((entry) => entry.kind === 'chapter'
-    ? view.document.chapters.filter((chapter) => chapter.id === entry.chapterId)
+    ? view.document.chapters.filter((chapter) => chapter.id === entry.chapterId && chapter.type !== 'introduction')
     : [])
+  const introductionChapter = view.document.chapters.find((chapter) => chapter.type === 'introduction')
   const summaryPage = view.document.pages.find((page) => page.type === 'summary')
   const summaryPageSelected = summaryPage?.id === view.selection.pageId
   const summarySelected = interaction.resultPage === null
-    && interaction.introductionPage === null
+    && !interaction.introductionFolderOpen
     && (interaction.summarySettingsOpen || summaryPageSelected)
   return <section
     id="elce-outline"
@@ -174,7 +175,7 @@ function renderQuizHuntScenarioPanel(
             <span id="quiz-hunt-scenario-summary-name">{summaryPage?.name ?? 'Sommaire'}</span>
           </button>
         </li>
-        {renderIntroductionFolder(interaction)}
+        {renderIntroductionFolder(view, introductionChapter, actions, interaction)}
         {chapters.map((chapter) => renderChapterItem(chapter, view, actions, interaction))}
         {renderResultFolder(interaction)}
       </ol>
@@ -182,32 +183,70 @@ function renderQuizHuntScenarioPanel(
   </section>
 }
 
-/** Renders the existing game information as a page in the Introduction folder. */
-function renderIntroductionFolder(interaction: QuizHuntWorkspaceInteraction): RemixNode {
+/** Renders the optional Introduction chapter and its normal game content page. */
+function renderIntroductionFolder(
+  view: QuizHuntWorkspaceView,
+  chapter: QuizHuntChapter | undefined,
+  actions: QuizHuntEditorFacade,
+  interaction: QuizHuntWorkspaceInteraction,
+): RemixNode {
+  const page = chapter?.pageIds.flatMap((pageId) => view.document.pages.filter((candidate) => candidate.id === pageId))[0]
+  const selected = page?.id === view.selection.pageId || (page === undefined && interaction.introductionFolderOpen)
   return <li id="quiz-hunt-introduction-folder">
     <div id="quiz-hunt-introduction-folder-heading" className="elce-outline-item-heading">
       <button
         id="quiz-hunt-introduction-folder-select"
-        className={interaction.introductionPage === 'overview' ? 'elce-chapter-select elce-chapter-select--selected' : 'elce-chapter-select'}
+        className={selected ? 'elce-chapter-select elce-chapter-select--selected' : 'elce-chapter-select'}
         type="button"
-        aria-pressed={interaction.introductionPage === 'overview'}
-        mix={on<HTMLButtonElement, 'click'>('click', () => interaction.onSelectIntroductionPage('overview'))}
+        aria-pressed={selected}
+        mix={on<HTMLButtonElement, 'click'>('click', () => page === undefined
+          ? interaction.onSetIntroductionFolderOpen(true)
+          : interaction.onSelectIntroductionPage(page.id))}
       >
         {renderLucideIcon(Folder, 'quiz-hunt-introduction-folder-icon')}
         <strong id="quiz-hunt-introduction-folder-name">Introduction</strong>
       </button>
+      {page === undefined
+        ? <div id="quiz-hunt-introduction-folder-actions" className="elce-outline-item-actions">
+          <button
+            id="quiz-hunt-introduction-page-create"
+            className="elce-icon-action elce-location-page-action"
+            type="button"
+            aria-label="Ajouter une page d’introduction"
+            title="Ajouter une page d’introduction"
+            mix={on<HTMLButtonElement, 'click'>('click', () => createPage(actions, null, 'Introduction', interaction))}
+          >{renderLucideIcon(Plus, 'quiz-hunt-introduction-page-create-icon')}</button>
+        </div>
+        : null}
     </div>
-    <ul id="quiz-hunt-introduction-page-list" className="elce-outline-list">
-      <li id="quiz-hunt-introduction-page-row-settings">
+    {page === undefined ? null : <ul id="quiz-hunt-introduction-page-list" className="elce-outline-list">
+      <li id={`quiz-hunt-introduction-page-row-${page.id}`}>
+        <div
+          id={`quiz-hunt-introduction-page-heading-${page.id}`}
+          className={selected
+            ? 'elce-page-row quiz-hunt-bank-page-row quiz-hunt-bank-page-row--selected'
+            : 'elce-page-row quiz-hunt-bank-page-row'}
+        >
         <button
-          id="quiz-hunt-introduction-page-select-settings"
-          className={interaction.introductionPage === 'settings' ? 'elce-page-button elce-page-button--selected' : 'elce-page-button'}
+          id={`quiz-hunt-introduction-page-select-${page.id}`}
+          className={selected ? 'elce-page-button elce-page-button--selected' : 'elce-page-button'}
           type="button"
-          aria-pressed={interaction.introductionPage === 'settings'}
-          mix={on<HTMLButtonElement, 'click'>('click', () => interaction.onSelectIntroductionPage('settings'))}
-        >Informations du jeu</button>
+          aria-pressed={selected}
+          mix={on<HTMLButtonElement, 'click'>('click', () => interaction.onSelectIntroductionPage(page.id))}
+        >{page.name}</button>
+        <div id={`quiz-hunt-introduction-page-actions-${page.id}`} className="elce-page-actions">
+          <button
+            id={`quiz-hunt-introduction-page-delete-${page.id}`}
+            className="elce-danger-action"
+            type="button"
+            aria-label="Supprimer la page d’introduction"
+            title="Supprimer la page d’introduction"
+            mix={on<HTMLButtonElement, 'click'>('click', () => actions.deletePage(page.id))}
+          >{renderLucideIcon(Trash2, `quiz-hunt-introduction-page-delete-icon-${page.id}`)}</button>
+        </div>
+        </div>
       </li>
-    </ul>
+    </ul>}
   </li>
 }
 
@@ -296,8 +335,14 @@ function renderChapterPages(
       const page = view.document.pages.find((candidate) => candidate.id === pageId)
       if (page === undefined) return null
       const active = view.selection.pageId === page.id
+      const group = view.document.settings.groups.find((candidate) => candidate.id === page.colorId)
       return <li key={page.id} id={`quiz-hunt-bank-page-row-${page.id}`}>
-        <div id={`quiz-hunt-bank-page-heading-${page.id}`} className="elce-page-row quiz-hunt-bank-page-row">
+        <div
+          id={`quiz-hunt-bank-page-heading-${page.id}`}
+          className={active
+            ? 'elce-page-row quiz-hunt-bank-page-row quiz-hunt-bank-page-row--selected'
+            : 'elce-page-row quiz-hunt-bank-page-row'}
+        >
           <button
             id={`quiz-hunt-bank-page-select-${page.id}`}
             className={active ? 'elce-page-button elce-page-button--selected' : 'elce-page-button'}
@@ -308,7 +353,17 @@ function renderChapterPages(
               actions.selectPage(page.id)
             })}
           >{page.name}</button>
-          {page.mandatory ? renderMandatoryIndicator(`quiz-hunt-bank-page-kind-${page.id}`, 'Obligatoire') : null}
+          {group === undefined && !page.mandatory ? null : <span id={`quiz-hunt-page-indicators-${page.id}`} className="quiz-hunt-page-indicators">
+            {page.mandatory ? renderMandatoryIndicator(`quiz-hunt-bank-page-kind-${page.id}`, 'Obligatoire') : null}
+            {group === undefined ? null : <span
+              id={`quiz-hunt-page-color-${page.id}`}
+              className="quiz-hunt-page-color-indicator"
+              role="img"
+              aria-label={`Couleur ${group.name}`}
+              title={group.name}
+              style={{ backgroundColor: group.color }}
+            />}
+          </span>}
         </div>
       </li>
     })}
@@ -333,7 +388,11 @@ function renderChapterLanding(chapter: QuizHuntChapter | undefined, actions: Qui
       />
     </h2>
     <p id={`quiz-hunt-bank-description-${chapter.id}`} className="elce-muted">
-      {chapter.type === 'finals' ? 'Les finales sont tirées parmi les couleurs actives.' : 'Les pages de cette banque forment le parcours des questions.'}
+      {chapter.type === 'introduction'
+        ? 'La page de contenu Introduction est facultative.'
+        : chapter.type === 'finals'
+          ? 'Les finales sont tirées parmi les couleurs actives.'
+          : 'Les pages de cette banque forment le parcours des questions.'}
     </p>
   </section>
 }
@@ -360,15 +419,17 @@ function renderQuizHuntPropertiesPanel(
     </header>
     {interaction.resultPage !== null
       ? <p id="quiz-hunt-result-settings-location" className="elce-muted">La Carte sélectionnée est éditée dans l’espace central.</p>
-      : interaction.introductionPage !== null
-        ? <p id="quiz-hunt-introduction-settings-location" className="elce-muted">Les informations du jeu sont affichées dans l’espace central.</p>
+      : interaction.introductionFolderOpen
+        ? <p id="quiz-hunt-introduction-settings-location" className="elce-muted">L’introduction est facultative et son contenu s’édite comme une page de jeu.</p>
       : interaction.summarySettingsOpen
-      ? <p id="quiz-hunt-summary-settings-location" className="elce-muted">Le Sommaire est affiché dans l’espace central.</p>
-      : selectedPage !== undefined && selectedPage.chapterId !== null
+      ? null
+      : selectedPage !== undefined && (selectedChapter?.type === 'questions' || selectedChapter?.type === 'finals')
         ? renderQuestionOptions(selectedPage, view.document, actions)
-        : selectedChapter !== undefined
+      : selectedChapter !== undefined && selectedPage === undefined
           ? renderBankInspector(selectedChapter)
-          : <p id="quiz-hunt-properties-hint" className="elce-muted">Cette page d’accueil n’a pas de réglage de jeu.</p>}
+          : selectedPage !== undefined
+            ? <p id="quiz-hunt-page-settings-location" className="elce-muted">Le contenu de la page est édité dans l’espace central.</p>
+            : <p id="quiz-hunt-properties-hint" className="elce-muted">Cette page n’a pas de réglage dans le panneau latéral.</p>}
   </aside>
 }
 
@@ -376,31 +437,21 @@ function renderQuizHuntPropertiesPanel(
 function renderSummaryWorkspace(
   document: QuizHuntDocument,
   actions: QuizHuntEditorFacade,
-  interaction: QuizHuntWorkspaceInteraction,
 ): RemixNode {
   return <section id="quiz-hunt-summary-workspace" className="elce-summary-profile-settings quiz-hunt-summary-workspace">
       <header id="quiz-hunt-summary-workspace-heading" className="elce-summary-profile-settings__heading">
         <h1 id="quiz-hunt-summary-workspace-title">Sommaire</h1>
       </header>
-      {renderDrawPreview(document, actions, interaction)}
+      {renderGameSettings(document, actions)}
+      {renderDrawPreview(document, actions)}
   </section>
 }
 
-/** Renders the current game configuration in the Introduction folder page. */
-function renderIntroductionPage(document: QuizHuntDocument, actions: QuizHuntEditorFacade): RemixNode {
-  return <section id="quiz-hunt-introduction-workspace" className="elce-summary-profile-settings quiz-hunt-summary-workspace">
-    <header id="quiz-hunt-introduction-workspace-heading" className="elce-summary-profile-settings__heading">
-      <h1 id="quiz-hunt-introduction-workspace-title">Informations du jeu</h1>
-    </header>
-    {renderGameSettings(document, actions)}
-  </section>
-}
-
-/** Gives the Introduction folder a landing surface above its information page. */
+/** Gives the optional Introduction chapter a landing surface when it has no page. */
 function renderIntroductionFolderLanding(): RemixNode {
   return <section id="quiz-hunt-introduction-folder-landing" className="elce-panel elce-work-area quiz-hunt-bank-settings">
     <h1 id="quiz-hunt-introduction-folder-landing-title" className="elce-work-area-chapter-title">Introduction</h1>
-    <p id="quiz-hunt-introduction-folder-landing-description" className="elce-muted">Ouvrez Informations du jeu pour accéder à sa configuration.</p>
+    <p id="quiz-hunt-introduction-folder-landing-description" className="elce-muted">Cette page de contenu est facultative. Utilisez + dans le dossier Introduction pour l’ajouter.</p>
   </section>
 }
 
@@ -468,7 +519,7 @@ function renderPage(
     trashAnimationToken: interaction.trashAnimationToken,
     onToggleAddContentMenu: () => interaction.onSetAddContentMenuOpen(!interaction.isAddContentMenuOpen),
     dropTarget: interaction.dropTarget,
-    chapterTitle: chapter === undefined ? null : renderChapterTitle(chapter, actions),
+    chapterTitle: chapter === undefined || chapter.type === 'introduction' ? null : renderChapterTitle(chapter, actions),
     textFieldFeature: quizHuntTextFieldFeature,
     renderPageTypeMark: (currentPage) => renderLucideIcon(
       currentPage.type === 'diapo' ? DIAPO_PAGE_ICON : FLUX_PAGE_ICON,
@@ -486,7 +537,9 @@ function renderPage(
       return renderQuestionEditor({
         bdcId: bdc.id,
         question: bdc.question,
-        canDelete: page.chapterId === null || bdcs.filter((candidate) => candidate.question !== null).length > 1,
+        canDelete: chapter?.type === 'introduction'
+          || page.chapterId === null
+          || bdcs.filter((candidate) => candidate.question !== null).length > 1,
         media,
         mediaType: media === null ? null : mediaTypeFromMimeType(media.mimeType),
         mediaSource: media === null ? null : view.mediaSources[media.id] ?? null,
@@ -802,73 +855,44 @@ function renderQuizHuntSection(
   </article>
 }
 
-/** Renders game timing, extra, and color settings in the Introduction page. */
+/** Renders game timing, extra, and color settings in the Sommaire. */
 function renderGameSettings(
   document: QuizHuntDocument,
   actions: QuizHuntEditorFacade,
 ): RemixNode {
   const settings = document.settings
   const updateNumber = (key: 'timeBudgetMs' | 'clueDelayMs' | 'feedbackDelayMs', value: string): void => {
-    const number = Number(value)
-    if (Number.isFinite(number)) actions.updateSettings({ [key]: number })
+    const seconds = Number(value)
+    if (Number.isFinite(seconds)) actions.updateSettings({ [key]: Math.round(seconds * 1_000) })
   }
   return <section id="quiz-hunt-game-settings" className="quiz-hunt-summary-settings elce-summary-profile-settings__group">
     <header id="quiz-hunt-game-settings-heading" className="quiz-hunt-panel-heading">
       <h2 id="quiz-hunt-game-settings-title">Configuration du jeu</h2>
     </header>
     <div id="quiz-hunt-game-settings-fields" className="elce-summary-profile-settings__fields">
-      {renderNumberSetting('timeBudgetMs', 'Durée du jeu (ms)', settings.timeBudgetMs, updateNumber)}
-      {renderNumberSetting('clueDelayMs', 'Délai avant indice (ms)', settings.clueDelayMs, updateNumber)}
-      {renderNumberSetting('feedbackDelayMs', 'Durée du retour (ms)', settings.feedbackDelayMs, updateNumber)}
-      <label id="quiz-hunt-extra-enabled-label" className="elce-summary-profile-settings__checkbox">
-        <input id="quiz-hunt-extra-enabled" type="checkbox" checked={settings.extraEnabled} mix={on<HTMLInputElement, 'change'>('change', (event) => actions.updateSettings({ extraEnabled: event.currentTarget.checked }))} />
-        Activer l’extra
-      </label>
+      {renderNumberSetting('timeBudgetMs', 'Durée du jeu (s)', settings.timeBudgetMs / 1_000, updateNumber, 'any')}
+      {renderNumberSetting('clueDelayMs', 'Délai avant indice (s)', settings.clueDelayMs / 1_000, updateNumber, 'any')}
+      {renderNumberSetting('feedbackDelayMs', 'Durée du retour (s)', settings.feedbackDelayMs / 1_000, updateNumber, 'any')}
     </div>
     {renderGroups(settings.groups, actions)}
   </section>
 }
 
-/** Shows the stable authoring draw and keeps unfilled game places visible. */
+/** Renders seed, distribution policy and extra-trigger settings in the Sommaire. */
 function renderDrawPreview(
   document: QuizHuntDocument,
   actions: QuizHuntEditorFacade,
-  interaction: QuizHuntWorkspaceInteraction,
 ): RemixNode {
   const draw = createQuizHuntGameDraw(document, document.settings.seed)
   const extraTriggerCandidates = getQuizHuntExtraTriggerCandidates(document)
   const extraTriggerCandidateIds = new Set(extraTriggerCandidates.map((page) => page.id))
-  const configuredTriggerPage = document.pages.find((page) => page.id === document.settings.extraTriggerPageId)
+  const configuredTriggerPage = extraTriggerCandidates.find((page) => page.id === document.settings.extraTriggerPageId)
   const selectedTriggerIsUnavailable = document.settings.extraTriggerPageId !== null
     && !extraTriggerCandidateIds.has(document.settings.extraTriggerPageId)
   const updateSeed = (value: string): void => {
     const seed = Number(value)
     if (Number.isFinite(seed)) actions.updateSettings({ seed })
   }
-  const renderBank = (
-    bankKey: 'questions' | 'finals',
-    title: string,
-    slotsByColor: typeof draw.trialSlotsByColor,
-  ): RemixNode => <section id={`quiz-hunt-draw-${bankKey}`} className="quiz-hunt-draw-bank">
-    <h4 id={`quiz-hunt-draw-${bankKey}-title`}>{title}</h4>
-    {document.settings.groups.map((group) => <section key={group.id} id={`quiz-hunt-draw-color-${bankKey}-${group.id}`} className="quiz-hunt-draw-color">
-      <h5 id={`quiz-hunt-draw-color-title-${bankKey}-${group.id}`}>{group.name}</h5>
-      <ol id={`quiz-hunt-draw-slots-${bankKey}-${group.id}`} className="quiz-hunt-draw-slots">
-        {(slotsByColor[group.id] ?? []).map((page, index) => <li key={`${group.id}-${index}`} id={`quiz-hunt-draw-slot-${bankKey}-${group.id}-${index}`}>
-          <button
-            id={`quiz-hunt-draw-select-${bankKey}-${group.id}-${index}`}
-            type="button"
-            disabled={page === null}
-            mix={on<HTMLButtonElement, 'click'>('click', () => {
-              if (page === null) return
-              interaction.onSetSummarySettingsOpen(false)
-              actions.selectPage(page.id)
-            })}
-          >{page?.name ?? 'Emplacement vide'}</button>
-        </li>)}
-      </ol>
-    </section>)}
-  </section>
   return <section id="quiz-hunt-draw-preview" className="quiz-hunt-draw-preview elce-summary-profile-settings__group">
     <header id="quiz-hunt-draw-preview-heading">
       <h3 id="quiz-hunt-draw-preview-title">Aperçu</h3>
@@ -878,45 +902,50 @@ function renderDrawPreview(
           <input id="quiz-hunt-random" type="checkbox" checked={document.settings.random} mix={on<HTMLInputElement, 'change'>('change', (event) => actions.updateSettings({ random: event.currentTarget.checked }))} />
           Tirage aléatoire en diffusion
         </label>
+        <label id="quiz-hunt-authoring-grid-debug-label" className="elce-summary-profile-settings__checkbox">
+          <input id="quiz-hunt-authoring-grid-debug" type="checkbox" checked={document.settings.authoringGridDebug} mix={on<HTMLInputElement, 'change'>('change', (event) => actions.updateSettings({ authoringGridDebug: event.currentTarget.checked }))} />
+          Debug auteur : noms dans la grille
+        </label>
         <label id="quiz-hunt-extra-trigger-label" className="elce-summary-profile-settings__field elce-summary-profile-settings__field--wide">
-          <span id="quiz-hunt-extra-trigger-caption">Épreuve qui déclenche le jeton</span>
+          <span id="quiz-hunt-extra-trigger-caption">Question qui déclenche le jeton</span>
           <select
             id="quiz-hunt-extra-trigger"
             value={document.settings.extraTriggerPageId ?? ''}
             mix={on<HTMLSelectElement, 'change'>('change', (event) => actions.updateSettings({ extraTriggerPageId: event.currentTarget.value || null }))}
           >
             <option id="quiz-hunt-extra-trigger-seeded" value="">Selon le seed</option>
-            {selectedTriggerIsUnavailable && configuredTriggerPage !== undefined
-              ? <option id="quiz-hunt-extra-trigger-unavailable" value={configuredTriggerPage.id} disabled>{configuredTriggerPage.name} (indisponible)</option>
+            {selectedTriggerIsUnavailable && document.settings.extraTriggerPageId !== null
+              ? <option id="quiz-hunt-extra-trigger-unavailable" value={document.settings.extraTriggerPageId} disabled>Question indisponible</option>
               : null}
             {extraTriggerCandidates.map((page) => <option id={`quiz-hunt-extra-trigger-option-${page.id}`} key={page.id} value={page.id}>{page.name}</option>)}
           </select>
         </label>
+        <label id="quiz-hunt-extra-enabled-label" className="elce-summary-profile-settings__checkbox">
+          <input id="quiz-hunt-extra-enabled" type="checkbox" checked={document.settings.extraEnabled} mix={on<HTMLInputElement, 'change'>('change', (event) => actions.updateSettings({ extraEnabled: event.currentTarget.checked }))} />
+          Activer l’extra
+        </label>
       </div>
       <p id="quiz-hunt-draw-preview-seed">Finale {document.pages.find((page) => page.id === draw.finalPageId)?.name ?? 'désactivée'} ({document.settings.groups.find((group) => group.id === draw.finalColorId)?.name ?? 'couleur indisponible'})</p>
       <p id="quiz-hunt-draw-preview-extra">{document.settings.extraTriggerPageId === null
-        ? `Épreuve du jeton choisie par le seed : ${document.pages.find((page) => page.id === draw.extraPageId)?.name ?? 'aucune question tirée'}`
+        ? `Question du jeton choisie par le seed : ${document.pages.find((page) => page.id === draw.extraPageId)?.name ?? 'aucune question tirée'}`
         : selectedTriggerIsUnavailable
-          ? `Épreuve du jeton indisponible : ${configuredTriggerPage?.name ?? document.settings.extraTriggerPageId}`
-          : `Épreuve déclencheuse du jeton : ${configuredTriggerPage?.name ?? 'aucune'}`} · délai après l’ouverture de l’épreuve : {draw.extraOffsetMs} ms</p>
+          ? 'Question déclencheuse du jeton indisponible'
+          : `Question déclencheuse du jeton : ${configuredTriggerPage?.name ?? 'aucune'}`} · délai après l’ouverture de la Question : {draw.extraOffsetMs / 1_000} s</p>
     </header>
-    <div id="quiz-hunt-draw-preview-banks" className="quiz-hunt-draw-preview-banks">
-      {renderBank('questions', 'Questions', draw.trialSlotsByColor)}
-      {renderBank('finals', 'Finales', draw.finalSlotsByColor)}
-    </div>
   </section>
 }
 
-/** Renders one typed game duration field. */
+/** Renders one numeric setting field. */
 function renderNumberSetting<Key extends 'seed' | 'timeBudgetMs' | 'clueDelayMs' | 'feedbackDelayMs'>(
   key: Key,
   label: string,
   value: number,
   update: (key: Key, value: string) => void,
+  step = '1',
 ): RemixNode {
   return <label id={`quiz-hunt-setting-label-${key}`} className="elce-summary-profile-settings__field" htmlFor={`quiz-hunt-setting-${key}`}>
     <span id={`quiz-hunt-setting-caption-${key}`}>{label}</span>
-    <input id={`quiz-hunt-setting-${key}`} type="number" value={value} mix={on<HTMLInputElement, 'change'>('change', (event) => update(key, event.currentTarget.value))} />
+    <input id={`quiz-hunt-setting-${key}`} type="number" step={step} value={value} mix={on<HTMLInputElement, 'change'>('change', (event) => update(key, event.currentTarget.value))} />
   </label>
 }
 
@@ -973,8 +1002,13 @@ function renderQuestionOptions(page: QuizHuntPage, document: QuizHuntDocument, a
       value={page.colorId ?? ''}
       mix={on<HTMLSelectElement, 'change'>('change', (event) => actions.setPageColor(page.id, event.currentTarget.value || null))}
     >
-      <option id={`quiz-hunt-page-color-none-${page.id}`} value="">Aucune</option>
-      {document.settings.groups.map((group) => <option id={`quiz-hunt-page-color-option-${page.id}-${group.id}`} key={group.id} value={group.id}>{group.name}</option>)}
+      <option id={`quiz-hunt-page-color-none-${page.id}`} value="" selected={page.colorId === null}>Aucune</option>
+      {document.settings.groups.map((group) => <option
+        id={`quiz-hunt-page-color-option-${page.id}-${group.id}`}
+        key={group.id}
+        value={group.id}
+        selected={group.id === page.colorId}
+      >{group.name}</option>)}
     </select>
     <label id={`quiz-hunt-page-mandatory-label-${page.id}`} htmlFor={`quiz-hunt-page-mandatory-${page.id}`}>Obligatoire</label>
     <input id={`quiz-hunt-page-mandatory-${page.id}`} type="checkbox" checked={page.mandatory} mix={on<HTMLInputElement, 'change'>('change', (event) => actions.setMandatory(page.id, event.currentTarget.checked))} />
@@ -998,12 +1032,13 @@ function renderMandatoryIndicator(id: string, accessibleLabel: string | null): R
 /** Creates a page inside its Questions or Finales bank. */
 function createPage(
   actions: QuizHuntEditorFacade,
-  chapterId: string,
+  chapterId: string | null,
   fallbackName: string,
   interaction: QuizHuntWorkspaceInteraction,
 ): void {
   const name = window.prompt('Nom de la page', fallbackName)
   if (!name?.trim()) return
   interaction.onSetSummarySettingsOpen(false)
+  interaction.onSetIntroductionFolderOpen(false)
   actions.createPage(chapterId, name.trim())
 }

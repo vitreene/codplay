@@ -1,7 +1,7 @@
 import { QUIZ_HUNT_COLOR_SLOT_COUNT } from './quiz-hunt-document-types'
 import type { QuizHuntDocument, QuizHuntPage } from './quiz-hunt-document-types'
 
-/** Lists Question pages that can trigger the extra without displacing required trials. */
+/** Lists only playable Question pages that the draw can guarantee in its grid. */
 export function getQuizHuntExtraTriggerCandidates(document: QuizHuntDocument): readonly QuizHuntPage[] {
   const questionBank = document.chapters.find((chapter) => chapter.type === 'questions')
   const finalBank = document.chapters.find((chapter) => chapter.type === 'finals')
@@ -10,7 +10,7 @@ export function getQuizHuntExtraTriggerCandidates(document: QuizHuntDocument): r
   const pagesById = new Map(document.pages.map((page) => [page.id, page]))
   const questionPages = questionBank.pageIds.flatMap((pageId) => {
     const page = pagesById.get(pageId)
-    return page === undefined ? [] : [page]
+    return page === undefined || page.chapterId !== questionBank.id ? [] : [page]
   })
   const finalColorIds = new Set(finalBank.pageIds.flatMap((pageId) => {
     const page = pagesById.get(pageId)

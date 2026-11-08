@@ -28,7 +28,7 @@
 
 .elce-question-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
   align-items: start;
   gap: 0.55rem;
 }
@@ -89,10 +89,16 @@
 .elce-question-answers {
   display: flex;
   flex-direction: column;
+  grid-column: 1 / -1;
   gap: 0.35rem;
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.elce-question-add-answer {
+  grid-column: 1 / -1;
+  justify-self: start;
 }
 
 .elce-question-answer-row {

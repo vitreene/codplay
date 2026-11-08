@@ -1,5 +1,7 @@
 import type { DocumentStoreCodec } from '../../../core/persistence/indexed-db/document-store-types'
 import type { QuizHuntDocument } from '../document/quiz-hunt-document-types'
+import { normalizeQuizHuntExtraTrigger } from '../document/quiz-hunt-extra-trigger.ts'
+import { normalizeQuizHuntFinalColors } from '../document/quiz-hunt-final-color.ts'
 import { ElceQuestionService } from '../../../resources/bdcs/question/domain/question-service'
 import { assertContentPlacementInvariants } from '../../../core/document/content-placement-service'
 
@@ -26,9 +28,11 @@ export function readQuizHuntDocument(value: unknown): QuizHuntDocument {
   if (arrays.some((name) => !Array.isArray(data[name]))) throw new Error('Collections Quiz Hunt invalides.')
   const settings = record(data.settings)
   settings.extraTriggerPageId ??= null
+  settings.authoringGridDebug ??= false
   if (!Array.isArray(settings.groups)
     || typeof settings.successCardBdcId !== 'string' || typeof settings.failureCardBdcId !== 'string'
     || typeof settings.random !== 'boolean' || typeof settings.extraEnabled !== 'boolean'
+    || typeof settings.authoringGridDebug !== 'boolean'
     || settings.extraTriggerPageId !== null && typeof settings.extraTriggerPageId !== 'string'
     || ['seed', 'timeBudgetMs', 'clueDelayMs', 'feedbackDelayMs'].some((name) => typeof settings[name] !== 'number' || !Number.isFinite(settings[name]))) {
     throw new Error('Réglages Quiz Hunt invalides.')
@@ -47,8 +51,8 @@ export function readQuizHuntDocument(value: unknown): QuizHuntDocument {
   chapters.forEach((value) => {
     const chapter = record(value)
     requireStrings(chapter, ['id', 'name', 'type'])
-    if (!['questions', 'finals'].includes(String(chapter.type)) || !Array.isArray(chapter.pageIds)
-      || chapter.pageIds.some((id) => typeof id !== 'string')) throw new Error('Banque Quiz Hunt invalide.')
+    if (!['questions', 'finals', 'introduction'].includes(String(chapter.type)) || !Array.isArray(chapter.pageIds)
+      || chapter.pageIds.some((id) => typeof id !== 'string')) throw new Error('Chapitre Quiz Hunt invalide.')
   })
   const entries = data.scenarioEntries as unknown[]
   entries.forEach((value) => {
@@ -79,10 +83,19 @@ export function readQuizHuntDocument(value: unknown): QuizHuntDocument {
       if (record(section.content).type !== 'doc') throw new Error('Texte Section invalide.')
     }
   })
-  const document = data as unknown as QuizHuntDocument
+  const document = normalizeQuizHuntResultMessages(
+    normalizeQuizHuntExtraTrigger(
+      normalizeQuizHuntFinalColors(data as unknown as QuizHuntDocument),
+    ),
+  )
   const summaries = document.pages.filter((page) => page.type === 'summary')
   if (summaries.length !== 1 || summaries[0]!.chapterId !== null) throw new Error('Un Sommaire racine est requis.')
-  if (document.chapters.length !== 2 || new Set(document.chapters.map((chapter) => chapter.type)).size !== 2) {
+  const questionChapters = document.chapters.filter((chapter) => chapter.type === 'questions')
+  const finalChapters = document.chapters.filter((chapter) => chapter.type === 'finals')
+  const introductionChapters = document.chapters.filter((chapter) => chapter.type === 'introduction')
+  if (questionChapters.length !== 1 || finalChapters.length !== 1 || introductionChapters.length > 1
+    || document.chapters.length !== 2 + introductionChapters.length
+    || introductionChapters.some((chapter) => chapter.pageIds.length > 1)) {
     throw new Error('Une banque Questions et une banque Finales sont requises.')
   }
   const resultCardIds = [document.settings.successCardBdcId, document.settings.failureCardBdcId]
@@ -115,10 +128,33 @@ export function readQuizHuntDocument(value: unknown): QuizHuntDocument {
   document.pages.forEach((page) => {
     if (page.colorId !== null && !groupIds.has(page.colorId)) throw new Error('Couleur de question inconnue.')
     const pageQuestions = page.bdcIds.flatMap((id) => document.bdcs.find((bdc) => bdc.id === id)?.question ?? [])
-    if (page.chapterId !== null && pageQuestions.length === 0) throw new Error('Une page de banque doit contenir une Question.')
+    const chapter = page.chapterId === null ? undefined : chapterById.get(page.chapterId)
+    if ((chapter?.type === 'questions' || chapter?.type === 'finals') && pageQuestions.length === 0) {
+      throw new Error('Une page de banque doit contenir une Question.')
+    }
     pageQuestions.forEach((question) => questions.assertValid(question))
   })
   return document
+}
+
+/** Adds the result page defaults to an unedited result Card in an existing project. */
+function normalizeQuizHuntResultMessages(document: QuizHuntDocument): QuizHuntDocument {
+  const defaultsByCardId = new Map([
+    [document.settings.successCardBdcId, {
+      title: 'Bravo !',
+      message: 'Vous avez remporté la partie.',
+    }],
+    [document.settings.failureCardBdcId, {
+      title: 'Partie terminée',
+      message: 'Vous pouvez recommencer pour tenter de gagner, ou revenir au sommaire.',
+    }],
+  ])
+  const bdcs = document.bdcs.map((bdc) => {
+    const defaults = defaultsByCardId.get(bdc.id)
+    if (defaults === undefined || bdc.card == null || bdc.card.title !== '' || bdc.card.message !== '') return bdc
+    return { ...bdc, card: { ...bdc.card, ...defaults } }
+  })
+  return bdcs.some((bdc, index) => bdc !== document.bdcs[index]) ? { ...document, bdcs } : document
 }
 
 /** Serializes the versioned document with the shared cache index fields. */

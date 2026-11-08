@@ -16,7 +16,7 @@ import type { QuizHuntDocument } from '../document/quiz-hunt-document-types'
 import { isQuizHuntImportChange, createQuizHuntControllerMachine } from './quiz-hunt-controller'
 import { QuizHuntEditorContextProvider } from '../composition/quiz-hunt-editor-context'
 import { renderQuizHuntWorkspace } from './quiz-hunt-workspace'
-import type { QuizHuntIntroductionPage, QuizHuntResultPage, QuizHuntWorkspaceInteraction, QuizHuntWorkspaceView } from './quiz-hunt-workspace'
+import type { QuizHuntResultPage, QuizHuntWorkspaceInteraction, QuizHuntWorkspaceView } from './quiz-hunt-workspace'
 
 type QuizHuntSnapshot = SnapshotFrom<ReturnType<typeof createQuizHuntControllerMachine>>
 
@@ -51,7 +51,7 @@ export function QuizHuntProjectApplication(handle: Handle) {
   let isAddContentMenuOpen = false
   let trashAnimationToken = 0
   let trashAnimationTimer: ReturnType<typeof setTimeout> | undefined
-  let introductionPage: QuizHuntIntroductionPage = null
+  let introductionFolderOpen = false
   let resultPage: QuizHuntResultPage = null
   let summarySettingsOpen = view.workspace.document.pages.some((page) =>
     page.id === view.workspace.selection.pageId && page.type === 'summary')
@@ -97,19 +97,29 @@ export function QuizHuntProjectApplication(handle: Handle) {
 
   /** Opens or closes the fixed Sommaire workspace in the central area. */
   const setSummarySettingsOpen = (open: boolean): void => {
-    if (summarySettingsOpen === open && introductionPage === null && resultPage === null) return
+    if (summarySettingsOpen === open && !introductionFolderOpen && resultPage === null) return
     summarySettingsOpen = open
-    introductionPage = null
+    introductionFolderOpen = false
     resultPage = null
     void handle.update()
   }
 
-  /** Selects the existing game information page or its folder. */
-  const selectIntroductionPage = (page: QuizHuntIntroductionPage): void => {
-    if (introductionPage === page && !summarySettingsOpen && resultPage === null) return
+  /** Opens the empty Introduction chapter landing page. */
+  const setIntroductionFolderOpen = (open: boolean): void => {
+    if (introductionFolderOpen === open && !summarySettingsOpen && resultPage === null) return
     summarySettingsOpen = false
-    introductionPage = page
+    introductionFolderOpen = open
     resultPage = null
+    void handle.update()
+  }
+
+  /** Selects the optional Introduction page through the document controller. */
+  const selectIntroductionPage = (pageId: string): void => {
+    if (view.workspace.selection.pageId === pageId && !summarySettingsOpen && resultPage === null) return
+    summarySettingsOpen = false
+    introductionFolderOpen = false
+    resultPage = null
+    actions.selectPage(pageId)
     void handle.update()
   }
 
@@ -117,7 +127,7 @@ export function QuizHuntProjectApplication(handle: Handle) {
   const selectResultPage = (page: QuizHuntResultPage): void => {
     if (resultPage === page && !summarySettingsOpen) return
     summarySettingsOpen = false
-    introductionPage = null
+    introductionFolderOpen = false
     resultPage = page
     void handle.update()
   }
@@ -240,7 +250,7 @@ export function QuizHuntProjectApplication(handle: Handle) {
         || view.workspace.selection.pageId !== next.workspace.selection.pageId) {
         summarySettingsOpen = next.workspace.document.pages.some((page) =>
           page.id === next.workspace.selection.pageId && page.type === 'summary')
-        introductionPage = null
+        introductionFolderOpen = false
         resultPage = null
       }
       for (const bdc of next.workspace.document.bdcs) {
@@ -298,7 +308,7 @@ export function QuizHuntProjectApplication(handle: Handle) {
     }, actions, sectionSession, handle, {
       panelVisibility,
       summarySettingsOpen,
-      introductionPage,
+      introductionFolderOpen,
       resultPage,
       getDraggedBdcId: () => draggedBdcId,
       onSetDraggedBdcId: (bdcId) => { draggedBdcId = bdcId },
@@ -309,6 +319,7 @@ export function QuizHuntProjectApplication(handle: Handle) {
       trashAnimationToken,
       onTrashDropSuccess: animateTrashDropSuccess,
       onSetSummarySettingsOpen: setSummarySettingsOpen,
+      onSetIntroductionFolderOpen: setIntroductionFolderOpen,
       onSelectIntroductionPage: selectIntroductionPage,
       onSelectResultPage: selectResultPage,
       onSetPanelVisibility: setPanelVisibility,

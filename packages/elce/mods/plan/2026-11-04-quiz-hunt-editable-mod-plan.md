@@ -38,14 +38,22 @@ Le correctif général du Sommaire Learning reste dans son
   nouvelle partie, y compris Recommencer. La grille responsive 4 × 4 affiche
   les épreuves retenues par couleur dans leur ordre global de tirage.
 - Obligatoire privilégie la question dans le tirage, sans condition de réponse
-  pour la finale. Chaque couleur dispose de quatre slots : si plus de quatre
-  questions sont marquées obligatoires, les quatre premières dans l’ordre de
-  la banque sont tirées et le dépassement relève de l’auteur. Il ne bloque pas
-  le lancement et ne doit provoquer aucune erreur du tirage.
+  supplémentaire pour la finale. Chaque couleur dispose de quatre slots : si
+  plus de quatre questions sont marquées obligatoires, les quatre premières
+  dans l’ordre de la banque sont tirées et le dépassement relève de l’auteur.
+  Une Finale est obligatoire par couleur. Elle reprend la couleur de sa
+  Question de même nom ; si cette affectation manque au chargement ou à sa
+  création, le document la rétablit depuis cette Question. Ces règles ne
+  bloquent pas le lancement et ne doivent provoquer aucune erreur du tirage.
 - Sighty possède progression, accès et verdict. Une réponse est imposée avant
   retour au Sommaire. Panier/minuteur dans une scène persistante, extra dans le
-  layout, menu/question dans le même slot, résultat au-dessus du menu.
-- Deux résultats préconçus, avec une Carte éditable chacun. Le menu de partie
+  layout, menu/question/résultat dans le même slot de contenu.
+- Deux pages de résultat, Réussite et Échec, chacune avec une Carte éditable,
+  un message initial et les actions Retour au Sommaire et Recommencer. Une
+  réponse à la Finale ou une expiration du minuteur affiche la page
+  correspondante dans le slot de contenu après la fin du feedback en cours,
+  sans modale. Les textes des pages de résultat sont centrés.
+  Le menu de partie
   reprend la grille 4 × 4 d’origine ; panier, chronomètre, jeton, question et
   verdict reprennent les scènes et styles de la démo Sighty. Panier et minuteur
   restent des stories ressources ; l’extra est une action du layout. Préparer
@@ -118,8 +126,27 @@ Le correctif général du Sommaire Learning reste dans son
    quatre premières questions obligatoires. Le rendu de jeu doit aussi respecter
    la décision de fidélité visuelle ci-dessous avant que cette action soit
    terminée.
-   - [x] Choix du déclencheur dans l’Aperçu du Sommaire, persistance, maintien
-     dans le tirage entre seeds et parcours extra du joueur vérifiés.
+   - [x] Choix du déclencheur dans l’Aperçu du Sommaire, persistance et maintien
+     dans le tirage entre seeds vérifiés.
+   - [ ] Lecture des anciens réglages : effacer toute cible hors banque
+     Questions ; n’exposer que des Questions garanties dans la grille jouée.
+   - [ ] Parcours extra à valider sur le jeu : apparition, collecte avec
+     déplacement vers l’inventaire du panier, glisser-déposer sur une épreuve
+     échouée, retour du jeton après un dépôt invalide ou annulé, puis reprise
+     après l’animation de sortie. Le dépôt accepté demande au circuit de reset
+     Sighty de remettre à zéro la Question ciblée ; le `onReset` de sa scène
+     transmet l’événement de reset à la ressource Question avant la reprise.
+   - [ ] Réponse à la Finale et expiration immédiate ou différée du minuteur :
+     arrêter définitivement le chrono, afficher la vue Réussite ou Échec avec
+     le temps passé et, en Échec, les nombres de Questions répondues et
+     correctes ; vérifier les actions Retour au Sommaire et Recommencer. Après
+     le retour, le Sommaire propose Recommencer et les tuiles restent bloquées
+     jusqu’au démarrage d’une nouvelle partie. Une reprise SCORM terminale
+     continue de commencer au Sommaire avec cette commande disponible.
+   - [ ] Parcours des transitions du `slot-content` : fondu vers les vues
+     Question et Finale, masque SVG en grille de cercles 8 × 8 à l’arrivée au
+     Sommaire, puis volet vertical vers Réussite ou Échec. L’arrivée au
+     Sommaire depuis une page de résultat garde son masque cercle.
 4. [ ] `mods/quiz-hunt/preview/`, `persistence/server/`, runtime SCORM et
    composition de diffusion : le projet chargé depuis le serveur démarre en
    mode release ; enregistrer et restaurer son état dans la table Quiz Hunt,
@@ -138,11 +165,23 @@ Le correctif général du Sommaire Learning reste dans son
    - [x] Typecheck, suite Elcé (601 tests) et build depuis `packages/elce`.
    - [x] Auteur, preview vidéo HTTP et affichage sans débordement à 390 px.
    - [x] Composition auteur Quiz Hunt et démarrage Learning.
-   - [ ] Scénario auteur : Sommaire fixe comme Learning ; dossiers Introduction
-     et Résultat ouvrant leurs pages auteur ; chapitres avec leurs pages
-     imbriquées, sans glisser-déposer ni commandes de réordonnancement.
-     Les deux résultats réutilisent leurs Cartes existantes. Panneaux responsives
-     conservés.
+   - [ ] Scénario auteur : Sommaire fixe comme Learning avec tous les réglages
+     du jeu ; chapitre Introduction et page de contenu normale facultative ;
+     dossier Résultat ouvrant ses deux pages auteur ; chapitres de banques avec
+     leurs pages imbriquées, sans glisser-déposer ni commandes de
+     réordonnancement. Les pastilles de couleur apparaissent dans Scénario pour
+     les Questions et Finales ; les listes de tirage sont absentes des réglages
+     Sommaire. Les deux résultats réutilisent leurs Cartes existantes.
+     Le choix de la Question déclencheuse exclut les Finales et reste dans la
+     grille réellement jouée. Un toggle de debug dans le Sommaire révèle, en
+     prévisualisation auteur uniquement, le nom de chaque Question au bas de sa
+     tuile et un « • » sur la tuile de l’extra activé. L’export release ne rend
+     pas ces repères. `authoringGridDebug` est sauvegardé avec les réglages du
+     document, ajouté à SQLite avec une valeur par défaut désactivée pour les
+     projets existants, puis transmis uniquement par la session de
+     prévisualisation. Vérifier le placement déterministe, le marqueur extra,
+     l’aller-retour sauvegarde/relecture et l’absence des repères dans les
+     scénarios Sighty et SCORM de diffusion. Panneaux responsives conservés.
    - [ ] Parcours complet diffusion/SCORM et média jusqu’à la sortie de page.
 
 ## Décisions acceptées pour l’interface auteur
@@ -166,16 +205,35 @@ la sélection.
 Le panneau Scénario ajoute un dossier Résultat avec deux pages auteur, Réussite
 et Échec, qui éditent les deux Cartes déjà référencées dans les réglages du jeu.
 Ces entrées réutilisent les BDC existants et ne créent ni pages de document ni
-copies de Carte. Il ajoute aussi un dossier Introduction dont la page
-Informations du jeu regroupe les réglages de durée, délais, extra et couleurs.
-La section Aperçu du Sommaire regroupe le seed et le tirage aléatoire avec le
-tirage affiché. Elle permet aussi de choisir l’épreuve qui déclenche le jeton.
-Sans choix explicite, le tirage seedé continue de choisir cette épreuve. Un
-choix explicite est conservé dans le tirage en remplaçant une question aléatoire
-de la même couleur ; les quatre premières questions obligatoires restent
-prioritaires. Les choix proposés sont limités aux épreuves compatibles avec une
-finale de leur couleur et avec cette capacité. Si une modification éditoriale
-rend le choix incompatible, le réglage est effacé et le tirage seedé reprend.
+copies de Carte. Les pages de résultat affichent leur Carte et leurs actions
+Retour au Sommaire et Recommencer dans le slot de contenu en fin de partie ; la
+Carte Réussite est préremplie avec « Bravo ! » et « Vous avez remporté la
+partie. », et la Carte Échec avec « Partie terminée » et « Vous pouvez
+recommencer pour tenter de gagner, ou revenir au sommaire. ». Elles remplacent
+la page active sans ouvrir de modale. Le dossier Introduction apparaît même lorsque son contenu est
+absent ; le premier ajout crée son chapitre et une page Flux facultative,
+éditée par les composants de page partagés et placée avant le Sommaire dans le
+parcours du joueur. Cette page ne contient aucun réglage de l’application. Tous
+les réglages du jeu, dont durée, délais, extra, couleurs, seed et cible du
+jeton, se trouvent dans la page Sommaire. Sa section Aperçu regroupe le seed,
+le tirage aléatoire et les réglages de l’extra ; la case Activer l’extra est
+placée à côté du choix de la Question qui déclenche le jeton. Cette section
+n’affiche pas les listes de tirage. Les durées et délais sont affichés et saisis
+en secondes dans la Configuration du jeu ; le document et le runtime les
+conservent en millisecondes. Le Sommaire propose également un toggle auteur de
+debug de placement. Activé, il affiche dans la prévisualisation auteur le nom
+de chaque Question au bas de sa tuile dans la grille réellement tirée et marque
+par « • » la tuile de l’extra si celui-ci est activé. Les scénarios release ne
+rendent pas ces repères. La colonne Scénario affiche une pastille de couleur à
+côté de chaque Question et Finale qui en possède une.
+Sans choix explicite, le tirage seedé choisit une Question réellement présente
+dans la grille. Un choix explicite ne peut désigner qu’une page du chapitre
+Questions, jamais une Finale ; il est conservé dans la grille en remplaçant une
+Question aléatoire de la même couleur. Les quatre premières Questions
+obligatoires restent prioritaires. Les choix proposés sont limités aux
+Questions compatibles avec une Finale de leur couleur et avec cette capacité.
+Si une modification éditoriale rend le choix incompatible, le réglage est
+effacé et le tirage seedé reprend.
 Aucun champ de présentation joueur n’est ajouté au modèle.
 
 Le Scénario ne propose ni glisser-déposer, ni poignée, ni séparateur, ni flèche
@@ -196,6 +254,12 @@ porte le nom `renderQuestionEditor` dans `question-editor.tsx`.
 Dans la liste des pages du Scénario, le statut obligatoire est montré par une
 icône d’exclamation accessible à la place du texte. La même icône apparaît à
 côté de la case « Obligatoire » dans les réglages de la page éditée.
+Quand une page a une couleur, l’icône d’exclamation précède la pastille dans la
+ligne du Scénario.
+La liste de premier niveau du Scénario utilise un espacement vertical un peu
+plus grand que les listes imbriquées, qui conservent l’espacement de Learning.
+La page active reçoit un fond légèrement teinté sur sa ligne afin de se
+distinguer clairement sans modifier la géométrie de la liste.
 
 Pour l’édition d’une page, Quiz Hunt reprend le layout commun de Learning
 (`renderPageEditorView`, `elce-page-editor-layout` et `elce-work-area`) et les
@@ -205,7 +269,9 @@ BDC d’une page est réordonnable ; les Sections peuvent être supprimées et l
 Question requise reste protégée. Le menu d’ajout reprend celui de Learning et
 propose les Sections disponibles dans Quiz Hunt. Le Sommaire et les chapitres
 utilisent le même host central, avec leurs réglages propres au mod à l’intérieur
-de la surface de travail Learning.
+de la surface de travail Learning. Dans l’éditeur Question partagé, l’illustration
+occupe un tiers de la largeur du bloc et la liste de réponses s’étend sur toute
+sa largeur.
 
 Fichiers propriétaires : `src/mods/quiz-hunt/authoring/` et
 `src/mods/quiz-hunt/document/quiz-hunt-document-service.ts`. L’acceptation
@@ -235,6 +301,17 @@ L’acceptation compare le jeu Sighty et la preview publique Elcé aux mêmes
 dimensions, en portrait et paysage, sur le Sommaire, une Question, une Finale,
 le panier/minuteur, l’extra et le verdict. L’action 3 reste ouverte jusqu’à
 cette parité.
+
+## Décision acceptée : transitions de pages
+
+Les vues entrantes du `slot-content` portent les profils Sighty `replace` :
+fondu (`fade`) pour les vues Question, leurs reprises et la Finale ; masque
+`mask-reveal` en forme cercle, répété sur une grille 8 × 8 (`split: 'cells'`,
+`cellX: 8`, `cellY: 8`), pour toute arrivée au Sommaire ; volet vertical
+(`curtain`) vers les pages Réussite et Échec. Les profils et durées par défaut
+du contrat CodPlay sont conservés.
+La génération commune applique ces transitions en preview et en release ; ce
+choix ne modifie pas le core ni le modèle auteur.
 
 ## Décision vidéo acceptée
 

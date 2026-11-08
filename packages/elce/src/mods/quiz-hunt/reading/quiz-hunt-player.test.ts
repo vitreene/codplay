@@ -108,6 +108,7 @@ function createPlayableDocument(): QuizHuntDocument {
     feedbackDelayMs: 250,
     extraEnabled: false,
     extraTriggerPageId: null,
+    authoringGridDebug: false,
   })
 }
 
@@ -543,6 +544,6 @@ describe('Quiz Hunt real reading runtime', () => {
     expect(stage.querySelector('.quiz-hunt-summary')).not.toBeNull()
     expect(stage.querySelector('.quiz-hunt-summary-final')).toBeNull()
     expect(Array.from(stage.querySelectorAll<HTMLButtonElement>('.quiz-hunt-summary-tile')).every((tile) => tile.disabled)).toBe(true)
-    expect(stage.querySelector('.quiz-hunt-result-overlay[hidden]')).not.toBeNull()
+    expect(stage.querySelector('.quiz-hunt-result-page')).toBeNull()
   })
 })

@@ -11,6 +11,7 @@ const MENU_TERMINAL_EVENT = 'quiz-hunt:menu:terminal'
 export function buildQuizHuntSummaryScene(
   document: QuizHuntDocument,
   game: QuizHuntGameCatalog,
+  showAuthoringGridDebug = false,
 ): SceneDoc<string> {
   const summary = document.pages.find((page) => page.type === 'summary')
   if (summary === undefined) throw new Error('La page Sommaire Quiz Hunt est absente.')
@@ -25,6 +26,8 @@ export function buildQuizHuntSummaryScene(
       group.color,
       index + 1,
       game.finalPageId !== null && playableColorIds.has(trial.colorId),
+      showAuthoringGridDebug,
+      document.settings.extraEnabled && trial.page.id === game.extraPageId,
     )]
   })
 
@@ -72,14 +75,20 @@ function createTile(
   color: string,
   tileNumber: number,
   playable: boolean,
+  showAuthoringGridDebug: boolean,
+  marksExtra: boolean,
 ): SummaryPerso {
   const colorStyle = resolveQuizHuntColorStyle(colorName, color)
+  const debugLabel = `${marksExtra ? '• ' : ''}${trial.page.name}`
   const buttonAttributes = {
     id: `quiz-hunt-menu-trial-${trial.page.id}-button`,
     type: 'button',
     disabled: !playable,
-    'aria-label': trial.page.name,
+    'aria-label': showAuthoringGridDebug
+      ? `Question ${tileNumber} : ${debugLabel}`
+      : trial.page.name,
     'data-quiz-hunt-page-id': trial.page.id,
+    ...(showAuthoringGridDebug ? { 'data-quiz-hunt-debug-label': debugLabel } : {}),
   }
   return {
     id: `quiz-hunt-menu-trial-${trial.page.id}`,
@@ -88,7 +97,9 @@ function createTile(
       tag: 'button',
       content: String(tileNumber),
       attr: buttonAttributes,
-      className: 'quiz-hunt-grid-tile',
+      className: showAuthoringGridDebug
+        ? 'quiz-hunt-grid-tile is-authoring-debug'
+        : 'quiz-hunt-grid-tile',
       style: {
         '--quiz-hunt-accent': colorStyle.solid,
         '--quiz-hunt-accent-gradient': colorStyle.gradient,

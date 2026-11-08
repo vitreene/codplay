@@ -813,7 +813,7 @@ body {
 
 .elce-question-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
   align-items: start;
   gap: 0.55rem;
 }

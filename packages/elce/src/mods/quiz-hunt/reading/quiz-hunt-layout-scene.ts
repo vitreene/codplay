@@ -5,7 +5,6 @@ import { QUIZ_HUNT_ORIGINAL_GAME_STYLES } from './quiz-hunt-original-game-styles
 export const QUIZ_HUNT_SLOT = {
   CONTENT: 'slot-content',
   BASKET: 'slot-basket',
-  RESULT: 'slot-result',
 } as const
 
 export const QUIZ_HUNT_LAYOUT_EVENT = {
@@ -21,6 +20,9 @@ export const QUIZ_HUNT_LAYOUT_EVENT = {
   EXTRA_DROP_TARGET: 'quiz-hunt:extra:drop-target',
   EXTRA_RETRY_HIDE: 'quiz-hunt:extra:retry-hide',
   EXTRA_RETRY_HIDE_DONE: 'quiz-hunt:extra:retry-hide-done',
+  RESULT_ROUTE: 'quiz-hunt:result:route',
+  RESULT_SUCCESS: 'quiz-hunt:result:success',
+  RESULT_FAILURE: 'quiz-hunt:result:failure',
 } as const
 
 const EXTRA_OFFER_PART = 'quiz-hunt:layout:extra-offer'
@@ -29,7 +31,7 @@ export const QUIZ_HUNT_EXTRA_RETRY_HIDE_DURATION_MS = 800
 
 type LayoutPerso = SceneDoc<string>['stories'][string]['persos'][number]
 
-/** Builds the persistent game frame and its content, basket, result, and extra outlets. */
+/** Builds the persistent game frame, content and basket outlets, and extra token. */
 export function buildQuizHuntLayoutScene(): Readonly<{ sceneDoc: SceneDoc<string>; styleSheet: string }> {
   return {
     sceneDoc: {
@@ -49,8 +51,20 @@ export function buildQuizHuntLayoutScene(): Readonly<{ sceneDoc: SceneDoc<string
                 }],
               }
             },
+            'quiz-hunt-layout-result-route': ({ event }) => {
+              const outcome = event.data?.outcome
+              if (outcome !== 'success' && outcome !== 'failure') return undefined
+              return { events: [{
+                name: outcome === 'success' ? QUIZ_HUNT_LAYOUT_EVENT.RESULT_SUCCESS : QUIZ_HUNT_LAYOUT_EVENT.RESULT_FAILURE,
+                visibility: 'public' as const,
+                data: event.data,
+              }] }
+            },
           },
-          listen: [{ on: QUIZ_HUNT_LAYOUT_EVENT.EXTRA_DRAG_END, straps: ['quiz-hunt-layout-capture-end'] }],
+          listen: [
+            { on: QUIZ_HUNT_LAYOUT_EVENT.EXTRA_DRAG_END, straps: ['quiz-hunt-layout-capture-end'] },
+            { on: QUIZ_HUNT_LAYOUT_EVENT.RESULT_ROUTE, straps: ['quiz-hunt-layout-result-route'] },
+          ],
           persos: [
             {
               id: 'quiz-hunt-layout-frame',
@@ -65,7 +79,6 @@ export function buildQuizHuntLayoutScene(): Readonly<{ sceneDoc: SceneDoc<string
                     <div id="quiz-hunt-layout-extra-offer" class="quiz-hunt-extra-outlet" data-part="${EXTRA_OFFER_PART}"></div>
                     <div id="quiz-hunt-layout-extra-inventory" class="quiz-hunt-extra-outlet" data-part="${EXTRA_INVENTORY_PART}"></div>
                   </div>
-                  <div id="quiz-hunt-layout-result-host" data-part="quiz-hunt:layout:result"></div>
                 </div>`,
               },
               actions: {},
@@ -73,7 +86,6 @@ export function buildQuizHuntLayoutScene(): Readonly<{ sceneDoc: SceneDoc<string
             createExtraToken(),
             createLayoutSlot(QUIZ_HUNT_SLOT.CONTENT, 'quiz-hunt:layout:content'),
             createLayoutSlot(QUIZ_HUNT_SLOT.BASKET, 'quiz-hunt:layout:basket'),
-            createLayoutSlot(QUIZ_HUNT_SLOT.RESULT, 'quiz-hunt:layout:result'),
           ],
         },
       },
