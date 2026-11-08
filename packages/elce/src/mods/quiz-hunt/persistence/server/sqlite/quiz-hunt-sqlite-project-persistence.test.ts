@@ -27,13 +27,18 @@ describe('Quiz Hunt SQLite project persistence', () => {
     const cards = new ElceCardService()
     const initial = documents.createInitialDocument('quiz-hunt-persistence', 'Quiz Hunt persistance')
     const questionPage = initial.pages.find((page) => page.chapterId !== null)!
+    const finalBank = initial.chapters.find((chapter) => chapter.type === 'finals')!
     const questionBdcId = questionPage.bdcIds[0]!
     const group = initial.settings.groups[0]!
     const questionBdc = initial.bdcs.find((bdc) => bdc.id === questionBdcId)!
     const question = questions.setPrompt(questionBdc.question!, 'Quel est le satellite naturel de la Terre ?')
     const withQuestion = documents.updateQuestion(initial, questionBdcId, question)
     const withColor = documents.setPageColor(withQuestion, questionPage.id, group.id)
-    const withSection = documents.addSection(withColor, questionPage.id, 0)
+    const withFinalPage = documents.createPage(withColor, finalBank.id, 'Finale Rouge')
+    const finalPage = withFinalPage.pages.at(-1)!
+    const withFinalColor = documents.setPageColor(withFinalPage, finalPage.id, group.id)
+    const withTrigger = documents.updateSettings(withFinalColor, { extraTriggerPageId: questionPage.id })
+    const withSection = documents.addSection(withTrigger, questionPage.id, 0)
     const sectionBdcId = withSection.bdcs.find((bdc) => bdc.type === SECTION_BDC_TYPE)!.id
     const section = {
       ...withSection.bdcs.find((bdc) => bdc.id === sectionBdcId)!.section!,
@@ -86,6 +91,7 @@ describe('Quiz Hunt SQLite project persistence', () => {
     })
     expect(restored.scenarioEntries).toEqual(savedDocument.scenarioEntries)
     expect(restored.settings.groups).toEqual(savedDocument.settings.groups)
+    expect(restored.settings.extraTriggerPageId).toBe(questionPage.id)
     expect(restored.medias).toEqual([media])
     expect(await quizHunt.findMediaFile(authored.id, media.id)).toMatchObject({
       id: media.id,

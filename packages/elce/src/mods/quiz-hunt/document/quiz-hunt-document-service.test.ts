@@ -71,22 +71,6 @@ describe('Quiz Hunt authoring operations', () => {
     expect(reassigned.pages.at(-1)!.colorId).toBe(removed.settings.groups[0]!.id)
   })
 
-  it('moves the summary after a root welcome page while keeping bank contents untouched', () => {
-    const initial = documents.createInitialDocument()
-    const summary = initial.pages.find((page) => page.type === 'summary')!
-    const withWelcome = documents.createPage(initial, null, 'Bienvenue')
-    const welcome = withWelcome.pages.at(-1)!
-    const welcomeFirst = documents.moveRootEntry(withWelcome, { kind: 'page', pageId: welcome.id }, 0)
-    const moved = documents.moveRootEntry(welcomeFirst, { kind: 'page', pageId: summary.id }, 1)
-
-    expect(moved.scenarioEntries.slice(0, 2)).toEqual([
-      { kind: 'page', pageId: welcome.id }, { kind: 'page', pageId: summary.id },
-    ])
-    expect(moved.pages).toBe(withWelcome.pages)
-    expect(moved.chapters).toBe(withWelcome.chapters)
-    expect(moved.pages.find((page) => page.id === summary.id)!.chapterId).toBeNull()
-  })
-
   it('allows progressive authoring and mandatory choices beyond the displayed capacity', () => {
     const initial = documents.createInitialDocument()
     const bank = initial.chapters.find((chapter) => chapter.type === 'questions')!

@@ -1,5 +1,6 @@
 import type { PersoDoc, SceneDoc } from 'codplay/scene/types'
 import type { AuthorCaptureTrackFunction } from 'codplay/scene/capture'
+import { QUIZ_HUNT_ORIGINAL_GAME_STYLES } from './quiz-hunt-original-game-styles.ts'
 
 export const QUIZ_HUNT_SLOT = {
   CONTENT: 'slot-content',
@@ -27,83 +28,6 @@ const EXTRA_INVENTORY_PART = 'quiz-hunt:layout:extra-inventory'
 export const QUIZ_HUNT_EXTRA_RETRY_HIDE_DURATION_MS = 800
 
 type LayoutPerso = SceneDoc<string>['stories'][string]['persos'][number]
-
-const QUIZ_HUNT_LAYOUT_STYLE_SHEET = `
-.quiz-hunt-layout {
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
-  gap: 0.75rem;
-  position: relative;
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
-}
-
-#quiz-hunt-layout-content-host { min-width: 0; min-height: 0; }
-#quiz-hunt-layout-basket-host { min-width: 0; min-height: 0; }
-#quiz-hunt-layout-result-host {
-  position: absolute;
-  inset: 0;
-  z-index: 20;
-  min-width: 0;
-  min-height: 0;
-  pointer-events: none;
-}
-
-.quiz-hunt-extra-layer {
-  position: absolute;
-  inset: 0;
-  z-index: 15;
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
-  pointer-events: none;
-}
-
-.quiz-hunt-extra-outlet {
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-end;
-  min-width: 0;
-  min-height: 0;
-  padding: 0.75rem;
-  pointer-events: none;
-}
-
-.quiz-hunt-extra-token {
-  min-width: 3rem;
-  min-height: 3rem;
-  border: 2px solid #fff;
-  border-radius: 50%;
-  background: #d78b35;
-  color: #fff;
-  font: inherit;
-  font-weight: 800;
-  box-shadow: 0 0.25rem 0.8rem rgb(15 23 42 / 35%);
-  cursor: grab;
-  pointer-events: auto;
-  transition: opacity 180ms ease, translate 180ms ease;
-}
-
-.quiz-hunt-extra-token.is-hidden { opacity: 0; translate: 0 -0.5rem; pointer-events: none; }
-.quiz-hunt-extra-token.is-visible { opacity: 1; translate: 0 0; }
-.quiz-hunt-extra-token.is-dragging { cursor: grabbing; }
-.quiz-hunt-extra-token-inventory { justify-self: center; }
-
-@media (orientation: landscape) and (min-width: 40em) {
-  .quiz-hunt-layout { grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem); grid-template-rows: minmax(0, 1fr); }
-  #quiz-hunt-layout-content-host { grid-column: 1; grid-row: 1; }
-  #quiz-hunt-layout-basket-host { grid-column: 2; grid-row: 1; }
-  #quiz-hunt-layout-result-host { grid-column: 1 / -1; grid-row: 1; }
-  .quiz-hunt-extra-layer { grid-template-columns: subgrid; grid-template-rows: subgrid; grid-column: 1 / -1; grid-row: 1; }
-  #quiz-hunt-layout-extra-offer { grid-column: 1; grid-row: 1; }
-  #quiz-hunt-layout-extra-inventory { grid-column: 2; grid-row: 1; align-items: flex-end; }
-}
-
-@media (orientation: portrait) {
-  .quiz-hunt-layout { grid-template-rows: minmax(0, 1fr) auto; overflow-y: auto; }
-}
-`
 
 /** Builds the persistent game frame and its content, basket, result, and extra outlets. */
 export function buildQuizHuntLayoutScene(): Readonly<{ sceneDoc: SceneDoc<string>; styleSheet: string }> {
@@ -134,15 +58,15 @@ export function buildQuizHuntLayoutScene(): Readonly<{ sceneDoc: SceneDoc<string
               initial: {
                 move: '@root',
                 className: 'quiz-hunt-layout',
-                markup: `<main id="quiz-hunt-layout-root" class="quiz-hunt-layout">
-                  <section id="quiz-hunt-layout-content-host" data-part="quiz-hunt:layout:content" aria-label="Jeu Quiz Hunt"></section>
-                  <aside id="quiz-hunt-layout-basket-host" data-part="quiz-hunt:layout:basket" aria-label="Panier et minuteur"></aside>
-                  <div id="quiz-hunt-layout-extra-layer" class="quiz-hunt-extra-layer">
+                markup: `<div id="quiz-hunt-layout-root" class="quiz-hunt-layout">
+                  <div id="quiz-hunt-layout-main-zone" class="quiz-hunt-main-zone" data-part="quiz-hunt:layout:content"></div>
+                  <div id="quiz-hunt-layout-basket-host" data-part="quiz-hunt:layout:basket"></div>
+                  <div id="quiz-hunt-layout-extra-overlay" class="quiz-hunt-extra-overlay">
                     <div id="quiz-hunt-layout-extra-offer" class="quiz-hunt-extra-outlet" data-part="${EXTRA_OFFER_PART}"></div>
                     <div id="quiz-hunt-layout-extra-inventory" class="quiz-hunt-extra-outlet" data-part="${EXTRA_INVENTORY_PART}"></div>
                   </div>
-                  <div id="quiz-hunt-layout-result-host" data-part="quiz-hunt:layout:result" aria-live="assertive"></div>
-                </main>`,
+                  <div id="quiz-hunt-layout-result-host" data-part="quiz-hunt:layout:result"></div>
+                </div>`,
               },
               actions: {},
             },
@@ -154,7 +78,7 @@ export function buildQuizHuntLayoutScene(): Readonly<{ sceneDoc: SceneDoc<string
         },
       },
     },
-    styleSheet: QUIZ_HUNT_LAYOUT_STYLE_SHEET,
+    styleSheet: QUIZ_HUNT_ORIGINAL_GAME_STYLES,
   }
 }
 

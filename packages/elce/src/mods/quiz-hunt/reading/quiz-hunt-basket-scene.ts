@@ -2,6 +2,8 @@ import type { CompiledRecord } from 'codplay'
 import type { SceneDoc } from 'codplay/scene/types'
 import type { StrapFunction, StrapReturnValue } from 'codplay/runtime/player'
 import type { QuizHuntDocument, QuizHuntGroup, QuizHuntPage } from '../document/quiz-hunt-document-types'
+import type { QuizHuntGameCatalog } from './quiz-hunt-game-catalog'
+import { resolveQuizHuntColorStyle } from './quiz-hunt-color-style.ts'
 
 export const QUIZ_HUNT_BASKET_EVENT = {
   PROJECT: 'quiz-hunt:basket:project',
@@ -15,83 +17,30 @@ export const QUIZ_HUNT_BASKET_EVENT = {
   TIMER_EXPIRED_DURING_FEEDBACK: 'quiz-hunt:timer:expired-during-feedback',
   TIMER_FEEDBACK_PENDING: 'quiz-hunt:timer:feedback-pending',
   TIMER_FEEDBACK_FINISHED: 'quiz-hunt:timer:feedback-finished',
+  FINAL_READY: 'quiz-hunt:menu:final:ready',
+  FINAL_LOCKED: 'quiz-hunt:menu:final:locked',
 } as const
 
 const TIMER_RENDER_EVENT = 'quiz-hunt:basket:timer:render'
 const TIMER_FREEZE_EVENT = 'quiz-hunt:basket:timer:freeze'
+const TIMER_NEEDLE_SET_EVENT = 'quiz-hunt:basket:timer:needle-set'
+const TIMER_ELAPSED_SET_EVENT = 'quiz-hunt:basket:timer:elapsed-set'
+const TIMER_ELAPSED_SLOT = 'quiz-hunt:basket:timer:elapsed-slot'
+const ELAPSED_RING_RADIUS = 132
+const ELAPSED_RING_CIRCUMFERENCE = 2 * Math.PI * ELAPSED_RING_RADIUS
 
 type BasketPerso = SceneDoc<string>['stories'][string]['persos'][number]
 type TimerStatus = 'idle' | 'running' | 'paused' | 'stopped' | 'expired'
 type TimerFrameInput = Readonly<{ progress: number; data?: Readonly<Record<string, unknown>> }>
 
-const QUIZ_HUNT_BASKET_STYLE_SHEET = `
-.quiz-hunt-basket {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
-  grid-template-rows: auto auto auto;
-  align-items: stretch;
-  gap: 0.5rem;
-  min-width: 0;
-  padding: 0.5rem;
-}
-
-.quiz-hunt-basket__slot {
-  display: grid;
-  align-content: center;
-  min-width: 0;
-  min-height: 3rem;
-  padding: 0.4rem 0.55rem;
-  border: 1px solid var(--quiz-hunt-group-color, #64748b);
-  border-radius: 0.55rem;
-  background: rgb(15 23 42 / 82%);
-  color: #f8fafc;
-}
-
-.quiz-hunt-basket__group { font-size: 0.7em; opacity: 0.8; }
-.quiz-hunt-basket__word { overflow: hidden; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-
-.quiz-hunt-basket__timer-zone {
-  grid-column: 3;
-  grid-row: 1 / span 2;
-  display: grid;
-  place-items: center;
-  min-width: 5.5rem;
-  min-height: 5.5rem;
-  aspect-ratio: 1;
-}
-
-.quiz-hunt-basket__timer {
-  display: grid;
-  place-items: center;
-  width: 100%;
-  height: 100%;
-  border: 0.45rem solid #64748b;
-  border-radius: 50%;
-  background: #0f172a;
-  color: #4ade80;
-  font-family: ui-monospace, monospace;
-  font-size: clamp(0.95rem, 2.4vw, 1.25rem);
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  box-shadow: inset 0 0 0 0.3rem rgb(148 163 184 / 12%), 0 0.2rem 0.7rem rgb(15 23 42 / 28%);
-}
-
-@media (orientation: landscape) and (min-width: 40em) {
-  .quiz-hunt-basket { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto auto auto auto; }
-  .quiz-hunt-basket__timer-zone { grid-column: 1 / -1; grid-row: 3; justify-self: center; width: 8rem; height: 8rem; }
-}
-
-@media (orientation: portrait) {
-  .quiz-hunt-basket { grid-template-columns: repeat(2, minmax(0, 1fr)) auto; }
-}
-`
-
 /** Builds the persistent colored basket and its own CodPlay-controlled countdown. */
 export function buildQuizHuntBasketScene(
   document: QuizHuntDocument,
+  game: QuizHuntGameCatalog,
 ): Readonly<{ sceneDoc: SceneDoc<string>; styleSheet: string }> {
   const groups = document.settings.groups
   const pagesById = new Map(document.pages.map((page) => [page.id, page]))
+  const finalPage = document.pages.find((page) => page.id === game.finalPageId)
   const budgetMs = document.settings.timeBudgetMs
   return {
     sceneDoc: {
@@ -107,10 +56,10 @@ export function buildQuizHuntBasketScene(
             'quiz-hunt-basket-timer': createTimerStrap(budgetMs),
             'quiz-hunt-basket-project': ({ event }) => projectBasket(groups, pagesById, event.data),
             'quiz-hunt-basket-timer-project': ({ event }) => ({
-              events: [{ name: TIMER_FREEZE_EVENT, data: { content: formatRemaining(clampRemaining(
+              events: freezeTimerEvents(clampRemaining(
                 typeof event.data?.remainingMs === 'number' ? event.data.remainingMs : budgetMs,
                 budgetMs,
-              )) } }],
+              ), budgetMs),
             }),
           },
           listen: [
@@ -124,61 +73,137 @@ export function buildQuizHuntBasketScene(
             { on: QUIZ_HUNT_BASKET_EVENT.TIMER_PROJECT, straps: ['quiz-hunt-basket-timer-project'] },
           ],
           persos: [
-            createBasketLayout(groups),
+            createBasketLayout(),
             ...groups.flatMap((group, index) => createBasketSlot(group, index)),
+            ...(finalPage === undefined ? [] : [createFinalButton(finalPage)]),
             createTimerDisplay(budgetMs),
+            createTimerNeedle(budgetMs),
+            createTimerElapsedRing(budgetMs),
           ],
         },
       },
     },
-    styleSheet: QUIZ_HUNT_BASKET_STYLE_SHEET,
+    styleSheet: '',
   }
 }
 
 /** Creates the layout marker that keeps all basket colors and the clock together. */
-function createBasketLayout(groups: readonly QuizHuntGroup[]): BasketPerso {
-  const slots = groups.map((_group, index) => `<!-- data-part="quiz-hunt:basket:slot:${index}" -->`).join('')
+function createBasketLayout(): BasketPerso {
   return {
     id: 'quiz-hunt-basket-layout',
     type: 'layout',
     initial: {
       move: '@root',
-      className: 'quiz-hunt-basket',
-      markup: `<section id="quiz-hunt-basket-root" class="quiz-hunt-basket" aria-label="Panier et minuteur">
-        ${slots}
-        <div id="quiz-hunt-basket-timer-zone" class="quiz-hunt-basket__timer-zone">
-          <span id="quiz-hunt-basket-timer" class="quiz-hunt-basket__timer" data-part="quiz-hunt:basket:timer"></span>
+      className: 'quiz-hunt-footer',
+      markup: `<div id="quiz-hunt-basket-root" class="quiz-hunt-footer">
+        <!-- data-part="quiz-hunt:basket:slots" -->
+        <div id="quiz-hunt-timer-zone" class="quiz-hunt-timer-zone">
+          <div id="quiz-hunt-timer-wrapper" class="quiz-hunt-chrono-wrapper" data-part="quiz-hunt:basket:timer-wrapper">
+            ${buildClockFaceMarkup()}
+            <div id="quiz-hunt-timer-dot" class="quiz-hunt-chrono-dot"></div>
+            <div id="quiz-hunt-timer-host" data-part="quiz-hunt:basket:timer"></div>
+          </div>
         </div>
-      </section>`,
+        <div id="quiz-hunt-basket-tools" class="quiz-hunt-basket-tools">
+          <div id="quiz-hunt-basket-final-slot" class="quiz-hunt-basket-final-slot" data-part="quiz-hunt:basket:final"></div>
+        </div>
+      </div>`,
     },
     actions: {},
   }
 }
 
-/** Creates one displayed color slot, initially empty until the scenario projects its basket. */
-function createBasketSlot(group: QuizHuntGroup, index: number): readonly BasketPerso[] {
-  const wordEvent = `quiz-hunt:basket:word:${index}`
-  return [
-    {
-      id: `quiz-hunt-basket-slot-${index + 1}`,
-      type: 'layout',
-      initial: {
-        move: { target: `quiz-hunt:basket:slot:${index}` },
-        className: 'quiz-hunt-basket__slot',
-        markup: `<div id="quiz-hunt-basket-slot-${index + 1}-root" class="quiz-hunt-basket__slot" style="--quiz-hunt-group-color:${escapeAttribute(group.color)}">
-          <span id="quiz-hunt-basket-slot-${index + 1}-group" class="quiz-hunt-basket__group">${escapeHtml(group.name)}</span>
-          <span id="quiz-hunt-basket-slot-${index + 1}-word-host" class="quiz-hunt-basket__word"><!-- data-part="${wordEvent}" --></span>
-        </div>`,
+/** Creates the original SVG timer face with sixty ticks and twelve labels. */
+function buildClockFaceMarkup(): string {
+  const cx = 150
+  const cy = 150
+  const outerRadius = 143
+  const majorInnerRadius = 118
+  const minorInnerRadius = 132
+  const textRadius = 102
+  const marks: string[] = []
+
+  for (let index = 0; index < 60; index += 1) {
+    const radians = (index * 6 - 90) * (Math.PI / 180)
+    const isMajor = index % 5 === 0
+    const innerRadius = isMajor ? majorInnerRadius : minorInnerRadius
+    const x1 = (cx + innerRadius * Math.cos(radians)).toFixed(2)
+    const y1 = (cy + innerRadius * Math.sin(radians)).toFixed(2)
+    const x2 = (cx + outerRadius * Math.cos(radians)).toFixed(2)
+    const y2 = (cy + outerRadius * Math.sin(radians)).toFixed(2)
+    const stroke = isMajor ? '#cbd5e1' : '#475569'
+    const strokeWidth = isMajor ? '2.8' : '1.2'
+    marks.push(`<line id="quiz-hunt-timer-mark-${index}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-linecap="round"/>`)
+  }
+
+  for (let index = 1; index <= 12; index += 1) {
+    const seconds = index * 5
+    const radians = (seconds * 6 - 90) * (Math.PI / 180)
+    const x = (cx + textRadius * Math.cos(radians)).toFixed(2)
+    const y = (cy + textRadius * Math.sin(radians)).toFixed(2)
+    const label = seconds === 60 ? '60' : String(seconds).padStart(2, '0')
+    marks.push(`<text id="quiz-hunt-timer-label-${index}" x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" fill="#e2e8f0" font-size="13" font-family="monospace" font-weight="700">${label}</text>`)
+  }
+
+  return `<svg id="quiz-hunt-timer-face" class="quiz-hunt-chrono-face" viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">
+    <circle id="quiz-hunt-timer-face-background" cx="150" cy="150" r="146" fill="#0f172a"/>
+    <circle id="quiz-hunt-timer-ring-background" cx="150" cy="150" r="${ELAPSED_RING_RADIUS}" fill="none" stroke="rgba(148, 163, 184, 0.22)" stroke-width="28"/>
+    <g id="quiz-hunt-timer-elapsed-slot" data-part="${TIMER_ELAPSED_SLOT}"></g>
+    <g id="quiz-hunt-timer-marks">${marks.join('')}</g>
+  </svg>`
+}
+
+/** Creates the original hidden final-question control in the basket tools. */
+function createFinalButton(page: QuizHuntPage): BasketPerso {
+  return {
+    id: `quiz-hunt-basket-final-${page.id}`,
+    type: 'tag',
+    initial: {
+      tag: 'button',
+      content: 'Épreuve finale',
+      attr: {
+        id: `quiz-hunt-basket-final-${page.id}-button`,
+        type: 'button',
+        disabled: true,
+        'aria-label': `Épreuve finale : ${page.name}`,
       },
-      actions: {},
+      className: 'quiz-hunt-final-button is-hidden',
+      style: { '--quiz-hunt-accent': '#2563eb' },
+      move: { target: 'quiz-hunt:basket:final' },
     },
-    {
-      id: `quiz-hunt-basket-slot-${index + 1}-word`,
-      type: 'tag',
-      initial: { tag: 'span', content: '—', move: { target: wordEvent } },
-      actions: { [wordEvent]: {} },
+    emit: { click: { event: { name: 'quiz-hunt:final:open', visibility: 'public' } } },
+    actions: {
+      [QUIZ_HUNT_BASKET_EVENT.FINAL_READY]: {
+        className: { remove: 'is-hidden' },
+        attr: { disabled: false },
+      },
+      [QUIZ_HUNT_BASKET_EVENT.FINAL_LOCKED]: {
+        className: { add: 'is-hidden' },
+        attr: { disabled: true },
+      },
     },
-  ]
+  }
+}
+
+/** Creates one displayed color slot, initially empty until the scenario projects its basket. */
+function createBasketSlot(group: QuizHuntGroup, index: number): BasketPerso {
+  const wordEvent = `quiz-hunt:basket:word:${index}`
+  const colorStyle = resolveQuizHuntColorStyle(group.name, group.color)
+  return {
+    id: `quiz-hunt-basket-slot-${index + 1}`,
+    type: 'tag',
+    initial: {
+      tag: 'div',
+      content: '—',
+      className: 'quiz-hunt-basket-slot',
+      style: {
+        '--quiz-hunt-accent': colorStyle.solid,
+        '--quiz-hunt-accent-gradient': colorStyle.gradient,
+      },
+      move: { target: 'quiz-hunt:basket:slots' },
+    },
+    actions: { [wordEvent]: null },
+  }
 }
 
 /** Renders the countdown for the complete configured timer budget. */
@@ -189,13 +214,55 @@ function createTimerDisplay(budgetMs: number): BasketPerso {
     initial: {
       tag: 'span',
       content: formatRemaining(budgetMs),
-      className: 'quiz-hunt-basket__timer',
+      className: 'quiz-hunt-chrono-display',
       attr: { 'aria-label': 'Temps restant' },
       move: { target: 'quiz-hunt:basket:timer' },
     },
     actions: {
       [TIMER_RENDER_EVENT]: { duration: budgetMs, ease: 'linear', fn: ({ progress, data }: TimerFrameInput) => timerFrame(progress, data, budgetMs) },
       [TIMER_FREEZE_EVENT]: {},
+    },
+  }
+}
+
+/** Creates the original clock needle and animates it with the configured budget. */
+function createTimerNeedle(budgetMs: number): BasketPerso {
+  return {
+    id: 'quiz-hunt-basket-timer-needle',
+    type: 'tag',
+    initial: {
+      tag: 'span',
+      className: 'quiz-hunt-chrono-needle',
+      move: { target: 'quiz-hunt:basket:timer-wrapper' },
+    },
+    actions: {
+      [TIMER_RENDER_EVENT]: {
+        duration: budgetMs,
+        ease: 'linear',
+        fn: ({ progress, data }: TimerFrameInput) => needleFrame(progress, data, budgetMs),
+      },
+      [TIMER_NEEDLE_SET_EVENT]: {},
+    },
+  }
+}
+
+/** Creates the original elapsed-time ring inside the clock's SVG face. */
+function createTimerElapsedRing(budgetMs: number): BasketPerso {
+  return {
+    id: 'quiz-hunt-basket-timer-elapsed-ring',
+    type: 'layout',
+    initial: {
+      format: 'svg',
+      markup: `<circle id="quiz-hunt-timer-elapsed-ring-circle" class="quiz-hunt-chrono-elapsed-ring" cx="150" cy="150" r="${ELAPSED_RING_RADIUS}" fill="none" stroke-width="28" stroke-linecap="butt" stroke-dasharray="${ELAPSED_RING_CIRCUMFERENCE}" stroke-dashoffset="${ELAPSED_RING_CIRCUMFERENCE}" transform="rotate(-90 150 150)"/>`,
+      move: { target: TIMER_ELAPSED_SLOT },
+    },
+    actions: {
+      [TIMER_RENDER_EVENT]: {
+        duration: budgetMs,
+        ease: 'linear',
+        fn: ({ progress, data }: TimerFrameInput) => elapsedFrame(progress, data, budgetMs),
+      },
+      [TIMER_ELAPSED_SET_EVENT]: {},
     },
   }
 }
@@ -253,7 +320,7 @@ function createTimerStrap(budgetMs: number): StrapFunction {
     return {
       update: { timer: { ...timer, status, remainingMs, generation } },
       events: [
-        ...freezeTimerEvents(remainingMs),
+        ...freezeTimerEvents(remainingMs, budgetMs),
         { name: QUIZ_HUNT_BASKET_EVENT.TIMER_PAUSED, data: { remainingMs }, visibility: 'public' },
       ],
     }
@@ -268,17 +335,22 @@ function expireTimer(timer: ReturnType<typeof readTimerState>, budgetMs: number)
   return {
     update: { timer: { ...timer, status: 'expired', remainingMs: 0, generation: timer.generation + 1 } },
     events: [
-      ...freezeTimerEvents(0),
+      ...freezeTimerEvents(0, budgetMs),
       { name: eventName, data: { remainingMs: 0, feedbackPending: timer.feedbackPending, budgetMs }, visibility: 'public' },
     ],
   }
 }
 
-/** Freezes the display event stream at the supplied remaining duration. */
-function freezeTimerEvents(remainingMs: number): { name: string; data?: CompiledRecord }[] {
+/** Freezes the original digital, needle, and elapsed-ring displays at one time. */
+function freezeTimerEvents(remainingMs: number, budgetMs: number): { name: string; data?: CompiledRecord }[] {
+  const elapsedRatio = 1 - remainingMs / budgetMs
+  const elapsedOffset = ELAPSED_RING_CIRCUMFERENCE * (1 - elapsedRatio)
+  const needleRotation = ((remainingMs / 1_000 / 60) * 360).toFixed(3)
   return [
     { name: 'tween:stop' },
-    { name: TIMER_FREEZE_EVENT, data: { content: formatRemaining(remainingMs) } },
+    { name: TIMER_FREEZE_EVENT, data: { content: formatRemaining(remainingMs), style: { color: resolveTimerColor(elapsedRatio) } } },
+    { name: TIMER_NEEDLE_SET_EVENT, data: { style: { transform: `rotate(${needleRotation}deg)` } } },
+    { name: TIMER_ELAPSED_SET_EVENT, data: { attr: { 'stroke-dashoffset': elapsedOffset.toFixed(3) } } },
   ]
 }
 
@@ -290,14 +362,14 @@ function projectBasket(
 ): Readonly<{ events: readonly Readonly<{ name: string; data?: CompiledRecord }>[] }> {
   const basket = readRecord(data?.basket)
   return {
-    events: groups.map((group, index) => {
-      const pageId = basket[group.id]
-      const page = typeof pageId === 'string' ? pagesById.get(pageId) : undefined
-      return {
-        name: `quiz-hunt:basket:word:${index}`,
-        data: { content: page?.name ?? '—' },
-      }
-    }),
+    events: [
+      ...groups.map((group, index) => {
+        const pageId = basket[group.id]
+        const page = typeof pageId === 'string' ? pagesById.get(pageId) : undefined
+        return { name: `quiz-hunt:basket:word:${index}`, data: { content: page?.name ?? '—' } }
+      }),
+      { name: data?.finalReady === true ? QUIZ_HUNT_BASKET_EVENT.FINAL_READY : QUIZ_HUNT_BASKET_EVENT.FINAL_LOCKED },
+    ],
   }
 }
 
@@ -324,9 +396,37 @@ function readTimerState(value: unknown, budgetMs: number): Readonly<{
 
 /** Interpolates and formats one countdown action frame. */
 function timerFrame(progress: number, data: Readonly<Record<string, unknown>> | undefined, budgetMs: number): Readonly<Record<string, unknown>> {
+  const remainingMs = remainingAtFrame(progress, data, budgetMs)
+  return {
+    content: formatRemaining(remainingMs),
+    style: { color: resolveTimerColor(1 - remainingMs / budgetMs) },
+  }
+}
+
+/** Computes the remaining time for a shared linear timer frame. */
+function remainingAtFrame(progress: number, data: Readonly<Record<string, unknown>> | undefined, budgetMs: number): number {
   const segmentStart = typeof data?.remainingMs === 'number' ? clampRemaining(data.remainingMs, budgetMs) : budgetMs
-  const remainingMs = clampRemaining(segmentStart - Math.max(0, Math.min(1, progress)) * budgetMs, budgetMs)
-  return { content: formatRemaining(remainingMs) }
+  return clampRemaining(segmentStart - Math.max(0, Math.min(1, progress)) * budgetMs, budgetMs)
+}
+
+/** Produces the original moving needle pose for one timer frame. */
+function needleFrame(progress: number, data: Readonly<Record<string, unknown>> | undefined, budgetMs: number): Readonly<Record<string, unknown>> {
+  const remainingMs = remainingAtFrame(progress, data, budgetMs)
+  const rotation = ((remainingMs / 1_000 / 60) * 360).toFixed(3)
+  return { style: { transform: `rotate(${rotation}deg)` } }
+}
+
+/** Produces the original elapsed-ring offset for one timer frame. */
+function elapsedFrame(progress: number, data: Readonly<Record<string, unknown>> | undefined, budgetMs: number): Readonly<Record<string, unknown>> {
+  const remainingMs = remainingAtFrame(progress, data, budgetMs)
+  const elapsedRatio = 1 - remainingMs / budgetMs
+  const dashOffset = ELAPSED_RING_CIRCUMFERENCE * (1 - elapsedRatio)
+  return { attr: { 'stroke-dashoffset': dashOffset.toFixed(3) } }
+}
+
+/** Selects the original timer color for the elapsed portion of the game. */
+function resolveTimerColor(elapsedRatio: number): string {
+  return elapsedRatio < 0.5 ? '#4ade80' : elapsedRatio < 0.75 ? '#fb923c' : '#f87171'
 }
 
 /** Formats one millisecond duration as a stable minute-and-second label. */
@@ -347,12 +447,3 @@ function readRecord(value: unknown): Record<string, unknown> {
     : {}
 }
 
-/** Escapes author values before inserting them in the shared basket markup. */
-function escapeHtml(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
-}
-
-/** Escapes a color value before writing the controlled inline style attribute. */
-function escapeAttribute(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
-}

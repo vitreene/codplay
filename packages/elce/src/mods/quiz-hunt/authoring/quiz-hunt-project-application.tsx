@@ -2,6 +2,8 @@ import type { Handle } from 'remix/component'
 import type { SnapshotFrom } from 'xstate'
 import { renderCoreProjectApplication } from '../../../core/authoring/layout/project-application'
 import type { CoreProjectApplicationView } from '../../../core/authoring/layout/project-application'
+import type { EditorPanelName, EditorPanelVisibility } from '../../../core/authoring/layout/editor-frame'
+import { initialEditorPanelVisibility, resizedEditorPanelVisibility } from '../../../core/authoring/layout/editor-panel-state.ts'
 import { SectionEditorSession } from '../../../resources/bdcs/section/authoring/section-editor-session'
 import type { ScormVersion } from '../../../scorm/scorm-types'
 import { PopupPreviewHost } from '../../../core/preview/popup-preview-host'
@@ -14,7 +16,7 @@ import type { QuizHuntDocument } from '../document/quiz-hunt-document-types'
 import { isQuizHuntImportChange, createQuizHuntControllerMachine } from './quiz-hunt-controller'
 import { QuizHuntEditorContextProvider } from '../composition/quiz-hunt-editor-context'
 import { renderQuizHuntWorkspace } from './quiz-hunt-workspace'
-import type { QuizHuntWorkspaceView } from './quiz-hunt-workspace'
+import type { QuizHuntIntroductionPage, QuizHuntResultPage, QuizHuntWorkspaceInteraction, QuizHuntWorkspaceView } from './quiz-hunt-workspace'
 
 type QuizHuntSnapshot = SnapshotFrom<ReturnType<typeof createQuizHuntControllerMachine>>
 
@@ -36,10 +38,89 @@ export function QuizHuntProjectApplication(handle: Handle) {
   let view = selectQuizHuntProjectView(controller.getSnapshot())
   const sectionSession = new SectionEditorSession()
   let exportBusy = false
+  let exportKind: 'sighty' | 'scorm' | null = null
   let exportError: string | null = null
   let exportNotice: string | null = null
   let previewError: string | null = null
   let popupPreviewHost: PopupPreviewHost<QuizHuntDocument> | null = null
+  let panelVisibility: EditorPanelVisibility = initialEditorPanelVisibility(window.innerWidth)
+  let previousWindowWidth = window.innerWidth
+  let returnFocusId: string | null = null
+  let draggedBdcId: string | null = null
+  let dropTarget: string | null = null
+  let isAddContentMenuOpen = false
+  let trashAnimationToken = 0
+  let trashAnimationTimer: ReturnType<typeof setTimeout> | undefined
+  let introductionPage: QuizHuntIntroductionPage = null
+  let resultPage: QuizHuntResultPage = null
+  let summarySettingsOpen = view.workspace.document.pages.some((page) =>
+    page.id === view.workspace.selection.pageId && page.type === 'summary')
+
+  /** Updates the active BDC insertion target and refreshes its shared highlight. */
+  const setDropTarget = (targetId: string | null): void => {
+    if (dropTarget === targetId) return
+    dropTarget = targetId
+    if (!handle.signal.aborted) void handle.update()
+  }
+
+  /** Opens or closes the shared page BDC creation menu. */
+  const setAddContentMenuOpen = (isOpen: boolean): void => {
+    if (isAddContentMenuOpen === isOpen) return
+    isAddContentMenuOpen = isOpen
+    if (!handle.signal.aborted) void handle.update()
+  }
+
+  /** Shows Learning's successful delete animation after a page BDC is removed. */
+  const animateTrashDropSuccess = (): void => {
+    trashAnimationToken += 1
+    if (trashAnimationTimer !== undefined) clearTimeout(trashAnimationTimer)
+    if (!handle.signal.aborted) void handle.update()
+    trashAnimationTimer = setTimeout(() => {
+      trashAnimationTimer = undefined
+      trashAnimationToken = 0
+      if (!handle.signal.aborted) void handle.update()
+    }, 420)
+  }
+
+  /** Updates the shared responsive panels and restores focus after a close. */
+  const setPanelVisibility = (panel: EditorPanelName, open: boolean, triggerId?: string): void => {
+    if (open) returnFocusId = triggerId ?? returnFocusId
+    const focusId = open ? null : returnFocusId
+    panelVisibility = open && window.innerWidth <= 800
+      ? { outline: panel === 'outline', properties: panel === 'properties' }
+      : { ...panelVisibility, [panel]: open }
+    if (!open) returnFocusId = null
+    void handle.update().then(() => {
+      if (!open && focusId !== null) document.getElementById(focusId)?.focus()
+    })
+  }
+
+  /** Opens or closes the fixed Sommaire workspace in the central area. */
+  const setSummarySettingsOpen = (open: boolean): void => {
+    if (summarySettingsOpen === open && introductionPage === null && resultPage === null) return
+    summarySettingsOpen = open
+    introductionPage = null
+    resultPage = null
+    void handle.update()
+  }
+
+  /** Selects the existing game information page or its folder. */
+  const selectIntroductionPage = (page: QuizHuntIntroductionPage): void => {
+    if (introductionPage === page && !summarySettingsOpen && resultPage === null) return
+    summarySettingsOpen = false
+    introductionPage = page
+    resultPage = null
+    void handle.update()
+  }
+
+  /** Selects one of the existing result Cards in its virtual authoring page. */
+  const selectResultPage = (page: QuizHuntResultPage): void => {
+    if (resultPage === page && !summarySettingsOpen) return
+    summarySettingsOpen = false
+    introductionPage = null
+    resultPage = page
+    void handle.update()
+  }
 
   /** Opens the shared export dialog while retaining the active document state. */
   const openExportDialog = (): void => {
@@ -96,6 +177,7 @@ export function QuizHuntProjectApplication(handle: Handle) {
     const documentSnapshot = context.document
     const mediaSources = context.mediaSources
     exportBusy = true
+    exportKind = 'sighty'
     exportError = null
     exportNotice = null
     void handle.update()
@@ -108,6 +190,7 @@ export function QuizHuntProjectApplication(handle: Handle) {
         exportError = error instanceof Error ? error.message : 'L’export du scénario Quiz Hunt a échoué.'
       } finally {
         exportBusy = false
+        exportKind = null
         void handle.update()
       }
     })()
@@ -121,6 +204,7 @@ export function QuizHuntProjectApplication(handle: Handle) {
     const documentSnapshot = context.document
     const mediaSources = context.mediaSources
     exportBusy = true
+    exportKind = 'scorm'
     exportError = null
     exportNotice = null
     void handle.update()
@@ -134,6 +218,7 @@ export function QuizHuntProjectApplication(handle: Handle) {
         exportError = error instanceof Error ? error.message : 'L’export SCORM Quiz Hunt a échoué.'
       } finally {
         exportBusy = false
+        exportKind = null
         void handle.update()
       }
     })()
@@ -151,6 +236,13 @@ export function QuizHuntProjectApplication(handle: Handle) {
       const previousHistoryRestore = view.workspace.historySelection
       const next = selectQuizHuntProjectView(snapshot)
       if (sameQuizHuntProjectView(view, next)) return
+      if (view.project.activeProject?.id !== next.project.activeProject?.id
+        || view.workspace.selection.pageId !== next.workspace.selection.pageId) {
+        summarySettingsOpen = next.workspace.document.pages.some((page) =>
+          page.id === next.workspace.selection.pageId && page.type === 'summary')
+        introductionPage = null
+        resultPage = null
+      }
       for (const bdc of next.workspace.document.bdcs) {
         if (bdc.section !== null) sectionSession.updateSection(bdc.id, bdc.section)
       }
@@ -162,17 +254,30 @@ export function QuizHuntProjectApplication(handle: Handle) {
       })
     })
     const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape' && window.innerWidth <= 800) {
+        const openPanel = panelVisibility.outline ? 'outline' : panelVisibility.properties ? 'properties' : null
+        if (openPanel !== null) setPanelVisibility(openPanel, false)
+      }
       if (!(event.metaKey || event.ctrlKey) || event.altKey || event.key.toLowerCase() !== 'z') return
       if (view.project.activeProject === null || view.project.projectStatus !== 'active' || view.project.editAccess !== 'active') return
       event.preventDefault()
       event.stopPropagation()
       runHistoryAction(event.shiftKey ? 'redo' : 'undo')
     }
+    const handleResize = (): void => {
+      const nextWidth = window.innerWidth
+      panelVisibility = resizedEditorPanelVisibility(panelVisibility, previousWindowWidth, nextWidth)
+      previousWindowWidth = nextWidth
+      void handle.update()
+    }
     window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('resize', handleResize)
     handle.signal.addEventListener('abort', () => {
       subscription.unsubscribe()
       window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('resize', handleResize)
       popupPreviewHost?.destroy()
+      if (trashAnimationTimer !== undefined) clearTimeout(trashAnimationTimer)
       sectionSession.destroy()
     }, { once: true })
   })
@@ -185,11 +290,29 @@ export function QuizHuntProjectApplication(handle: Handle) {
       ...view.workspace,
       editable: view.project.projectStatus === 'active' && view.project.editAccess === 'active',
       exportBusy,
+      exportKind,
       exportError,
       exportNotice,
       previewError,
       onPreview: openPreview,
-    }, actions, sectionSession, handle) : null
+    }, actions, sectionSession, handle, {
+      panelVisibility,
+      summarySettingsOpen,
+      introductionPage,
+      resultPage,
+      getDraggedBdcId: () => draggedBdcId,
+      onSetDraggedBdcId: (bdcId) => { draggedBdcId = bdcId },
+      dropTarget,
+      onSetDropTarget: setDropTarget,
+      isAddContentMenuOpen,
+      onSetAddContentMenuOpen: setAddContentMenuOpen,
+      trashAnimationToken,
+      onTrashDropSuccess: animateTrashDropSuccess,
+      onSetSummarySettingsOpen: setSummarySettingsOpen,
+      onSelectIntroductionPage: selectIntroductionPage,
+      onSelectResultPage: selectResultPage,
+      onSetPanelVisibility: setPanelVisibility,
+    } satisfies QuizHuntWorkspaceInteraction) : null
     return renderCoreProjectApplication({
       view: view.project,
       actions: actions.core,
@@ -233,6 +356,7 @@ function selectQuizHuntProjectView(snapshot: QuizHuntSnapshot): QuizHuntProjectV
       importPending: context.documentChanges.some(isQuizHuntImportChange),
       editable: context.activeProject !== null && context.projectStatus === 'active' && context.editAccess === 'active',
       exportBusy: false,
+      exportKind: null,
       exportError: null,
       exportNotice: null,
       previewError: null,

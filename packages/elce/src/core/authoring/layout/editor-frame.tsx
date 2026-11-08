@@ -10,6 +10,7 @@ export interface EditorPanelVisibility {
 }
 
 export interface EditorFrameProps {
+  readonly className?: string
   readonly leftPanel: RemixNode
   readonly center: RemixNode
   readonly rightPanel: RemixNode
@@ -17,6 +18,7 @@ export interface EditorFrameProps {
   readonly visible: boolean
   readonly editable?: boolean
   readonly onSetPanelVisibility: (panel: EditorPanelName, open: boolean, triggerId?: string) => void
+  readonly propertiesPanelLabel?: string
   readonly onPreview: () => void
   readonly workspaceAction: RemixNode
   readonly workspaceOverlay: RemixNode
@@ -29,7 +31,7 @@ export interface EditorFrameProps {
 
 /** Renders the shared responsive authoring frame and its common access controls. */
 export function renderEditorFrame(props: EditorFrameProps): RemixNode {
-  const panelStateClass = ` elce-main--outline-${props.panelVisibility.outline ? 'open' : 'closed'} elce-main--properties-${props.panelVisibility.properties ? 'open' : 'closed'}`
+  const panelStateClass = ` elce-main--outline-${props.panelVisibility.outline ? 'open' : 'closed'} elce-main--properties-${props.panelVisibility.properties ? 'open' : 'closed'}${props.className === undefined ? '' : ` ${props.className}`}`
 
   return <div id="elce-remix-editor-workspace">
     <main
@@ -62,7 +64,7 @@ function renderWorkspaceAccess(props: EditorFrameProps): RemixNode {
         {renderPreviewButton(props.onPreview)}
         {props.workspaceAction}
       </div>
-      {renderPanelToggle('properties', props.panelVisibility, props.onSetPanelVisibility)}
+      {renderPanelToggle('properties', props.panelVisibility, props.onSetPanelVisibility, props.propertiesPanelLabel)}
     </nav>
     {props.previewError === null ? null : <p
       id="elce-preview-open-error"
@@ -101,9 +103,10 @@ function renderPanelToggle(
   panel: EditorPanelName,
   panelVisibility: EditorPanelVisibility,
   setPanelVisibility: EditorFrameProps['onSetPanelVisibility'],
+  propertiesPanelLabel?: string,
 ): RemixNode {
   const isOpen = panelVisibility[panel]
-  const panelLabel = panel === 'outline' ? 'le panneau Scénario' : 'le panneau Contenus'
+  const panelLabel = panel === 'outline' ? 'le panneau Scénario' : `le panneau ${propertiesPanelLabel ?? 'Contenus'}`
   const label = `Ouvrir ${panelLabel}`
   const id = panel === 'outline' ? 'elce-outline-toggle' : 'elce-properties-toggle'
   const targetId = panel === 'outline' ? 'elce-outline' : 'elce-properties'

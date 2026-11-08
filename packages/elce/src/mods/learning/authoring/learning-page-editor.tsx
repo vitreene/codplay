@@ -23,7 +23,7 @@ import { LEARNING_PROFILE_TEXT_FIELD_ATTRIBUTES } from '../profile/authoring/lea
 import { createLearningPresetBuilder } from '../learning-presets'
 import { appearanceClassNameForTarget } from '../../../builders/scene-style/appearance-class-names'
 import { createAppearanceTargetStyleSheet } from '../../../player/appearance-scene-style-sheet'
-import { renderRemixQuestionEditor } from '../../../resources/bdcs/question/authoring/remix-question-editor'
+import { renderQuestionEditor } from '../../../resources/bdcs/question/authoring/question-editor.tsx'
 import { renderRemixEvaluationResultEditor } from './learning-evaluation-result-editor'
 import { renderRemixCardEditor } from '../../../resources/bdcs/card/authoring/remix-card-editor'
 import { RemixCarouselEditor } from '../../../resources/bdcs/carousel/authoring/remix-carousel-editor'
@@ -401,7 +401,7 @@ function renderBdcEditor(
       const media = mediaId === null
         ? null
         : view.documentModel.medias.find((candidate) => candidate.id === mediaId) ?? null
-      return renderRemixQuestionEditor({
+      return renderQuestionEditor({
         bdcId: bdc.id,
         question: bdc.question,
         media,

@@ -7,6 +7,7 @@ import type { QuizHuntGameStatePersistence } from '../persistence/quiz-hunt-game
 import { QuizHuntGameStateApiClient } from '../persistence/quiz-hunt-game-state-api-client'
 import { createQuizHuntScenarioModel, QUIZ_HUNT_MENU_PROJECT_EVENT } from './quiz-hunt-scenario-builder'
 import type { QuizHuntSceneKey, QuizHuntSlotName } from './quiz-hunt-scenario-builder'
+import { QUIZ_HUNT_VIDEO_EVENT } from './quiz-hunt-page-scene-catalog'
 import { QUIZ_HUNT_LAYOUT_EVENT, QUIZ_HUNT_SLOT } from './quiz-hunt-layout-scene'
 
 export interface QuizHuntPlayerOptions {
@@ -41,6 +42,9 @@ export class QuizHuntPlayer {
     ownerWindow?.addEventListener('pointerdown', this.handlePointerDown, true)
     ownerWindow?.addEventListener('pointerup', this.handlePointerUpCapture, true)
     ownerWindow?.addEventListener('pointercancel', this.handlePointerCancelCapture, true)
+    options.stage.addEventListener('play', this.handleVideoPlayback, true)
+    options.stage.addEventListener('pause', this.handleVideoPlayback, true)
+    options.stage.addEventListener('ended', this.handleVideoPlayback, true)
     options.stage.addEventListener('pointerup', this.handlePointerUp)
     options.stage.addEventListener('pointercancel', this.handlePointerCancel)
   }
@@ -127,6 +131,9 @@ export class QuizHuntPlayer {
     ownerWindow?.removeEventListener('pointerdown', this.handlePointerDown, true)
     ownerWindow?.removeEventListener('pointerup', this.handlePointerUpCapture, true)
     ownerWindow?.removeEventListener('pointercancel', this.handlePointerCancelCapture, true)
+    this.options.stage.removeEventListener('play', this.handleVideoPlayback, true)
+    this.options.stage.removeEventListener('pause', this.handleVideoPlayback, true)
+    this.options.stage.removeEventListener('ended', this.handleVideoPlayback, true)
     this.options.stage.removeEventListener('pointerup', this.handlePointerUp)
     this.options.stage.removeEventListener('pointercancel', this.handlePointerCancel)
     this.removeSlotChange?.()
@@ -174,6 +181,30 @@ export class QuizHuntPlayer {
   private readonly handlePointerCancel = (event: PointerEvent): void => {
     if (event.pointerId !== this.activePointerId) return
     this.dispatchDropTarget()
+  }
+
+  /** Forwards native playback changes from Quiz Hunt Question videos into Sighty. */
+  private readonly handleVideoPlayback = (event: Event): void => {
+    const ownerWindow = this.options.stage.ownerDocument.defaultView
+    const video = event.target
+    if (ownerWindow === null || !(video instanceof ownerWindow.HTMLVideoElement)) return
+    if (event.type === 'pause' && video.ended) return
+    const videoHost = video.closest<HTMLElement>('[data-quiz-hunt-video-page-id]')
+    const pageId = videoHost?.dataset.quizHuntVideoPageId
+    const eventName = event.type === 'play'
+      ? QUIZ_HUNT_VIDEO_EVENT.PLAY
+      : event.type === 'pause'
+        ? QUIZ_HUNT_VIDEO_EVENT.PAUSE
+        : event.type === 'ended' ? QUIZ_HUNT_VIDEO_EVENT.ENDED : undefined
+    const runtime = this.runtime
+    if (pageId === undefined || eventName === undefined || !this.options.stage.contains(videoHost) || runtime === null) return
+    void runtime.api.dispatch({
+      name: eventName,
+      sourceSceneKey: `scene-page-${pageId}`,
+      data: { pageId },
+    }).catch((error: unknown) => {
+      this.options.onLog?.(`La synchronisation de la vidéo Quiz Hunt a échoué : ${String(error)}`, 'error')
+    })
   }
 
   /** Sends one public intent and clears the transient DOM hit-test result. */

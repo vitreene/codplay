@@ -1,9 +1,9 @@
 import type { ContentChapter, ContentPage } from '../../../core/document/content-document-types'
 import type { ResourceDocumentData } from '../../../resources/document/resource-document-types'
 
-export type QuizHuntMenuPresentation = 'grid' | 'diapo'
-
 export type QuizHuntBankRole = 'questions' | 'finals'
+
+export const QUIZ_HUNT_COLOR_SLOT_COUNT = 4
 
 export interface QuizHuntChapter extends ContentChapter {
   readonly name: string
@@ -29,7 +29,6 @@ export type QuizHuntRootEntry =
 
 export interface QuizHuntSettings {
   readonly groups: readonly QuizHuntGroup[]
-  readonly menuPresentation: QuizHuntMenuPresentation
   readonly successCardBdcId: string
   readonly failureCardBdcId: string
   readonly seed: number
@@ -38,6 +37,7 @@ export interface QuizHuntSettings {
   readonly clueDelayMs: number
   readonly feedbackDelayMs: number
   readonly extraEnabled: boolean
+  readonly extraTriggerPageId: string | null
 }
 
 export interface QuizHuntDocument extends ResourceDocumentData {

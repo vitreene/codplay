@@ -24,7 +24,7 @@ export interface PageEditorViewProps<TPage extends ContentPage = ContentPage> {
   readonly renderPageTypeMark: (page: TPage) => RemixNode
   readonly textFieldFeature: ResourceTextFieldFeature
   readonly onRenamePage: (pageId: string, name: AuthoredTextValue) => void
-  readonly onOpenAppearanceTarget: (target: AppearanceTarget, triggerId: string) => void
+  readonly onOpenAppearanceTarget?: (target: AppearanceTarget, triggerId: string) => void
   readonly renderBdcEditor: (bdcId: string, index: number) => RemixNode
   readonly onStartBdcDrag: (event: DragEvent, bdcId: string) => void
   readonly onEndBdcDrag: () => void
@@ -84,7 +84,7 @@ function renderPageTitle<TPage extends ContentPage>(
         onChange: (name) => onRenamePage(page.id, name),
       })}
     </h1>
-    {renderAppearanceTrigger({
+    {onOpenAppearanceTarget === undefined ? null : renderAppearanceTrigger({
       id: `elce-page-style-${page.id}`,
       target: { kind: 'page', pageId: page.id },
       label: 'Ouvrir le style de la page',

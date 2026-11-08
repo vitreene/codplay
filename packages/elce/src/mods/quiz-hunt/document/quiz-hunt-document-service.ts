@@ -1,5 +1,5 @@
 import { createStableId } from '../../../core/document/stable-id'
-import { insertAt } from '../../../core/document/collection-operations'
+import { insertAt, removeValue } from '../../../core/document/collection-operations'
 import { QUESTION_BDC_TYPE, QUESTION_PRESET_ID } from '../../../resources/bdcs/question/question-config'
 import { ElceQuestionService } from '../../../resources/bdcs/question/domain/question-service'
 import type { QuestionContent } from '../../../resources/bdcs/question/domain/question-types'
@@ -12,7 +12,8 @@ import { SECTION_BDC_TYPE, SECTION_PRESET_ID } from '../../../resources/bdcs/sec
 import { createEmptyRichTextDocument } from '../../../resources/bdcs/section/domain/section-service'
 import type { SectionContent } from '../../../resources/bdcs/section/domain/section-types'
 import type { MediaMetadata } from '../../../core/document/content-document-types'
-import type { QuizHuntDocument, QuizHuntGroup, QuizHuntRootEntry, QuizHuntSettings } from './quiz-hunt-document-types'
+import { normalizeQuizHuntExtraTrigger } from './quiz-hunt-extra-trigger'
+import type { QuizHuntDocument, QuizHuntGroup, QuizHuntSettings } from './quiz-hunt-document-types'
 
 /** Owns Quiz Hunt authoring operations without depending on a Learning document. */
 export class QuizHuntDocumentService {
@@ -70,7 +71,6 @@ export class QuizHuntDocumentService {
           { id: createStableId('color'), name: 'Vert', color: '#37886b' },
           { id: createStableId('color'), name: 'Jaune', color: '#c99826' },
         ],
-        menuPresentation: 'grid',
         successCardBdcId,
         failureCardBdcId,
         seed: 1,
@@ -79,6 +79,7 @@ export class QuizHuntDocumentService {
         clueDelayMs: 3_000,
         feedbackDelayMs: 2_000,
         extraEnabled: true,
+        extraTriggerPageId: null,
       },
     }
   }
@@ -96,32 +97,26 @@ export class QuizHuntDocumentService {
     return this.withProjectIdentity(this.createInitialDocument(), createStableId('quiz-hunt'), `Quiz Hunt ${index}`)
   }
 
-  /** Adds a bank question or a root content page through the same resource model. */
-  public createPage(document: QuizHuntDocument, chapterId: string | null, name: string): QuizHuntDocument {
-    const chapter = chapterId === null ? null : document.chapters.find((candidate) => candidate.id === chapterId)
+  /** Adds a new Question to its Questions or Finales bank. */
+  public createPage(document: QuizHuntDocument, chapterId: string, name: string): QuizHuntDocument {
+    const chapter = document.chapters.find((candidate) => candidate.id === chapterId)
     if (chapter === undefined) throw new Error('La banque demandée est absente.')
     const pageId = createStableId('page')
     const bdcId = createStableId('bdc')
-    const isQuestion = chapter !== null
     return {
       ...document,
       pages: [...document.pages, { id: pageId, name, type: 'flux', chapterId, bdcIds: [bdcId], colorId: null, mandatory: false }],
       chapters: document.chapters.map((candidate) => candidate.id === chapterId
         ? { ...candidate, pageIds: [...candidate.pageIds, pageId] }
         : candidate),
-      scenarioEntries: chapterId === null
-        ? [...document.scenarioEntries, { kind: 'page', pageId }]
-        : document.scenarioEntries,
       bdcs: [...document.bdcs, {
         id: bdcId,
-        type: isQuestion ? QUESTION_BDC_TYPE : SECTION_BDC_TYPE,
-        presetId: isQuestion ? QUESTION_PRESET_ID : SECTION_PRESET_ID,
+        type: QUESTION_BDC_TYPE,
+        presetId: QUESTION_PRESET_ID,
         pageId,
         parentBdcId: null,
-        question: isQuestion ? this.questions.createDefault() : null,
-        section: isQuestion ? null : {
-          title: '', markup: '', content: createEmptyRichTextDocument(), revelation: { intro: null, outro: null },
-        },
+        question: this.questions.createDefault(),
+        section: null,
       }],
     }
   }
@@ -141,12 +136,18 @@ export class QuizHuntDocumentService {
     if (colorId !== null && !document.settings.groups.some((group) => group.id === colorId)) {
       throw new Error('La couleur choisie est absente du sommaire.')
     }
-    return { ...document, pages: document.pages.map((page) => page.id === pageId ? { ...page, colorId } : page) }
+    return normalizeQuizHuntExtraTrigger({
+      ...document,
+      pages: document.pages.map((page) => page.id === pageId ? { ...page, colorId } : page),
+    })
   }
 
   /** Marks a bank page for guaranteed selection without imposing a response gate. */
   public setMandatory(document: QuizHuntDocument, pageId: string, mandatory: boolean): QuizHuntDocument {
-    return { ...document, pages: document.pages.map((page) => page.id === pageId ? { ...page, mandatory } : page) }
+    return normalizeQuizHuntExtraTrigger({
+      ...document,
+      pages: document.pages.map((page) => page.id === pageId ? { ...page, mandatory } : page),
+    })
   }
 
   /** Adds or updates an authored group without changing existing question references. */
@@ -160,11 +161,11 @@ export class QuizHuntDocumentService {
 
   /** Removes a color and clears its assignments while preserving every authored page. */
   public removeGroup(document: QuizHuntDocument, colorId: string): QuizHuntDocument {
-    return {
+    return normalizeQuizHuntExtraTrigger({
       ...document,
       settings: { ...document.settings, groups: document.settings.groups.filter((group) => group.id !== colorId) },
       pages: document.pages.map((page) => page.colorId === colorId ? { ...page, colorId: null } : page),
-    }
+    })
   }
 
   /** Updates game settings independently of page and bank organization. */
@@ -172,16 +173,7 @@ export class QuizHuntDocumentService {
     document: QuizHuntDocument,
     settings: Partial<Omit<QuizHuntSettings, 'groups' | 'successCardBdcId' | 'failureCardBdcId'>>,
   ): QuizHuntDocument {
-    return { ...document, settings: { ...document.settings, ...settings } }
-  }
-
-  /** Reorders an existing root entry, including the summary, within its own level. */
-  public moveRootEntry(document: QuizHuntDocument, entry: QuizHuntRootEntry, index: number): QuizHuntDocument {
-    const currentIndex = document.scenarioEntries.findIndex((candidate) => candidate.kind === entry.kind
-      && (candidate.kind === 'page' && entry.kind === 'page' ? candidate.pageId === entry.pageId
-        : candidate.kind === 'chapter' && entry.kind === 'chapter' && candidate.chapterId === entry.chapterId))
-    if (currentIndex < 0) throw new Error('Cette entrée ne se trouve pas à la racine.')
-    return { ...document, scenarioEntries: insertAt(document.scenarioEntries.filter((_, position) => position !== currentIndex), entry, index) }
+    return normalizeQuizHuntExtraTrigger({ ...document, settings: { ...document.settings, ...settings } })
   }
 
   /** Inserts a Section at any position without imposing a question-page template. */
@@ -194,6 +186,33 @@ export class QuizHuntDocumentService {
         id: bdcId, type: SECTION_BDC_TYPE, presetId: SECTION_PRESET_ID, pageId, parentBdcId: null, question: null,
         section: { title: '', markup: '', content: createEmptyRichTextDocument(), revelation: { intro: null, outro: null } },
       }],
+    }
+  }
+
+  /** Reorders one direct page BDC within its current game page. */
+  public moveBdc(document: QuizHuntDocument, bdcId: string, pageId: string, index: number): QuizHuntDocument {
+    const page = document.pages.find((candidate) => candidate.id === pageId)
+    if (page === undefined || !page.bdcIds.includes(bdcId)) return document
+    const bdc = document.bdcs.find((candidate) => candidate.id === bdcId)
+    if (bdc?.pageId !== pageId || bdc.parentBdcId !== null) return document
+    const remaining = removeValue(page.bdcIds, bdcId)
+    const moved = insertAt(remaining, bdcId, Math.max(0, Math.min(index, remaining.length)))
+    return {
+      ...document,
+      pages: document.pages.map((candidate) => candidate.id === pageId ? { ...candidate, bdcIds: moved } : candidate),
+    }
+  }
+
+  /** Deletes one Section from its owning page while retaining the required Question. */
+  public deleteSection(document: QuizHuntDocument, bdcId: string): QuizHuntDocument {
+    const bdc = document.bdcs.find((candidate) => candidate.id === bdcId && candidate.type === SECTION_BDC_TYPE)
+    if (bdc === undefined || bdc.pageId === null) return document
+    return {
+      ...document,
+      pages: document.pages.map((page) => page.id === bdc.pageId
+        ? { ...page, bdcIds: removeValue(page.bdcIds, bdcId) }
+        : page),
+      bdcs: removeValue(document.bdcs, bdc),
     }
   }
 

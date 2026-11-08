@@ -107,6 +107,7 @@ function createPlayableDocument(): QuizHuntDocument {
     clueDelayMs: 0,
     feedbackDelayMs: 250,
     extraEnabled: false,
+    extraTriggerPageId: null,
   })
 }
 
@@ -263,9 +264,11 @@ describe('Quiz Hunt real reading runtime', () => {
     installBrowserTestAdapters(pendingFrames)
     const documents = new QuizHuntDocumentService()
     const base = createPlayableDocument()
+    const triggerPageId = base.pages.find((page) => page.chapterId !== null)!.id
     const authored = Array.from({ length: 128 }, (_unused, index) => documents.updateSettings(base, {
       seed: index + 1,
       extraEnabled: true,
+      extraTriggerPageId: triggerPageId,
       feedbackDelayMs: 100,
     })).find((candidate) => createQuizHuntGameCatalog(candidate, 'authoring').extraOffsetMs < 900)
     if (authored === undefined) throw new Error('No bounded Quiz Hunt seed was available for the extra acceptance fixture.')

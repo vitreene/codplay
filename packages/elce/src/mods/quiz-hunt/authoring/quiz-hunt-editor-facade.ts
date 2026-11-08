@@ -20,7 +20,7 @@ import type { SectionChangeSelection } from '../../../resources/anchoring/author
 import { QUESTION_BDC_TYPE } from '../../../resources/bdcs/question/question-config'
 import type { QuizHuntCommand } from './quiz-hunt-controller'
 import { createQuizHuntControllerMachine } from './quiz-hunt-controller'
-import type { QuizHuntGroup, QuizHuntRootEntry, QuizHuntSettings } from '../document/quiz-hunt-document-types'
+import type { QuizHuntGroup, QuizHuntSettings } from '../document/quiz-hunt-document-types'
 
 /** Routes Quiz Hunt authoring intentions through its controller and shared resource rules. */
 export class QuizHuntEditorFacade {
@@ -39,8 +39,8 @@ export class QuizHuntEditorFacade {
     )
   }
 
-  /** Creates a page in a question bank or at the document root. */
-  public createPage(chapterId: string | null, name: string): void {
+  /** Creates a game page inside its owning Question or Finale bank. */
+  public createPage(chapterId: string, name: string): void {
     this.apply({ type: 'page.create', chapterId, name })
   }
 
@@ -52,11 +52,6 @@ export class QuizHuntEditorFacade {
   /** Renames one page without changing its placement. */
   public renamePage(pageId: string, name: string): void {
     this.apply({ type: 'page.rename', pageId, name })
-  }
-
-  /** Moves one root page or bank to its requested root position. */
-  public moveRootEntry(entry: QuizHuntRootEntry, index: number): void {
-    this.apply({ type: 'root.move', entry, index })
   }
 
   /** Selects a page in the controller-owned authoring selection. */
@@ -97,6 +92,16 @@ export class QuizHuntEditorFacade {
   /** Inserts a Section BDC at the selected page position. */
   public createSection(pageId: string, index: number): void {
     this.apply({ type: 'section.create', pageId, index })
+  }
+
+  /** Deletes one Section through the Quiz Hunt document command path. */
+  public deleteSection(bdcId: string): void {
+    this.apply({ type: 'section.delete', bdcId })
+  }
+
+  /** Reorders one BDC inside its owning game page. */
+  public moveBdc(bdcId: string, pageId: string, index: number): void {
+    this.apply({ type: 'bdc.move', bdcId, pageId, index })
   }
 
   /** Saves the selected Section's JSON and static HTML projection. */

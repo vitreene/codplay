@@ -1,6 +1,8 @@
+import { QUIZ_HUNT_COLOR_SLOT_COUNT } from '../document/quiz-hunt-document-types'
 import type { QuizHuntDocument, QuizHuntPage } from '../document/quiz-hunt-document-types'
+import { getQuizHuntExtraTriggerCandidates } from '../document/quiz-hunt-extra-trigger'
 
-export const QUIZ_HUNT_COLOR_SLOT_COUNT = 4
+export { QUIZ_HUNT_COLOR_SLOT_COUNT } from '../document/quiz-hunt-document-types'
 
 export interface QuizHuntGameDraw {
   readonly seed: number
@@ -33,14 +35,18 @@ export function createQuizHuntGameDraw(document: QuizHuntDocument, seed: number)
   const questionBank = document.chapters.find((chapter) => chapter.type === 'questions')
   const finalBank = document.chapters.find((chapter) => chapter.type === 'finals')
   if (questionBank === undefined || finalBank === undefined) throw new Error('Les deux banques Quiz Hunt sont requises.')
+  const extraTriggerPageId = getQuizHuntExtraTriggerCandidates(document)
+    .some((page) => page.id === document.settings.extraTriggerPageId)
+    ? document.settings.extraTriggerPageId
+    : null
 
   const trialSlotsByColor = Object.fromEntries(document.settings.groups.map((group) => [
     group.id,
-    drawColorSlots(document, questionBank.pageIds, group.id, random),
+    drawColorSlots(document, questionBank.pageIds, group.id, random, extraTriggerPageId),
   ]))
   const finalSlotsByColor = Object.fromEntries(document.settings.groups.map((group) => [
     group.id,
-    drawColorSlots(document, finalBank.pageIds, group.id, random),
+    drawColorSlots(document, finalBank.pageIds, group.id, random, null),
   ]))
   const activeColorIds = document.settings.groups.flatMap((group) =>
     trialSlotsByColor[group.id]?.some((page) => page !== null) === true
@@ -48,10 +54,14 @@ export function createQuizHuntGameDraw(document: QuizHuntDocument, seed: number)
       ? [group.id]
       : [])
   const activeColorSet = new Set(activeColorIds)
-  const drawnTrialIds = Object.entries(trialSlotsByColor).flatMap(([colorId, slots]) =>
-    activeColorSet.has(colorId) ? slots.flatMap((page) => page === null ? [] : [page.id]) : [])
-  const trialGridOrder = shuffle(drawnTrialIds, random)
-  const extraPageId = trialGridOrder.length === 0 ? null : trialGridOrder[Math.floor(random() * trialGridOrder.length)]!
+  const drawnTrialIds = new Set(Object.entries(trialSlotsByColor).flatMap(([colorId, slots]) =>
+    activeColorSet.has(colorId) ? slots.flatMap((page) => page === null ? [] : [page.id]) : []))
+  const orderedTrialIds = questionBank.pageIds.filter((pageId) => drawnTrialIds.has(pageId))
+  const trialGridOrder = shuffle(orderedTrialIds, random)
+  const randomExtraPageId = trialGridOrder.length === 0 ? null : trialGridOrder[Math.floor(random() * trialGridOrder.length)]!
+  const extraPageId = extraTriggerPageId !== null && trialGridOrder.includes(extraTriggerPageId)
+    ? extraTriggerPageId
+    : randomExtraPageId
   const extraOffsetMs = Math.round(800 + random() * (2_200 - 800))
   const finalColorId = activeColorIds.length === 0
     ? null
@@ -72,6 +82,7 @@ function drawColorSlots(
   bankPageIds: readonly string[],
   colorId: string,
   random: () => number,
+  extraTriggerPageId: string | null,
 ): readonly (QuizHuntPage | null)[] {
   const pagesById = new Map(document.pages.map((page) => [page.id, page]))
   const pages = bankPageIds.flatMap((pageId) => {
@@ -80,8 +91,19 @@ function drawColorSlots(
   })
   const mandatory = pages.filter((page) => page.mandatory).slice(0, QUIZ_HUNT_COLOR_SLOT_COUNT)
   const selectedIds = new Set(mandatory.map((page) => page.id))
-  const available = shuffle(pages.filter((page) => !selectedIds.has(page.id)), random)
-  const selected = [...mandatory, ...available.slice(0, QUIZ_HUNT_COLOR_SLOT_COUNT - mandatory.length)]
+  const available = pages.filter((page) => !selectedIds.has(page.id))
+  const remainingSlots = QUIZ_HUNT_COLOR_SLOT_COUNT - mandatory.length
+  const selectedAvailable = available.length <= remainingSlots
+    ? available
+    : remainingSlots === 0
+      ? []
+      : shuffle(available, random).slice(0, remainingSlots)
+  const selected = [...mandatory, ...selectedAvailable]
+  const triggerPage = pages.find((page) => page.id === extraTriggerPageId)
+  if (triggerPage !== undefined && !selected.some((page) => page.id === triggerPage.id) && !triggerPage.mandatory) {
+    const replaceIndex = selected.findIndex((page) => !page.mandatory)
+    if (replaceIndex >= 0) selected[replaceIndex] = triggerPage
+  }
   return [...selected, ...Array.from({ length: QUIZ_HUNT_COLOR_SLOT_COUNT - selected.length }, () => null)]
 }
 

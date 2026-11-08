@@ -427,7 +427,6 @@ async function readDocument(database: ProjectDatabase, projectRow: SqlRow): Prom
           name: sqliteStringValue(row, 'name'),
           color: sqliteStringValue(row, 'color'),
         })),
-        menuPresentation: sqliteStringValue(settingRow, 'menu_presentation') as QuizHuntDocument['settings']['menuPresentation'],
         successCardBdcId: sqliteStringValue(settingRow, 'success_card_bdc_id'),
         failureCardBdcId: sqliteStringValue(settingRow, 'failure_card_bdc_id'),
         seed: sqliteNumberValue(settingRow, 'seed'),
@@ -436,6 +435,7 @@ async function readDocument(database: ProjectDatabase, projectRow: SqlRow): Prom
         clueDelayMs: sqliteNumberValue(settingRow, 'clue_delay_ms'),
         feedbackDelayMs: sqliteNumberValue(settingRow, 'feedback_delay_ms'),
         extraEnabled: sqliteNumberValue(settingRow, 'extra_enabled') !== 0,
+        extraTriggerPageId: sqliteNullableText(settingRow, 'extra_trigger_page_id'),
       },
     },
   })
@@ -511,18 +511,19 @@ async function synchronizeQuizHuntSettings(database: ProjectDatabase, document: 
   await queryRows(database, `
     INSERT INTO quiz_hunt_settings (
       project_id, menu_presentation, success_card_bdc_id, failure_card_bdc_id,
-      seed, random, time_budget_ms, clue_delay_ms, feedback_delay_ms, extra_enabled
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      seed, random, time_budget_ms, clue_delay_ms, feedback_delay_ms, extra_enabled, extra_trigger_page_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(project_id) DO UPDATE SET
       menu_presentation = excluded.menu_presentation,
       success_card_bdc_id = excluded.success_card_bdc_id,
       failure_card_bdc_id = excluded.failure_card_bdc_id,
       seed = excluded.seed, random = excluded.random, time_budget_ms = excluded.time_budget_ms,
       clue_delay_ms = excluded.clue_delay_ms, feedback_delay_ms = excluded.feedback_delay_ms,
-      extra_enabled = excluded.extra_enabled
-  `, [document.id, settings.menuPresentation, settings.successCardBdcId, settings.failureCardBdcId,
+      extra_enabled = excluded.extra_enabled,
+      extra_trigger_page_id = excluded.extra_trigger_page_id
+  `, [document.id, 'grid', settings.successCardBdcId, settings.failureCardBdcId,
     settings.seed, Number(settings.random), settings.timeBudgetMs,
-    settings.clueDelayMs, settings.feedbackDelayMs, Number(settings.extraEnabled)])
+    settings.clueDelayMs, settings.feedbackDelayMs, Number(settings.extraEnabled), settings.extraTriggerPageId])
   await queryRows(database, 'DELETE FROM quiz_hunt_groups WHERE project_id = ?', [document.id])
   for (const [position, group] of settings.groups.entries()) {
     await queryRows(database, `

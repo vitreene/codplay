@@ -12,4 +12,14 @@ describe('Quiz Hunt document codec', () => {
     expect(serialized.version).toBe(1)
     expect(readQuizHuntDocument(serialized)).toEqual(document)
   })
+
+  it('defaults the extra trigger for documents saved before the setting existed', () => {
+    const document = new QuizHuntDocumentService().createInitialDocument('quiz-hunt-old-cache', 'Old cache')
+    const serialized = JSON.parse(JSON.stringify(writeQuizHuntDocument(document))) as {
+      document: { settings: Record<string, unknown> }
+    }
+    Reflect.deleteProperty(serialized.document.settings, 'extraTriggerPageId')
+
+    expect(readQuizHuntDocument(serialized).settings.extraTriggerPageId).toBeNull()
+  })
 })

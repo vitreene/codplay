@@ -15,12 +15,12 @@ racines et les réglages propres au jeu. Son codec stocke un enveloppe de
 version 1, expose à sa racine `id` et `medias[].id` pour les index partagés du
 cache IndexedDB, puis valide ses références avant d’admettre un document.
 
-Un document initial contient un Sommaire racine, les deux banques, une page de
-Question dans la banque Questions, quatre groupes de couleurs et deux Cartes
-de résultat conservées au catalogue. Chaque page de banque possède une Question
-requise ; l’auteur peut ajouter et ordonner des Sections autour de celle-ci.
-Renommer une banque conserve son rôle. L’ordre racine peut déplacer le
-Sommaire parmi les pages d’accueil sans l’affecter à une banque.
+Un document initial contient la page Sommaire utilisée par le runtime, les
+deux banques, une page de Question dans la banque Questions, quatre groupes de
+couleurs et deux Cartes de résultat conservées au catalogue. Chaque page de
+banque possède une Question requise ; l’auteur peut ajouter des Sections autour
+de celle-ci. Les pages de jeu sont créées dans la banque Questions ou Finales.
+Renommer une banque conserve son rôle.
 
 Chaque page porte son groupe couleur et son indicateur obligatoire. Supprimer
 un groupe efface son affectation sur les pages concernées et conserve leurs
@@ -33,6 +33,44 @@ ne fait pas échouer le tirage.
 délègue le contenu des Questions et des Cartes à leurs services de ressource.
 Le contrôleur auteur conserve le document et l’historique dans son acteur
 XState ; Annuler et Rétablir restaurent aussi la page sélectionnée.
+
+## Interface auteur
+
+`QuizHuntProjectApplication` compose l’édition dans le cadre partagé
+`renderEditorFrame`. Le panneau Scénario reprend la hiérarchie de Learning : le
+Sommaire est une entrée fixe à la racine de la vue auteur, puis les chapitres
+Questions et Finales affichent directement leurs pages imbriquées. L’identifiant
+de page Sommaire reste dans le document pour le runtime ; l’entrée auteur ouvre
+ses réglages dans la zone centrale comme le Sommaire Learning. Sélectionner un
+chapitre ou une page ferme ces réglages. Les pages conservent l’ordre du
+document et aucun contrôle de glisser-déposer ou de réordonnancement n’est
+exposé. La page ou le chapitre actif se rend au centre ; la barre commune porte
+Prévisualiser, les erreurs de preview et les statuts d’export.
+
+Une page marquée obligatoire porte une icône d’exclamation accessible dans la
+liste du Scénario, à la place du libellé « Obligatoire ». Dans les réglages de la
+page sélectionnée, le libellé et la case à cocher « Obligatoire » restent
+présents, avec la même icône à côté de la case.
+
+Les actions auteur qui reprennent le nom ou le rôle d’une action Learning
+reprennent aussi son icône fonctionnelle : Plus pour ajouter, Corbeille pour
+supprimer. Leurs noms d’action restent disponibles comme libellés accessibles.
+Les commandes de gestion des couleurs suivent cette convention ; les actions
+de page et de BDC réutilisent les commandes partagées.
+
+La configuration du Sommaire, les groupes de couleurs et les Cartes des
+résultats sont édités dans la zone centrale du Sommaire. Sa section Aperçu
+regroupe le seed, Random, le tirage et le choix de l’épreuve qui déclenche le
+jeton. Sans choix explicite, cette épreuve reste tirée par le seed. Le panneau
+Réglages suit la sélection : une page de banque expose sa couleur et son statut
+obligatoire ; une banque expose son nom et son rôle. Ces réglages sont des vues
+du document Quiz Hunt et passent par sa facade auteur.
+
+Les panneaux et commandes reprennent les règles responsives partagées par
+Learning : au-dessus de 1200 px les deux panneaux sont ouverts par défaut ; de
+801 à 1200 px, seul Scénario l’est ; à 800 px et moins, les deux sont fermés et
+un seul peut être ouvert à la fois. Échap referme le panneau mobile et restitue
+le focus à sa commande de réouverture.
 
 ## Lecture
 
@@ -55,11 +93,41 @@ Le strap du panier planifie l’échéance comme événement public ; Sighty la
 redirige vers le strap de minuterie. Une échéance pendant le feedback est
 mémorisée et devient un échec après la fin du feedback.
 
-L’extra est offert sur une épreuve choisie par le tirage et collecté par l’action
-du layout. Le joueur hôte identifie le jeton par sa classe, lit la tuile sous le
+L’extra est offert sur l’épreuve explicitement configurée dans le Sommaire, ou
+sur une épreuve choisie par le seed si aucun choix n’est configuré. Une cible
+explicite reste dans le tirage en remplaçant une question aléatoire de sa
+couleur ; les quatre premières questions obligatoires restent prioritaires.
+Seules les questions jouables d’une couleur ayant une Finale peuvent être
+choisies. Les éditions qui rendraient la cible impossible à tirer effacent ce
+réglage et reviennent au tirage seedé. Le jeton est collecté par l’action du
+layout. Le joueur hôte identifie le jeton par sa classe, lit la tuile sous le
 pointeur avec `elementsFromPoint`, puis transmet la cible au graphe Sighty. Une
 tuile en échec ne devient une reprise qu’après la sortie animée du jeton ; la
 garde n’admet alors que cette épreuve échouée avec un extra disponible.
+
+## Médias des Questions
+
+Une Question vidéo reste un média de ressource partagé. Le catalogue de scènes
+résout son type depuis le MIME et transmet `mediaSources` au builder Flux
+partagé ; Flux crée le composant `media` CodPlay avec `sync: 'independent'` et
+ses broadcasts de visibilité existants. La preview fournit l’URL média du
+projet. L’export Sighty archive les octets référencés sous `./media/` et
+transmet ces chemins relatifs au même builder en mode release. Quiz Hunt
+n’ajoute pas de lecture vidéo directe ni de commandes média parallèles.
+
+Dans l’indice NOSTROMO, le nœud vidéo rendu par le perso `media` reste contenu
+dans l’hôte de l’indice : sa largeur est limitée à celle de l’hôte, sa hauteur
+suit le ratio source et `object-fit: contain` affiche l’image entière. Les
+dimensions intrinsèques du fichier ne font pas déborder ni recadrer la vidéo.
+
+[`quiz-hunt-page-scene-catalog.ts`](../src/mods/quiz-hunt/reading/quiz-hunt-page-scene-catalog.ts)
+et [`quiz-hunt-scenario-builder.ts`](../src/mods/quiz-hunt/reading/quiz-hunt-scenario-builder.ts)
+composent ce parcours pour les deux contextes. Le test de composition serveur
+[`quiz-hunt-server-composition.test.ts`](../src/mods/quiz-hunt/composition/server/quiz-hunt-server-composition.test.ts)
+vérifie l’upload et la lecture par la route média. Les contrats `media` et de
+fin de page sont détaillés dans les spécifications du
+[builder Flux](./flux-scene-builder-spec.md) et du
+[player](./player-preview-spec.md#lecture-des-vidéos-et-sortie-de-page).
 
 ## Persistance
 
@@ -67,8 +135,9 @@ La persistance Quiz Hunt utilise la base SQLite commune d’Elcé. Elle conserve
 les chapitres, pages, ordre racine, identités et placements des BDC dans les
 tables relationnelles partagées. Les contenus Section, Question, réponses,
 Carte et médias passent par les requêtes et conversions préparées par leurs
-ressources. Les réglages Quiz Hunt, groupes et options couleur/obligatoire
-restent dans les tables possédées par le mod. `projects.mod_key` filtre les
+ressources. Les réglages Quiz Hunt, dont la cible explicite de l’extra, les
+groupes et options couleur/obligatoire restent dans les tables possédées par le
+mod. `projects.mod_key` filtre les
 catalogues sans ajouter le mod au document.
 
 Les contrats d’ouverture de la base, des routes de projet et des ressources
@@ -109,13 +178,20 @@ l’enveloppe générique des packages figure dans sa
 - [`quiz-hunt-document-service.ts`](../src/mods/quiz-hunt/document/quiz-hunt-document-service.ts)
   porte les opérations documentaires ;
   [`quiz-hunt-document-service.test.ts`](../src/mods/quiz-hunt/document/quiz-hunt-document-service.test.ts)
-  vérifie la création et l’édition des Questions, l’ordre racine, les banques,
-  les groupes et la conservation du contenu.
+  vérifie la création et l’édition des Questions, les banques, les groupes et
+  la conservation du contenu.
+- [`quiz-hunt-workspace.tsx`](../src/mods/quiz-hunt/authoring/quiz-hunt-workspace.tsx)
+  compose le cadre partagé, l’entrée Sommaire fixe, les chapitres avec leurs
+  pages imbriquées et l’inspecteur Quiz Hunt ;
+  [`quiz-hunt-workspace.test.tsx`](../src/mods/quiz-hunt/authoring/quiz-hunt-workspace.test.tsx)
+  vérifie les panneaux partagés et l’enregistrement de l’épreuve déclencheuse
+  du jeton depuis l’Aperçu du Sommaire.
 - [`quiz-hunt-game-draw.ts`](../src/mods/quiz-hunt/reading/quiz-hunt-game-draw.ts)
-  dérive les slots et le seed de partie ;
+  dérive les slots, conserve la cible extra explicite et le seed de partie ;
   [`quiz-hunt-game-draw.test.ts`](../src/mods/quiz-hunt/reading/quiz-hunt-game-draw.test.ts)
-  couvre la reproductibilité du seed, la politique de seed et les quatre
-  premières questions obligatoires.
+  couvre la reproductibilité du seed, la politique de seed, le maintien de
+  l’épreuve déclencheuse dans le tirage et les quatre premières questions
+  obligatoires.
 - [`quiz-hunt-player.ts`](../src/mods/quiz-hunt/reading/quiz-hunt-player.ts),
   [`quiz-hunt-scenario-builder.ts`](../src/mods/quiz-hunt/reading/quiz-hunt-scenario-builder.ts)
   et [`quiz-hunt-player.test.ts`](../src/mods/quiz-hunt/reading/quiz-hunt-player.test.ts)
@@ -125,11 +201,12 @@ l’enveloppe générique des packages figure dans sa
   verrouillées pour les issues succès et échec.
 - [`quiz-hunt-sqlite-project-persistence.ts`](../src/mods/quiz-hunt/persistence/server/sqlite/quiz-hunt-sqlite-project-persistence.ts)
   conserve l’organisation Quiz Hunt et délègue les contenus BDC aux ressources.
-  Son test SQLite vérifie la sauvegarde et la réouverture des BDC et médias
-  dans la base partagée avec Learning.
+  Son test SQLite vérifie la sauvegarde et la réouverture des réglages, des BDC
+  et des médias dans la base partagée avec Learning.
 - [`quiz-hunt-document-codec.ts`](../src/mods/quiz-hunt/persistence/quiz-hunt-document-codec.ts)
-  conserve l’enveloppe versionnée et les index `id`/`medias` du cache partagé ;
-  son test vérifie le round-trip du document.
+  conserve l’enveloppe versionnée et les index `id`/`medias` du cache partagé,
+  en initialisant la nouvelle cible extra à `null` pour les anciens documents ;
+  ses tests vérifient le round-trip et cette valeur par défaut.
 - [`quiz-hunt-scorm-adapter.ts`](../src/mods/quiz-hunt/scorm/quiz-hunt-scorm-adapter.ts)
   adapte le run et le signet à la session LMS ;
   [`quiz-hunt-scorm-adapter.test.ts`](../src/mods/quiz-hunt/scorm/quiz-hunt-scorm-adapter.test.ts)

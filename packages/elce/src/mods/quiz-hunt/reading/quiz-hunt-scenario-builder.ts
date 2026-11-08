@@ -13,7 +13,14 @@ import { QUESTION_EVENTS } from '../../../resources/bdcs/question/question-confi
 import { PAGE_FINISHED_EVENT } from '../../../resources/pages/page-completion/page-completion-events'
 import { createQuizHuntGameCatalog } from './quiz-hunt-game-catalog'
 import type { QuizHuntGameCatalog, QuizHuntGameQuestion } from './quiz-hunt-game-catalog'
-import { buildQuizHuntPageSceneCatalog, quizHuntPageSceneStoryId, quizHuntQuestionRevealEvent } from './quiz-hunt-page-scene-catalog'
+import {
+  buildQuizHuntPageSceneCatalog,
+  findQuizHuntClueVideoBdc,
+  quizHuntPageSceneStoryId,
+  quizHuntQuestionRevealEvent,
+  quizHuntVideoStartEvent,
+  QUIZ_HUNT_VIDEO_EVENT,
+} from './quiz-hunt-page-scene-catalog'
 import { buildQuizHuntSummaryScene } from './quiz-hunt-summary-scene'
 import { buildQuizHuntBasketScene, QUIZ_HUNT_BASKET_EVENT } from './quiz-hunt-basket-scene'
 import {
@@ -48,6 +55,13 @@ const EXTRA_HIDE_DUE_PREFIX = 'quiz-hunt:extra:hide-due:'
 const FEEDBACK_FINISHED_PREFIX = 'quiz-hunt:feedback:finished:'
 const FEEDBACK_WAIT_EVENT = 'quiz-hunt:feedback:wait'
 
+type QuizHuntVideoPlaybackStatus = 'pending' | 'playing' | 'paused' | 'ended'
+type QuizHuntVideoPlaybackState = Readonly<{
+  pageIds: ReadonlySet<string>
+  statusByPageId: Map<string, QuizHuntVideoPlaybackStatus>
+  revealedPageIds: Set<string>
+}>
+
 /** Builds the one Sighty graph from the Quiz Hunt document and its resolved seeded draw. */
 export function createQuizHuntScenarioModel(
   document: QuizHuntDocument,
@@ -61,23 +75,32 @@ export function createQuizHuntScenarioModel(
 ): QuizHuntScenarioModel {
   const run = context === 'release' ? savedRun : null
   const game = createQuizHuntGameCatalog(document, context, run?.seed)
-  const pageScenes = buildQuizHuntPageSceneCatalog(document, mediaSources)
+  const clueVideoPageIds = new Set(game.trials.flatMap((trial) =>
+    findQuizHuntClueVideoBdc(trial.page, document) === undefined ? [] : [trial.page.id],
+  ))
+  const videoPlayback = {
+    pageIds: clueVideoPageIds,
+    statusByPageId: new Map<string, 'pending' | 'playing' | 'paused' | 'ended'>(),
+    revealedPageIds: new Set<string>(),
+  }
+  const pageScenes = buildQuizHuntPageSceneCatalog(document, game, mediaSources)
   const summary = buildQuizHuntSummaryScene(document, game)
-  const basket = buildQuizHuntBasketScene(document)
+  const basket = buildQuizHuntBasketScene(document, game)
   const layout = buildQuizHuntLayoutScene()
   const result = buildQuizHuntResultScene(document, mediaSources)
   const summaryPageId = document.pages.find((page) => page.type === 'summary')?.id
   const contentGraph = createContentGraph(
     document,
     game,
+    clueVideoPageIds,
     run === null || run === undefined ? startPageId : startPageId ?? summaryPageId,
   )
-  const actions = createScenarioActions(document, game, persistGameState, loadGameState, onRestartRequested)
+  const actions = createScenarioActions(document, game, videoPlayback, persistGameState, loadGameState, onRestartRequested)
   const guards = createScenarioGuards(game)
 
   const scenes: Partial<Record<QuizHuntSceneKey, SightySceneSourceValue>> = {
     'scene-layout': { sceneDoc: layout.sceneDoc, styleSheet: layout.styleSheet },
-    'scene-summary': { sceneDoc: summary.sceneDoc, styleSheet: summary.styleSheet },
+    'scene-summary': summary,
     'scene-basket': { sceneDoc: basket.sceneDoc, styleSheet: basket.styleSheet },
     'scene-result': { sceneDoc: result.sceneDoc, styleSheet: result.styleSheet },
     ...pageScenes as Readonly<Record<`scene-page-${string}`, SightySceneSourceValue>>,
@@ -131,6 +154,7 @@ export function createQuizHuntScenarioModel(
 function createContentGraph(
   document: QuizHuntDocument,
   game: QuizHuntGameCatalog,
+  clueVideoPageIds: ReadonlySet<string>,
   startPageId?: string,
 ): SightyViewMap<QuizHuntSceneKey, QuizHuntSlotName> {
   const rootPages = document.scenarioEntries.flatMap((entry) => {
@@ -157,13 +181,13 @@ function createContentGraph(
     }),
   )
   const trialViews = Object.fromEntries(game.trials.flatMap((trial) => [
-    [trialViewId(trial.page.id), createTrialView(trial, document, game)],
-    [retryTrialViewId(trial.page.id), createTrialView(trial, document, game, true)],
+    [trialViewId(trial.page.id), createTrialView(trial, document, game, clueVideoPageIds)],
+    [retryTrialViewId(trial.page.id), createTrialView(trial, document, game, clueVideoPageIds, true)],
   ]))
   const finalQuestion = game.finals.find((candidate) => candidate.page.id === game.finalPageId)
   const finalViews = finalQuestion === undefined
     ? {}
-    : { [finalViewId(finalQuestion.page.id)]: createTrialView(finalQuestion, document, game, false, true) }
+    : { [finalViewId(finalQuestion.page.id)]: createTrialView(finalQuestion, document, game, clueVideoPageIds, false, true) }
   const requestedRootPage = rootPages.find((page) => page.id === startPageId)
 
   return {
@@ -177,10 +201,14 @@ function createTrialView(
   trial: QuizHuntGameQuestion,
   document: QuizHuntDocument,
   game: QuizHuntGameCatalog,
+  clueVideoPageIds: ReadonlySet<string>,
   retry = false,
   isFinal = false,
 ): SightyGraphView<QuizHuntSceneKey, QuizHuntSlotName> {
   const pageId = trial.page.id
+  const videoStartEvents = clueVideoPageIds.has(pageId)
+    ? [{ name: quizHuntVideoStartEvent(pageId), startAt: 0, visibility: 'story' as const, data: { pageId } }]
+    : []
   const extraEvents = !retry && !isFinal && document.settings.extraEnabled && pageId === game.extraPageId
     ? [
       { name: extraOfferDueEvent(pageId), startAt: game.extraOffsetMs, visibility: 'public' as const, data: { pageId } },
@@ -192,6 +220,7 @@ function createTrialView(
     events: [
       { name: quizHuntQuestionRevealEvent(pageId), startAt: retry ? 0 : document.settings.clueDelayMs, visibility: 'story' },
       { name: questionRevealDueEvent(pageId), startAt: retry ? 0 : document.settings.clueDelayMs, visibility: 'public', data: { pageId } },
+      ...videoStartEvents,
       ...extraEvents,
     ],
   }
@@ -212,6 +241,9 @@ function createRootEventActions(
 ): Readonly<Record<string, SightyViewAction<QuizHuntSceneKey, QuizHuntSlotName>>> {
   return {
     [QUESTION_EVENTS.ANSWERED]: { action: 'action:quiz-hunt:record-answer' },
+    [QUIZ_HUNT_VIDEO_EVENT.PLAY]: { action: 'action:quiz-hunt:video-playback' },
+    [QUIZ_HUNT_VIDEO_EVENT.PAUSE]: { action: 'action:quiz-hunt:video-playback' },
+    [QUIZ_HUNT_VIDEO_EVENT.ENDED]: { action: 'action:quiz-hunt:video-playback' },
     [QUIZ_HUNT_BASKET_EVENT.TIMER_PAUSED]: { action: 'action:quiz-hunt:record-timer' },
     [QUIZ_HUNT_BASKET_EVENT.TIMER_CHECK]: { action: 'action:quiz-hunt:check-timer' },
     [QUIZ_HUNT_BASKET_EVENT.TIMER_EXPIRED]: {
@@ -263,6 +295,7 @@ function createRootEventActions(
 function createScenarioActions(
   document: QuizHuntDocument,
   game: QuizHuntGameCatalog,
+  videoPlayback: QuizHuntVideoPlaybackState,
   persistGameState?: (value: QuizHuntSavedGameState) => Promise<void>,
   loadGameState?: () => Promise<QuizHuntSavedGameState | null>,
   onRestartRequested?: () => void,
@@ -276,13 +309,18 @@ function createScenarioActions(
         : readGameState(context.game, document, game)
       if (isResume) await updateContext({ game: state })
       await projectGame(state, game, send)
-      if (state.screen === 'result' && state.outcome !== null) await showResult(send, state.outcome)
+      await send('scene-basket', {
+        name: QUIZ_HUNT_BASKET_EVENT.TIMER_PROJECT,
+        data: { remainingMs: state.timerRemainingMs },
+      }, { scope: 'story', storyId: 'main' })
+      if (state.screen === 'result' && state.outcome !== null) await showResult(send, state.outcome, state, document)
       if (!isResume) await persistGameState?.({ seed: game.seed, state, savedAt: Date.now() })
     },
-    'action:quiz-hunt:enter-trial': createEnterTrialAction(document, game),
+    'action:quiz-hunt:enter-trial': createEnterTrialAction(document, game, videoPlayback),
     'action:quiz-hunt:enter-final': createEnterFinalAction(document, game),
-    'action:quiz-hunt:record-answer': createRecordAnswerAction(document, game),
-    'action:quiz-hunt:start-timer': createStartTimerAction(document, game),
+    'action:quiz-hunt:record-answer': createRecordAnswerAction(document, game, videoPlayback),
+    'action:quiz-hunt:video-playback': createVideoPlaybackAction(document, game, videoPlayback),
+    'action:quiz-hunt:start-timer': createStartTimerAction(document, game, videoPlayback),
     'action:quiz-hunt:record-timer': createRecordTimerAction(document, game),
     'action:quiz-hunt:check-timer': createCheckTimerAction(),
     'action:quiz-hunt:finish-feedback': createFinishFeedbackAction(document, game),
@@ -362,6 +400,7 @@ function createScenarioGuards(
 function createEnterTrialAction(
   document: QuizHuntDocument,
   game: QuizHuntGameCatalog,
+  videoPlayback: QuizHuntVideoPlaybackState,
 ): SightyActionHandler<QuizHuntSceneKey, QuizHuntSlotName> {
   return async function enterTrial({ event, context, updateContext, send }): Promise<void> {
     const retry = game.trials.some((candidate) => event.name === retryTrialReadyEvent(candidate.page.id))
@@ -372,6 +411,9 @@ function createEnterTrialAction(
     if (retry) {
       if (event.sourceSceneKey !== 'scene-layout' || state.trialStatus[trial.page.id] !== 'failed' || !state.extraAvailable) return
     } else if (state.trialStatus[trial.page.id] !== 'available') return
+    videoPlayback.statusByPageId.clear()
+    videoPlayback.revealedPageIds.clear()
+    if (videoPlayback.pageIds.has(trial.page.id)) videoPlayback.statusByPageId.set(trial.page.id, 'pending')
     await updateContext({
       game: {
         ...pauseGameTimer(state),
@@ -405,6 +447,7 @@ function createEnterFinalAction(
 function createRecordAnswerAction(
   document: QuizHuntDocument,
   game: QuizHuntGameCatalog,
+  videoPlayback: QuizHuntVideoPlaybackState,
 ): SightyActionHandler<QuizHuntSceneKey, QuizHuntSlotName> {
   return async function recordAnswer({ event, context, updateContext, send }): Promise<void> {
     const pageId = typeof event.data?.pageId === 'string' ? event.data.pageId : undefined
@@ -431,6 +474,12 @@ function createRecordAnswerAction(
       outcome: isFinal ? isCorrect ? 'success' : 'failure' : state.outcome,
     }
     await updateContext({ game: nextState })
+    if (videoPlayback.pageIds.has(pageId)) {
+      await send(`scene-page-${pageId}`, { name: QUIZ_HUNT_VIDEO_EVENT.STOP }, {
+        scope: 'story',
+        storyId: quizHuntPageSceneStoryId(pageId, question.page.type),
+      })
+    }
     await send('scene-basket', { name: QUIZ_HUNT_BASKET_EVENT.TIMER_FEEDBACK_PENDING }, { scope: 'story', storyId: 'main' })
     if (nextState.extraOfferedOn === null) await send('scene-layout', { name: QUIZ_HUNT_LAYOUT_EVENT.EXTRA_HIDE }, { scope: 'story', storyId: 'main' })
     await send(`scene-page-${pageId}`, {
@@ -449,6 +498,7 @@ function createRecordAnswerAction(
 function createStartTimerAction(
   document: QuizHuntDocument,
   game: QuizHuntGameCatalog,
+  videoPlayback: QuizHuntVideoPlaybackState,
 ): SightyActionHandler<QuizHuntSceneKey, QuizHuntSlotName> {
   return async function startTimer({ event, context, updateContext, send }): Promise<void> {
     const pageId = typeof event.data?.pageId === 'string' ? event.data.pageId : undefined
@@ -456,13 +506,52 @@ function createStartTimerAction(
     const isActiveTrial = state.screen === 'trial' && state.activeTrialId === pageId
     const isActiveFinal = state.screen === 'final' && state.activeFinalId === pageId
     if (pageId === undefined || (!isActiveTrial && !isActiveFinal)) return
-    const timerStartedAtMs = Date.now()
-    await updateContext({ game: { ...state, timerStartedAtMs } })
-    await send('scene-basket', {
-      name: QUIZ_HUNT_BASKET_EVENT.TIMER_PLAY,
-      data: { remainingMs: state.timerRemainingMs },
-    }, { scope: 'story', storyId: 'main' })
+    videoPlayback.revealedPageIds.add(pageId)
+    const videoStatus = videoPlayback.statusByPageId.get(pageId)
+    if (videoStatus === 'pending' || videoStatus === 'playing' || state.timerStartedAtMs !== null) return
+    await resumeGameTimer(state, { updateContext, send })
   }
+}
+
+/** Pauses the shared countdown only for the active Question video's native playback. */
+function createVideoPlaybackAction(
+  document: QuizHuntDocument,
+  game: QuizHuntGameCatalog,
+  videoPlayback: QuizHuntVideoPlaybackState,
+): SightyActionHandler<QuizHuntSceneKey, QuizHuntSlotName> {
+  return async function handleVideoPlayback({ event, context, updateContext, send }): Promise<void> {
+    const pageId = typeof event.data?.pageId === 'string' ? event.data.pageId : undefined
+    const status: QuizHuntVideoPlaybackStatus | undefined = event.name === QUIZ_HUNT_VIDEO_EVENT.PLAY
+      ? 'playing'
+      : event.name === QUIZ_HUNT_VIDEO_EVENT.PAUSE
+        ? 'paused'
+        : event.name === QUIZ_HUNT_VIDEO_EVENT.ENDED ? 'ended' : undefined
+    if (pageId === undefined || status === undefined || !videoPlayback.pageIds.has(pageId)
+      || event.sourceSceneKey !== `scene-page-${pageId}`) return
+    const state = readGameState(context.game, document, game)
+    if (state.screen !== 'trial' || state.activeTrialId !== pageId || state.feedbackPending !== null) return
+    videoPlayback.statusByPageId.set(pageId, status)
+    if (status === 'playing') {
+      if (state.timerStartedAtMs === null) return
+      await updateContext({ game: pauseGameTimer(state) })
+      await send('scene-basket', { name: QUIZ_HUNT_BASKET_EVENT.TIMER_PAUSE }, { scope: 'story', storyId: 'main' })
+      return
+    }
+    if (!videoPlayback.revealedPageIds.has(pageId) || state.timerStartedAtMs !== null) return
+    await resumeGameTimer(state, { updateContext, send })
+  }
+}
+
+/** Starts the shared timer scene with the game's preserved remaining duration. */
+async function resumeGameTimer(
+  state: QuizHuntGameState,
+  actions: Pick<SightyActionContext<QuizHuntSceneKey, QuizHuntSlotName>, 'updateContext' | 'send'>,
+): Promise<void> {
+  await actions.updateContext({ game: { ...state, timerStartedAtMs: Date.now() } })
+  await actions.send('scene-basket', {
+    name: QUIZ_HUNT_BASKET_EVENT.TIMER_PLAY,
+    data: { remainingMs: state.timerRemainingMs },
+  }, { scope: 'story', storyId: 'main' })
 }
 
 /** Stores the remaining milliseconds reported by the basket scene at pause. */
@@ -519,7 +608,7 @@ function createFinishFeedbackAction(
     await updateContext({ game: nextState })
     await send('scene-basket', { name: QUIZ_HUNT_BASKET_EVENT.TIMER_FEEDBACK_FINISHED }, { scope: 'story', storyId: 'main' })
     await projectGame(nextState, game, send)
-    if (outcome !== null && (timedOut || isFinal)) await showResult(send, outcome)
+    if (outcome !== null && (timedOut || isFinal)) await showResult(send, outcome, nextState, document)
     if (!timedOut && !isFinal && nextState.timerRemainingMs > 0) {
       await send('scene-basket', {
         name: QUIZ_HUNT_BASKET_EVENT.TIMER_PLAY,
@@ -547,7 +636,7 @@ function createTimerExpiredAction(
     }
     await updateContext({ game: nextState })
     await projectGame(nextState, game, send)
-    await showResult(send, 'failure')
+    await showResult(send, 'failure', nextState, document)
   }
 }
 
@@ -654,10 +743,12 @@ async function projectGame(
       terminal: state.outcome !== null,
     },
   }, { scope: 'story', storyId: 'main' })
-  await send('scene-basket', { name: QUIZ_HUNT_BASKET_EVENT.PROJECT, data: { basket: state.basket } }, { scope: 'story', storyId: 'main' })
   await send('scene-basket', {
-    name: QUIZ_HUNT_BASKET_EVENT.TIMER_PROJECT,
-    data: { remainingMs: state.timerRemainingMs },
+    name: QUIZ_HUNT_BASKET_EVENT.PROJECT,
+    data: {
+      basket: state.basket,
+      finalReady: state.outcome === null && isFinalReady(state, game),
+    },
   }, { scope: 'story', storyId: 'main' })
 }
 
@@ -665,8 +756,20 @@ async function projectGame(
 async function showResult(
   send: SightyActionContext<QuizHuntSceneKey, QuizHuntSlotName>['send'],
   outcome: QuizHuntGameOutcome,
+  state: QuizHuntGameState,
+  document: QuizHuntDocument,
 ): Promise<void> {
-  await send('scene-result', { name: 'quiz-hunt:result:project', data: { outcome } }, { scope: 'story', storyId: 'main' })
+  const foundCount = document.settings.groups.filter((group) => state.basket[group.id] !== null).length
+  const usedMs = Math.max(0, document.settings.timeBudgetMs - state.timerRemainingMs)
+  const totalSeconds = Math.floor(usedMs / 1_000)
+  await send('scene-result', {
+    name: 'quiz-hunt:result:project',
+    data: {
+      outcome,
+      summary: `${foundCount} / ${document.settings.groups.length} couleurs trouvées`,
+      time: `${String(Math.floor(totalSeconds / 60)).padStart(2, '0')}:${String(totalSeconds % 60).padStart(2, '0')}`,
+    },
+  }, { scope: 'story', storyId: 'main' })
 }
 
 /** Creates the stable game state used by author preview and a new release run. */

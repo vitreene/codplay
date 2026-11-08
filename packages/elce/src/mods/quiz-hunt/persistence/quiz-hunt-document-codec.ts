@@ -25,9 +25,11 @@ export function readQuizHuntDocument(value: unknown): QuizHuntDocument {
   const arrays = ['pages', 'chapters', 'scenarioEntries', 'bdcs', 'medias', 'catalogPageIds', 'catalogBdcIds']
   if (arrays.some((name) => !Array.isArray(data[name]))) throw new Error('Collections Quiz Hunt invalides.')
   const settings = record(data.settings)
-  if (!Array.isArray(settings.groups) || !['grid', 'diapo'].includes(String(settings.menuPresentation))
+  settings.extraTriggerPageId ??= null
+  if (!Array.isArray(settings.groups)
     || typeof settings.successCardBdcId !== 'string' || typeof settings.failureCardBdcId !== 'string'
     || typeof settings.random !== 'boolean' || typeof settings.extraEnabled !== 'boolean'
+    || settings.extraTriggerPageId !== null && typeof settings.extraTriggerPageId !== 'string'
     || ['seed', 'timeBudgetMs', 'clueDelayMs', 'feedbackDelayMs'].some((name) => typeof settings[name] !== 'number' || !Number.isFinite(settings[name]))) {
     throw new Error('Réglages Quiz Hunt invalides.')
   }
@@ -88,6 +90,7 @@ export function readQuizHuntDocument(value: unknown): QuizHuntDocument {
     const bdc = document.bdcs.find((candidate) => candidate.id === bdcId)
     return bdc?.type !== 'card' || bdc.card == null || !document.catalogBdcIds.includes(bdcId)
   })) throw new Error('Les Cartes de résultat du Sommaire sont invalides.')
+  delete settings.menuPresentation
   const pageById = new Map(document.pages.map((page) => [page.id, page]))
   const chapterById = new Map(document.chapters.map((chapter) => [chapter.id, chapter]))
   const groupIds = new Set(document.settings.groups.map((group) => group.id))

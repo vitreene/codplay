@@ -55,4 +55,49 @@ describe('Quiz Hunt game draw', () => {
 
     expect(draw.trialSlotsByColor[group.id]?.flatMap((page) => page === null ? [] : [page.id])).toEqual(expectedIds)
   })
+
+  it('keeps the configured extra trigger in the draw across seeds', () => {
+    const documents = new QuizHuntDocumentService()
+    const initial = documents.createInitialDocument()
+    const questionBank = initial.chapters.find((chapter) => chapter.type === 'questions')!
+    const finalBank = initial.chapters.find((chapter) => chapter.type === 'finals')!
+    const group = initial.settings.groups[0]!
+    const firstTrial = initial.pages.find((page) => page.chapterId === questionBank.id)!
+    let authored = documents.setPageColor(initial, firstTrial.id, group.id)
+    authored = documents.setMandatory(authored, firstTrial.id, true)
+    const trials = Array.from({ length: 5 }).reduce<typeof authored>((document, _, index) => {
+      const withTrial = documents.createPage(document, questionBank.id, `Trial ${index + 1}`)
+      return documents.setPageColor(withTrial, withTrial.pages.at(-1)!.id, group.id)
+    }, authored)
+    const targetPage = trials.pages.at(-1)!
+    const withFinal = documents.createPage(trials, finalBank.id, 'Finale rouge')
+    const withFinalColor = documents.setPageColor(withFinal, withFinal.pages.at(-1)!.id, group.id)
+    const drawSeeds = Array.from({ length: 20 }, (_, index) => index + 1)
+
+    expect(drawSeeds.some((seed) => !createQuizHuntGameDraw(withFinalColor, seed).trialGridOrder.includes(targetPage.id))).toBe(true)
+
+    const configured = documents.updateSettings(withFinalColor, { extraTriggerPageId: targetPage.id })
+    drawSeeds.forEach((seed) => {
+      const draw = createQuizHuntGameDraw(configured, seed)
+      const trialSlots = draw.trialSlotsByColor[group.id]?.flatMap((page) => page === null ? [] : [page.id]) ?? []
+      expect(draw.extraPageId).toBe(targetPage.id)
+      expect(trialSlots).toContain(targetPage.id)
+      expect(trialSlots).toContain(firstTrial.id)
+    })
+  })
+
+  it('clears the configured trigger when author edits remove its playable color', () => {
+    const documents = new QuizHuntDocumentService()
+    const initial = documents.createInitialDocument()
+    const questionBank = initial.chapters.find((chapter) => chapter.type === 'questions')!
+    const finalBank = initial.chapters.find((chapter) => chapter.type === 'finals')!
+    const group = initial.settings.groups[0]!
+    const trial = initial.pages.find((page) => page.chapterId === questionBank.id)!
+    const withTrial = documents.setPageColor(initial, trial.id, group.id)
+    const withFinal = documents.createPage(withTrial, finalBank.id, 'Finale rouge')
+    const withFinalColor = documents.setPageColor(withFinal, withFinal.pages.at(-1)!.id, group.id)
+    const configured = documents.updateSettings(withFinalColor, { extraTriggerPageId: trial.id })
+
+    expect(documents.removeGroup(configured, group.id).settings.extraTriggerPageId).toBeNull()
+  })
 })

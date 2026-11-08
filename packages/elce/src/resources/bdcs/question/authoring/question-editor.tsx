@@ -17,7 +17,7 @@ import type { ElceTextValue } from '../../../document/rich-text-types'
 const ANSWER_DRAG_MIME_TYPE = 'application/x-elce-question-answer+json'
 
 /** Renders one Question BDC in Remix and routes edits through its existing facade. */
-export function renderRemixQuestionEditor(props: QuestionEditorProps): RemixNode {
+export function renderQuestionEditor(props: QuestionEditorProps): RemixNode {
   const { bdcId, question, actions } = props
   const typeConfig = QUESTION_TYPE_CONFIG[question.type]
 

@@ -13,21 +13,22 @@ import { SECTION_BDC_TYPE } from '../../../resources/bdcs/section/section-config
 import type { MediaMetadata } from '../../../core/document/content-document-types'
 import { createObjectUrl, resolveImportedMedia } from '../../../core/media/media-import-service'
 import { QuizHuntDocumentService } from '../document/quiz-hunt-document-service'
-import type { QuizHuntDocument, QuizHuntGroup, QuizHuntRootEntry, QuizHuntSettings } from '../document/quiz-hunt-document-types'
+import type { QuizHuntDocument, QuizHuntGroup, QuizHuntSettings } from '../document/quiz-hunt-document-types'
 
 export type QuizHuntCommand =
   | Readonly<{ type: 'document.rename'; name: string }>
   | Readonly<{ type: 'chapter.rename'; chapterId: string; name: string }>
   | Readonly<{ type: 'page.rename'; pageId: string; name: string }>
-  | Readonly<{ type: 'page.create'; chapterId: string | null; name: string }>
+  | Readonly<{ type: 'page.create'; chapterId: string; name: string }>
   | Readonly<{ type: 'page.color.set'; pageId: string; colorId: string | null }>
   | Readonly<{ type: 'page.mandatory.set'; pageId: string; mandatory: boolean }>
   | Readonly<{ type: 'group.set'; group: QuizHuntGroup }>
   | Readonly<{ type: 'group.delete'; colorId: string }>
   | Readonly<{ type: 'settings.update'; settings: Partial<Omit<QuizHuntSettings, 'groups' | 'successCardBdcId' | 'failureCardBdcId'>> }>
-  | Readonly<{ type: 'root.move'; entry: QuizHuntRootEntry; index: number }>
   | Readonly<{ type: 'section.create'; pageId: string; index: number }>
+  | Readonly<{ type: 'section.delete'; bdcId: string }>
   | Readonly<{ type: 'section.update'; bdcId: string; section: SectionContent }>
+  | Readonly<{ type: 'bdc.move'; bdcId: string; pageId: string; index: number }>
   | Readonly<{ type: 'question.update'; bdcId: string; question: QuestionContent }>
   | Readonly<{ type: 'question.media.set'; bdcId: string; mediaId: string | null }>
   | Readonly<{ type: 'question.media.attach'; bdcId: string; media: MediaMetadata }>
@@ -89,9 +90,10 @@ function applyCommand(documents: QuizHuntDocumentService, document: QuizHuntDocu
     case 'group.set': return documents.setGroup(document, command.group)
     case 'group.delete': return documents.removeGroup(document, command.colorId)
     case 'settings.update': return documents.updateSettings(document, command.settings)
-    case 'root.move': return documents.moveRootEntry(document, command.entry, command.index)
     case 'section.create': return documents.addSection(document, command.pageId, command.index)
+    case 'section.delete': return documents.deleteSection(document, command.bdcId)
     case 'section.update': return documents.updateSection(document, command.bdcId, command.section)
+    case 'bdc.move': return documents.moveBdc(document, command.bdcId, command.pageId, command.index)
     case 'question.update': return documents.updateQuestion(document, command.bdcId, command.question)
     case 'question.media.set': return documents.setQuestionMedia(document, command.bdcId, command.mediaId)
     case 'question.media.attach': return documents.attachQuestionMedia(document, command.bdcId, command.media)
