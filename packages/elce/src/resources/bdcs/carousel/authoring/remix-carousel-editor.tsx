@@ -17,7 +17,6 @@ import { renderAppearanceTrigger } from '../../../../core/authoring/appearance-t
 import { RemixCardEditorFields } from '../../card/authoring/remix-card-editor-fields'
 import { renderRemixStatisticalGraphEditor } from '../../statistical-graph/authoring/remix-statistical-graph-editor'
 import { authoredTextToPlainText } from '../../../../core/document/rich-text-utils'
-import { resolveCarouselCueStarts } from '../domain/carousel-service'
 
 /** Renders Carousel settings and its ordered illustration BDCs in the Remix runtime. */
 export function RemixCarouselEditor(handle: Handle<ElceCarouselEditorProps>) {
@@ -44,7 +43,12 @@ function renderTranscriptAssociation(
   const avatar = props.avatar
   const take = avatar?.avatar?.take
   if (take == null || avatar === undefined || selected.bdc.type !== 'card' || cardIndex === 0 || props.onAssociateWord === undefined) return null
-  const starts = resolveCarouselCueStarts(props.content)
+  const previousWordStartAtMs = props.content.cards.slice(0, cardIndex).reduce((previousStartAtMs, entry) => {
+    const reference = entry.cue?.word
+    if (reference?.avatarBdcId !== avatar.id || reference.takeId !== take.id) return previousStartAtMs
+    const wordStartAtMs = take.words[reference.wordIndex]?.startAtMs
+    return wordStartAtMs !== undefined && wordStartAtMs > previousStartAtMs ? wordStartAtMs : previousStartAtMs
+  }, 0)
   const prefix = `elce-carousel-transcript-${selected.bdc.id}`
   return <details id={`${prefix}-details`} className="elce-carousel-editor__transcript" open={true}>
     <summary
@@ -59,10 +63,12 @@ function renderTranscriptAssociation(
       {take.words.map((word, wordIndex) => {
         const selectedWord = selected.entry.cue?.word
         const checked = selectedWord?.avatarBdcId === avatar.id && selectedWord.takeId === take.id && selectedWord.wordIndex === wordIndex
+        const disabled = word.startAtMs <= previousWordStartAtMs
         return <label
           id={`${prefix}-choice-${wordIndex}`}
           key={`${take.id}-${wordIndex}`}
-          className={checked ? 'elce-carousel-editor__view-tab is-active' : 'elce-carousel-editor__view-tab'}
+          className={`elce-carousel-editor__view-tab${checked ? ' is-active' : ''}${disabled ? ' is-disabled' : ''}`}
+          aria-disabled={disabled}
         >
           <input
             id={`${prefix}-word-${wordIndex}`}
@@ -72,7 +78,7 @@ function renderTranscriptAssociation(
             value={word.startAtMs}
             checked={checked}
             aria-label={`${word.text}, occurrence ${wordIndex + 1}`}
-            disabled={word.startAtMs <= (starts[cardIndex - 1] ?? 0) || word.startAtMs >= (starts[cardIndex + 1] ?? take.durationMs)}
+            disabled={disabled}
             mix={on<HTMLInputElement, 'change'>('change', (event) => {
               const startAtMs = Number(event.currentTarget.value)
               if (event.currentTarget.checked && startAtMs === word.startAtMs) {
@@ -192,7 +198,7 @@ function renderCarouselEditor(props: ElceCarouselEditorProps, state: CarouselEdi
 /** Renders Carousel playback, timing, transition and ratio controls. */
 function renderCarouselSettings(props: ElceCarouselEditorProps): RemixNode {
   const { bdcId, content, actions } = props
-  const hasTimedCues = content.cards.some((entry) => entry.cue !== undefined)
+  const hasWordAssociations = content.cards.some((entry) => entry.cue !== undefined)
   return <section
     id={`elce-carousel-settings-panel-${bdcId}`}
     className="elce-carousel-editor__settings-panel"
@@ -213,7 +219,6 @@ function renderCarouselSettings(props: ElceCarouselEditorProps): RemixNode {
         <select
           id={`elce-carousel-playback-${bdcId}`}
           aria-label="Mode de lecture du Carousel"
-          aria-describedby={hasTimedCues ? `elce-carousel-timed-cues-${bdcId}` : undefined}
           mix={on<HTMLSelectElement, 'change'>('change', (event) => actions.setPlaybackMode(event.currentTarget.value as typeof content.playbackMode))}
         >
           {CAROUSEL_PLAYBACK_MODE_OPTIONS.map((option) => <option
@@ -226,7 +231,7 @@ function renderCarouselSettings(props: ElceCarouselEditorProps): RemixNode {
           </option>)}
         </select>
       </label>
-      {hasTimedCues ? null : <>
+      {hasWordAssociations ? null : <>
         {content.playbackMode === CAROUSEL_PLAYBACK_MODE.AUTOMATIC
           ? <label
             id={`elce-carousel-repeat-label-${bdcId}`}
@@ -362,9 +367,6 @@ function renderCarouselSettings(props: ElceCarouselEditorProps): RemixNode {
         </select>
       </label>
     </div>
-    {hasTimedCues
-      ? <p id={`elce-carousel-timed-cues-${bdcId}`} className="elce-carousel-editor__timed-cues">Le mode du Carousel règle le démarrage ; les repères des cartes suivent les mots choisis.</p>
-      : null}
   </section>
 }
 
@@ -434,8 +436,7 @@ function renderSelectedCard(
 ): RemixNode {
   const { content, mediaById, actions } = props
   const cardIndex = content.cards.findIndex((entry) => entry.bdcId === selected.bdc.id)
-  const cue = selected.entry.cue
-  const wordAssociation = cue?.word
+  const wordAssociation = selected.entry.cue?.word
   const take = props.avatar?.avatar?.take
   const associatedWord = take == null || wordAssociation === undefined
     || wordAssociation.avatarBdcId !== props.avatar?.id || wordAssociation.takeId !== take.id
@@ -445,16 +446,16 @@ function renderSelectedCard(
     id={`elce-carousel-card-duration-label-${selected.bdc.id}`}
     className={associatedWord === undefined ? 'elce-carousel-editor__view-duration' : 'elce-carousel-editor__view-duration elce-carousel-editor__view-duration--word'}
   >
-    <span id={`elce-carousel-card-duration-caption-${selected.bdc.id}`}>Durée (sec.)</span>
-    {associatedWord !== undefined || cue !== undefined
+    <span id={`elce-carousel-card-duration-caption-${selected.bdc.id}`}>
+      {associatedWord !== undefined ? 'Mot associé' : 'Durée (sec.)'}
+    </span>
+    {associatedWord !== undefined
       ? <input
         id={`elce-carousel-card-duration-${selected.bdc.id}`}
         type="text"
         readOnly={true}
-        aria-label={associatedWord === undefined ? 'Temps conservé de cette vue' : 'Mot choisi pour cette vue'}
-        value={associatedWord?.text ?? (cardIndex === 0 && cue?.startAtMs === 0
-          ? ''
-          : `${((cue?.startAtMs ?? 0) / 1000).toFixed(3)} s`)}
+        aria-label="Mot choisi pour cette vue"
+        value={associatedWord.text}
       />
       : <input
         id={`elce-carousel-card-duration-${selected.bdc.id}`}

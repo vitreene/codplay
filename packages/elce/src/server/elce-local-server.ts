@@ -39,6 +39,7 @@ const BROWSER_PACKAGES = [
   'codplay',
   '@codplay/sighty',
   '@codplay/component-v2',
+  '@rive-app/canvas-advanced-single',
   '@codplay/story',
   '@codplay/remote',
   '@codplay/capsule-automation',

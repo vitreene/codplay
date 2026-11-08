@@ -17,3 +17,11 @@ export { generateSpeechWithTimestamps, type GeneratedSpeech } from './elevenlabs
 export { transcribeAudio } from './elevenlabs/speech-to-text'
 export { transformVoice } from './elevenlabs/voice-transformation'
 export { registerAudioCaptureElement, type AudioCaptureInsertEventDetail } from './ui/audio-capture-element'
+export {
+  startHeadMotionCapture,
+  type HeadMotionCaptureOptions,
+  type HeadMotionCaptureSession,
+  type HeadMotionSample,
+  type HeadMotionValues,
+} from './head-tracking/head-motion-tracker'
+export type { HeadMotionRivePreviewConfig } from './head-tracking/head-motion-rive-preview'

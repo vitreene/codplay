@@ -1,9 +1,8 @@
 import { AVATAR_BDC_TYPE } from '../../bdcs/avatar/avatar-config'
 import { appendAvatarToDiapoStory } from '../../bdcs/avatar/reading/avatar-diapo-story'
-import { projectCarouselCues } from '../../bdcs/carousel/domain/carousel-service'
 import type { PersoDoc, StoryDoc } from 'codplay/scene/types'
 import { CARD_BDC_TYPE } from '../../bdcs/card/card-config'
-import { CAROUSEL_BDC_TYPE } from '../../bdcs/carousel/carousel-config'
+import { CAROUSEL_BDC_TYPE, CAROUSEL_PLAYBACK_MODE } from '../../bdcs/carousel/carousel-config'
 import { QUESTION_BDC_TYPE, QUESTION_EVENTS } from '../../bdcs/question/question-config'
 import { STATISTICAL_GRAPH_BDC_TYPE } from '../../bdcs/statistical-graph/statistical-graph-config'
 import { DIAPO_PAGE_TYPE } from './diapo-config'
@@ -252,7 +251,9 @@ function buildCarousel(
   const revelationSettings = options.editorSettings.revelation.carouselsByBdcId[carousel.id]
   if (revelationSettings === undefined) throw new Error(`Les réglages de révélation du Carousel ${carousel.id} sont absents.`)
   const narrated = avatar?.avatar?.take != null
-  const carouselContent = projectCarouselCues(carousel.carousel, avatar?.avatar?.take?.durationMs)
+  const carouselContent = narrated
+    ? { ...carousel.carousel, playbackMode: CAROUSEL_PLAYBACK_MODE.AUTOMATIC, repeatCount: 0 }
+    : carousel.carousel
   const views = carousel.carousel.cards.map((entry) => {
     const child = bdcs.find((candidate) => candidate.id === entry.bdcId)
     if (child === undefined) throw new Error(`La vue ${entry.bdcId} du Carousel ${carousel.id} est introuvable.`)

@@ -19,7 +19,7 @@ import { ProjectEditorLock } from '../../../app/sync/project-editor-lock'
 import { LearningEditorContextProvider } from '../composition/learning-editor-context'
 import { LearningPageEditor } from './learning-page-editor'
 import { renderEditorWorkspace } from './learning-workspace'
-import { createAvatarDocumentFixture } from '../integration/fixtures/avatar-document-fixture'
+import { createAvatarDocumentFixture, createAvatarTakeFixture } from '../integration/fixtures/avatar-document-fixture'
 
 describe('Remix production page editor', () => {
   let cleanup: (() => void | Promise<void>) | undefined
@@ -347,6 +347,35 @@ describe('Remix production page editor', () => {
     expect(radio.value).toBe('2400')
     expect((rendered.$('#elce-carousel-card-duration-card-two') as HTMLInputElement).value).toBe('encore')
     expect(transcript?.textContent).not.toContain('2.400')
+
+    const replacementTake = createAvatarTakeFixture('take-replacement', 350)
+    const replacementTakeWithFutureWord = {
+      ...replacementTake,
+      words: [...replacementTake.words, { text: 'plus tard', startAtMs: 9000, endAtMs: 9400 }],
+    }
+    await actOnRemix(rendered, () => controller.send({
+      type: 'document.apply',
+      command: { type: 'bdc.avatar.take.set', bdcId: 'avatar-test', take: replacementTakeWithFutureWord },
+    }))
+    await actOnRemix(rendered, () => rendered.$('#elce-carousel-card-tab-card-two')?.click())
+    expect(rendered.$('#elce-carousel-card-duration-caption-card-two')?.textContent).toBe('Durée (sec.)')
+    expect((rendered.$('#elce-carousel-card-duration-card-two') as HTMLInputElement).value).toBe('4.4')
+    expect((rendered.$('#elce-carousel-transcript-card-two-word-0') as HTMLInputElement).disabled).toBe(true)
+    expect(rendered.$('#elce-carousel-transcript-card-two-choice-0')?.classList.contains('is-disabled')).toBe(true)
+    expect((rendered.$('#elce-carousel-transcript-card-two-word-2') as HTMLInputElement).value).toBe('7150')
+    expect((rendered.$('#elce-carousel-transcript-card-two-word-2') as HTMLInputElement).disabled).toBe(false)
+    await actOnRemix(rendered, () => rendered.$('#elce-carousel-transcript-card-two-choice-2')?.click())
+    let currentCarousel = controller.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === 'carousel-test')?.carousel
+    expect(currentCarousel?.cards.map((entry) => entry.durationMs)).toEqual([7150, 4400, 450])
+    expect(currentCarousel?.cards[2]?.cue?.word).toBeUndefined()
+
+    await actOnRemix(rendered, () => rendered.$('#elce-carousel-card-tab-card-three')?.click())
+    expect((rendered.$('#elce-carousel-transcript-card-three-word-3') as HTMLInputElement).value).toBe('9000')
+    expect((rendered.$('#elce-carousel-transcript-card-three-word-3') as HTMLInputElement).disabled).toBe(false)
+    await actOnRemix(rendered, () => rendered.$('#elce-carousel-transcript-card-three-choice-3')?.click())
+    currentCarousel = controller.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === 'carousel-test')?.carousel
+    expect(currentCarousel?.cards.map((entry) => entry.durationMs)).toEqual([7150, 1850, 3000])
+    expect(currentCarousel?.cards[2]?.cue?.word).toEqual({ avatarBdcId: 'avatar-test', takeId: 'take-replacement', wordIndex: 3 })
 
     await actOnRemix(rendered, () => {
       const position = rendered.$('#elce-avatar-position-avatar-test') as HTMLSelectElement

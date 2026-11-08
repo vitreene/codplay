@@ -662,7 +662,7 @@ describe('Elcé document commands', () => {
     const current = learningDocumentService.createInitialDocument()
     const restored = LearningDocument.fromJSON({ ...current.toJSON(), version: 8 })
 
-    expect(restored.data.version).toBe(11)
+    expect(restored.data.version).toBe(12)
     expect(restored.pages[0]?.allowEarlyExit).toBeUndefined()
   })
 

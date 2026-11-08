@@ -31,12 +31,6 @@
   margin-bottom: 0;
 }
 
-.elce-carousel-editor__timed-cues {
-  margin: 0.35rem 0 0;
-  color: #6b716f;
-  font-size: 0.75rem;
-}
-
 .elce-carousel-editor__setting,
 .elce-carousel-editor__ratio,
 .elce-carousel-editor__view-duration {
@@ -175,6 +169,13 @@
   border-color: #52776f;
   color: #fff;
   background: #52776f;
+}
+
+.elce-carousel-editor__transcript-words > .elce-carousel-editor__view-tab.is-disabled {
+  border-color: #e0ded8;
+  color: #747a77;
+  background: #f4f3ef;
+  cursor: not-allowed;
 }
 
 .elce-carousel-editor__view-add {

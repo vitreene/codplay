@@ -83,12 +83,14 @@ référence une prise complète ; l’éditeur, les données de prise et les
 associations par carte sont décrits dans la
 [spécification du BDC Avatar](./avatar-bdc-spec.md).
 
-Pour une prise complète, le builder résout sa source audio depuis le catalogue,
-projette les repères de mots dans les entrées Carousel, puis ajoute la factory
-`createRiveTalkingAvatarStory` à la story unique de la page. Le Carousel garde
-son builder existant ; il masque ses points et laisse la fin fonctionnelle au
-constructeur de page. Sans prise, la Diapo conserve le rendu ordinaire du
-Carousel. Les pages ordinaires ne changent pas de circuit.
+Pour une prise complète, le builder résout sa source audio depuis le catalogue
+et ajoute la factory `createRiveTalkingAvatarStory` à la story unique de la
+page. Les associations de mots ont déjà été converties en durées par entrée
+dans les commandes d’édition ; le builder Carousel calcule les débuts de vue en
+cumulant ces durées et ne projette aucun temps absolu issu du transcript. Le
+Carousel garde son builder existant ; il masque ses points et laisse la fin
+fonctionnelle au constructeur de page. Sans prise, la Diapo conserve le rendu
+ordinaire du Carousel. Les pages ordinaires ne changent pas de circuit.
 
 La racine de page devient une grille responsive 1/1. La racine Carousel remplit
 son rectangle complet, sans la limite de largeur commune aux autres BDC et sans

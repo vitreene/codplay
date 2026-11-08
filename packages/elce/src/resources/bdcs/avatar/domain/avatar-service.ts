@@ -1,5 +1,6 @@
 import { AVATAR_POSITIONS, AVATAR_PROFILE_ID } from '../avatar-config'
 import type { AvatarContent, AvatarTake } from './avatar-types'
+import type { RiveTalkingAvatarFrame } from '@codplay/story/rive-talking-avatar'
 
 /** Creates an empty authorable Avatar using the supplied transparent rig. */
 export function createDefaultAvatar(): AvatarContent {
@@ -25,14 +26,15 @@ export function assertAvatarContent(content: AvatarContent): void {
   }
   if (take.frames.some((frame) => !Number.isInteger(frame.startAt) || frame.startAt < 0
     || frame.startAt > take.durationMs || Object.values(frame.values).some((value) => typeof value === 'number' && !Number.isFinite(value)))) {
-    throw new Error('La piste de visèmes est hors de la durée de la voix.')
+    throw new Error('La piste de l’Avatar est hors de la durée de la voix.')
   }
 }
 
-/** Adapts the supplied AniMattor JSON to the current rig without duplicating its transcript. */
+/** Adapts the supplied timeline and optional head motion to the current rig. */
 export function parseAvatarTimeline(value: unknown, identity: Pick<AvatarTake, 'id' | 'audioMediaId' | 'durationMs'>): AvatarTake {
   if (typeof value !== 'object' || value === null || !('words' in value) || !Array.isArray(value.words)
-    || !('visemes' in value) || !Array.isArray(value.visemes)) {
+    || !('visemes' in value) || !Array.isArray(value.visemes)
+    || ('headMotion' in value && !Array.isArray(value.headMotion))) {
     throw new Error('Le fichier JSON doit contenir les mots et les visèmes de la prise.')
   }
   const words = value.words.map((word: unknown) => {
@@ -43,7 +45,7 @@ export function parseAvatarTimeline(value: unknown, identity: Pick<AvatarTake, '
     return { text: word.text, startAtMs: Math.round(word.start * 1000), endAtMs: Math.round(word.end * 1000) }
   })
   const mouthNames = Array.from({ length: 22 }, (_, index) => `v${100 + index}`)
-  const frames = value.visemes.map((viseme: unknown) => {
+  const visemeFrames = value.visemes.map((viseme: unknown) => {
     if (typeof viseme !== 'object' || viseme === null || !('property' in viseme)
       || typeof viseme.property !== 'string' || !mouthNames.includes(viseme.property)
       || !('value' in viseme) || typeof viseme.value !== 'number'
@@ -54,6 +56,31 @@ export function parseAvatarTimeline(value: unknown, identity: Pick<AvatarTake, '
       values: Object.fromEntries(mouthNames.map((name) => [name, name === viseme.property ? strength : 0])),
     }
   })
+  const headMotionFrames = ('headMotion' in value && Array.isArray(value.headMotion) ? value.headMotion : [])
+    .map((sample: unknown) => {
+      if (typeof sample !== 'object' || sample === null || !('startAtMs' in sample)
+        || typeof sample.startAtMs !== 'number' || !Number.isInteger(sample.startAtMs)
+        || !('values' in sample) || typeof sample.values !== 'object' || sample.values === null
+        || !('headX' in sample.values) || typeof sample.values.headX !== 'number'
+        || !('headY' in sample.values) || typeof sample.values.headY !== 'number'
+        || !('headTilt' in sample.values) || typeof sample.values.headTilt !== 'number') {
+        throw new Error('Position de tête invalide.')
+      }
+      const { headX, headY, headTilt } = sample.values
+      if (![headX, headY, headTilt].every((position) => Number.isFinite(position) && position >= 0 && position <= 100)) {
+        throw new Error('Position de tête hors limites.')
+      }
+      return { startAt: sample.startAtMs, values: { headX, headY, headTilt } }
+    })
+  const framesByTime = [...visemeFrames, ...headMotionFrames]
+    .reduce((byTime, frame) => {
+      const existing = byTime.get(frame.startAt)
+      byTime.set(frame.startAt, existing === undefined
+        ? frame
+        : { startAt: frame.startAt, values: { ...existing.values, ...frame.values } })
+      return byTime
+    }, new Map<number, RiveTalkingAvatarFrame>())
+  const frames = [...framesByTime.values()].sort((first, second) => first.startAt - second.startAt)
   const take = { ...identity, words, frames }
   assertAvatarContent({ ...createDefaultAvatar(), take })
   return take

@@ -46,7 +46,7 @@ export class LearningBdcCommandService {
       case 'bdc.avatar.update':
       case 'bdc.avatar.take.set':
       case 'bdc.carousel.word.set':
-        return applyAvatarCommand(document, command)
+        return applyAvatarCommand(document, command, this.resources.carouselService)
       case 'bdc.avatar.delete':
         return deleteBdc(document, command.bdcId)
       case 'bdc.delete':

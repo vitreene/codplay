@@ -24,7 +24,7 @@ export function placeBdc(document: LearningDocument, bdc: LearningBdc, placement
   const placedBdcs = changesPage && bdc.type === BDC_TYPE.AVATAR
     ? clearAvatarWordAssociations(document.bdcs, bdc.id) : document.bdcs
   const placedBdc = changesPage && bdc.carousel != null
-    ? { ...bdc, carousel: { ...bdc.carousel, cards: bdc.carousel.cards.map((entry) => entry.cue === undefined ? entry : { ...entry, cue: { startAtMs: entry.cue.startAtMs } }) } }
+    ? { ...bdc, carousel: { ...bdc.carousel, cards: bdc.carousel.cards.map(({ cue: _cue, ...entry }) => entry) } }
     : bdc
   const withoutBdc = new LearningDocument({
     ...document.data,

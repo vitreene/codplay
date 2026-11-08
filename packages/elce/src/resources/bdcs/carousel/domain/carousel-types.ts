@@ -12,8 +12,7 @@ export interface CarouselBdcEntry {
   readonly bdcId: BdcId
   readonly durationMs: number | null
   readonly cue?: Readonly<{
-    startAtMs: number
-    word?: Readonly<{ avatarBdcId: string; takeId: string; wordIndex: number }>
+    word: Readonly<{ avatarBdcId: string; takeId: string; wordIndex: number }>
   }>
   readonly introTransitionRef: RevelationTransitionRef | null
   readonly outroTransitionRef: RevelationTransitionRef | null

@@ -5,6 +5,9 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "dependencies": {
+    "@rive-app/canvas-advanced-single": "2.38.3"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },

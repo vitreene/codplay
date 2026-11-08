@@ -11,14 +11,14 @@ rationale dans l’[étude](../notes/2026-11-04-talking-head-study.md).
 
 - Module web réutilisable, connecteur Elcé vers Diapo/Carousel ; lecture par
   les circuits existants. Mac est le poste de développement, sans variante OS.
-- Le module web de captation est réutilisable hors Elcé. Traiter l’audio
-  d’abord ; différer la captation vidéo à une étape ultérieure.
-- Capacités audio distinctes : capture micro et import locaux ; TTS, STT,
-  alignement et transformation vocale gardent chacun leur opération. Le STT
-  ElevenLabs reste le fournisseur courant jusqu’à qualification d’un fournisseur
-  local ; le code doit permettre ce remplacement sans coupler le STT aux temps
-  de l’alignement. Les visèmes Azure 22 sont générés localement depuis les temps
-  caractère, selon la démo. Garder une seule action
+- Capacités audio distinctes : capture Micro, capture Caméra et import locaux ; TTS, STT,
+  alignement et transformation vocale gardent chacun leur opération. Le flux
+  auteur pour un son importé ou capté suit la démo AniMattor : l’auteur saisit
+  ou colle le transcript, puis l’alignement séparé produit les temps. L’action
+  « Préparer et insérer » ne transcrit pas automatiquement. STT reste une
+  opération isolée, hors de ce flux auteur, jusqu’à décision sur son usage. Les
+  visèmes Azure 22 sont générés localement depuis les temps caractère, selon la
+  démo. Garder une seule action
   « Préparer et insérer » comme orchestration auteur, sans fusionner les
   permissions ni les fournisseurs sous une validation globale de clé. Le token
   n’est utilisé que par l’appel ElevenLabs choisi et reste en mémoire par
@@ -31,12 +31,6 @@ rationale dans l’[étude](../notes/2026-11-04-talking-head-study.md).
   voie d’alignement caractère restent à qualifier avant de remplacer les appels
   distants présents dans le code. Aucun modèle local ne devient une dépendance
   sans qualification. Aucune app native ni installation d’outil.
-- Voix finale = durée et fin fonctionnelle de la page. Première carte à zéro,
-  suivantes au début du mot choisi ; occurrences distinguées. Au retrait de
-  l’Avatar ou au remplacement de sa prise, supprimer les associations aux mots
-  et conserver les temps de déclenchement correspondants. Une nouvelle
-  association reste un geste explicite de l’auteur : sélectionner un mot du
-  nouveau son remplace le temps conservé par le début de cette occurrence.
 - Aucune navigation Carousel. Si l’auteur demande une télécommande
   Play/Pause/progression, il choisit aussi le démarrage automatique ou l’attente
   de Play explicite. Les commandes restent visuellement hors scène et pilotent
@@ -94,11 +88,11 @@ rationale dans l’[étude](../notes/2026-11-04-talking-head-study.md).
 | Lot | Propriétaire et résultat attendu |
 | --- | --- |
 | 0 — Fini | `authoring/component-v2/src/rive/view-model/` : composant distinct, cycle de state machine partagé, Seek narratif et durée de vie native vérifiés. |
-| 1 — Fini | `demos/src/v2/demos/rive-view-model/` : rig, MP3 et JSON fournis, voix maître, visèmes et mots synchronisés ; animations internes Rive préservées. Démo validée par l’utilisateur. La piste caméra est différée après validation de la capture audio. |
+| 1 — Fini | `demos/src/v2/demos/rive-view-model/` : rig, MP3 et JSON fournis, voix maître, visèmes et mots synchronisés ; animations internes Rive préservées. Démo validée par l’utilisateur. |
 | 2 — Fini | `authoring/component-v2/src/rive/` porte les composants ; `authoring/story/rive-talking-avatar/` porte la story réutilisable et son guide ; `isTalking` reste le booléen canonique. |
 | 3 — En cours | `resources/bdcs/carousel/reading/`, `resources/pages/diapo/`, `mods/learning/reading/`, `mods/learning/preview/` et `src/server/elce-local-server.ts` : composer le Carousel et le BDC Avatar persistant sur la Diapo réelle du Projet 3, avec quatre cartes et les occurrences retenues du transcript. Servir les assets Rive et audio depuis le boundary Remix existant. La voix maître règle la durée, le Carousel n’affiche pas ses points et la fin publique est émise à la fin de la voix. Garder les pages ordinaires inchangées. |
-| 4 — En cours, cadrage | Éditeurs Diapo/Carousel + commandes/persistance sur les fichiers fournis : BDC Avatar à côté du Carousel, réglages de placement et association des cartes aux occurrences du transcript. La capture audio reste au lot 5 ; la vidéo est différée. |
-| 5 — En cours | `packages/authoring/audio-capture/` : module audio réutilisable, fournisseur ElevenLabs et connexion par token ; Elcé n’enregistre que la prise finale choisie par son circuit média existant. La vidéo est différée. |
+| 4 — En cours, cadrage | Éditeurs Diapo/Carousel + commandes/persistance sur les fichiers fournis : BDC Avatar à côté du Carousel, réglages de placement et association des cartes aux occurrences du transcript. La capture audio et le suivi facial restent au lot 5. |
+| 5 — En cours | `packages/authoring/audio-capture/` : module audio réutilisable, fournisseur ElevenLabs et connexion par token ; proposer la captation microphone seule ou la captation caméra audio+image, avec suivi facial synchronisé et un seul événement final. |
 
 Le premier POC utilisait le pont
 `LearningPlayerOptions.temporaryRiveTalkingAvatarByPageId`. Le lot 4 l’a
@@ -113,8 +107,12 @@ en mémoire.
 Le périmètre utilisateur du 5 novembre remplace l’entrée micro/caméra
 indifférenciée : le module autonome commence par audio ; TTS, STT et
 transformation vocale utilisent actuellement leurs opérations ElevenLabs
-séparées. Le STT local reste l’évolution visée, après qualification. La vidéo
-attend la validation de cette partie. Les candidats STT et alignement sont dans
+séparées. Le STT local reste l’évolution visée, après qualification. Le 6
+novembre, l’utilisateur a demandé deux modes de captation en direct : Micro
+(son seul) et Caméra (son et images simultanés), avec le suivi de tête intégré
+à la capture et sans réglages visibles. La décision est de ne pas conserver les
+images ; seules la piste audio et sa timeline de tête rejoignent le BDC Avatar.
+Les candidats STT et alignement sont dans
 l’[étude talking-head](../notes/2026-11-04-talking-head-study.md#audit-local-complémentaire-et-recommandations--5-novembre-2026),
 à requalifier sur les sons français du Projet 3 avant de finaliser le parcours.
 La référence aux endpoints et à la frontière de clé est dans la même
@@ -144,10 +142,11 @@ La référence aux endpoints et à la frontière de clé est dans la même
    [étude talking-head](../notes/2026-11-04-talking-head-study.md#référence-api-elevenlabs-du-5-novembre-2026).
 2. **En cours — opérations audio et raccord de sortie.** Séparer le TTS, le
    STT, l’alignement et la transformation vocale, chacun raccordé à son
-   opération propre. Conserver ElevenLabs pour le STT pendant cette tranche ;
-   préparer son remplacement ultérieur en gardant le résultat STT au texte et
-   l’alignement des temps dans une opération distincte. Le même module garde
-   l’enregistrement microphone et l’import audio locaux. La génération des
+   opération propre. Le module conserve le STT ElevenLabs comme capacité
+   indépendante, sans l’appeler dans le flux auteur courant. Le même module garde
+   l’enregistrement microphone, la capture caméra et l’import audio locaux.
+   Micro enregistre le son seul ; Caméra utilise son et image en direct pour
+   suivre la tête pendant la prise, sans réglages visibles. La génération des
    visèmes reste locale et n’appelle pas ElevenLabs. L’auteur
    réécoute et choisit la piste
    finale. Après une génération TTS, une icône permet de télécharger le MP3 ;
@@ -158,11 +157,11 @@ La référence aux endpoints et à la frontière de clé est dans la même
    timeline, puis attend l’application de la prise dans le BDC. Elle ne présume
    pas qu’une clé autorise chaque opération. Les boutons séparés de
    transcription et d’alignement sont retirés ; la transformation reste une
-   option explicite. « Préparer et insérer » appelle ElevenLabs STT seulement
-   si le transcript est vide, puis Forced Alignment séparément si ses temps
-   caractère manquent. Les deux opérations sont isolées dans des modules
-   distincts ; le STT demande uniquement le texte, sans granularité temporelle.
-   Le choix local reste à qualifier avant son remplacement.
+   option explicite. Pour un audio capté ou importé, « Préparer et insérer »
+   exige un transcript saisi ou collé, puis appelle Forced Alignment si ses
+   temps caractère manquent. Il ne fait aucun appel STT. Le module STT reste
+   isolé et disponible indépendamment du flux auteur. Le fournisseur local
+   reste à qualifier avant tout choix d’intégration STT.
    Le connecteur Elcé utilise l’import média et la commande de prise déjà
    présents ; placement et réglages de l’Avatar sont conservés. La clé reste
    dans le navigateur et n’accompagne jamais les fichiers. Les onglets sont
@@ -171,15 +170,17 @@ La référence aux endpoints et à la frontière de clé est dans la même
    chargement, Piste audio est activé et sélectionné. À la réouverture, il reste
    sélectionné si la piste existe. Sans piste, Capture est sélectionné même
    sans clé ; Capture, Piste audio désactivé et Réglages restent visibles. Les
-   trois sources restent accessibles ; seules les opérations ElevenLabs
-   requièrent une clé. Les sources sont « Générer une voix », « Microphone » et
-   « Charger audio ». L’action
+   sources TTS, Micro, Caméra et Charger audio restent accessibles ; seules
+   les opérations ElevenLabs requièrent une clé. L’action
    « Préparer et insérer » est visuellement principale. Garder les libellés et
    retours nécessaires, sans textes explicatifs ajoutés. « Charger audio »
    présente seulement « Choisir un fichier », sans légende ni libellé répété ;
    le bouton ouvre directement le sélecteur natif pendant son clic utilisateur
    (`showPicker`, avec repli navigateur). Après le choix, la piste est ajoutée
    et sélectionnée dans « Piste audio » sans appel API.
+   Si le transcript est vide, conserver la piste et demander le texte avant
+   tout appel réseau ; l’auteur peut le saisir ou le coller puis relancer
+   l’action.
    La modale garde les
    mêmes dimensions entre ses onglets, avec des limites responsive ; son
    contenu défile à l’intérieur si nécessaire.
@@ -193,12 +194,61 @@ La référence aux endpoints et à la frontière de clé est dans la même
    timeline n’est produite à partir d’une estimation micro live. L’acceptation
    restante compare la timeline générée à la phrase française de référence et
    vérifie le transfert et la lecture dans le BDC Avatar.
-4. Cadrer la capture vidéo séparément après validation de l’audio.
+4. **En cours — captation Micro ou Caméra.** L’interface et le circuit sont
+   implémentés dans `packages/authoring/audio-capture/src/`. Micro demande et
+   enregistre le son seul. Caméra suit la séquence AniMattor : depuis le clic,
+   demander d’abord la vidéo seule, afficher l’aperçu après accord, puis
+   demander le microphone séparément. Un refus caméra indique où autoriser le
+   site dans le navigateur et libère le flux. MediaPipe suit le visage pendant
+   la prise, avec les réglages par défaut et sans contrôle visible. Le
+   `MediaRecorder` reçoit uniquement la piste audio ; les images
+   restent dans le flux utilisé en direct et ne sont jamais écrites dans la
+   prise. Les échantillons `headX`, `headY`, `headTilt` sont gardés en mémoire,
+   recalés sur la durée audio finale et inclus dans le JSON de timeline transmis
+   avec l’audio par l’unique événement `audio-capture-insert`. Aucun événement
+   n’est émis par échantillon. La vue Caméra inclut l’Avatar Rive cible du BDC,
+   côte à côte avec l’aperçu caméra, et lui applique en direct les mêmes valeurs
+   `headX`, `headY`, `headTilt`. Le module partagé reçoit l’URL du runtime et
+   le profil Rive en configuration ; il n’embarque aucun chemin d’asset Elcé.
+   Le rendu cible est
+   libéré à l’arrêt ou à la fermeture ; la prise ne conserve toujours que le
+   son et la timeline. Dans
+   `packages/elce/src/resources/bdcs/avatar/domain/avatar-service.ts`,
+   `headMotion` est adapté en patches ViewModel et fusionné aux frames déjà
+   portées par `AvatarTake`. Ne pas modifier `packages/codplay/`.
+
+   Acceptation restante : confirmer dans Safari normal, avec le site réglé sur
+   « Demander », que Micro n’ouvre pas la caméra ; que Caméra demande l’accès
+   vidéo avant le micro, affiche l’aperçu
+   après autorisation, puis enregistre l’audio et suit les images pendant la
+   même prise ; que le refus caméra indique les réglages du site ; que
+   l’arrêt/fermeture libère tous les appareils ; et que l’événement final ne
+   contient que l’audio et la timeline. Valider la
+   restitution des mouvements par Play et Seek dans l’Avatar. Le 6 novembre,
+   les typechecks Audio Capture et Elcé ainsi que le build Elcé passent ; Safari
+   confirme l’onglet Caméra et l’absence de réglages visibles sans démarrer un
+   appareil. À 390 × 844 px, Safari confirme quatre sources sur deux colonnes,
+   une modale de 358 × 672 px et aucun débordement horizontal. La captation
+   réelle et la restitution restent à accepter.
+   Contrôle MCP du 6 novembre : la capture a démarré sans dialogue caméra et
+   sans visage détecté ; arrêt et rechargement ont libéré les pistes et supprimé
+   la piste locale temporaire. Ce contrôle ne valide pas le dialogue réel.
+   Contrôle comparatif du 6 novembre : dans la même session Safari MCP, le
+   bouton `Start camera` d’AniMattor démarre sans dialogue visible, affiche la
+   même mire vidéo 640 × 480 et indique `No face in view`. Le parcours Elcé
+   suit donc la séquence observée dans la démo ; la source caméra simulée de
+   cette session ne valide ni la permission native ni le suivi d’un visage réel.
+   Implémentation de la cible ajoutée le 6 novembre ; typechecks Audio Capture
+   et Elcé ainsi que le build Elcé passent. Acceptation restante : dans Brave,
+   démarrer Caméra avec une vraie caméra ; vérifier que l’aperçu et la cible
+   apparaissent ensemble et que les mouvements du visage modifient le Rive en direct ;
+   arrêter et fermer la modale pour confirmer la libération des ressources.
 
 Acceptation de la phase 1 : Safari confirme que « Capture » est le premier
 onglet et devient la sélection par défaut à l’ouverture/réouverture avec une
-clé, ainsi que les trois sources audio et l’absence de textes explicatifs
-statiques. « Piste audio » se place entre Capture et Réglages ; il est
+clé, ainsi que les quatre sources : TTS, Micro, Caméra et Charger audio, sans
+textes explicatifs statiques. La Caméra a été vérifiée dans le contrôle du
+6 novembre. « Piste audio » se place entre Capture et Réglages ; il est
 désactivé tant qu’aucune piste n’existe et devient sélectionné après création
 ou chargement. « Préparer et insérer » est visuellement l’action principale.
 La modale garde les dimensions mesurées sur chaque onglet : 608 ×
@@ -257,21 +307,11 @@ après chargement d’un WAV local temporaire, et le style principal du bouton
 « Préparer et insérer ». Le bouton n’a pas été déclenché ; aucun appel
 ElevenLabs ni transfert au BDC n’a eu lieu pendant ce contrôle.
 
-État non final, 6 novembre : « Préparer et insérer » appelle ElevenLabs STT si
-le transcript est vide et Forced Alignment séparément si ses temps caractère
-manquent. Décision utilisateur du 6 novembre : garder ElevenLabs pour le STT
-dans cette tranche et séparer les opérations afin de préparer l’adaptation
-locale. Le STT transmet le texte seul (`timestamps_granularity=none`) ;
-l’alignement produit les mots et caractères horodatés. Le générateur local de
-visèmes dépend uniquement des types de timing partagés. Le fournisseur local
-reste à qualifier avant remplacement. Constat du
-5 novembre : l’ancien contrôle « Transcrire le son » atteint
-`POST /v1/speech-to-text` avec `scribe_v2`, le fichier audio et les timestamps
-mot. ElevenLabs répond `401 unauthorized` en signalant la permission
-`speech_to_text` manquante. Cette réponse concerne le STT ; elle ne doit ni
-masquer les autres réglages ni être interprétée comme l’échec du TTS. Un
-transcript collé évite le STT, mais le code demande encore la permission
-Forced Alignment pour produire les caractères horodatés.
+Acceptation du flux de préparation encore requise : transcript vide, aucune
+requête STT et piste conservée ; transcript fourni, Forced Alignment appelé si
+nécessaire, puis génération locale des visèmes et transfert au BDC Avatar. La
+démo AniMattor confirme le parcours texte fourni puis alignement forcé. Le STT
+reste hors de ce parcours ; son usage ultérieur sera cadré séparément.
 
 ## Décisions restantes
 
@@ -323,8 +363,10 @@ Forced Alignment pour produire les caractères horodatés.
   dans le catalogue média Elcé ; préparer le montage futur. Le module partagé
   est localisé dans `packages/authoring/audio-capture/` ; l’attache de la piste
   finale réutilise le service média Elcé existant.
-- **T5 :** format et précision de réduction temporelle ; restitution du regard
-  selon les capacités réelles du rig, sans contrôle indépendant identifié.
+- **T5 — acceptation restante :** vérifier la précision de la piste caméra et
+  sa restitution par Play/Seek sur le rig réel ; la collecte conserve les
+  échantillons du détecteur dans une seule charge utile finale. La commande de
+  regard reste hors de cette tranche.
 - **D1/D2 :** la télécommande est intégrée à la barre de navigation et le
   démarrage manuel est appliqué. Le placement responsive est maintenant
   vérifié dans le lot 4 pour le réglage haut droite sur grand et petit
@@ -394,19 +436,11 @@ accéder à la captation et aux réglages, dont la position ; sa présence activ
 dans le Carousel l’accès au transcript et le choix d’un mot horodaté.
 Le BDC Avatar est placé dans la Diapo à côté du Carousel. Il n’est ni une vue
 ni un enfant du Carousel. Le lot 4 conserve les fichiers audio, transcript et
-visèmes fournis ; le module de captation audio, la conversion après saisie et
-la réécoute restent au lot 5. La capture vidéo est différée jusqu’à validation
-de ce parcours.
-Décision du 5 novembre sur le retrait de l’Avatar ou le remplacement de sa
-prise : supprimer les liens aux occurrences du transcript, en conservant
-leurs temps de déclenchement. Ne pas conserver d’associations « À réassocier »
-ni reporter automatiquement les liens sur les mots d’une nouvelle prise.
-Chaque carte peut ensuite être réassociée au nouveau son : le choix d’une
-occurrence de son transcript enregistre la nouvelle association et remplace
-son temps de déclenchement par le début de cette occurrence. La première
-carte reste à zéro.
-Rationale et interactions proposées dans l’
-[étude](../notes/2026-11-04-talking-head-study.md#intégration-auteur-proposée--5-novembre-2026).
+visèmes fournis ; le module de captation audio, la conversion après saisie, la
+captation caméra et la réécoute restent au lot 5.
+L’association de mots et la migration v12 sont appliquées ; leur contrat est
+dans la [spécification Avatar](../specs/avatar-bdc-spec.md#association-aux-cartes-du-carousel).
+L’acceptation projet, Undo/Redo et rechargement reste au lot 4, action 4.
 
 Décision utilisateur : **un seul Avatar par Diapo pour cette version**, frère
 du Carousel. L’Avatar peut être conservé au catalogue ; Flux et placement
@@ -424,13 +458,14 @@ le démarrage de la page ; la case Avatar `autoStart` n’est pas proposée et s
 ancienne valeur persistée est ignorée. La prise existante conserve son audio et
 affiche son transcript. Son entrée « Capture live » ouvre une modale dédiée ;
 l’import fichier par fichier disparaît de l’éditeur, la capture réelle restant
-au lot 5. Le choix d’un mot est rattaché à chaque carte, sous forme de radios
-cachés dont la valeur en millisecondes est transmise et validée avec l’occurrence
-choisie ; l’interface affiche le mot sans temps et remplace le champ de durée
-par le mot choisi. Aucun sélecteur de mot global au Carousel.
-Décision utilisateur complémentaire : la carte 1 garde son repère à zéro, mais
-le champ de durée reste vide pour signifier une durée illimitée plutôt qu’une
-durée nulle. Le contrôle auteur masque donc le `0 s` de cette carte.
+au lot 5. Chaque carte après la première a son propre radio caché par occurrence,
+avec le temps du mot comme valeur. L’interface affiche seulement le mot associé
+et remplace le champ de durée ; aucune heure de début n’est affichée. Une
+occurrence choisie doit suivre les associations des cartes précédentes, mais
+peut dépasser les associations suivantes : celles qu’elle dépasse sont alors
+supprimées et les durées recalculées. Aucun sélecteur global de transcript dans
+le Carousel. La première carte commence à zéro, conserve une durée ordinaire et
+ne reçoit pas de mot associé.
 Décision utilisateur du 5 novembre sur l’association : la liste des mots reste
 ouverte par défaut, entourée d’un bord sur toute la largeur, sous la barre de
 réglages et séparée du champ de durée. Une icône de repli se place en haut à
@@ -441,68 +476,61 @@ sa ligne ; afficher le transcript avant son bilan statistique et rapprocher les
 deux. Rendu Safari vérifié le 5 novembre ; contrat transféré dans la
 [spécification Avatar](../specs/avatar-bdc-spec.md#éditeur-de-lavatar).
 
-**Décision utilisateur du 5 novembre — réordonnancement narré.** Les
-associations restent liées à leur carte pendant le
-réordonnancement, sauf sur la carte qui devient première, qui revient à zéro
-sans association. L’ancienne première, déplacée en deuxième, retrouve le choix
-de mot. Les occurrences hors ordre restent visibles et leur radio est
-désactivée. Une association conservée mais hors ordre reste mémorisée ; son
-repère effectif devient libre. Les repères libres entre deux associations
-actives partagent également l’intervalle restant. Après la dernière association
-active, chaque carte libre avance selon la durée de l’entrée précédente ou la
-durée par défaut du Carousel. Réutiliser le service Carousel et la commande
-Learning existants ; aucun BDC ni circuit de commande parallèle. À vérifier
-sur les déplacements vers l’index 0 depuis les 2e, 3e et 4e cartes, la
-réactivation d’un lien quand son ordre redevient valide, la monotonie des
-repères effectifs et la sauvegarde/réouverture du Projet 3.
+**Réordonnancement — code appliqué, acceptation en cours.** Le service Carousel
+et la commande Learning existants gardent les associations avec leur carte,
+retirent celle de la vue devenue première et recalculent les durées. L’action 4
+vérifie les déplacements vers l’index 0 depuis les 2e, 3e et 4e cartes, le
+retour d’un ordre valide et la persistance dans le Projet 3.
 
 **Implémentation appliquée ; acceptation en cours.** La façade passe l’identifiant
 déplacé à la commande `bdc.carousel.update` existante ; Learning recalcule les
-repères et valide les liens conservés. Dans Safari, la vraie commande Learning
+durées et valide les liens conservés. Dans Safari, la vraie commande Learning
 a été appliquée en mémoire à une copie désérialisée du Projet 3 : les
-déplacements 3e→1re et 4e→1re laissent une première carte à zéro, sans lien, et
-une séquence croissante ; le déplacement 4e avant 3e conserve son lien
+déplacements 3e→1re et 4e→1re laissent une première carte sans association ;
+le déplacement 4e avant 3e conserve son lien
 `Saturne` mais le rend hors ordre et non sélectionnable, puis le retour le
-réactive à 13 526 ms. Aucune donnée du Projet 3 n’a été écrite. Le build et le
+réactive. Aucune donnée du Projet 3 n’a été écrite. Le build et le
 typecheck Elcé passent depuis le 6 novembre, après retrait de la variable
 locale `title` inutilisée. Le drag UI, la sauvegarde/réouverture
 et la suite complète restent à vérifier. Le rejet API observé séparément
 atteint `assertAvatarContent` ; le document local examiné est valide, mais le
 document entrant qui a déclenché ce rejet n’a pas été capturé.
-Dans l’éditeur Projet 3, le champ de durée de la carte 1 est vide à zéro ; les
-41 occurrences de la carte 2 sont affichées dans une zone compacte pleine
-largeur bordée, séparée des réglages temporels, avec la flèche de bascule en
-haut à droite. Le cadre est ouvert par défaut ; Safari vérifie que le repli
-masque les mots et inverse la flèche, puis que le déploiement rouvre la liste.
-Le build Elcé passe.
+Dans l’éditeur Projet 3, Safari vérifie que les 41 occurrences de la carte 2
+sont affichées dans une zone compacte pleine largeur bordée, séparée des
+réglages, avec la flèche de bascule en haut à droite. Le cadre est ouvert par
+défaut ; le repli masque les mots et inverse la flèche, puis le déploiement
+rouvre la liste.
 
 Actions du lot 4 — acceptées par la demande de poursuite :
 
 Préparation de l’exécution :
 
-- **Acquis :** BDC frères, prise sur fichiers fournis, temps conservés après
+- **Acquis :** BDC frères, prise sur fichiers fournis, durées conservées après
   retrait/remplacement et réassociation explicite au nouveau son ; fond
   réglable sur le rig transparent.
-- **Schéma de cette tranche :** document v11, migration additive depuis v10 ; payload
+- **Schéma de cette tranche :** document v12, migration additive depuis v11 ; payload
   `avatar` propre à la ressource, avec référence de profil, prise identifiée
   (audio référencé dans `medias`, durée, occurrences et piste fournie) et
   réglages de placement/lecture. Le rig fourni reste une ressource applicative
   du profil ; l’audio rejoint le circuit média existant. Le transcript est
-  conservé une seule fois dans la prise. L’entrée Carousel porte un temps de
-  début et une association facultative à la prise et à son occurrence ; les
-  durées ordinaires gardent leur rôle actuel. La projection temporelle
-  réutilise le builder Carousel et la factory Avatar existants.
+  conservé une seule fois dans la prise. L’entrée Carousel garde `durationMs`
+  comme source de vérité. Sa référence facultative à la prise et à l’occurrence
+  identifie le mot associé ; le temps du mot sert à recalculer les durées au
+  moment de l’édition, sans être persisté comme début absolu. La migration v12
+  convertit les anciens débuts absolus en durées par vue avant de retirer leur
+  champ temporel.
   `avatar.take` contient `id`, `audioMediaId`, `durationMs`, `words` et
   `frames` adaptés au profil fourni. `avatar` porte aussi `profileId` et
   `placement` (position, largeur, fond facultatif). Le mode du Carousel est
   l’unique réglage de démarrage de la page ; l’ancien `avatar.autoStart` stocké
   reste ignoré pour compatibilité.
-  `CarouselBdcEntry.cue` contient `startAtMs` et `word` facultatif
+  `CarouselBdcEntry.cue` contient seulement `word` facultatif
   `{ avatarBdcId, takeId, wordIndex }`. Aucun transcript copié dans le Carousel.
-  Le retrait/remplacement efface seulement `cue.word`. La prise existante garde
+  Le retrait/remplacement matérialise les durées de la prise courante puis
+  efface les associations. La prise existante garde
   l’audio et le transcript ; la capture future réutilisera la file XState et le
-  stockage média commun. SQLite porte un détail Avatar JSON et les repères des
-  entrées.
+  stockage média commun. SQLite porte un détail Avatar JSON, la durée dans
+  `duration_ms` et l’association de mot dans `cue_json`.
 - **Propriétaires à étendre :** `resources/bdcs/avatar/` pour données,
   validation, adaptation du fichier et éditeur ; modèle/commandes Learning
   pour placement et mises à jour atomiques ; file d’import et API média
@@ -524,12 +552,14 @@ Préparation de l’exécution :
    modale dédiée, sans présenter la captation du lot 5 comme disponible.
    Dans l’éditeur de chaque carte, sélectionner une occurrence du transcript
    avec un bouton radio caché, dont la valeur est le temps de l’occurrence ;
-   afficher seulement le mot choisi dans le champ qui alterne avec la durée.
-   Un mot répété reste distinguable. Au retrait de l’Avatar ou au
-   remplacement de sa prise, supprimer l’association et conserver le temps
-   correspondant dans la même commande documentaire. Permettre ensuite de
-   choisir un mot du nouveau son pour remplacer ensemble l’association et
-   le temps de la carte. Ne pas copier le transcript dans le Carousel.
+   afficher seulement le mot choisi dans le contrôle de l’association. Un mot
+   répété reste distinguable. Recalculer et enregistrer `durationMs` à partir
+   des mots associés ; un choix futur est permis même s’il dépasse les cartes
+   suivantes et efface alors leurs associations devenues impossibles. Ne pas
+   persister de début absolu. Au retrait de l’Avatar
+   ou au remplacement de sa prise, convertir les anciens débuts en durées,
+   supprimer les associations et conserver ces durées dans la même commande
+   documentaire. Ne pas copier le transcript dans le Carousel.
 3. **Appliqué, rendu partiellement accepté** — Builders Diapo/Carousel et
    preview Learning : produire la configuration de la factory existante depuis
    le document et retirer le mapping temporaire
@@ -541,26 +571,34 @@ Préparation de l’exécution :
 4. **En cours — acceptation** : créer et régler un Avatar dans l’éditeur réel,
    associer les cartes (dont un mot répété), vérifier Play/Pause/Seek/replay et
    fin vocale ;
-   retrait/remplacement doivent supprimer les associations en conservant
-   exactement les temps. Undo/Redo doit restaurer ensemble la prise, les
-   associations et les temps. Réassocier une carte à un mot du nouveau son
-   doit remplacer son temps conservé par le début du mot choisi, sans modifier
-   les autres cartes ; rechargement et preview doivent restituer
-   l’état enregistré. Tests avec leurs propres
-   prises, typecheck/build et navigateur ; vérifier le Carousel plein cadre et
-   l’Avatar superposé selon ses positions en grand et petit viewport. Transférer seulement
-   les résultats vérifiés aux spécifications propriétaires.
-
-   **Vérification partielle du 5 novembre :** Safari MCP a supprimé l’Avatar sur
-   une copie temporaire du Projet 3 ; le mot « Il » a été remplacé par le temps
-   conservé 5 770 ms, les réglages du Carousel sont restés inchangés et le temps
-   a persisté après fermeture/réouverture. La copie a été supprimée. L’Undo/Redo,
-   le remplacement de prise et les autres critères restent à vérifier.
+   retrait/remplacement doivent supprimer les associations en matérialisant
+   les durées obtenues à partir de la prise courante. Undo/Redo doit restaurer
+   ensemble la prise, les associations et les durées. Réassocier une carte à
+   un mot du nouveau son doit recalculer les durées concernées à partir des
+   occurrences actives, sans conserver de début absolu ; rechargement et preview
+   doivent restituer l’état enregistré. Les tests ciblés, typecheck et build
+   passent. Dans le Projet 3, Safari MCP confirme le clic d’association,
+   l’effacement d’un lien dépassé, la recalculation des durées, Undo et la
+   persistance après rechargement. Restent à vérifier Play/Pause/Seek/replay,
+   le retrait/remplacement avec Undo/Redo, la fin vocale et le Carousel plein
+   cadre avec l’Avatar dans ses positions aux deux tailles de viewport. Garder
+   le lot En cours jusqu’à validation de ces critères.
 
    Le 5 novembre, Safari MCP a aussi vérifié l’agencement de l’éditeur du
    Projet 3 en lecture seule : titre Avatar seul, capture colorée à droite du
    lecteur sur sa ligne, transcript avant le bilan avec 6 px d’écart. Aucune
    donnée du projet n’a été modifiée.
+
+   Le 8 novembre, `avatar-authoring.test.ts` et le test auteur ciblé vérifient
+   la migration v11→v12, la conversion des associations en `durationMs`, le
+   remplacement de prise, les réassociations et le réordonnancement-retour.
+   Safari MCP vérifie le choix réel d’un mot plus tardif sur la deuxième carte :
+   l’association dépassée de la troisième est retirée, sa durée devient
+   1,193 s, et les mots postérieurs restent sélectionnables. Deux Undo
+   restaurent les valeurs initiales ; le rechargement confirme le document
+   synchronisé. Les critères de lecture et d’overlay restent ouverts. Dans le
+   fichier complet de l’éditeur, un échec distinct persiste dans le déplacement
+   catalogue d’une Carte : `dispatchDrag` reçoit une cible absente (ligne 725).
 
 Contrôle navigateur du 5 novembre : la preview standard du Projet 3 confirme
 que le Carousel a exactement le rectangle de la racine Diapo à 1280 × 756 et
@@ -594,7 +632,6 @@ typecheck Elcé passe depuis le 6 novembre après retrait de la variable locale
   41 mots du JSON fourni. Elle utilise directement les propriétés/valeurs,
   le décalage bouche de 50 ms et la voix maître. Play, Seek et animations
   natives ont été vérifiés dans Safari MCP ; l’utilisateur valide le rendu.
-  La piste de tête issue de capture caméra est différée après validation audio.
 - Lot 2 clos : composants dans `component-v2`, story autonome dans le package
   `authoring/story/rive-talking-avatar/`, guide dans ce dossier, fin de scène
   laissée à l’appelant et booléen `isTalking` unifié. **72 tests component-v2
@@ -611,7 +648,7 @@ typecheck Elcé passe depuis le 6 novembre après retrait de la variable locale
   incluse dans ce lot.
 - Elcé : mots répétés, remplacement de prise, fin de voix après la dernière
   carte, sortie/retour sans son résiduel, annulation/refus micro-caméra,
-  Undo/Redo et rechargement avec ressources/placement/repères restaurés.
+  Undo/Redo et rechargement avec ressources, placement et durées restaurés.
 - Reprise du 5 novembre : **68 tests passent sur 70** dans les suites Diapo,
   player et session preview. Le test narré passe. Échecs avant toute modification
   de cette reprise : attente du perso Question `:prompt` et absence du groupe

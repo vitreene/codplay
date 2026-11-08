@@ -4,7 +4,7 @@ import { applyDocumentCommand } from '../../../domain/commands/document-commands
 import { LearningDocument } from '../document/learning-document'
 import { learningControllerMachine } from '../authoring/learning-controller-machine'
 import { LearningPageSceneCatalog } from '../reading/learning-page-scene-catalog'
-import { projectCarouselCues } from '../../../resources/bdcs/carousel/domain/carousel-service'
+import { resolveCarouselViewStarts } from '../../../resources/bdcs/carousel/domain/carousel-service'
 import { createAvatarDocumentFixture, createAvatarTakeFixture } from './fixtures/avatar-document-fixture'
 
 /** Returns the test Carousel, whose identity and values belong to this suite. */
@@ -36,49 +36,134 @@ describe('Avatar authoring through Learning commands', () => {
     })).toThrow('profil configuré')
   })
 
-  it('distinguishes repeated words and projects cues through the existing Carousel durations', () => {
+  it('distinguishes repeated words and stores the resulting Carousel durations', () => {
     const document = createAvatarDocumentFixture()
     const content = carouselIn(document)
     expect(content.cards.map((entry) => entry.cue)).toEqual([
-      { startAtMs: 0 },
-      { startAtMs: 2400, word: { avatarBdcId: 'avatar-test', takeId: 'take-test', wordIndex: 1 } },
-      { startAtMs: 6800, word: { avatarBdcId: 'avatar-test', takeId: 'take-test', wordIndex: 2 } },
+      undefined,
+      { word: { avatarBdcId: 'avatar-test', takeId: 'take-test', wordIndex: 1 } },
+      { word: { avatarBdcId: 'avatar-test', takeId: 'take-test', wordIndex: 2 } },
     ])
-    expect(projectCarouselCues(content, 12_000).cards.map((entry) => entry.durationMs)).toEqual([2400, 4400, 5200])
+    expect(content.cards.map((entry) => entry.durationMs)).toEqual([2400, 4400, 5200])
+    expect(resolveCarouselViewStarts(content)).toEqual([0, 2400, 6800])
     expect(() => applyDocumentCommand(document, { type: 'bdc.carousel.word.set', bdcId: 'carousel-test', cardBdcId: 'card-one', avatarBdcId: 'avatar-test', wordIndex: 1, startAtMs: 2400 })).toThrow('première')
-    expect(() => applyDocumentCommand(document, { type: 'bdc.carousel.word.set', bdcId: 'carousel-test', cardBdcId: 'card-two', avatarBdcId: 'avatar-test', wordIndex: 2, startAtMs: 6800 })).toThrow('croissants')
   })
 
-  it('clears associations on replacement, preserves exact starts and reassociates to the new sound', () => {
+  it('migrates v11 absolute starts into v12 per-view durations', () => {
+    const source = createAvatarDocumentFixture()
+    const starts = [0, 2400, 6800]
+    const legacy = {
+      ...source.toJSON(),
+      version: 11,
+      bdcs: source.bdcs.map((bdc) => bdc.carousel == null ? bdc : {
+        ...bdc,
+        carousel: {
+          ...bdc.carousel,
+          cards: bdc.carousel.cards.map((entry, index) => ({
+            ...entry,
+            cue: { startAtMs: starts[index], ...(entry.cue?.word === undefined ? {} : { word: entry.cue.word }) },
+          })),
+        },
+      }),
+    }
+
+    const migrated = LearningDocument.fromJSON(legacy)
+
+    expect(migrated.data.version).toBe(12)
+    expect(carouselIn(migrated).cards.map((entry) => entry.durationMs)).toEqual([2400, 4400, 5200])
+    expect(carouselIn(migrated).cards.map((entry) => entry.cue)).toEqual([
+      undefined,
+      { word: { avatarBdcId: 'avatar-test', takeId: 'take-test', wordIndex: 1 } },
+      { word: { avatarBdcId: 'avatar-test', takeId: 'take-test', wordIndex: 2 } },
+    ])
+  })
+
+  it('keeps word links with their Cards and recalculates durations across reorder and return', () => {
+    const source = createAvatarDocumentFixture()
+    const original = carouselIn(source)
+    const reordered = applyDocumentCommand(source, {
+      type: 'bdc.carousel.update',
+      bdcId: 'carousel-test',
+      carousel: { ...original, cards: [original.cards[0]!, original.cards[2]!, original.cards[1]!] },
+      movedBdcId: 'card-three',
+    })
+
+    expect(carouselIn(reordered).cards.map((entry) => entry.cue?.word?.wordIndex)).toEqual([undefined, 2, 1])
+    expect(carouselIn(reordered).cards.map((entry) => entry.durationMs)).toEqual([6800, 2600, 2600])
+    expect(resolveCarouselViewStarts(carouselIn(reordered))).toEqual([0, 6800, 9400])
+
+    const restored = applyDocumentCommand(reordered, {
+      type: 'bdc.carousel.update',
+      bdcId: 'carousel-test',
+      carousel: { ...carouselIn(reordered), cards: [original.cards[0]!, original.cards[1]!, original.cards[2]!] },
+      movedBdcId: 'card-two',
+    })
+
+    expect(carouselIn(restored).cards.map((entry) => entry.durationMs)).toEqual([2400, 4400, 5200])
+    expect(resolveCarouselViewStarts(carouselIn(restored))).toEqual([0, 2400, 6800])
+  })
+
+  it('accepts a future word on one Card, clears overtaken links and reallocates durations', () => {
+    const source = createAvatarDocumentFixture()
+    const take = source.bdcs.find((bdc) => bdc.id === 'avatar-test')?.avatar?.take
+    if (take == null) throw new Error('The fixture Avatar has no take.')
+    const withFutureWord = applyDocumentCommand(source, {
+      type: 'bdc.avatar.take.set',
+      bdcId: 'avatar-test',
+      take: { ...take, words: [...take.words, { text: 'plus tard', startAtMs: 9000, endAtMs: 9400 }] },
+    })
+
+    const associated = applyDocumentCommand(withFutureWord, {
+      type: 'bdc.carousel.word.set',
+      bdcId: 'carousel-test',
+      cardBdcId: 'card-two',
+      avatarBdcId: 'avatar-test',
+      wordIndex: 3,
+      startAtMs: 9000,
+    })
+
+    expect(carouselIn(associated).cards.map((entry) => entry.cue)).toEqual([
+      undefined,
+      { word: { avatarBdcId: 'avatar-test', takeId: 'take-test', wordIndex: 3 } },
+      undefined,
+    ])
+    expect(carouselIn(associated).cards.map((entry) => entry.durationMs)).toEqual([9000, 1500, 1500])
+    expect(resolveCarouselViewStarts(carouselIn(associated))).toEqual([0, 9000, 10_500])
+  })
+
+  it('converts old associations to durations on replacement and reassociates to the new sound', () => {
     const source = createAvatarDocumentFixture()
     const replaced = applyDocumentCommand(source, { type: 'bdc.avatar.take.set', bdcId: 'avatar-test', take: createAvatarTakeFixture('take-new', 350) })
-    expect(carouselIn(replaced).cards.map((entry) => entry.cue)).toEqual([{ startAtMs: 0 }, { startAtMs: 2400 }, { startAtMs: 6800 }])
+    expect(carouselIn(replaced).cards.map((entry) => entry.cue)).toEqual([undefined, undefined, undefined])
+    expect(carouselIn(replaced).cards.map((entry) => entry.durationMs)).toEqual([2400, 4400, 5200])
     const associated = applyDocumentCommand(replaced, { type: 'bdc.carousel.word.set', bdcId: 'carousel-test', cardBdcId: 'card-two', avatarBdcId: 'avatar-test', wordIndex: 1, startAtMs: 2750 })
-    expect(carouselIn(associated).cards.map((entry) => entry.cue?.startAtMs)).toEqual([0, 2750, 6800])
-    expect(carouselIn(associated).cards[1]?.cue?.word?.takeId).toBe('take-new')
+    expect(carouselIn(associated).cards.map((entry) => entry.durationMs)).toEqual([2750, 4400, 4850])
+    expect(carouselIn(associated).cards[1]?.cue?.word.takeId).toBe('take-new')
     expect(LearningDocument.fromJSON(associated.toJSON()).toJSON()).toEqual(associated.toJSON())
+
+    const laterAssociation = applyDocumentCommand(replaced, { type: 'bdc.carousel.word.set', bdcId: 'carousel-test', cardBdcId: 'card-three', avatarBdcId: 'avatar-test', wordIndex: 2, startAtMs: 7150 })
+    const earlierAssociation = applyDocumentCommand(laterAssociation, { type: 'bdc.carousel.word.set', bdcId: 'carousel-test', cardBdcId: 'card-two', avatarBdcId: 'avatar-test', wordIndex: 1, startAtMs: 2750 })
+    expect(carouselIn(earlierAssociation).cards.map((entry) => entry.durationMs)).toEqual([2750, 4400, 4850])
+    expect(carouselIn(earlierAssociation).cards[2]?.cue?.word).toEqual({ avatarBdcId: 'avatar-test', takeId: 'take-new', wordIndex: 2 })
   })
 
-  it('retains cue times through removal, catalogue return and Carousel moves without stale links', () => {
+  it('retains durations through removal, catalogue return and Carousel moves without stale links', () => {
     const source = createAvatarDocumentFixture()
     for (const command of [
       { type: 'bdc.avatar.delete', bdcId: 'avatar-test' },
       { type: 'bdc.remove', bdcId: 'avatar-test' },
     ] as const) {
       const next = applyDocumentCommand(source, command)
-      expect(carouselIn(next).cards.map((entry) => entry.cue)).toEqual([{ startAtMs: 0 }, { startAtMs: 2400 }, { startAtMs: 6800 }])
+      expect(carouselIn(next).cards.map((entry) => entry.cue)).toEqual([undefined, undefined, undefined])
+      expect(carouselIn(next).cards.map((entry) => entry.durationMs)).toEqual([2400, 4400, 5200])
     }
     const withoutAvatar = applyDocumentCommand(source, { type: 'bdc.remove', bdcId: 'avatar-test' })
     const movedCarousel = applyDocumentCommand(withoutAvatar, { type: 'bdc.move', bdcId: 'carousel-test', placement: { kind: 'page', pageId: 'page-a' } })
-    expect(carouselIn(movedCarousel).cards.map((entry) => entry.cue)).toEqual([{ startAtMs: 0 }, { startAtMs: 2400 }, { startAtMs: 6800 }])
+    expect(carouselIn(movedCarousel).cards.map((entry) => entry.cue)).toEqual([undefined, undefined, undefined])
+    expect(carouselIn(movedCarousel).cards.map((entry) => entry.durationMs)).toEqual([2400, 4400, 5200])
+    expect(resolveCarouselViewStarts(carouselIn(movedCarousel))).toEqual([0, 2400, 6800])
     const catalog = new LearningPageSceneCatalog().build(movedCarousel, {})
-    const sourceScene = catalog.scenes['scene-page-a']!
-    const scene = 'sceneDoc' in sourceScene ? sourceScene.sceneDoc : sourceScene
-    const story = Object.values(scene.stories).find((candidate) => candidate.id.includes('carousel-test'))!
-    const cueStarts = story.eventimes
-      ?.filter((event) => typeof event.name === 'string' && event.name.endsWith(':intro'))
-      .map((event) => event.startAt)
-    expect(cueStarts).toEqual([2400, 6800])
+    expect(catalog.scenes['scene-page-a']).toBeDefined()
   })
 
   it('restores the complete take and associations with controller Undo and Redo', () => {
@@ -90,7 +175,8 @@ describe('Avatar authoring through Learning commands', () => {
     actor.send({ type: 'history.undo' })
     expect(carouselIn(actor.getSnapshot().context.document).cards[1]?.cue?.word?.takeId).toBe('take-test')
     actor.send({ type: 'history.redo' })
-    expect(carouselIn(actor.getSnapshot().context.document).cards[1]?.cue).toEqual({ startAtMs: 2400 })
+    expect(carouselIn(actor.getSnapshot().context.document).cards[1]?.cue).toBeUndefined()
+    expect(carouselIn(actor.getSnapshot().context.document).cards.map((entry) => entry.durationMs)).toEqual([2400, 4400, 5200])
     actor.stop()
   })
 

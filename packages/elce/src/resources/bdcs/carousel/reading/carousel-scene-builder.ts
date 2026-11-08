@@ -28,7 +28,7 @@ import { ELCE_CAROUSEL_RUNTIME_KEY, selectCarouselCardStrap } from '../../../../
 import { appendClassToMarkupElement, sceneClassRule, sceneStyleClassName } from '../../../../builders/scene-style/scene-style-classes'
 import { appearanceClassNameForBdc } from '../../../../builders/scene-style/appearance-class-names'
 import type { ResourceInlineTextSceneFeature } from '../../../document/resource-inline-text-feature'
-import { projectCarouselCues } from '../domain/carousel-service'
+import { resolveCarouselViewStarts } from '../domain/carousel-service'
 
 const statisticalGraphSceneBuilder = new ElceStatisticalGraphSceneBuilder()
 
@@ -67,7 +67,7 @@ export class ElceCarouselSceneBuilder {
   /** Projects Carousel settings and illustrative BDCs into a CodPlay story. */
   public build(input: CarouselSceneBuildInput): CarouselSceneBuild {
     const { pageId, bdcId } = input
-    const content = projectCarouselCues(input.content)
+    const content = input.content
     const displayMode = input.displayMode ?? 'content'
     const navigation = input.navigation ?? 'points'
     const pageCompletion = input.pageCompletion ?? 'last-card'
@@ -242,19 +242,20 @@ export class ElceCarouselSceneBuilder {
 /** Resolves Carousel entry durations into the ranges consumed by CapsuleDistribution. */
 function resolveCardSchedule(input: CarouselSceneBuildInput): readonly ScheduledView[] {
   const cardById = new Map(input.cards.map((bdc) => [bdc.id, bdc]))
-  let endMs = 0
-  const authoredBounds = input.content.cards.map((entry) => {
+  const starts = resolveCarouselViewStarts(input.content)
+  const authoredBounds = input.content.cards.map((entry, index) => {
     const bdc = cardById.get(entry.bdcId)
     if (bdc === undefined || (bdc.type !== 'card' && bdc.type !== 'statistical-graph')) {
       throw new Error(`Le BDC ${entry.bdcId} du Carousel est introuvable ou non illustratif.`)
     }
     const durationMs = entry.durationMs ?? input.content.defaultViewDurationMs
-    const startMs = endMs
-    endMs += durationMs
+    const startMs = starts[index]!
+    const endMs = startMs + durationMs
     return { entry, bdc, startMs, endMs }
   })
+  const clipDurationMs = authoredBounds.at(-1)?.endMs ?? 0
   const distribution = CapsuleDistribution.compute({
-    clipDurationMs: endMs,
+    clipDurationMs,
     mode: CapsulePreset.resolve({ capsuleType: CAPSULE_TYPE.carousel }).mode,
     children: authoredBounds.map(({ entry, startMs, endMs: cardEndMs }) => ({
       trackId: entry.bdcId,

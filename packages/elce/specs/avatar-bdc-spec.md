@@ -35,20 +35,35 @@ Manuel du Carousel détermine le démarrage de la Diapo.
 
 ## Association aux cartes du Carousel
 
-Chaque entrée Carousel conserve son temps `cue.startAtMs`, qu’elle soit liée ou
-non à une occurrence de mot. Une association facultative identifie l’Avatar, la
-prise et l’index de l’occurrence. L’index distingue les répétitions d’un même
-mot. La première carte commence à zéro et ne reçoit pas d’association.
+Chaque entrée Carousel conserve une durée ; le début de la vue est le cumul
+des durées précédentes. La référence facultative `cue.word` identifie l’Avatar,
+la prise et l’index d’occurrence, sans stocker un temps absolu dans le Carousel.
+L’index distingue les répétitions d’un même mot. La première vue commence
+implicitement à zéro et ne reçoit pas d’association ; sa durée reste une durée
+ordinaire de vue.
 
 Quand une prise est disponible, chaque autre carte expose son propre groupe de
 boutons radio cachés. La valeur du bouton radio est le début du mot en
-millisecondes ; son libellé visible est seulement le mot. Le choix met à jour
-ensemble l’association et le temps de la carte. Le champ de durée affiche alors
-le mot choisi. En l’absence d’association, il affiche le temps conservé. Pour
-la première carte, le repère zéro reste implicite et le champ est vide : `0 s`
-serait compris comme une durée nulle, alors que l’absence de valeur indique une
-durée illimitée. Aucun sélecteur global de transcript n’est placé dans
-l’éditeur Carousel.
+millisecondes ; son libellé visible est seulement le mot. Le choix associe le
+mot puis recalcule et enregistre les `durationMs` concernés. Les débuts de mots
+servent à calculer les intervalles entre vues ; la lecture consomme les durées
+cumulées et aucun repère absolu n’est persisté. Le contrôle affiche « Mot
+associé » avec le mot seul, ou « Durée (sec.) » avec une durée éditable lorsqu’il
+n’y a pas d’association. `durationMs: null` hérite de la durée commune du
+Carousel, fixée à cinq secondes par défaut. Aucun sélecteur global de transcript
+n’est placé dans l’éditeur Carousel.
+
+Un choix peut dépasser les associations déjà présentes sur les vues suivantes.
+L’auteur peut choisir toute occurrence postérieure aux associations des vues
+précédentes ; si elle dépasse des associations suivantes, ces liens dépassés
+sont supprimés, puis les durées sont recalculées. Les vues libres entre deux
+associations actives partagent l’intervalle. Après la dernière association, les
+vues libres gardent leurs durées enregistrées (ou héritent de la durée commune)
+et la dernière vue se termine à la fin de la prise. Si les durées des vues
+libres avant la dernière ne tiennent plus dans le temps restant, elles sont
+réparties également pour laisser une durée positive à chacune. L’auteur n’a pas
+à nettoyer les durées à la main. Le champ de la carte associée affiche le mot ;
+il ne présente pas le temps du mot sous le libellé « Durée » ou « Repère ».
 Pour chaque autre carte, la liste des occurrences est visible par défaut dans
 une zone compacte, bordée et pleine largeur, séparée du réglage de durée. Une
 flèche de bascule placée en haut à droite du cadre la replie et la rouvre ; le
@@ -56,19 +71,22 @@ repli masque effectivement les mots. Les choix montrent uniquement les mots ;
 leurs temps restent portés par les radios et l’association sauvegardée.
 
 Retirer l’Avatar ou remplacer sa prise supprime les associations aux mots et
-garde exactement les temps des cartes. L’auteur peut associer chaque carte au
-nouveau transcript, ce qui remplace son temps par le début de la nouvelle
-occurrence choisie.
+conserve les durées des cartes. Lorsqu’un ancien document stocke encore des
+débuts absolus, la migration les convertit en intervalles `durationMs` avant de
+retirer ces débuts. L’auteur peut ensuite associer les cartes au nouveau
+transcript ; ces choix recalculent les durées concernées à partir des nouvelles
+occurrences.
 
 Lors d’un réordonnancement, une carte déplacée en première position revient à
 zéro sans association ; l’ancienne première carte devient associable. Les
 autres liens restent attachés à leur carte. Si un mot associé ne respecte plus
 l’ordre des cartes, le lien reste mémorisé mais son radio est visible et
-désactivé. Son repère effectif devient libre : les cartes libres entre deux
-liens actifs se partagent également l’intervalle ; après le dernier lien
-actif, elles avancent selon la durée de l’entrée précédente ou la durée par
-défaut du Carousel. Quand l’ordre rend à nouveau le mot compatible, le repère
-revient à son temps transcript et le radio redevient sélectionnable.
+désactivé. Cette vue est traitée comme libre : les durées entre associations
+actives partagent l’intervalle ; les durées après la dernière association
+restent inchangées sauf ajustement nécessaire pour finir avec la prise. Quand
+l’ordre rend à nouveau le mot compatible, il redevient actif et ses durées sont
+recalculées. Cette règle de réordonnancement n’empêche pas un nouveau choix :
+celui-ci annule les associations ultérieures qu’il dépasse.
 
 ## Éditeur de l’Avatar
 
@@ -79,45 +97,49 @@ le lecteur audio de la prise et son transcript. Le BDC n’affiche que son titre
 bouton coloré « Capture live », plus grand que les icônes d’action, est placé à
 droite du lecteur sur la même ligne. Le transcript vient avant son bilan de
 mots et de durée, avec un espacement court. « Capture live » ouvre une modale
-dédiée ; elle indique que la captation réelle n’est pas encore disponible.
-L’import fichier par fichier n’est pas proposé.
+dédiée. Elle présente « Micro » et « Caméra » avec une action de démarrage dans
+chaque panneau, sans réglage de suivi facial visible. Elle peut aussi générer
+une voix ou charger un audio ; l’import fichier par fichier dans le BDC n’est
+pas proposé.
 La modale garde les mêmes dimensions en passant entre « Réglages », « Capture »
 et les onglets de source. Sa largeur et sa hauteur sont limitées par la fenêtre ;
 son contenu défile à l’intérieur.
 
 ## Preuves
 
-- Le service de commandes Learning, exécuté en mémoire avec le document Projet
-  3 lu en lecture seule depuis IndexedDB, vérifie les déplacements des 3e et 4e
-  cartes en première position, le déplacement d’une carte au-delà d’un repère
-  suivant et son retour à l’ordre initial. Les repères restent croissants, les
-  liens non premiers restent attachés à leur carte et le lien hors ordre est
-  réactivé quand il redevient compatible. L’[acceptation du lot 4](../plan/2026-11-04-talking-head-plan.md#lot-4--intégration-auteur--implémentation-en-cours)
-  suit encore le drag UI et la sauvegarde/réouverture.
 - [`avatar-authoring.test.ts`](../src/mods/learning/integration/avatar-authoring.test.ts)
-  vérifie la cardinalité, les associations, les temps conservés lors d’un
-  retrait/remplacement et la réassociation à une nouvelle prise.
-- Le 5 novembre, Safari MCP a vérifié le bouton « Supprimer l’Avatar » sur une
-  copie temporaire du Projet 3 : le mot associé à la carte 2 disparaît et son
-  repère reste à 5 770 ms ; le mode Manuel, la transition et le ratio du
-  Carousel restent inchangés. Après fermeture et réouverture de la copie, le
-  temps est toujours présent. La copie a été supprimée ; le Projet 3 original
-  est resté intact.
+  vérifie la cardinalité, la conversion d’un document v11 en durées v12, la
+  conservation des durées au retrait/remplacement et la réassociation à une
+  nouvelle prise. Il vérifie aussi qu’un réordonnancement rend un lien hors
+  ordre inactif pour le calcul des durées, puis le réactive au retour.
 - [`learning-page-editor.test.tsx`](../src/mods/learning/authoring/learning-page-editor.test.tsx)
   vérifie les contrôles d’édition, l’absence d’import fichier et de case
-  `autoStart`, le transcript et la modale Capture live.
+  `autoStart`, le transcript et la modale Capture live. Il vérifie aussi qu’après
+  remplacement de la prise, les cartes non premières peuvent chacune être
+  associées par clic à une occurrence compatible du nouveau transcript et que
+  leurs durées sont recalculées.
+- [`avatar-authoring.test.ts`](../src/mods/learning/integration/avatar-authoring.test.ts)
+  vérifie qu’un nouveau mot qui dépasse une association enregistrée l’annule
+  et que les durées des vues sont recalculées automatiquement.
 - [`diapo-scene-builder.test.ts`](../src/mods/learning/integration/diapo-scene-builder.test.ts)
   vérifie l’overlay et la projection du placement avec ses propres fixtures.
 - Safari MCP vérifie dans la preview du Projet 3 le BDC configuré en haut à
   droite à 1280 × 756 et 390 × 844, avec le Carousel plein cadre et l’Avatar
   affiché après Play. Les mesures et les bords visibles du canvas sont dans le
   [relevé d’acceptation](../notes/assets/talking-head/elce-project-3-acceptance.json).
-- Safari MCP vérifie dans l’éditeur du Projet 3 que le champ de la première
-  carte est vide à zéro, et que les 41 mots de la deuxième carte apparaissent
-  dans la zone pleine largeur bordée, avec la flèche de bascule en haut à
+- Safari MCP vérifie dans l’éditeur du Projet 3 que les 41 mots de la deuxième
+  carte apparaissent dans la zone pleine largeur bordée, avec la flèche de bascule en haut à
   droite. Le cadre est ouvert par défaut ; le clic replie réellement la liste,
   masque les mots et inverse la flèche, puis rouvre la liste. Le build Elcé
   passe.
+- Le 8 novembre, Safari MCP vérifie dans le Projet 3 le choix réel d’un mot
+  sur la troisième carte (`humaine.` à 9 044 ms), puis d’un mot plus tardif sur
+  la deuxième (`La` à 10 031 ms). Le second choix est accepté, retire
+  l’association dépassée de la troisième carte, recalcule sa durée à 1,193 s
+  et laisse les mots postérieurs sélectionnables. Les deux écritures API
+  répondent 200. Deux annulations restaurent les associations et durées
+  initiales ; après rechargement, le Projet 3 est synchronisé et la première
+  carte affiche sa durée de 0,743 s.
 - Le 5 novembre, Safari MCP a vérifié visuellement l’éditeur du Projet 3 en
   lecture seule : « Avatar » reste le seul titre du BDC ; le lecteur audio et
   « Capture live » partagent une ligne, le bouton étant à droite et coloré ;
@@ -127,6 +149,10 @@ son contenu défile à l’intérieur.
   « Réglages » et « Capture » à grande largeur, puis 411 × 672 px sur les deux
   onglets principaux et les trois sources audio à largeur réduite. Aucun appel
   API ni changement du document projet n’a été effectué.
+- Le 6 novembre, Safari MCP confirme que la modale expose les sources Micro et
+  Caméra et que le panneau Caméra affiche son action sans réglage facial. Aucun
+  appareil n’a été démarré pendant ce contrôle visuel ; le flux de captation reste à accepter dans le
+  [plan talking-head](../plan/2026-11-04-talking-head-plan.md).
 
 La suite complète de persistance, Undo/Redo, réassociation et affichage initial
 du rig reste à vérifier dans le

@@ -380,7 +380,7 @@ export function updateCarousel(
   const currentEntries = new Map(bdc.carousel.cards.map((entry) => [entry.bdcId, entry]))
   const nextCarousel = movedBdcId === undefined || !orderChanged
     ? carousel
-    : resources.carouselService.reconcileMovedCueTimes(
+    : resources.carouselService.reconcileCueDurations(
       {
         ...carousel,
         cards: carousel.cards.map((entry) => currentEntries.get(entry.bdcId) ?? entry),

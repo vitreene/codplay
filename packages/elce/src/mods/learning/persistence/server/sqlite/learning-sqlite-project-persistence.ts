@@ -208,7 +208,7 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
     })
   }
 
-  /** Creates a project from its browser-owned v11 document unless its id already exists. */
+  /** Creates a project from its browser-owned Learning document unless its id already exists. */
   public async createProject(document: LearningDocument): Promise<CreateProjectResult> {
     return this.database.transaction(async (transaction) => {
       const now = new Date().toISOString()
@@ -388,7 +388,7 @@ async function readStoredProject(database: ProjectDatabase, projectId: string): 
 
   const projectRow = projectRows[0]!
   const version = numberValue(projectRow, 'format_version')
-  if (version !== 7 && version !== 8 && version !== 9 && version !== 10 && version !== 11) {
+  if (version !== 7 && version !== 8 && version !== 9 && version !== 10 && version !== 11 && version !== 12) {
     throw new Error(`Version documentaire SQLite non prise en charge : ${String(projectRow.format_version)}`)
   }
   const document = await readDocument(database, projectRow)

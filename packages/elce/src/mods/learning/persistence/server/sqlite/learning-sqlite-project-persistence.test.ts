@@ -49,7 +49,7 @@ describe('SQLite project persistence through the Remix API', () => {
     temporaryDirectory = undefined
   })
 
-  it('persists the sibling Avatar, timed word references and audio through the existing API', async () => {
+  it('persists the sibling Avatar, word associations, durations and audio through the existing API', async () => {
     temporaryDirectory = await mkdtemp(join(tmpdir(), 'elce-avatar-persistence-'))
     const databaseFile = join(temporaryDirectory, 'project.sqlite')
     database = await openProjectDatabase(databaseFile)
@@ -77,11 +77,11 @@ describe('SQLite project persistence through the Remix API', () => {
     const restored = (await reopened.findProject(source.id))!.document
     expect(restored.bdcs.find((bdc) => bdc.id === 'avatar-test')?.avatar).toEqual(source.bdcs.find((bdc) => bdc.id === 'avatar-test')?.avatar)
     expect(restored.bdcs.find((bdc) => bdc.id === 'carousel-test')?.carousel?.cards).toEqual(source.bdcs.find((bdc) => bdc.id === 'carousel-test')?.carousel?.cards)
-    expect(restored.data.version).toBe(11)
+    expect(restored.data.version).toBe(12)
     expect((await reopened.findMediaFile(source.id, 'voice-test'))?.storageKey).toBeTruthy()
   })
 
-  it('migrates a fresh database and round-trips the v11 scenario and BDC relations', async () => {
+  it('migrates a fresh database and round-trips the v12 scenario and BDC relations', async () => {
     database = await openProjectDatabase(':memory:')
     const persistence = new LearningSqliteProjectPersistence(database)
     const router = createLearningApiRouter(persistence)
@@ -165,7 +165,7 @@ describe('SQLite project persistence through the Remix API', () => {
       throw new Error('The second facade-created Card was not placed after the first one.')
     }
     const secondSaved = await saveAndReload()
-    expect(secondSaved.data.version).toBe(11)
+    expect(secondSaved.data.version).toBe(12)
     expect(secondSaved.pages.find((page) => page.id === pageId)?.bdcIds).toContain(firstCardId)
     expect(secondSaved.pages.find((page) => page.id === pageId)?.bdcIds).toContain(secondCardId)
     actor.stop()
@@ -217,7 +217,7 @@ describe('SQLite project persistence through the Remix API', () => {
     const body = await opened.json() as { document: ReturnType<LearningDocument['toJSON']> }
     const restored = LearningDocument.fromJSON(body.document)
 
-    expect(restored.data.version).toBe(11)
+    expect(restored.data.version).toBe(12)
     expect(restored.bdcs.find((bdc) => bdc.id === 'bdc-card-photo')?.card?.message).toEqual(richMessage)
     expect(restored.bdcs.find((bdc) => bdc.id === 'bdc-question')?.question?.answers[0]?.label).toBe('Réponse conservée')
   })

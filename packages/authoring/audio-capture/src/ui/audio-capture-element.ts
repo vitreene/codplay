@@ -12,10 +12,19 @@ import {
 import type { AudioCharacter, AudioWord } from '../audio/types'
 import { alignAudioToText } from '../elevenlabs/forced-alignment'
 import { generateSpeechWithTimestamps } from '../elevenlabs/text-to-speech'
-import { transcribeAudio } from '../elevenlabs/speech-to-text'
 import { transformVoice } from '../elevenlabs/voice-transformation'
 import { createMp3WithComment } from '../audio/mp3-comment'
 import { buildFrenchAzureVisemes } from '../timeline/french-azure-viseme-timeline'
+import {
+  startHeadMotionRivePreview,
+  type HeadMotionRivePreviewConfig,
+  type HeadMotionRivePreviewSession,
+} from '../head-tracking/head-motion-rive-preview'
+import {
+  startHeadMotionCapture,
+  type HeadMotionCaptureSession,
+  type HeadMotionSample,
+} from '../head-tracking/head-motion-tracker'
 
 export type AudioCaptureInsertEventDetail = Readonly<{
   audio: File
@@ -24,24 +33,28 @@ export type AudioCaptureInsertEventDetail = Readonly<{
 }>
 
 type AudioVariant = Readonly<{
-  id: 'tts' | 'recording' | 'loaded' | 'transformed'
+  id: 'tts' | 'recording' | 'camera' | 'loaded' | 'transformed'
   label: string
   fileName: string
   audio: Blob
   characters: readonly AudioCharacter[] | null
   transcript: string
   words: readonly AudioWord[] | null
+  headMotion: readonly HeadMotionSample[]
+  headMotionDurationMs: number | null
 }>
 
 const audioCaptureMarkup = `
   <style id="audio-capture-style">
     :host {
       display: block;
+      min-width: 0;
+      max-width: 100%;
       color: var(--audio-capture-ink, #293936);
       font: inherit;
     }
     * { box-sizing: border-box; }
-    #audio-capture-panel { display: grid; gap: 0.85rem; }
+    #audio-capture-panel { display: grid; gap: 0.85rem; min-width: 0; width: 100%; }
     #audio-capture-form { display: grid; gap: 0.8rem; }
     #audio-capture-settings-panel,
     #audio-capture-capture-panel,
@@ -70,9 +83,15 @@ const audioCaptureMarkup = `
     #audio-capture-remember-input { width: 1.05rem; height: 1.05rem; margin: 0; }
     #audio-capture-main-tabs,
     #audio-capture-source-tabs {
-      display: flex;
-      gap: 0.8rem;
+      min-width: 0;
+      width: 100%;
       border-bottom: 1px solid var(--audio-capture-border, #d5d1c7);
+    }
+    #audio-capture-main-tabs { display: flex; gap: 0.8rem; }
+    #audio-capture-source-tabs {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.25rem;
     }
     #audio-capture-main-tabs [role="tab"],
     #audio-capture-source-tabs [role="tab"] {
@@ -86,6 +105,11 @@ const audioCaptureMarkup = `
       cursor: pointer;
       font: inherit;
       font-weight: 600;
+    }
+    #audio-capture-source-tabs [role="tab"] {
+      min-width: 0;
+      padding-inline: 0.4rem;
+      text-align: center;
     }
     #audio-capture-main-tabs [role="tab"][aria-selected="true"],
     #audio-capture-source-tabs [role="tab"][aria-selected="true"] {
@@ -129,6 +153,7 @@ const audioCaptureMarkup = `
     #audio-capture-panel button:not([role="tab"]):disabled { cursor: not-allowed; opacity: 0.58; }
     #audio-capture-tts-panel,
     #audio-capture-microphone-panel,
+    #audio-capture-camera-panel,
     #audio-capture-file-panel,
     #audio-capture-track-panel {
       display: grid;
@@ -162,7 +187,9 @@ const audioCaptureMarkup = `
     }
     #audio-capture-tts-panel[hidden],
     #audio-capture-microphone-panel[hidden],
+    #audio-capture-camera-panel[hidden],
     #audio-capture-file-panel[hidden],
+    #audio-capture-camera-video[hidden],
     #audio-capture-settings-panel[hidden],
     #audio-capture-capture-panel[hidden],
     #audio-capture-track-panel[hidden] { display: none; }
@@ -185,6 +212,38 @@ const audioCaptureMarkup = `
     #audio-capture-track-choices label { display: flex; align-items: center; gap: 0.5rem; }
     #audio-capture-track-preview { display: flex; align-items: center; gap: 0.55rem; min-width: 0; }
     #audio-capture-preview { flex: 1; min-width: 0; }
+    #audio-capture-camera-video {
+      display: block;
+      width: 100%;
+      max-height: 15rem;
+      aspect-ratio: 4 / 3;
+      object-fit: cover;
+      background: #172623;
+      border-radius: 0.3rem;
+      transform: scaleX(-1);
+    }
+    #audio-capture-camera-video[hidden] { display: none; }
+    #audio-capture-camera-previews {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      align-items: center;
+      gap: 0.75rem;
+      min-width: 0;
+    }
+    #audio-capture-camera-previews[data-target-active="true"] {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    #audio-capture-camera-target {
+      display: block;
+      width: 100%;
+      max-height: 15rem;
+      aspect-ratio: 420 / 500;
+      background: var(--audio-capture-field, #fffdf8);
+      border-radius: 0.3rem;
+    }
+    #audio-capture-camera-target[hidden] { display: none; }
+    #audio-capture-camera-status { margin: 0; }
+    #audio-capture-camera-status:empty { display: none; }
     #audio-capture-panel #audio-capture-download {
       display: grid;
       place-items: center;
@@ -208,6 +267,9 @@ const audioCaptureMarkup = `
       font-size: 1rem;
       font-weight: 700;
     }
+    @media (max-width: 32rem) {
+      #audio-capture-source-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
   </style>
   <section id="audio-capture-panel" aria-label="Capture audio">
     <div id="audio-capture-main-tabs" role="tablist" aria-label="Capture, piste audio et réglages">
@@ -219,7 +281,8 @@ const audioCaptureMarkup = `
       <section id="audio-capture-workflow" aria-label="Créer ou charger une piste audio">
         <div id="audio-capture-source-tabs" role="tablist" aria-label="Source audio">
           <button id="audio-capture-tts-tab" type="button" role="tab" aria-selected="true" aria-controls="audio-capture-tts-panel" tabindex="0">Générer une voix</button>
-          <button id="audio-capture-microphone-tab" type="button" role="tab" aria-selected="false" aria-controls="audio-capture-microphone-panel" tabindex="-1">Microphone</button>
+          <button id="audio-capture-microphone-tab" type="button" role="tab" aria-selected="false" aria-controls="audio-capture-microphone-panel" tabindex="-1">Micro</button>
+          <button id="audio-capture-camera-tab" type="button" role="tab" aria-selected="false" aria-controls="audio-capture-camera-panel" tabindex="-1">Caméra</button>
           <button id="audio-capture-file-tab" type="button" role="tab" aria-selected="false" aria-controls="audio-capture-file-panel" tabindex="-1">Charger audio</button>
         </div>
       <fieldset id="audio-capture-tts-panel" role="tabpanel" aria-labelledby="audio-capture-tts-tab" tabindex="0">
@@ -231,8 +294,17 @@ const audioCaptureMarkup = `
         <button id="audio-capture-generate" type="button" disabled>Générer la voix</button>
       </fieldset>
       <fieldset id="audio-capture-microphone-panel" role="tabpanel" aria-labelledby="audio-capture-microphone-tab" tabindex="0" hidden>
-        <legend id="audio-capture-microphone-legend">Enregistrement</legend>
+        <legend id="audio-capture-microphone-legend">Micro</legend>
         <button id="audio-capture-record" type="button">Commencer l’enregistrement</button>
+      </fieldset>
+      <fieldset id="audio-capture-camera-panel" role="tabpanel" aria-labelledby="audio-capture-camera-tab" tabindex="0" hidden>
+        <legend id="audio-capture-camera-legend">Caméra</legend>
+        <button id="audio-capture-camera-record" type="button">Commencer la capture</button>
+        <div id="audio-capture-camera-previews" data-target-active="false">
+          <video id="audio-capture-camera-video" aria-label="Aperçu caméra" muted playsinline hidden></video>
+          <canvas id="audio-capture-camera-target" aria-label="Avatar cible" hidden></canvas>
+        </div>
+        <p id="audio-capture-camera-status" role="status" aria-live="polite"></p>
       </fieldset>
       <section id="audio-capture-file-panel" role="tabpanel" aria-labelledby="audio-capture-file-tab" tabindex="0" hidden>
         <div id="audio-capture-file-picker">
@@ -313,14 +385,25 @@ export function registerAudioCaptureElement(): void {
     private transcriptText: HTMLTextAreaElement | null = null
     private generateButton: HTMLButtonElement | null = null
     private recordButton: HTMLButtonElement | null = null
+    private cameraRecordButton: HTMLButtonElement | null = null
+    private cameraVideo: HTMLVideoElement | null = null
+    private cameraPreviews: HTMLDivElement | null = null
+    private cameraTargetCanvas: HTMLCanvasElement | null = null
+    private cameraStatus: HTMLParagraphElement | null = null
     private transformButton: HTMLButtonElement | null = null
     private insertButton: HTMLButtonElement | null = null
     private downloadButton: HTMLButtonElement | null = null
     private trackChoices: HTMLDivElement | null = null
     private previewAudio: HTMLAudioElement | null = null
+    private headMotionSession: HeadMotionCaptureSession | null = null
+    private headMotionRivePreview: HeadMotionRivePreviewSession | null = null
+    private captureController: AbortController | null = null
     private mediaRecorder: MediaRecorder | null = null
     private mediaStream: MediaStream | null = null
     private recordedChunks: BlobPart[] = []
+    private recordingStartedAt: number | null = null
+    private recordingSource: 'microphone' | 'camera' | null = null
+    private recordingStarting = false
     private audioUrl: string | null = null
     private variants = new Map<AudioVariant['id'], AudioVariant>()
     private selectedVariantId: AudioVariant['id'] | null = null
@@ -351,6 +434,11 @@ export function registerAudioCaptureElement(): void {
       this.transcriptText = root.querySelector<HTMLTextAreaElement>('#audio-capture-transcript-text')
       this.generateButton = root.querySelector<HTMLButtonElement>('#audio-capture-generate')
       this.recordButton = root.querySelector<HTMLButtonElement>('#audio-capture-record')
+      this.cameraRecordButton = root.querySelector<HTMLButtonElement>('#audio-capture-camera-record')
+      this.cameraVideo = root.querySelector<HTMLVideoElement>('#audio-capture-camera-video')
+      this.cameraPreviews = root.querySelector<HTMLDivElement>('#audio-capture-camera-previews')
+      this.cameraTargetCanvas = root.querySelector<HTMLCanvasElement>('#audio-capture-camera-target')
+      this.cameraStatus = root.querySelector<HTMLParagraphElement>('#audio-capture-camera-status')
       this.transformButton = root.querySelector<HTMLButtonElement>('#audio-capture-transform')
       this.insertButton = root.querySelector<HTMLButtonElement>('#audio-capture-insert')
       this.downloadButton = root.querySelector<HTMLButtonElement>('#audio-capture-download')
@@ -376,7 +464,8 @@ export function registerAudioCaptureElement(): void {
         tabList.addEventListener('keydown', (event) => this.handleTabKeydown(event, tabList))
       })
       this.generateButton?.addEventListener('click', () => void this.generateVoice())
-      this.recordButton?.addEventListener('click', () => void this.toggleRecording())
+      this.recordButton?.addEventListener('click', () => void this.toggleRecording('microphone'))
+      this.cameraRecordButton?.addEventListener('click', () => void this.toggleRecording('camera'))
       this.audioFileInput?.addEventListener('change', () => this.loadSelectedAudio())
       this.chooseAudioButton?.addEventListener('click', () => {
         const input = this.audioFileInput
@@ -393,7 +482,11 @@ export function registerAudioCaptureElement(): void {
       this.voiceSelect?.addEventListener('change', () => this.updateWorkflowControls())
       this.ttsText?.addEventListener('input', () => this.updateWorkflowControls())
       this.transcriptText?.addEventListener('input', () => this.updateWorkflowControls())
-      this.closest('dialog')?.addEventListener('close', () => this.selectDefaultTab())
+      this.closest('dialog')?.addEventListener('close', () => {
+        if (this.mediaRecorder?.state === 'recording') this.mediaRecorder.stop()
+        else this.cancelStartingCapture()
+        this.selectDefaultTab()
+      })
 
       this.setVoices(DEFAULT_ELEVENLABS_VOICES)
       const savedApiKey = loadRememberedElevenLabsApiKey()
@@ -407,10 +500,17 @@ export function registerAudioCaptureElement(): void {
 
     /** Stops browser media and revokes temporary playback URLs when removed. */
     disconnectedCallback(): void {
-      this.mediaRecorder?.stop()
-      this.mediaStream?.getTracks().forEach((track) => track.stop())
+      this.cancelStartingCapture()
+      this.stopHeadMotionCapture()
+      this.stopHeadMotionRivePreview()
+      const recorder = this.mediaRecorder
       this.mediaRecorder = null
+      if (recorder?.state === 'recording') recorder.stop()
+      this.mediaStream?.getTracks().forEach((track) => track.stop())
       this.mediaStream = null
+      this.recordingStartedAt = null
+      this.recordingSource = null
+      this.recordedChunks = []
       this.revokeAudioUrl()
     }
 
@@ -520,6 +620,64 @@ export function registerAudioCaptureElement(): void {
       )
     }
 
+    /** Aborts camera setup that has not yet started its audio recorder. */
+    private cancelStartingCapture(): void {
+      if (!this.recordingStarting) return
+      this.captureController?.abort()
+      this.captureController = null
+      if (this.mediaRecorder?.state === 'inactive') this.mediaRecorder = null
+      this.mediaStream?.getTracks().forEach((track) => track.stop())
+      this.mediaStream = null
+      this.recordingSource = null
+      this.recordingStartedAt = null
+      this.recordedChunks = []
+      this.recordingStarting = false
+      this.stopHeadMotionCapture()
+      this.stopHeadMotionRivePreview()
+      if (this.cameraVideo !== null) {
+        this.cameraVideo.hidden = true
+        this.cameraVideo.srcObject = null
+      }
+      if (this.cameraStatus !== null) this.cameraStatus.textContent = ''
+      if (this.recordButton !== null) this.recordButton.textContent = 'Commencer l’enregistrement'
+      if (this.cameraRecordButton !== null) this.cameraRecordButton.textContent = 'Commencer la capture'
+      this.updateWorkflowControls()
+    }
+
+    /** Stops the live tracker and returns its one in-memory motion timeline. */
+    private stopHeadMotionCapture(): readonly HeadMotionSample[] {
+      const session = this.headMotionSession
+      this.headMotionSession = null
+      if (session === null) return []
+      return session.stop()
+    }
+
+    /** Releases the temporary Rive target shown beside the camera preview. */
+    private stopHeadMotionRivePreview(): void {
+      const preview = this.headMotionRivePreview
+      this.headMotionRivePreview = null
+      preview?.stop()
+      if (this.cameraTargetCanvas !== null) this.cameraTargetCanvas.hidden = true
+      if (this.cameraPreviews !== null) this.cameraPreviews.dataset.targetActive = 'false'
+    }
+
+    /** Reads the optional Rive target profile supplied by the embedding Avatar editor. */
+    private readHeadMotionRivePreviewConfig(): HeadMotionRivePreviewConfig | null {
+      const runtimeSrc = this.getAttribute('data-head-target-runtime-src')
+      const src = this.getAttribute('data-head-target-src')
+      if (src === null || src === '') return null
+      const artboard = this.getAttribute('data-head-target-artboard')
+      const stateMachine = this.getAttribute('data-head-target-state-machine')
+      const viewModel = this.getAttribute('data-head-target-view-model')
+      const instance = this.getAttribute('data-head-target-instance')
+      if (runtimeSrc === null || runtimeSrc === '' || artboard === null || artboard === ''
+        || stateMachine === null || stateMachine === ''
+        || viewModel === null || viewModel === '' || instance === null || instance === '') {
+        throw new Error('La configuration de la cible Avatar est incomplète.')
+      }
+      return { runtimeSrc, src, artboard, stateMachine, viewModel, instance }
+    }
+
     /** Replaces the voice selector with one supplied voice list. */
     private setVoices(voices: readonly ElevenLabsVoice[]): void {
       if (this.voiceSelect === null) return
@@ -583,6 +741,8 @@ export function registerAudioCaptureElement(): void {
           characters: speech.characters,
           transcript: speech.transcript,
           words: speech.words,
+          headMotion: [],
+          headMotionDurationMs: null,
         })
         if (this.transcriptText !== null) this.transcriptText.value = speech.transcript
         this.setStatus('Voix générée.', 'success')
@@ -592,38 +752,137 @@ export function registerAudioCaptureElement(): void {
       this.setOperationBusy(false)
     }
 
-    /** Starts or stops a browser microphone recording without sending it to a server. */
-    private async toggleRecording(): Promise<void> {
+    /** Captures microphone audio, optionally starting camera tracking on the same take. */
+    private async toggleRecording(source: 'microphone' | 'camera'): Promise<void> {
       if (this.mediaRecorder !== null) {
-        this.mediaRecorder.stop()
+        if (this.recordingSource === source && this.mediaRecorder.state === 'recording') this.mediaRecorder.stop()
         return
       }
+      if (this.recordingStarting || this.busy) return
       if (typeof navigator === 'undefined' || navigator.mediaDevices?.getUserMedia === undefined
         || typeof MediaRecorder === 'undefined') {
-        this.setStatus('Ce navigateur ne permet pas l’enregistrement du microphone.', 'error')
+        this.setStatus('Ce navigateur ne permet pas la captation demandée.', 'error')
         return
       }
+
+      this.recordingStarting = true
+      this.recordingSource = source
+      const controller = new AbortController()
+      this.captureController = controller
+      this.updateWorkflowControls()
+      this.setStatus(source === 'camera' ? 'Autorisation de la caméra…' : 'Autorisation du microphone…', 'idle')
+      let faceDetectedDuringSetup: boolean | null = null
 
       try {
-        this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      } catch {
-        this.setStatus('Le microphone est indisponible. Vérifiez son autorisation dans le navigateur.', 'error')
-        return
-      }
+        const cameraStream = source === 'camera'
+          ? await navigator.mediaDevices.getUserMedia({
+            video: { width: 640, height: 480, facingMode: 'user' },
+            audio: false,
+          })
+          : null
+        if (controller.signal.aborted || !this.isConnected) {
+          cameraStream?.getTracks().forEach((track) => track.stop())
+          return
+        }
+        if (cameraStream !== null) {
+          this.mediaStream = cameraStream
+          const video = this.cameraVideo
+          if (video === null) throw new Error('L’aperçu caméra est indisponible.')
+          video.hidden = false
+          video.srcObject = cameraStream
+          video.muted = true
+          video.playsInline = true
+          await video.play()
+        }
 
-      const supportedType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4']
-        .find((type) => MediaRecorder.isTypeSupported(type))
-      this.recordedChunks = []
-      this.mediaRecorder = supportedType === undefined
-        ? new MediaRecorder(this.mediaStream)
-        : new MediaRecorder(this.mediaStream, { mimeType: supportedType })
-      this.mediaRecorder.addEventListener('dataavailable', (event) => {
-        if (event.data.size > 0) this.recordedChunks.push(event.data)
-      })
-      this.mediaRecorder.addEventListener('stop', () => this.finishRecording(), { once: true })
-      this.mediaRecorder.start()
-      if (this.recordButton !== null) this.recordButton.textContent = 'Arrêter l’enregistrement'
-      this.setStatus('Enregistrement en cours…', 'idle')
+        this.setStatus('Autorisation du microphone…', 'idle')
+        const microphoneStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false }).catch((error: unknown) => {
+          if (error instanceof Error && error.name === 'NotAllowedError') {
+            throw new Error('Autorisez l’accès au microphone dans la barre d’adresse du navigateur, puis réessayez.')
+          }
+          throw error
+        })
+        if (controller.signal.aborted || !this.isConnected) {
+          microphoneStream.getTracks().forEach((track) => track.stop())
+          cameraStream?.getTracks().forEach((track) => track.stop())
+          this.mediaStream = null
+          return
+        }
+        const stream = cameraStream === null
+          ? microphoneStream
+          : new MediaStream([...cameraStream.getVideoTracks(), ...microphoneStream.getAudioTracks()])
+        this.mediaStream = stream
+        if (stream.getAudioTracks().length === 0) throw new Error('Aucune piste microphone n’est disponible.')
+
+        if (cameraStream !== null) {
+          const video = this.cameraVideo
+          if (video === null) throw new Error('L’aperçu caméra est indisponible.')
+          if (this.cameraStatus !== null) this.cameraStatus.textContent = 'Initialisation du suivi…'
+          const previewConfig = this.readHeadMotionRivePreviewConfig()
+          if (previewConfig !== null) {
+            const targetCanvas = this.cameraTargetCanvas
+            if (targetCanvas === null) throw new Error('La cible Avatar est indisponible.')
+            if (this.cameraPreviews !== null) this.cameraPreviews.dataset.targetActive = 'true'
+            this.headMotionRivePreview = await startHeadMotionRivePreview(targetCanvas, previewConfig, controller.signal)
+            targetCanvas.hidden = false
+          }
+          this.headMotionSession = await startHeadMotionCapture(video, cameraStream, {
+            getTimeMs: () => this.recordingStartedAt === null
+              ? null
+              : performance.now() - this.recordingStartedAt,
+            onFaceDetected: (detected) => {
+              faceDetectedDuringSetup = detected
+              if (this.cameraStatus !== null) this.cameraStatus.textContent = detected ? 'Visage détecté.' : 'Visage introuvable.'
+            },
+            onMotion: (values) => this.headMotionRivePreview?.setValues(values),
+            signal: controller.signal,
+          })
+          if (controller.signal.aborted || !this.isConnected) {
+            this.stopHeadMotionCapture()
+            this.mediaStream?.getTracks().forEach((track) => track.stop())
+            return
+          }
+        }
+
+        const audioStream = source === 'camera' ? new MediaStream(stream.getAudioTracks()) : stream
+        const supportedType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4']
+          .find((type) => MediaRecorder.isTypeSupported(type))
+        this.recordedChunks = []
+        const recorder = supportedType === undefined
+          ? new MediaRecorder(audioStream)
+          : new MediaRecorder(audioStream, { mimeType: supportedType })
+        this.mediaRecorder = recorder
+        recorder.addEventListener('start', () => { this.recordingStartedAt = performance.now() }, { once: true })
+        recorder.addEventListener('dataavailable', (event) => {
+          if (event.data.size > 0) this.recordedChunks.push(event.data)
+        })
+        recorder.addEventListener('stop', () => this.finishRecording(), { once: true })
+        recorder.start()
+        this.recordingStarting = false
+        this.captureController = null
+        if (source === 'microphone' && this.recordButton !== null) this.recordButton.textContent = 'Arrêter l’enregistrement'
+        if (source === 'camera' && this.cameraRecordButton !== null) this.cameraRecordButton.textContent = 'Arrêter la capture'
+        if (this.cameraStatus !== null && source === 'camera') {
+          this.cameraStatus.textContent = faceDetectedDuringSetup === null
+            ? 'Capture en cours…'
+            : faceDetectedDuringSetup ? 'Visage détecté.' : 'Visage introuvable.'
+        }
+        this.setStatus(source === 'camera' ? 'Capture caméra en cours…' : 'Enregistrement en cours…', 'idle')
+        this.updateWorkflowControls()
+      } catch (error) {
+        const wasAborted = controller.signal.aborted
+        this.cancelStartingCapture()
+        if (wasAborted || !this.isConnected) return
+        const permissionMessage = source === 'camera'
+          ? 'Autorisez l’accès à la caméra dans la barre d’adresse du navigateur, puis réessayez.'
+          : 'Autorisez l’accès au microphone dans la barre d’adresse du navigateur, puis réessayez.'
+        const message = error instanceof Error && error.name === 'NotAllowedError'
+          ? permissionMessage
+          : error instanceof Error ? error.message : ''
+        this.setStatus(message || (source === 'camera'
+          ? 'La caméra ou le microphone est indisponible. Vérifiez leur autorisation dans le navigateur.'
+          : 'Le microphone est indisponible. Vérifiez son autorisation dans le navigateur.'), 'error')
+      }
     }
 
     /** Downloads the generated MP3 with its spoken text in the comment metadata. */
@@ -643,17 +902,37 @@ export function registerAudioCaptureElement(): void {
       setTimeout(() => URL.revokeObjectURL(objectUrl), 1_000)
     }
 
-    /** Adds a completed microphone take to the local choices and closes the stream. */
+    /** Finishes one local take and releases the microphone and optional camera. */
     private finishRecording(): void {
       const recorder = this.mediaRecorder
-      const stream = this.mediaStream
       if (recorder === null) return
+      const source = this.recordingSource
+      const captureDurationMs = this.recordingStartedAt === null
+        ? 0
+        : Math.round(Math.max(0, performance.now() - this.recordingStartedAt))
+      const headMotion = source === 'camera' ? this.stopHeadMotionCapture() : []
+      this.stopHeadMotionRivePreview()
       const audio = new Blob(this.recordedChunks, { type: recorder.mimeType || 'audio/webm' })
-      stream?.getTracks().forEach((track) => track.stop())
+      this.captureController?.abort()
+      this.captureController = null
+      this.mediaStream?.getTracks().forEach((track) => track.stop())
       this.mediaStream = null
       this.mediaRecorder = null
       this.recordedChunks = []
+      this.recordingStartedAt = null
+      this.recordingSource = null
+      this.recordingStarting = false
+      if (this.cameraVideo !== null) {
+        this.cameraVideo.hidden = true
+        this.cameraVideo.srcObject = null
+      }
+      if (this.cameraTargetCanvas !== null) this.cameraTargetCanvas.hidden = true
+      if (this.cameraPreviews !== null) this.cameraPreviews.dataset.targetActive = 'false'
+      if (this.cameraStatus !== null) this.cameraStatus.textContent = ''
       if (this.recordButton !== null) this.recordButton.textContent = 'Commencer l’enregistrement'
+      if (this.cameraRecordButton !== null) this.cameraRecordButton.textContent = 'Commencer la capture'
+      this.updateWorkflowControls()
+      if (!this.isConnected) return
       if (audio.size === 0) {
         this.setStatus('Aucun son n’a été capté.', 'error')
         return
@@ -661,15 +940,17 @@ export function registerAudioCaptureElement(): void {
 
       const extension = audio.type.includes('mp4') ? 'm4a' : 'webm'
       this.addVariant({
-        id: 'recording',
-        label: 'Captation originale',
-        fileName: `captation.${extension}`,
+        id: source === 'camera' ? 'camera' : 'recording',
+        label: source === 'camera' ? 'Captation caméra' : 'Captation originale',
+        fileName: source === 'camera' ? `captation-camera.${extension}` : `captation.${extension}`,
         audio,
         characters: null,
         transcript: '',
         words: null,
+        headMotion,
+        headMotionDurationMs: source === 'camera' ? captureDurationMs : null,
       })
-      this.setStatus('Enregistrement terminé.', 'success')
+      this.setStatus(source === 'camera' ? 'Capture caméra terminée.' : 'Enregistrement terminé.', 'success')
     }
 
     /** Loads a locally selected audio file as the original track for this capture. */
@@ -695,6 +976,8 @@ export function registerAudioCaptureElement(): void {
         characters: null,
         transcript: '',
         words: null,
+        headMotion: [],
+        headMotionDurationMs: null,
       })
       this.setStatus('Audio chargé.', 'success')
     }
@@ -718,6 +1001,8 @@ export function registerAudioCaptureElement(): void {
           characters: null,
           transcript: source.transcript,
           words: null,
+          headMotion: source.headMotion,
+          headMotionDurationMs: source.headMotionDurationMs,
         }
         this.variants.set(transformed.id, transformed)
         this.renderTrackChoices()
@@ -730,6 +1015,7 @@ export function registerAudioCaptureElement(): void {
 
     /** Builds the demo-compatible Avatar data and transfers both generated files to the host editor. */
     private async insertSelectedAudio(): Promise<void> {
+      if (this.recordingStarting || this.mediaRecorder !== null) return
       let variant = this.selectedVariant()
       if (variant === null) return
 
@@ -737,17 +1023,8 @@ export function registerAudioCaptureElement(): void {
       this.setOperationBusy(true)
       this.setStatus('Préparation du son, du transcript et des visèmes…', 'idle')
       try {
-        let transcript = this.transcriptText?.value.trim() ?? ''
-        if (transcript === '') {
-          if (apiKey === '') throw new Error('Saisissez une clé ElevenLabs pour générer le transcript de cette captation.')
-          this.setStatus('Génération du transcript ElevenLabs…', 'idle')
-          const result = await transcribeAudio(apiKey, variant.audio, variant.fileName)
-          transcript = result.text.trim()
-          if (this.transcriptText !== null) this.transcriptText.value = transcript
-          variant = { ...variant, transcript, words: null, characters: null }
-          this.updateVariant(variant)
-        }
-        if (transcript === '') throw new Error('Le transcript de la prise est vide.')
+        const transcript = this.transcriptText?.value.trim() ?? ''
+        if (transcript === '') throw new Error('Saisissez le texte de la prise.')
 
         if (variant.transcript !== transcript || variant.characters === null) {
           if (apiKey === '') throw new Error('Saisissez une clé ElevenLabs pour aligner le texte sur le son choisi.')
@@ -762,6 +1039,36 @@ export function registerAudioCaptureElement(): void {
         }
         const visemes = buildFrenchAzureVisemes(variant.characters)
         if (visemes.length === 0) throw new Error('La timeline des visèmes est vide pour cette prise.')
+        if (variant.headMotion.length > 0) {
+          const captureDurationMs = variant.headMotionDurationMs
+          if (captureDurationMs === null || captureDurationMs <= 0) {
+            throw new Error('La durée de la captation caméra est indisponible pour aligner les mouvements.')
+          }
+          const audioDurationMs = await this.readAudioDurationMs(variant.audio)
+          const samplesByTime = new Map<number, HeadMotionSample>()
+          const firstSample = variant.headMotion[0]
+          if (firstSample !== undefined && firstSample.startAtMs > 0) {
+            samplesByTime.set(0, { startAtMs: 0, values: { headX: 50, headY: 50, headTilt: 50 } })
+          }
+          variant.headMotion.forEach((sample) => {
+            const startAtMs = Math.max(0, Math.min(audioDurationMs, Math.round(sample.startAtMs / captureDurationMs * audioDurationMs)))
+            samplesByTime.set(startAtMs, { ...sample, startAtMs })
+          })
+          const lastSample = [...samplesByTime.values()].sort((first, second) => first.startAtMs - second.startAtMs).at(-1)
+          if (lastSample !== undefined && lastSample.startAtMs < audioDurationMs
+            && (lastSample.values.headX !== 50 || lastSample.values.headY !== 50 || lastSample.values.headTilt !== 50)) {
+            samplesByTime.set(audioDurationMs, {
+              startAtMs: audioDurationMs,
+              values: { headX: 50, headY: 50, headTilt: 50 },
+            })
+          }
+          variant = {
+            ...variant,
+            headMotion: [...samplesByTime.values()].sort((first, second) => first.startAtMs - second.startAtMs),
+            headMotionDurationMs: audioDurationMs,
+          }
+          this.updateVariant(variant)
+        }
         const audioFile = new File([variant.audio], variant.fileName, { type: variant.audio.type || 'audio/mpeg' })
         const timelineFile = new File([JSON.stringify({
           text: transcript,
@@ -771,6 +1078,7 @@ export function registerAudioCaptureElement(): void {
           input: null,
           words: variant.words,
           visemes,
+          ...(variant.headMotion.length === 0 ? {} : { headMotion: variant.headMotion }),
         })], 'avatar-timeline.json', { type: 'application/json' })
 
         this.setStatus('Insertion de la prise dans le BDC Avatar…', 'idle')
@@ -797,8 +1105,26 @@ export function registerAudioCaptureElement(): void {
       this.setOperationBusy(false)
     }
 
+    /** Reads the selected audio duration so captured motion stays inside its final timeline. */
+    private async readAudioDurationMs(audioBlob: Blob): Promise<number> {
+      const source = URL.createObjectURL(audioBlob)
+      const audio = this.ownerDocument.createElement('audio')
+      const duration = await new Promise<number>((resolve, reject) => {
+        audio.addEventListener('loadedmetadata', () => resolve(audio.duration), { once: true })
+        audio.addEventListener('error', () => reject(new Error('Le fichier audio ne peut pas être lu.')), { once: true })
+        audio.src = source
+      }).finally(() => {
+        audio.removeAttribute('src')
+        audio.load()
+        URL.revokeObjectURL(source)
+      })
+      if (!Number.isFinite(duration) || duration <= 0) throw new Error('La durée du fichier audio est indisponible.')
+      return Math.round(duration * 1000)
+    }
+
     /** Adds or replaces a local audio variant and selects it for preview. */
     private addVariant(variant: AudioVariant): void {
+      this.stopHeadMotionCapture()
       this.variants.set(variant.id, variant)
       this.selectedVariantId = variant.id
       this.renderTrackChoices()
@@ -840,6 +1166,7 @@ export function registerAudioCaptureElement(): void {
     private selectVariant(id: AudioVariant['id']): void {
       const variant = this.variants.get(id)
       if (variant === undefined) return
+      if (id !== this.selectedVariantId) this.stopHeadMotionCapture()
       this.selectedVariantId = id
       if (this.transcriptText !== null) this.transcriptText.value = variant.transcript
       this.setPreview(variant.audio)
@@ -873,30 +1200,46 @@ export function registerAudioCaptureElement(): void {
       const hasVoice = (this.voiceSelect?.value ?? '') !== ''
       const hasSpeechText = (this.ttsText?.value.trim() ?? '') !== ''
       const hasAudio = this.selectedVariant() !== null
-      if (this.trackTab !== null) {
-        this.trackTab.disabled = !hasAudio
-        this.trackTab.setAttribute('aria-disabled', String(!hasAudio))
-      }
       const recording = this.mediaRecorder !== null
+      const capturing = this.recordingStarting || recording
+      if (this.trackTab !== null) {
+        this.trackTab.disabled = !hasAudio || capturing
+        this.trackTab.setAttribute('aria-disabled', String(!hasAudio || capturing))
+      }
+      const settingsTab = this.shadowRoot?.querySelector<HTMLButtonElement>('#audio-capture-settings-tab')
+      if (settingsTab !== null && settingsTab !== undefined) settingsTab.disabled = capturing
+      const sourceTabId = this.recordingSource === 'camera' ? 'audio-capture-camera-tab' : 'audio-capture-microphone-tab'
+      this.shadowRoot?.querySelectorAll<HTMLButtonElement>('#audio-capture-source-tabs [role="tab"]')
+        .forEach((tab) => { tab.disabled = capturing && tab.id !== sourceTabId })
       const variant = this.selectedVariant()
       if (this.downloadButton !== null) this.downloadButton.hidden = variant?.id !== 'tts'
       if (this.voiceSelect !== null) {
-        this.voiceSelect.disabled = this.busy || this.voiceSelect.options.length <= 1
+        this.voiceSelect.disabled = this.busy || capturing || this.voiceSelect.options.length <= 1
       }
-      if (this.modelSelect !== null) this.modelSelect.disabled = this.busy
-      if (this.generateButton !== null) this.generateButton.disabled = this.busy || !hasApiKey || !hasVoice || !hasSpeechText
-      if (this.recordButton !== null) this.recordButton.disabled = this.busy && !recording
+      if (this.modelSelect !== null) this.modelSelect.disabled = this.busy || capturing
+      if (this.ttsText !== null) this.ttsText.disabled = this.busy || capturing
+      if (this.transcriptText !== null) this.transcriptText.disabled = this.busy || capturing
+      if (this.audioFileInput !== null) this.audioFileInput.disabled = this.busy || capturing
+      if (this.chooseAudioButton !== null) this.chooseAudioButton.disabled = this.busy || capturing
+      if (this.generateButton !== null) this.generateButton.disabled = this.busy || capturing || !hasApiKey || !hasVoice || !hasSpeechText
+      if (this.recordButton !== null) {
+        this.recordButton.disabled = this.busy || this.recordingStarting || (recording && this.recordingSource !== 'microphone')
+      }
+      if (this.cameraRecordButton !== null) {
+        this.cameraRecordButton.disabled = this.busy || this.recordingStarting || (recording && this.recordingSource !== 'camera')
+      }
       if (this.transformButton !== null) {
         const source = this.selectedVariant()
-        const canTransform = source?.id === 'recording' || source?.id === 'loaded'
-        this.transformButton.disabled = this.busy || !hasApiKey || !hasVoice || !hasAudio
-          || !canTransform
+        const canTransform = source?.id === 'recording' || source?.id === 'camera' || source?.id === 'loaded'
+        this.transformButton.disabled = this.busy || capturing || !hasApiKey || !hasVoice || !hasAudio || !canTransform
       }
       if (this.insertButton !== null) {
         const transcript = this.transcriptText?.value.trim() ?? ''
         const characterTimingReady = variant !== null && variant.characters !== null && variant.transcript === transcript
-        this.insertButton.disabled = this.busy || recording || variant === null || (!characterTimingReady && !hasApiKey)
+        this.insertButton.disabled = this.busy || capturing || variant === null || (!characterTimingReady && !hasApiKey)
       }
+      this.trackChoices?.querySelectorAll<HTMLInputElement>('input[type="radio"]')
+        .forEach((input) => { input.disabled = capturing || this.busy })
     }
 
     /** Marks API work busy while preserving the current audio and transcript in memory. */

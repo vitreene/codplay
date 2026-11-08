@@ -158,7 +158,7 @@ site ; le profil du fichier fourni a ensuite été vérifié nativement ci-desso
 
 Le code caméra chargé par cette page confirme que les mouvements de tête ne
 viennent pas d’un fichier annexe. Le navigateur ouvre une caméra vidéo seule
-(640 × 480), charge MediaPipe Tasks Vision 0.10.1 et
+(640 × 480), charge MediaPipe Tasks Vision 1.0.1 et
 `face_landmarker.task`, puis exécute un `FaceLandmarker` en mode vidéo (GPU,
 repli CPU). Les landmarks du nez, du contour du visage et des yeux donnent les
 axes X/Y et l’inclinaison. La première détection sert de centre ; chaque frame
@@ -168,13 +168,23 @@ Le réglage Smoothing vaut 60 % par défaut et applique
 sont écrites directement dans les Numbers Rive. Une option séparée projette
 aussi les blendshapes ARKit sur les propriétés numériques correspondantes.
 
+Le bouton `Start camera` demande `getUserMedia` avec `video` et `audio: false`
+au clic. En cas de refus, la démo indique d’autoriser la caméra dans la barre
+d’adresse. Après accord, elle rattache la piste au `<video>`, montre l’aperçu,
+appelle `play()`, puis initialise MediaPipe. Le bouton `Microphone` utilise une
+demande audio seule indépendante. Le parcours Caméra d’Elcé suit cet ordre :
+permission vidéo, aperçu, permission micro ; son recorder reçoit uniquement la
+piste audio.
+
 Les triggers `CONTACT_FACE_Trigger` et `CONTACT_HEAD_TRIGGER` et l’entrée
 `CONTACT_isTracking` visibles dans l’inspecteur ne sont pas utilisés par la
 boucle de suivi caméra. Celle-ci écrit les trois Numbers de tête. Le JSON
-exporté reste la piste de visèmes/mots : il n’embarque ni frames caméra ni
-keyframes de tête. Le fichier `.task` est le modèle de détection à exécuter,
-pas une description des mouvements d’une prise. Pour rendre la tête rejouable,
-CodPlay devra capturer et réduire cette piste séparément.
+exporté par la démo reste la piste de visèmes/mots : il n’embarque ni images
+caméra ni valeurs de tête. Le fichier `.task` est le modèle de détection à
+exécuter, pas une description des mouvements d’une prise. Elcé peut rendre la
+tête rejouable en ajoutant les valeurs scalaires horodatées au JSON de timeline
+et en les transmettant avec l’unique événement final du circuit de capture
+existant ; aucune modification de CodPlay n’est requise.
 
 ## Référence API ElevenLabs du 5 novembre 2026
 
@@ -674,10 +684,11 @@ générateur AniMattor transforme les temps de caractères en formes Azure, et
 ElevenLabs ne fournit pas cette timeline. Une seule action auteur peut
 orchestrer ces étapes sans fusionner leurs fournisseurs ou leurs permissions.
 
-Le code actuel appelle encore ElevenLabs STT quand le transcript manque et son
-Forced Alignment quand les temps caractère manquent. Ces appels ne constituent
-pas le parcours local visé. La table de candidats ci-dessus sert de point de
-départ, pas de sélection : il faut requalifier les modèles et outils actuels
-sur les prises françaises du Projet 3, leurs licences, leurs temps de calcul et
-leurs sorties alignables avant d’intégrer le STT local. Aucun repli ElevenLabs
-pour le STT ne devient implicite.
+Le flux auteur suit maintenant celui de la démo AniMattor : le transcript est
+saisi ou collé, puis Forced Alignment produit les temps caractère lorsqu’ils
+manquent. Il n’appelle pas automatiquement le STT ElevenLabs. La table de
+candidats ci-dessus sert de point de départ, pas de sélection : il faut
+requalifier les modèles et outils actuels sur les prises françaises du Projet
+3, leurs licences, leurs temps de calcul et leurs sorties alignables avant de
+cadrer une intégration STT. Aucun repli ElevenLabs pour le STT ne devient
+implicite.

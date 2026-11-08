@@ -2,8 +2,10 @@ import { SCENARIO_ENTRY_KIND } from '../organization/learning-organization-confi
 import type { LearningBdc, LearningChapter, LearningDocumentData, LearningPage, PageId } from './learning-document-types'
 import { authoredTextToPlainText } from '../../../core/document/rich-text-utils'
 import { isRichTextDocument, parseInlineTextTokens } from '../inline-text/learning-inline-text-value'
+import { migrateLegacyCarouselCueDurations } from '../../../resources/bdcs/carousel/domain/carousel-service'
+import type { LegacyCarouselContent } from '../../../resources/bdcs/carousel/domain/carousel-service'
 
-export const ELCE_DOCUMENT_VERSION = 11 as const
+export const ELCE_DOCUMENT_VERSION = 12 as const
 
 /** Owns the serializable Learning document value and its versioned codec. */
 export class LearningDocument {
@@ -53,19 +55,21 @@ export class LearningDocument {
     return this.data
   }
 
-  /** Rehydrates legacy document versions and supplies Card transition defaults. */
+  /** Rehydrates legacy documents, including the v11 Carousel timing format. */
   public static fromJSON(value: unknown): LearningDocument {
-    if (!isRecord(value) || (value.version !== 7 && value.version !== 8 && value.version !== 9 && value.version !== 10 && value.version !== ELCE_DOCUMENT_VERSION)) {
+    if (!isRecord(value) || (value.version !== 7 && value.version !== 8 && value.version !== 9 && value.version !== 10
+      && value.version !== 11 && value.version !== ELCE_DOCUMENT_VERSION)) {
       const version = isRecord(value) ? value.version : undefined
       throw new Error(`Version de document Elcé non supportée : ${String(version)}`)
     }
-    const data = value.version === 7
+    const v11Data = value.version === 7
       ? migrateV9Document(migrateV7Document(value))
       : value.version === 8
         ? migrateV9Document(migrateV8Document(value))
-        : value.version === 9
+        : value.version === 9 || value.version === 10
           ? migrateV9Document(value)
-          : { ...value, version: ELCE_DOCUMENT_VERSION } as unknown as LearningDocumentData
+          : value
+    const data = v11Data.version === ELCE_DOCUMENT_VERSION ? v11Data as unknown as LearningDocumentData : migrateV11Document(v11Data)
     return new LearningDocument(normalizeQuestionAnswerLabels(data))
   }
 }
@@ -88,14 +92,36 @@ function migrateV7Document(value: Record<string, unknown>): Record<string, unkno
   return migrated
 }
 
-/** Adds inherited transition defaults to every Card stored in a v9 document. */
-function migrateV9Document(value: Record<string, unknown>): LearningDocumentData {
+/** Adds inherited transition defaults and upgrades the document to v11. */
+function migrateV9Document(value: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...value,
+    version: 11,
+    bdcs: mapRecords(value.bdcs, (bdc) => {
+      if (!isRecord(bdc.card) || bdc.card.revelation !== undefined) return bdc
+      return { ...bdc, card: { ...bdc.card, revelation: { intro: null, outro: null } } }
+    }),
+  }
+}
+
+/** Converts legacy Avatar cue starts into the Carousel's persisted durations. */
+function migrateV11Document(value: Record<string, unknown>): LearningDocumentData {
+  const records = Array.isArray(value.bdcs) ? value.bdcs.filter(isRecord) : []
+  const voiceDurationByPage = new Map(records.flatMap((bdc) => {
+    if (bdc.type !== 'avatar' || typeof bdc.pageId !== 'string' || !isRecord(bdc.avatar) || !isRecord(bdc.avatar.take)
+      || typeof bdc.avatar.take.durationMs !== 'number') return []
+    return [[bdc.pageId, bdc.avatar.take.durationMs] as const]
+  }))
   return {
     ...value,
     version: ELCE_DOCUMENT_VERSION,
     bdcs: mapRecords(value.bdcs, (bdc) => {
-      if (!isRecord(bdc.card) || bdc.card.revelation !== undefined) return bdc
-      return { ...bdc, card: { ...bdc.card, revelation: { intro: null, outro: null } } }
+      if (!isRecord(bdc.carousel) || !Array.isArray(bdc.carousel.cards)) return bdc
+      const voiceDurationMs = typeof bdc.pageId === 'string' ? voiceDurationByPage.get(bdc.pageId) : undefined
+      return {
+        ...bdc,
+        carousel: migrateLegacyCarouselCueDurations(bdc.carousel as unknown as LegacyCarouselContent, voiceDurationMs),
+      }
     }),
   } as unknown as LearningDocumentData
 }

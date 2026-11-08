@@ -2,6 +2,7 @@ import { on, type Handle } from 'remix/component'
 import { Maximize2, Mic, Minimize2, Trash2, X } from 'lucide-static'
 import { registerAudioCaptureElement } from '@codplay/audio-capture'
 import type { AvatarContent } from '../domain/avatar-types'
+import { mattAvatarProfile } from '../reading/avatar-profile'
 import { AVATAR_POSITIONS } from '../avatar-config'
 import type { AppearanceTarget } from '../../../../domain/appearance/appearance-target-types'
 import { renderAppearanceTrigger } from '../../../../core/authoring/appearance-trigger'
@@ -148,6 +149,12 @@ export function RemixAvatarEditor(handle: Handle<AvatarEditorProps>) {
           <codplay-audio-capture
             id={`elce-avatar-capture-module-${bdcId}`}
             className="elce-avatar-editor__capture-module"
+            data-head-target-runtime-src="/assets/vendor/@rive-app/canvas-advanced-single/canvas_advanced_single.mjs"
+            data-head-target-src={mattAvatarProfile.document.src}
+            data-head-target-artboard={mattAvatarProfile.document.artboard}
+            data-head-target-state-machine={mattAvatarProfile.viewModel.stateMachine}
+            data-head-target-view-model={mattAvatarProfile.viewModel.viewModel}
+            data-head-target-instance={mattAvatarProfile.viewModel.instance}
             mix={on<HTMLElement, 'audio-capture-insert'>('audio-capture-insert', async (event) => {
               event.preventDefault()
               const dialog = event.currentTarget.closest('dialog')

@@ -1,6 +1,5 @@
 import { assertAvatarContent } from '../../../../resources/bdcs/avatar/domain/avatar-service'
 import { AVATAR_PRESET_ID } from '../../../../resources/bdcs/avatar/avatar-config'
-import { resolveCarouselCueStarts } from '../../../../resources/bdcs/carousel/domain/carousel-service'
 import { BDC_TYPE, DEFAULT_PRESET_ID, PAGE_TYPE } from '../../learning-definition'
 import { CARD_LAYOUT_IDS } from '../../../../resources/bdcs/card/card-config'
 import { SCENARIO_ENTRY_KIND } from '../../organization/learning-organization-config'
@@ -205,20 +204,15 @@ export function assertDocumentInvariants(document: LearningDocument, resources: 
           fail(`Bdc Carousel incomplet : ${bdc.id}`)
         }
         resources.carouselService.assertValid(bdc.carousel)
-        const starts = resolveCarouselCueStarts(bdc.carousel)
         for (const [index, entry] of bdc.carousel.cards.entries()) {
           const word = entry.cue?.word
           if (word === undefined) continue
           const avatar = bdcById.get(word.avatarBdcId)
           const take = avatar?.avatar?.take
-          const wordStartAtMs = take?.words[word.wordIndex]?.startAtMs
-          const wordIsAvailable = wordStartAtMs !== undefined
-            && wordStartAtMs > (starts[index - 1] ?? 0)
-            && wordStartAtMs < (starts[index + 1] ?? take?.durationMs ?? Number.POSITIVE_INFINITY)
+          const wordExists = take?.words[word.wordIndex] !== undefined
           if (avatar?.pageId !== bdc.pageId || bdc.pageId === null || take == null || take.id !== word.takeId
-            || wordStartAtMs === undefined || index === 0
-            || (entry.cue?.startAtMs !== wordStartAtMs && wordIsAvailable)) {
-            fail('Association de mot incohérente avec la prise ou l’ordre du Carousel.')
+            || !wordExists || index === 0) {
+            fail('Association de mot incohérente avec la prise ou la Diapo du Carousel.')
           }
         }
         if (bdc.parentBdcId !== null) fail(`Un bdc Carousel ne peut pas être enfant d’un autre BDC : ${bdc.id}`)
