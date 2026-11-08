@@ -3,6 +3,7 @@ import { SCENARIO_ENTRY_KIND } from '../organization/learning-organization-confi
 import type { LearningDocument } from '../document/learning-document'
 import type { ScenarioEntry } from '../organization/learning-scenario-entry-types'
 import { findPage } from '../../../core/document/content-placement-service'
+import { scenarioRootChapterIdForPage } from '../organization/learning-scenario-tree'
 
 /** Returns the graph key assigned to one root-level ScenarioEntry. */
 export function scenarioEntryViewId(entry: ScenarioEntry): string {
@@ -21,7 +22,10 @@ export function scenarioEntryViewIdForPage(document: LearningDocument, pageId: s
     case null:
       return scenarioEntryViewId({ kind: SCENARIO_ENTRY_KIND.PAGE, pageId: page.id })
     default:
-      return scenarioEntryViewId({ kind: SCENARIO_ENTRY_KIND.CHAPTER, chapterId: page.chapterId })
+      return scenarioEntryViewId({
+        kind: SCENARIO_ENTRY_KIND.CHAPTER,
+        chapterId: scenarioRootChapterIdForPage(document.data, page) ?? page.chapterId,
+      })
   }
 }
 

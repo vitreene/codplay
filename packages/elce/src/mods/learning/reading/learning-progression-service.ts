@@ -1,4 +1,11 @@
 import { CHAPTER_TYPE } from '../organization/learning-organization-config'
+import { SCENARIO_ENTRY_KIND } from '../organization/learning-organization-config'
+import {
+  scenarioChapterAncestors,
+  scenarioChapterPageIds,
+  scenarioEntriesForParent,
+  scenarioParentChapterId,
+} from '../organization/learning-scenario-tree'
 import type { LearningDocument } from '../document/learning-document'
 import type { ProfileProperty, ProfileValue } from '../profile/domain/learning-profile-types'
 import { learningProfileService } from '../profile/domain/learning-profile-service'
@@ -45,18 +52,17 @@ export class LearningProgressionService {
   ): boolean {
     const page = document.pages.find((candidate) => candidate.id === pageId)
     if (page?.chapterId === null || page?.chapterId === undefined) return true
-    const chapterIndex = document.chapters.findIndex((candidate) => candidate.id === page.chapterId)
-    const constraint = document.data.profile.readingConstraints.find((candidate) => candidate.target.id === page.chapterId)
-    if (constraint === undefined) return true
-    const requiredChapterIds = constraint.requirement.kind === 'chapters'
-      ? constraint.requirement.chapterIds
-      : document.chapters[chapterIndex - 1] === undefined
-        ? []
-        : [document.chapters[chapterIndex - 1]!.id]
-    return requiredChapterIds.every((requiredChapterId) => {
-      const requiredChapter = document.chapters.find((candidate) => candidate.id === requiredChapterId)
-      return requiredChapter !== undefined
-        && requiredChapter.pageIds.every((requiredPageId) => this.isPageComplete(requiredPageId, context, questionBdcByPage))
+    const chapter = document.chapters.find((candidate) => candidate.id === page.chapterId)
+    if (chapter === undefined) return true
+    const chapterPath = [...scenarioChapterAncestors(document.data, chapter.id), chapter]
+    const constraints = chapterPath.flatMap((ancestor) => document.data.profile.readingConstraints.filter(
+      (candidate) => candidate.target.id === ancestor.id,
+    ))
+    return constraints.every((constraint) => {
+      const requiredPageIds = constraint.requirement.kind === 'chapters'
+        ? constraint.requirement.chapterIds.flatMap((requiredChapterId) => scenarioChapterPageIds(document.data, requiredChapterId))
+        : this.previousDocumentEntryPageIds(document, constraint.target.id)
+      return requiredPageIds.every((requiredPageId) => this.isPageComplete(requiredPageId, context, questionBdcByPage))
     })
   }
 
@@ -101,25 +107,23 @@ export class LearningProgressionService {
     context: Readonly<Record<string, unknown>>,
   ): boolean {
     if (context.profileEnabled === false) return true
-    const visibility = runtime.profile.pageVisibility[pageId]
+    const visibility = runtime.profile.pageVisibility[pageId] ?? []
     const profileValues = learningTestStateService.readProfileValues(context.profileValues)
     const properties = new Map(runtime.profile.properties.map((property) => [property.id, property]))
-    if (visibility?.unmetBehavior === 'lock'
-      && !learningProfileService.profileVisibilityMatches(visibility.conditions, properties, profileValues)) return false
+    if (!visibility.every((constraint) => learningProfileService.profileVisibilityMatches(constraint.conditions, properties, profileValues))) return false
     const page = runtime.pages[pageId]
     if (page?.chapterId === null || page?.chapterId === undefined) return true
-    const constraint = runtime.profile.readingConstraints.find((candidate) => candidate.target.id === page.chapterId)
-    if (constraint === undefined) return true
-    const chapterIndex = runtime.chapterIds.indexOf(page.chapterId)
-    const requiredChapterIds = constraint.requirement.kind === 'chapters'
-      ? constraint.requirement.chapterIds
-      : runtime.chapterIds[chapterIndex - 1] === undefined
-        ? []
-        : [runtime.chapterIds[chapterIndex - 1]!]
-    return requiredChapterIds.every((requiredChapterId) => {
-      const requiredChapter = runtime.chapters[requiredChapterId]
-      return requiredChapter !== undefined
-        && requiredChapter.pageIds.every((requiredPageId) => this.isPageComplete(requiredPageId, context, runtime.questionBdcByPage))
+    const chapter = runtime.chapters[page.chapterId]
+    if (chapter === undefined) return true
+    const chapterPath = [...this.runtimeChapterAncestors(runtime, chapter.id), chapter]
+    const constraints = chapterPath.flatMap((ancestor) => runtime.profile.readingConstraints.filter(
+      (candidate) => candidate.target.id === ancestor.id,
+    ))
+    return constraints.every((constraint) => {
+      const requiredPageIds = constraint.requirement.kind === 'chapters'
+        ? constraint.requirement.chapterIds.flatMap((requiredChapterId) => runtime.chapters[requiredChapterId]?.subtreePageIds ?? [])
+        : this.previousRuntimeEntryPageIds(runtime, constraint.target.id)
+      return requiredPageIds.every((requiredPageId) => this.isPageComplete(requiredPageId, context, runtime.questionBdcByPage))
     })
   }
 
@@ -129,14 +133,48 @@ export class LearningProgressionService {
     chapterId: string,
     profileValues: Readonly<Record<string, ProfileValue>>,
   ): boolean {
-    const visibility = runtime.profile.chapterVisibility[chapterId]
-    return visibility === undefined
-      || visibility.unmetBehavior !== 'lock'
-      || learningProfileService.profileVisibilityMatches(
-        visibility.conditions,
-        new Map(runtime.profile.properties.map((property) => [property.id, property])),
-        profileValues,
-      )
+    const visibility = runtime.profile.chapterVisibility[chapterId] ?? []
+    const properties = new Map(runtime.profile.properties.map((property) => [property.id, property]))
+    return visibility.every((constraint) => learningProfileService.profileVisibilityMatches(constraint.conditions, properties, profileValues))
+  }
+
+  /** Returns the ordered pages covered by the previous sibling entry of a chapter. */
+  private previousDocumentEntryPageIds(document: LearningDocument, chapterId: string): readonly string[] {
+    const parentChapterId = scenarioParentChapterId(document.data, chapterId)
+    const entries = scenarioEntriesForParent(document.data, parentChapterId)
+    const chapterIndex = entries.findIndex((entry) => entry.kind === SCENARIO_ENTRY_KIND.CHAPTER && entry.chapterId === chapterId)
+    const previousEntry = chapterIndex > 0 ? entries[chapterIndex - 1] : undefined
+    if (previousEntry === undefined) return []
+    return previousEntry.kind === SCENARIO_ENTRY_KIND.PAGE
+      ? [previousEntry.pageId]
+      : scenarioChapterPageIds(document.data, previousEntry.chapterId)
+  }
+
+  /** Returns one chapter's ancestors from its runtime parent links. */
+  private runtimeChapterAncestors(runtime: ElceRuntimeData, chapterId: string): readonly ElceRuntimeData['chapters'][string][] {
+    const ancestors: ElceRuntimeData['chapters'][string][] = []
+    let parentChapterId = runtime.chapters[chapterId]?.parentChapterId ?? null
+    while (parentChapterId !== null) {
+      const parent = runtime.chapters[parentChapterId]
+      if (parent === undefined) break
+      ancestors.unshift(parent)
+      parentChapterId = parent.parentChapterId
+    }
+    return ancestors
+  }
+
+  /** Returns the ordered pages covered by the previous sibling entry at runtime. */
+  private previousRuntimeEntryPageIds(runtime: ElceRuntimeData, chapterId: string): readonly string[] {
+    const parentChapterId = runtime.chapters[chapterId]?.parentChapterId ?? null
+    const entries = parentChapterId === null
+      ? runtime.scenarioEntries
+      : runtime.chapters[parentChapterId]?.entries ?? []
+    const chapterIndex = entries.findIndex((entry) => entry.kind === SCENARIO_ENTRY_KIND.CHAPTER && entry.chapterId === chapterId)
+    const previousEntry = chapterIndex > 0 ? entries[chapterIndex - 1] : undefined
+    if (previousEntry === undefined) return []
+    return previousEntry.kind === SCENARIO_ENTRY_KIND.PAGE
+      ? [previousEntry.pageId]
+      : runtime.chapters[previousEntry.chapterId]?.subtreePageIds ?? []
   }
 
   /** Reads the optional Evaluation threshold without treating arbitrary context as a port. */

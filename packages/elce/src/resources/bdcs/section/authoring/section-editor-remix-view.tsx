@@ -1,4 +1,4 @@
-import { Bold, Italic, Underline, Subscript, Superscript, Pilcrow, Ellipsis, AlignLeft, AlignCenter, AlignRight, AlignJustify, Heading1, Heading2, Heading3, Heading4, Heading5, Heading6, Trash2, X } from 'lucide-static'
+import { Bold, Italic, Underline, Subscript, Superscript, Pilcrow, Ellipsis, AlignLeft, AlignCenter, AlignRight, AlignJustify, Heading1, Heading2, Heading3, Heading4, Heading5, Heading6, X } from 'lucide-static'
 import { on, ref, type RemixNode } from 'remix/component'
 
 import { ANCHOR } from '../../../anchoring/anchor-config'
@@ -136,18 +136,7 @@ export function renderRemixSectionEditor(
             target: { kind: 'bdc', bdcId: bdc.id },
             label: `Ouvrir le style de la section ${authoredTextToPlainText(section.title).trim() || ''}`,
             onOpen: state.onOpenAppearanceTarget,
-            className: 'elce-appearance-trigger elce-bdc-style-trigger',
           })}
-          <button
-            id={`elce-section-delete-${bdc.id}`}
-            className="elce-bdc-icon-button elce-bdc-icon-button--danger"
-            type="button"
-            aria-label="Supprimer le bloc texte"
-            title="Supprimer le bloc texte"
-            mix={on<HTMLButtonElement, 'click'>('click', () => actions.deleteSection(bdc.id))}
-          >
-            {renderLucideIcon(Trash2, `elce-section-delete-icon-${bdc.id}`)}
-          </button>
         </div>
       </div>
     {renderSectionEditorToolbar(bdc.id, toolbarState, state.session.adapters, handle)}

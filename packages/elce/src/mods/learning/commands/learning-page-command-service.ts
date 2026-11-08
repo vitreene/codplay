@@ -1,7 +1,8 @@
 import { BDC_TYPE, DEFAULT_PRESET_ID, PAGE_TYPE } from '../learning-definition'
-import { CHAPTER_TYPE, CHAPTER_TYPE_CONFIG, SCENARIO_ENTRY_KIND } from '../organization/learning-organization-config'
+import { CHAPTER_TYPE, CHAPTER_TYPE_CONFIG, MAX_SCENARIO_CHAPTER_DEPTH, SCENARIO_ENTRY_KIND } from '../organization/learning-organization-config'
 import { DEFAULT_EVALUATION_SETTINGS } from '../evaluation/learning-evaluation-config'
 import { PAGE_LOCATION } from '../organization/learning-page-placement'
+import { scenarioChapterDepth, scenarioEntriesForParent, scenarioParentChapterId } from '../organization/learning-scenario-tree'
 import type { PagePlacement } from '../organization/learning-page-placement'
 import { BDC_LOCATION } from '../../../core/document/content-location'
 import { indexAtEndOrRequested, insertAt, removeValue, replaceAt } from '../../../core/document/collection-operations'
@@ -35,7 +36,7 @@ export class LearningPageCommandService {
       case 'chapter.evaluation.settings.update':
         return this.updateChapterEvaluationSettings(document, command)
       case 'chapter.move':
-        return this.moveChapter(document, command.chapterId, command.index)
+        return this.moveChapter(document, command.chapterId, command.parentChapterId ?? null, command.index)
       case 'chapter.delete':
         return this.deleteChapter(document, command.chapterId)
       case 'page.create':
@@ -55,63 +56,79 @@ export class LearningPageCommandService {
     }
   }
 
-  /** Creates a chapter with its configured Evaluation settings. */
+  /** Creates a root chapter or a standard child chapter at the requested depth. */
   private createChapter(document: LearningDocument, command: Extract<LearningDocumentCommand, { type: 'chapter.create' }>): LearningDocument {
     if (document.chapters.some((chapter) => chapter.id === command.chapterId)) fail(`Chapitre déjà présent : ${command.chapterId}`)
+    const parentChapterId = command.parentChapterId ?? null
+    const parent = parentChapterId === null ? undefined : findChapter(document.chapters, parentChapterId)
+    if (parent?.type === CHAPTER_TYPE.EVALUATION) fail('Un chapitre Évaluation ne peut pas contenir de sous-chapitre.')
+    if (parentChapterId !== null && command.chapterType === CHAPTER_TYPE.EVALUATION) fail('Un chapitre Évaluation ne peut pas être imbriqué.')
+    if (parentChapterId !== null && scenarioChapterDepth(document.data, parentChapterId) >= MAX_SCENARIO_CHAPTER_DEPTH) {
+      fail(`La profondeur maximale est de ${MAX_SCENARIO_CHAPTER_DEPTH} niveaux.`)
+    }
     const chapter: LearningChapter = {
       id: command.chapterId,
       name: command.name,
       type: command.chapterType ?? CHAPTER_TYPE.STANDARD,
       pageIds: [],
+      entries: [],
       ...(command.chapterType === CHAPTER_TYPE.EVALUATION ? {
         evaluationThreshold: DEFAULT_EVALUATION_SETTINGS.threshold,
         evaluationAttemptLimit: DEFAULT_EVALUATION_SETTINGS.attemptLimit,
         evaluationRetryScope: DEFAULT_EVALUATION_SETTINGS.retryScope,
       } : {}),
     }
-    return new LearningDocument({
-      ...document.data,
-      chapters: [...document.chapters, chapter],
-      scenarioEntries: [...document.data.scenarioEntries, { kind: SCENARIO_ENTRY_KIND.CHAPTER, chapterId: chapter.id }],
-    })
+    const withChapter = this.withData({ ...document.data, chapters: [...document.chapters, chapter] })
+    const entries = scenarioEntriesForParent(withChapter.data, parentChapterId)
+    return this.replaceEntriesAtParent(withChapter, parentChapterId, [...entries, { kind: SCENARIO_ENTRY_KIND.CHAPTER, chapterId: chapter.id }])
   }
 
-  /** Deletes an empty chapter and its root scenario entry. */
+  /** Deletes an empty chapter from its parent entry list. */
   private deleteChapter(document: LearningDocument, chapterId: ChapterId): LearningDocument {
     const chapter = findChapter(document.chapters, chapterId)
-    if (chapter.pageIds.length > 0) fail(`Impossible de supprimer un chapitre non vide : ${chapterId}`)
-    return this.withData({
-      ...document.data,
-      chapters: document.chapters.filter((candidate) => candidate.id !== chapter.id),
-      scenarioEntries: document.data.scenarioEntries.filter((entry) => {
-        switch (entry.kind) {
-          case SCENARIO_ENTRY_KIND.PAGE:
-            return true
-          case SCENARIO_ENTRY_KIND.CHAPTER:
-            return entry.chapterId !== chapter.id
-        }
-      }),
-    })
+    if (chapter.entries.length > 0) fail(`Impossible de supprimer un chapitre non vide : ${chapterId}`)
+    const parentChapterId = scenarioParentChapterId(document.data, chapter.id)
+    const entries = scenarioEntriesForParent(document.data, parentChapterId)
+      .filter((entry) => entry.kind !== SCENARIO_ENTRY_KIND.CHAPTER || entry.chapterId !== chapter.id)
+    const withoutEntry = this.replaceEntriesAtParent(document, parentChapterId, entries)
+    return this.withData({ ...withoutEntry.data, chapters: withoutEntry.chapters.filter((candidate) => candidate.id !== chapter.id) })
   }
 
-  /** Reorders one chapter entry without changing its pages. */
-  private moveChapter(document: LearningDocument, chapterId: ChapterId, requestedIndex: number | undefined): LearningDocument {
+  /** Moves one chapter within or between valid parent entry lists. */
+  private moveChapter(
+    document: LearningDocument,
+    chapterId: ChapterId,
+    targetParentChapterId: ChapterId | null,
+    requestedIndex: number | undefined,
+  ): LearningDocument {
     const chapter = findChapter(document.chapters, chapterId)
-    const sourceIndex = this.scenarioEntryIndexForChapter(document, chapter.id)
-    const targetIndex = indexAtEndOrRequested(document.data.scenarioEntries.length, requestedIndex)
-    const insertionIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex
-    const scenarioEntries = document.data.scenarioEntries.filter((entry) => {
-      switch (entry.kind) {
-        case SCENARIO_ENTRY_KIND.PAGE:
-          return true
-        case SCENARIO_ENTRY_KIND.CHAPTER:
-          return entry.chapterId !== chapter.id
-      }
-    })
-    return this.withData({
-      ...document.data,
-      scenarioEntries: insertAt(scenarioEntries, { kind: SCENARIO_ENTRY_KIND.CHAPTER, chapterId: chapter.id }, insertionIndex),
-    })
+    const targetParent = targetParentChapterId === null ? undefined : findChapter(document.chapters, targetParentChapterId)
+    if (targetParent?.type === CHAPTER_TYPE.EVALUATION) fail('Un chapitre Évaluation ne peut pas contenir de sous-chapitre.')
+    if (chapter.type === CHAPTER_TYPE.EVALUATION && targetParentChapterId !== null) fail('Un chapitre Évaluation ne peut pas être imbriqué.')
+    const subtreeChapterIds = this.chapterSubtreeIds(document, chapter.id)
+    if (targetParentChapterId !== null && subtreeChapterIds.has(targetParentChapterId)) fail('Un chapitre ne peut pas être déplacé dans sa propre sous-arborescence.')
+    const subtreeHeight = this.chapterSubtreeHeight(document, chapter.id)
+    const targetDepth = targetParentChapterId === null ? 0 : scenarioChapterDepth(document.data, targetParentChapterId)
+    if (targetDepth + subtreeHeight > MAX_SCENARIO_CHAPTER_DEPTH) fail(`La profondeur maximale est de ${MAX_SCENARIO_CHAPTER_DEPTH} niveaux.`)
+
+    const sourceParentChapterId = scenarioParentChapterId(document.data, chapter.id)
+    const sourceEntries = scenarioEntriesForParent(document.data, sourceParentChapterId)
+    const targetEntries = scenarioEntriesForParent(document.data, targetParentChapterId)
+    const sourceIndex = sourceEntries.findIndex((entry) => entry.kind === SCENARIO_ENTRY_KIND.CHAPTER && entry.chapterId === chapter.id)
+    if (sourceIndex < 0) fail(`Entrée de chapitre absente : ${chapter.id}`)
+    const targetIndex = indexAtEndOrRequested(targetEntries.length, requestedIndex)
+    const insertionIndex = sourceParentChapterId === targetParentChapterId && sourceIndex < targetIndex ? targetIndex - 1 : targetIndex
+    const withoutChapter = this.replaceEntriesAtParent(
+      document,
+      sourceParentChapterId,
+      sourceEntries.filter((entry) => entry.kind !== SCENARIO_ENTRY_KIND.CHAPTER || entry.chapterId !== chapter.id),
+    )
+    const destinationEntries = scenarioEntriesForParent(withoutChapter.data, targetParentChapterId)
+    return this.replaceEntriesAtParent(
+      withoutChapter,
+      targetParentChapterId,
+      insertAt(destinationEntries, { kind: SCENARIO_ENTRY_KIND.CHAPTER, chapterId: chapter.id }, insertionIndex),
+    )
   }
 
   /** Creates a page and its configured initial BDCs at the requested placement. */
@@ -183,7 +200,6 @@ export class LearningPageCommandService {
       ...detached.data,
       chapters: detached.chapters.map((chapter) => ({ ...chapter, pageIds: removeValue(chapter.pageIds, pageId) })),
       pages: detached.pages.filter((candidate) => candidate.id !== pageId),
-      scenarioEntries: this.removeScenarioPageEntry(detached, pageId),
       catalogPageIds: removeValue(detached.data.catalogPageIds, pageId),
     })
   }
@@ -233,42 +249,20 @@ export class LearningPageCommandService {
     })
   }
 
-  /** Removes one standalone page from the root scenario sequence. */
-  private removeScenarioPageEntry(document: LearningDocument, pageId: PageId) {
-    return document.data.scenarioEntries.filter((entry) => {
-      switch (entry.kind) {
-        case SCENARIO_ENTRY_KIND.PAGE:
-          return entry.pageId !== pageId
-        case SCENARIO_ENTRY_KIND.CHAPTER:
-          return true
-      }
-    })
-  }
-
-  /** Finds a standalone page's root entry position when it already has one. */
-  private scenarioEntryIndexForPage(document: LearningDocument, pageId: PageId): number | undefined {
-    const index = document.data.scenarioEntries.findIndex((entry) => entry.kind === SCENARIO_ENTRY_KIND.PAGE && entry.pageId === pageId)
-    return index < 0 ? undefined : index
-  }
-
-  /** Returns one chapter's root entry position. */
-  private scenarioEntryIndexForChapter(document: LearningDocument, chapterId: ChapterId): number {
-    const index = document.data.scenarioEntries.findIndex((entry) => entry.kind === SCENARIO_ENTRY_KIND.CHAPTER && entry.chapterId === chapterId)
-    return index < 0 ? fail(`Entrée de chapitre absente : ${chapterId}`) : index
-  }
-
   /** Finds the existing index when a page is reordered inside its current collection. */
   private sourceIndexForPlacement(document: LearningDocument, page: LearningPage, placement: PagePlacement): number | undefined {
     switch (placement.kind) {
       case PAGE_LOCATION.CATALOG:
         return undefined
       case PAGE_LOCATION.SCENARIO:
-        return page.chapterId === null ? this.scenarioEntryIndexForPage(document, page.id) : undefined
+        return page.chapterId === null
+          ? document.data.scenarioEntries.findIndex((entry) => entry.kind === SCENARIO_ENTRY_KIND.PAGE && entry.pageId === page.id)
+          : undefined
       case PAGE_LOCATION.CHAPTER: {
         if (page.chapterId !== placement.chapterId) return undefined
         const chapter = document.chapters.find((candidate) => candidate.id === placement.chapterId)
         if (chapter === undefined) return undefined
-        const sourceIndex = chapter.pageIds.indexOf(page.id)
+        const sourceIndex = chapter.entries.findIndex((entry) => entry.kind === SCENARIO_ENTRY_KIND.PAGE && entry.pageId === page.id)
         return sourceIndex < 0 ? undefined : sourceIndex
       }
     }
@@ -296,27 +290,26 @@ export class LearningPageCommandService {
   /** Removes the page's prior location and installs its Learning placement. */
   private placePage(document: LearningDocument, page: LearningPage, placement: PagePlacement): LearningDocument {
     const insertionIndex = this.indexAfterPageRemoval(document, page, placement)
-    const withoutPage = this.withData({
-      ...document.data,
-      chapters: document.chapters.map((chapter) => ({ ...chapter, pageIds: removeValue(chapter.pageIds, page.id) })),
-      scenarioEntries: this.removeScenarioPageEntry(document, page.id),
-      catalogPageIds: removeValue(document.data.catalogPageIds, page.id),
+    const withoutPage = this.removePageFromScenario(document, page.id)
+    const withoutCatalogPage = this.withData({
+      ...withoutPage.data,
+      catalogPageIds: removeValue(withoutPage.data.catalogPageIds, page.id),
     })
     switch (placement.kind) {
       case PAGE_LOCATION.CATALOG:
-        return this.withPage(this.withData({ ...withoutPage.data, catalogPageIds: [...withoutPage.data.catalogPageIds, page.id] }), { ...page, chapterId: null })
+        return this.withPage(this.withData({ ...withoutCatalogPage.data, catalogPageIds: [...withoutCatalogPage.data.catalogPageIds, page.id] }), { ...page, chapterId: null })
       case PAGE_LOCATION.SCENARIO: {
-        const scenarioEntries = insertAt(withoutPage.data.scenarioEntries, { kind: SCENARIO_ENTRY_KIND.PAGE, pageId: page.id }, insertionIndex)
-        return this.withPage(this.withData({ ...withoutPage.data, scenarioEntries }), { ...page, chapterId: null })
+        const scenarioEntries = insertAt(withoutCatalogPage.data.scenarioEntries, { kind: SCENARIO_ENTRY_KIND.PAGE, pageId: page.id }, insertionIndex)
+        return this.withPage(this.withData({ ...withoutCatalogPage.data, scenarioEntries }), { ...page, chapterId: null })
       }
       case PAGE_LOCATION.CHAPTER: {
-        const chapter = findChapter(withoutPage.chapters, placement.chapterId)
-        const chapters = replaceAt(
-          withoutPage.chapters,
-          { ...chapter, pageIds: insertAt(chapter.pageIds, page.id, insertionIndex) },
-          (candidate) => candidate.id === chapter.id,
-        )
-        return this.withPage(this.withData({ ...withoutPage.data, chapters }), { ...page, chapterId: chapter.id })
+        const chapter = findChapter(withoutCatalogPage.chapters, placement.chapterId)
+        const chapters = replaceAt(withoutCatalogPage.chapters, {
+          ...chapter,
+          pageIds: insertAt(chapter.pageIds, page.id, insertionIndex),
+          entries: insertAt(chapter.entries, { kind: SCENARIO_ENTRY_KIND.PAGE, pageId: page.id }, insertionIndex),
+        }, (candidate) => candidate.id === chapter.id)
+        return this.withPage(this.withData({ ...withoutCatalogPage.data, chapters }), { ...page, chapterId: chapter.id })
       }
     }
   }
@@ -329,6 +322,64 @@ export class LearningPageCommandService {
   /** Replaces document data while retaining the Learning document constructor. */
   private withData(data: LearningDocument['data']): LearningDocument {
     return new LearningDocument(data)
+  }
+
+  /** Replaces one parent's entries and keeps its direct page index synchronized. */
+  private replaceEntriesAtParent(
+    document: LearningDocument,
+    parentChapterId: ChapterId | null,
+    entries: LearningChapter['entries'],
+  ): LearningDocument {
+    if (parentChapterId === null) return this.withData({ ...document.data, scenarioEntries: entries })
+    const parent = findChapter(document.chapters, parentChapterId)
+    const chapter = { ...parent, entries, pageIds: entries.flatMap((entry) => entry.kind === SCENARIO_ENTRY_KIND.PAGE ? [entry.pageId] : []) }
+    return this.withData({
+      ...document.data,
+      chapters: replaceAt(document.chapters, chapter, (candidate) => candidate.id === parent.id),
+    })
+  }
+
+  /** Removes a page entry from every ordered scenario collection. */
+  private removePageFromScenario(document: LearningDocument, pageId: PageId): LearningDocument {
+    const chapters = document.chapters.map((chapter) => {
+      const entries = chapter.entries.filter((entry) => entry.kind !== SCENARIO_ENTRY_KIND.PAGE || entry.pageId !== pageId)
+      return {
+        ...chapter,
+        entries,
+        pageIds: entries.flatMap((entry) => entry.kind === SCENARIO_ENTRY_KIND.PAGE ? [entry.pageId] : []),
+      }
+    })
+    return this.withData({
+      ...document.data,
+      chapters,
+      scenarioEntries: document.data.scenarioEntries.filter((entry) => entry.kind !== SCENARIO_ENTRY_KIND.PAGE || entry.pageId !== pageId),
+    })
+  }
+
+  /** Collects a chapter and every nested chapter beneath it. */
+  private chapterSubtreeIds(document: LearningDocument, chapterId: ChapterId): ReadonlySet<ChapterId> {
+    const chaptersById = new Map(document.chapters.map((chapter) => [chapter.id, chapter]))
+    const chapterIds = new Set<ChapterId>()
+    const visit = (currentId: ChapterId): void => {
+      if (chapterIds.has(currentId)) return
+      chapterIds.add(currentId)
+      chaptersById.get(currentId)?.entries.forEach((entry) => {
+        if (entry.kind === SCENARIO_ENTRY_KIND.CHAPTER) visit(entry.chapterId)
+      })
+    }
+    visit(chapterId)
+    return chapterIds
+  }
+
+  /** Finds the deepest number of chapter levels contained by a chapter. */
+  private chapterSubtreeHeight(document: LearningDocument, chapterId: ChapterId): number {
+    const chaptersById = new Map(document.chapters.map((chapter) => [chapter.id, chapter]))
+    const chapter = chaptersById.get(chapterId)
+    if (chapter === undefined) return 0
+    const childHeights = chapter.entries.flatMap((entry) => entry.kind === SCENARIO_ENTRY_KIND.CHAPTER
+      ? [this.chapterSubtreeHeight(document, entry.chapterId)]
+      : [])
+    return 1 + Math.max(0, ...childHeights)
   }
 
   /** Reports whether a page is part of an Evaluation chapter. */

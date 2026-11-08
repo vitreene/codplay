@@ -2,7 +2,7 @@ import { assertAvatarContent } from '../../../../resources/bdcs/avatar/domain/av
 import { AVATAR_PRESET_ID } from '../../../../resources/bdcs/avatar/avatar-config'
 import { BDC_TYPE, DEFAULT_PRESET_ID, PAGE_TYPE } from '../../learning-definition'
 import { CARD_LAYOUT_IDS } from '../../../../resources/bdcs/card/card-config'
-import { SCENARIO_ENTRY_KIND } from '../../organization/learning-organization-config'
+import { CHAPTER_TYPE, MAX_SCENARIO_CHAPTER_DEPTH, SCENARIO_ENTRY_KIND } from '../../organization/learning-organization-config'
 import { STATISTICAL_GRAPH_LAYOUT_IDS } from '../../../../resources/bdcs/statistical-graph/statistical-graph-config'
 import type { CardLayoutId } from '../../../../resources/bdcs/card/card-config'
 import type { StatisticalGraphLayoutId } from '../../../../resources/bdcs/statistical-graph/statistical-graph-config'
@@ -26,6 +26,7 @@ import type { AppearanceColorRole } from '../../../../config/appearance/appearan
 
 /** Checks placement and anchor-reference invariants for a document value. */
 export function assertDocumentInvariants(document: LearningDocument, resources: LearningCommandResourceServices): void {
+  assertCustomAppearanceColors(document.data.customAppearanceColors)
   assertAppearanceSettings(document.data.appearance, true, false)
   for (const page of document.pages) assertAppearanceSettings(page.appearance, false, false)
   for (const bdc of document.bdcs) {
@@ -69,48 +70,47 @@ export function assertDocumentInvariants(document: LearningDocument, resources: 
     }
   }
   if (bdcIds.size !== document.bdcs.length) fail('Chaque bdc doit avoir un emplacement unique')
-  const scenarioEntryChapterIds = document.data.scenarioEntries.flatMap((entry) => {
-    switch (entry.kind) {
-      case SCENARIO_ENTRY_KIND.PAGE: {
-        const page = document.pages.find((candidate) => candidate.id === entry.pageId)
-        switch (page) {
-          case undefined:
-            fail(`Page racine inconnue : ${entry.pageId}`)
-          default:
-            switch (page.chapterId) {
-              case null:
-                break
-              default:
-                fail(`Une page racine ne peut pas appartenir au chapitre ${page.chapterId} : ${page.id}`)
-            }
+  const chaptersById = new Map(document.chapters.map((chapter) => [chapter.id, chapter]))
+  const pagesById = new Map(document.pages.map((page) => [page.id, page]))
+  const scenarioChapterIds = new Set<string>()
+  const scenarioPageIds = new Set<string>()
+  const visitScenarioEntries = (entries: LearningDocument['data']['scenarioEntries'], parentChapterId: string | null, parentDepth: number): void => {
+    for (const entry of entries) {
+      switch (entry.kind) {
+        case SCENARIO_ENTRY_KIND.PAGE: {
+          const page = pagesById.get(entry.pageId)
+          if (page === undefined) fail(`Page de scénario inconnue : ${entry.pageId}`)
+          if (page.chapterId !== parentChapterId) fail(`Affectation de chapitre incohérente : ${entry.pageId}`)
+          if (scenarioPageIds.has(entry.pageId)) fail(`Page présente plusieurs fois dans le scénario : ${entry.pageId}`)
+          scenarioPageIds.add(entry.pageId)
+          break
         }
-        return []
+        case SCENARIO_ENTRY_KIND.CHAPTER: {
+          const chapter = chaptersById.get(entry.chapterId)
+          if (chapter === undefined) fail(`Entrée de chapitre inconnue : ${entry.chapterId}`)
+          if (scenarioChapterIds.has(entry.chapterId)) fail(`Chapitre présent plusieurs fois dans le scénario : ${entry.chapterId}`)
+          if (parentDepth >= MAX_SCENARIO_CHAPTER_DEPTH) fail(`La profondeur maximale est de ${MAX_SCENARIO_CHAPTER_DEPTH} niveaux.`)
+          const parentChapter = parentChapterId === null ? undefined : chaptersById.get(parentChapterId)
+          if (parentChapter?.type === CHAPTER_TYPE.EVALUATION) fail('Un chapitre Évaluation ne peut pas contenir de sous-chapitre.')
+          if (parentChapterId !== null && chapter.type === CHAPTER_TYPE.EVALUATION) fail('Un chapitre Évaluation ne peut pas être imbriqué.')
+          scenarioChapterIds.add(entry.chapterId)
+          const directPageIds = chapter.entries.flatMap((child) => child.kind === SCENARIO_ENTRY_KIND.PAGE ? [child.pageId] : [])
+          if (directPageIds.length !== chapter.pageIds.length || directPageIds.some((pageId, index) => chapter.pageIds[index] !== pageId)) {
+            fail(`L’index des pages directes du chapitre est incohérent : ${chapter.id}`)
+          }
+          visitScenarioEntries(chapter.entries, chapter.id, parentDepth + 1)
+          break
+        }
       }
-      case SCENARIO_ENTRY_KIND.CHAPTER:
-        return [entry.chapterId]
-    }
-  })
-  const uniqueScenarioChapterIds = new Set(scenarioEntryChapterIds)
-  if (scenarioEntryChapterIds.length !== document.chapters.length
-    || uniqueScenarioChapterIds.size !== scenarioEntryChapterIds.length) {
-    fail('Chaque chapitre doit avoir une entrée racine unique')
-  }
-  for (const chapterId of scenarioEntryChapterIds) {
-    switch (document.chapters.find((chapter) => chapter.id === chapterId)) {
-      case undefined:
-        fail(`Entrée de chapitre inconnue : ${chapterId}`)
-      default:
-        break
     }
   }
-  for (const chapter of document.chapters) {
-    for (const pageId of chapter.pageIds) {
-      if (document.pages.find((page) => page.id === pageId)?.chapterId !== chapter.id) fail(`Affectation de chapitre incohérente : ${pageId}`)
-    }
-  }
+  visitScenarioEntries(document.data.scenarioEntries, null, 0)
+  if (scenarioChapterIds.size !== document.chapters.length) fail('Chaque chapitre doit avoir une entrée unique dans l’arborescence du scénario.')
   for (const page of document.pages) {
-    if (page.chapterId === null && document.chapters.some((chapter) => chapter.pageIds.includes(page.id))) fail(`Page affectée à un chapitre sans référence : ${page.id}`)
-    if (page.chapterId !== null && !document.chapters.some((chapter) => chapter.id === page.chapterId && chapter.pageIds.includes(page.id))) fail(`Page hors chapitre incohérente : ${page.id}`)
+    const isCatalogPage = document.data.catalogPageIds.includes(page.id)
+    if (isCatalogPage && scenarioPageIds.has(page.id)) fail(`Une page du catalogue ne peut pas être dans le scénario : ${page.id}`)
+    if (isCatalogPage && page.chapterId !== null) fail(`Une page du catalogue ne peut pas rester affectée à un chapitre : ${page.id}`)
+    if (!isCatalogPage && !scenarioPageIds.has(page.id)) fail(`Page absente du scénario et du catalogue : ${page.id}`)
   }
 
   for (const page of document.pages) {
@@ -312,6 +312,18 @@ export function assertDocumentInvariants(document: LearningDocument, resources: 
     }
   }
   learningProfileService.assertSummaryProfileInvariants(document)
+}
+
+/** Ensures each project palette entry is a unique six-digit CSS hex color. */
+function assertCustomAppearanceColors(value: unknown): void {
+  if (!Array.isArray(value)) fail('Palette de couleurs personnalisées invalide.')
+  const seen = new Set<string>()
+  for (const color of value as readonly unknown[]) {
+    if (typeof color !== 'string' || !/^#[0-9a-f]{6}$/i.test(color) || seen.has(color.toLowerCase())) {
+      fail(`Couleur personnalisée de projet invalide ou répétée : ${color}`)
+    }
+    seen.add(color.toLowerCase())
+  }
 }
 
 /** Rejects unknown appearance references and malformed sparse settings at any document scope. */

@@ -14,6 +14,7 @@ export type { BdcId, ChapterId, MediaId, MediaMetadata, PageId }
 export interface LearningChapter extends ContentChapter {
   readonly name: ElceTextValue
   readonly type: ChapterType
+  readonly entries: readonly ScenarioEntry[]
   readonly evaluationThreshold?: number
   readonly evaluationAttemptLimit?: number | null
   readonly evaluationRetryScope?: EvaluationRetryScope
@@ -32,8 +33,9 @@ export interface LearningBdc extends ResourceBdc {
 
 export interface LearningDocumentData extends ResourceDocumentData {
   readonly id: string
-  readonly version: 12
+  readonly version: 14
   readonly name: string
+  readonly customAppearanceColors: readonly string[]
   readonly revelationDefaults: RevelationTransitionDefaults
   readonly summary: SummarySettings
   readonly profile: ProfileDefinition

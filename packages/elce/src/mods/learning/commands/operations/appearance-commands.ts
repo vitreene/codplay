@@ -60,6 +60,17 @@ export function resetAppearanceProperty(
   )
 }
 
+/** Adds a reusable custom color to the project palette once. */
+export function addCustomAppearanceColor(document: LearningDocument, color: string): LearningDocument {
+  if (!/^#[0-9a-f]{6}$/i.test(color)) fail(`Couleur personnalisée invalide : ${color}`)
+  const normalizedColor = color.toLowerCase()
+  if (document.data.customAppearanceColors.includes(normalizedColor)) return document
+  return new LearningDocument({
+    ...document.data,
+    customAppearanceColors: [...document.data.customAppearanceColors, normalizedColor],
+  })
+}
+
 /** Reads one target's sparse local appearance settings. */
 function appearanceForTarget(document: LearningDocument, target: AppearanceTarget): AppearanceSettings | undefined {
   switch (target.kind) {

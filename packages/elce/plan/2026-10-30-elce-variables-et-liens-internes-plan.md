@@ -174,9 +174,11 @@ d’instances n’est nécessaire.
    stocké comme chaîne ; après promotion, il est stocké comme JSON Tiptap, avec
    le texte déjà saisi converti en nœuds texte.
 3. **Formatage riche du Message Carte.** Le champ Message accepte le gras et
-   l’italique par une barre compacte propre à ce champ. Les autres champs Carte
-   n’activent pas de marques. Les marques survivent à l’enregistrement, à la
-   projection, aux changements de layout, à l’annulation/rétablissement et à la
+   l’italique par une barre compacte propre à ce champ. Les commandes visibles
+   utilisent les icônes Gras et Italique avec leurs noms accessibles conservés.
+   Les autres champs Carte n’activent pas de marques. Les marques survivent à
+   l’enregistrement, à la projection, aux changements de layout, à
+   l’annulation/rétablissement et à la
    preview. La limite existante de 250 caractères compte le texte UTF-16 et
    chaque nœud-étiquette comme un caractère, indépendamment de sa valeur
    dynamique.
@@ -332,7 +334,8 @@ dans ce champ afin de préserver une seule action interactive.
 - Le Message Carte conserve le gras et l’italique dans l’éditeur, le document
   enregistré et le player. La migration d’un message existant en texte simple
   conserve exactement son contenu ; le compteur limite texte UTF-16 et nœuds
-  étiquette selon la règle retenue.
+  étiquette selon la règle retenue. La barre affiche les icônes Gras et
+  Italique sans texte visible, tout en gardant les noms accessibles.
 - Insertion, glisser-déposer, saisie éventuelle, copie/collage, déplacement,
   annulation/rétablissement et rechargement préservent les références et le
   caret dans chaque type de champ retenu.

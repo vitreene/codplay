@@ -4,6 +4,7 @@ import { PAGE_LOCATION } from '../organization/learning-page-placement'
 import { SCENARIO_ENTRY_KIND } from '../organization/learning-organization-config'
 import type { PagePlacement } from '../organization/learning-page-placement'
 import type { ScenarioEntry } from '../organization/learning-scenario-entry-types'
+import type { ScenarioEntryPlacement } from '../organization/learning-scenario-entry-types'
 import { renderChapterSettings } from './chapter-settings'
 import { renderLearningContentCatalogPanel } from './learning-content-catalog-panel'
 import { renderScenarioPanel } from './scenario-panel'
@@ -45,12 +46,14 @@ export function renderEditorWorkspace(props: EditorWorkspaceViewProps): RemixNod
   )
   const scenarioProps: ScenarioPanelProps = {
     workspace: props,
+    getDraggedEntry: props.getDraggedEntry,
+    onSetDropTarget: props.onSetDropTarget,
     onDragStartPage: (event, pageId) => beginPageDrag(event, { kind: SCENARIO_ENTRY_KIND.PAGE, pageId }, props.onSetDraggedEntry),
     onDragStartChapter: (event, chapterId) => beginPageDrag(event, { kind: SCENARIO_ENTRY_KIND.CHAPTER, chapterId }, props.onSetDraggedEntry),
     onDragEnd: () => finishPageDrag(props.onSetDraggedEntry, props.onSetDropTarget),
-    onDragOverRoot: (event, targetId) => dragOverRoot(event, targetId, props.getDraggedEntry, props.onSetDropTarget),
+    onDragOverScenarioEntry: (event, targetId) => dragOverRoot(event, targetId, props.getDraggedEntry, props.onSetDropTarget),
     onDragOverPage: (event, targetId) => dragOverPage(event, targetId, props.getDraggedEntry, props.onSetDropTarget),
-    onDropRoot: (event, placement) => dropScenarioEntry(event, placement, props),
+    onDropScenarioEntry: (event, placement) => dropScenarioEntry(event, placement, props),
     onDropPage: (event, placement) => dropPageEntry(event, placement, props),
     onDragLeave: (event) => dragLeaveSeparator(event, props.onSetDropTarget),
   }
@@ -92,6 +95,7 @@ export function renderEditorWorkspace(props: EditorWorkspaceViewProps): RemixNod
     scenario: scenarioProps,
     isOpen: catalogPaletteOpen && props.visible && props.editable !== false,
     activeTab: catalogPaletteTab,
+    onClose: () => setCatalogPaletteOpen(false),
     dropTarget: props.dropTarget,
     getDraggedEntry: props.getDraggedEntry,
     onSetTab: setCatalogPaletteTab,
@@ -210,22 +214,22 @@ function dragLeaveSeparator(event: DragEvent, setDropTarget: (targetId: string |
   setDropTarget(null)
 }
 
-/** Applies a page or chapter move to the mixed root scenario order. */
-function dropScenarioEntry(event: DragEvent, placement: PagePlacement, props: EditorWorkspaceViewProps): void {
+/** Applies a page or chapter move to one mixed scenario entry list. */
+function dropScenarioEntry(event: DragEvent, placement: ScenarioEntryPlacement, props: EditorWorkspaceViewProps): void {
   const entry = props.getDraggedEntry()
   switch (entry?.kind) {
     case SCENARIO_ENTRY_KIND.PAGE:
       event.preventDefault()
       event.stopPropagation()
-      props.onMovePage(entry.pageId, placement)
+      props.onMovePage(entry.pageId, placement.parentChapterId === null
+        ? { kind: PAGE_LOCATION.SCENARIO, index: placement.index }
+        : { kind: PAGE_LOCATION.CHAPTER, chapterId: placement.parentChapterId, index: placement.index })
       finishPageDrag(props.onSetDraggedEntry, props.onSetDropTarget)
       return
     case SCENARIO_ENTRY_KIND.CHAPTER:
       event.preventDefault()
       event.stopPropagation()
-      props.onMoveChapter(entry.chapterId, placement.kind === PAGE_LOCATION.SCENARIO && placement.index !== undefined
-        ? placement.index
-        : props.view.documentModel.data.scenarioEntries.length)
+      props.onMoveChapter(entry.chapterId, placement.index, placement.parentChapterId)
       finishPageDrag(props.onSetDraggedEntry, props.onSetDropTarget)
       return
     default:

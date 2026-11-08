@@ -92,6 +92,12 @@ dans [`resources/bdcs/card/authoring/`](../src/resources/bdcs/card/authoring/).
 Les mêmes actions ressource Carte servent aux BDC directs de Flux ou Diapo et
 aux Cartes enfants du Carousel ; Learning reste propriétaire de la création,
 du placement documentaire et de l’accès au contrôleur.
+Le champ Message de la Carte affiche les commandes Gras et Italique sous forme
+d’icônes uniquement ; leurs noms accessibles restent « Gras » et « Italique ».
+Le rendu est fourni par le champ texte partagé dans
+[`learning-inline-text-field.tsx`](../src/mods/learning/inline-text/learning-inline-text-field.tsx)
+et ses styles d’éditeur dans
+[`app-layout.css`](../src/app/layout/app-layout.css).
 
 L’auteur peut ajouter, supprimer et réordonner les vues Carte et Graphe
 statistique dans la même séquence. Les cinq layouts et leurs champs restent
@@ -106,6 +112,16 @@ dans le même Carousel, avec le layout, le cadrage et la position du média de l
 Carte cible. Chaque ressource importée conserve sa propre référence média.
 Les boutons d’ajout de vue affichent « Carte » et « Graphe » sous leur icône ;
 leur nom accessible conserve la description complète.
+Le menu d’ajout est un panneau compact ancré immédiatement à droite du bouton
+« + » ; il reste hors du flux horizontal et ne repousse pas les cibles Corbeille
+et Catalogue. Ce comportement est porté par
+[`renderCarouselViewActions`](../src/resources/bdcs/carousel/authoring/remix-carousel-editor.tsx)
+et [`carousel-editor.css`](../src/resources/bdcs/carousel/authoring/carousel-editor.css) ;
+le rendu Safari MCP du Projet 3 confirme le menu flottant de 118,75 × 44,375 px
+et la rangée inchangée de 111,17 px. Un clic hors du menu le ferme, y compris
+sur une autre commande flottante ; Safari MCP sur Projet 3 confirme cette
+fermeture. Le comportement est porté par
+[`remix-carousel-editor.tsx`](../src/resources/bdcs/carousel/authoring/remix-carousel-editor.tsx).
 
 Dans une Diapo narrée, l’association de transcript est éditée dans chaque BDC
 Carte enfant, avec un bouton radio caché par occurrence. Elle n’apparaît pas
@@ -130,6 +146,10 @@ progression temporisée de l’instance courante : la lecture se poursuit en mod
 manuel et les clics suivants peuvent sélectionner d’autres vues. Cette
 bascule de lecture n’écrit pas dans le `playbackMode` enregistré du Carousel.
 Dans l’éditeur, les réglages du Carousel restent sur une rangée unique.
+Les libellés sont espacés de `0.35rem` de leurs champs. La rangée des
+réglages garde `0.35rem` avant les onglets des vues ; les onglets ont
+`0.4rem` d’espace vertical intérieur. Les réglages de la vue sélectionnée
+gardent `0.45rem` au-dessus et `0.75rem` au-dessous.
 Les valeurs affichées suivent le document courant. Une création utilise les
 défauts configurés ; après édition, le mode et la transition enregistrés restent
 sélectionnés après un changement de page et un rechargement. La transition

@@ -1,5 +1,5 @@
 import { on, type RemixNode } from 'remix/component'
-import { Images, List } from 'lucide-static'
+import { Eye, Images, List } from 'lucide-static'
 import { renderLucideIcon } from '../lucide-static-icon'
 
 export type EditorPanelName = 'outline' | 'properties'
@@ -94,6 +94,7 @@ function renderPreviewButton(onPreview: () => void): RemixNode {
     type="button"
     mix={on<HTMLButtonElement, 'click'>('click', onPreview)}
   >
+    {renderLucideIcon(Eye, 'elce-preview-open-icon')}
     Prévisualiser
   </button>
 }

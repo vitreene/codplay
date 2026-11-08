@@ -30,6 +30,7 @@ export class LearningDocumentService {
       name: 'Chapitre 1',
       type: CHAPTER_TYPE.STANDARD,
       pageIds: ['page-a'],
+      entries: [{ kind: SCENARIO_ENTRY_KIND.PAGE, pageId: 'page-a' }],
     }
     const page: LearningPage = {
       id: 'page-a',
@@ -59,6 +60,7 @@ export class LearningDocumentService {
       id: 'elce-document',
       version: ELCE_DOCUMENT_VERSION,
       name: 'Document Elcé',
+      customAppearanceColors: [],
       revelationDefaults: ELCE_EDITOR_SETTINGS.revelation.projectDefaults,
       summary: INITIAL_SUMMARY_SETTINGS,
       profile: INITIAL_PROFILE_DEFINITION,
@@ -154,12 +156,14 @@ export class LearningDocumentService {
     document: LearningDocument,
     name?: string,
     chapterType: LearningChapter['type'] = CHAPTER_TYPE.STANDARD,
+    parentChapterId?: string,
   ): Extract<LearningDocumentCommand, { type: 'chapter.create' }> {
     return {
       type: 'chapter.create',
       chapterId: createStableId('chapter'),
       name: name?.trim() || this.nextChapterName(document, chapterType),
       chapterType,
+      ...(parentChapterId === undefined ? {} : { parentChapterId }),
     }
   }
 

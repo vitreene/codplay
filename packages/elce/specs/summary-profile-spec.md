@@ -72,10 +72,12 @@ commence sur la première page de contenu et celle-ci n’a pas de page
 précédente. Une page éditée choisie expressément au démarrage reste la page de
 départ de cette session.
 
-Dans le scénario de l’éditeur, le réglage ajoute une entrée fixe « Sommaire »
-au-dessus des pages et chapitres. L’entrée ouvre les réglages du Sommaire ; elle
-ne crée pas de page métier et ne change pas l’ordre enregistré des contenus.
-La décocher retire cette entrée. L’accès au Sommaire depuis le menu reste
+Dans le scénario de l’éditeur, l’entrée fixe « Sommaire » figure une seule fois
+à la racine, avant les pages et chapitres ; aucune copie n’est rendue dans les
+listes de chapitres. Elle ouvre les réglages du Sommaire, ne crée pas de page
+métier et ne change pas l’ordre enregistré des contenus. Cette entrée auteur
+reste distincte de `summary.showAtRoot`, qui contrôle la présence de la page
+Sommaire dans le parcours du lecteur. L’accès au Sommaire depuis le menu reste
 gouverné par « Accès au sommaire dans la navigation » : le lien reste
 accessible pendant une page inachevée quand ce réglage est activé ; sinon, il
 devient accessible après la fin de la page. La case est désactivée tant que
@@ -462,6 +464,12 @@ L’API conserve son compare-and-swap : une modification concurrente refuse un
   En mode `free`, le test de composition garde
   le BDC Résultat d’Évaluation inaccessible tant que les réponses requises
   manquent.
+
+Validation de l’entrée auteur unique le 8 novembre 2026 : le typecheck et
+`git diff --check` passent. Safari MCP sur Projet 3 confirme dans le DOM une
+seule entrée `#elce-scenario-summary-entry`, dans la liste racine, et aucune
+copie dans les listes imbriquées. Le rendu est produit par
+[`scenario-panel.tsx`](../src/mods/learning/authoring/scenario-panel.tsx).
 
 Validation du menu le 30 octobre 2026 : 79 tests ciblés réussis, puis la suite
 Elcé complète (76 fichiers, 526 tests), le typecheck, le build et

@@ -287,7 +287,7 @@ export function LearningProjectApplication(handle: Handle) {
       setProfileTokenTarget(null)
     }
     document.addEventListener('drop', preventUnclaimedFileNavigation)
-    document.addEventListener('click', closeProjectMenuOnOutsideClick, true)
+    document.addEventListener('click', closeAuthoringMenusOnOutsideClick, true)
     const handleResize = (): void => {
       const nextWidth = window.innerWidth
       panelVisibility = resizedWorkspacePanelVisibility(panelVisibility, previousWindowWidth, nextWidth)
@@ -309,7 +309,7 @@ export function LearningProjectApplication(handle: Handle) {
       document.removeEventListener('pointerdown', handleProfileTokenPointerDown, true)
       document.removeEventListener(INLINE_TEXT_LABEL_SELECTION_EVENT, handleInlineTextLabelSelection)
       document.removeEventListener('drop', preventUnclaimedFileNavigation)
-      document.removeEventListener('click', closeProjectMenuOnOutsideClick, true)
+      document.removeEventListener('click', closeAuthoringMenusOnOutsideClick, true)
       window.removeEventListener('resize', handleResize)
       popupPreviewHost?.destroy()
     }
@@ -354,15 +354,17 @@ export function LearningProjectApplication(handle: Handle) {
     exportError,
     exportNotice,
     movePage: (pageId, placement) => actions.movePage(pageId, placement),
-    moveChapter: (chapterId, index) => actions.moveChapter(chapterId, index),
+    moveChapter: (chapterId, index, parentChapterId) => actions.moveChapter(chapterId, index, parentChapterId ?? null),
   }, runHistoryAction)
 }
 
-/** Closes the native project disclosure when a click lands outside it. */
-function closeProjectMenuOnOutsideClick(event: MouseEvent): void {
-  const menu = document.getElementById('elce-project-menu')
-  if (!(menu instanceof HTMLDetailsElement) || !menu.open) return
-  if (event.target instanceof Node && !menu.contains(event.target)) menu.open = false
+/** Closes native project and Scenario disclosures when a click lands outside. */
+function closeAuthoringMenusOnOutsideClick(event: MouseEvent): void {
+  const target = event.target
+  if (!(target instanceof Node)) return
+  document.querySelectorAll<HTMLDetailsElement>('#elce-project-menu, #elce-scenario-add').forEach((menu) => {
+    if (menu.open && !menu.contains(target)) menu.open = false
+  })
 }
 
 /** Prevents the browser from navigating when no authoring target accepts a file drop. */

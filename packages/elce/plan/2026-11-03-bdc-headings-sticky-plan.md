@@ -19,6 +19,8 @@ de la colonne centrale pendant le défilement de leur propre bloc.
 - Les vues Carte/Graphe d’un Carousel et les éditeurs d’ancres gardent leur
   contexte imbriqué existant et ne deviennent pas des en-têtes de la séquence
   directe.
+- Décision utilisateur du 8 novembre : chaque BDC direct de page est isolé dans
+  son propre cadre ; les filets servent uniquement aux emplacements de dépôt.
 
 ## Travail et acceptation
 
@@ -30,5 +32,11 @@ de la colonne centrale pendant le défilement de leur propre bloc.
 - [ ] Vérifier dans l’éditeur réel qu’un en-tête reste visible pendant le
   défilement de son BDC, que le suivant prend le relais, et qu’aucun en-tête ni
   la barre Section ne se recouvre ; vérifier aussi une largeur étroite.
-- [ ] Après validation, reporter le contrat vérifié dans la spécification
-  d’organisation et dans les spécifications des BDC concernés.
+- [x] Encadrer les BDC directs via leur conteneur commun et retirer les cadres
+  concurrents des éditeurs internes. Safari MCP confirme les styles calculés
+  des BDC Avatar et Carousel à 800 px et 1139 px, sans débordement horizontal ;
+  la capture est vide, donc seule la structure DOM a été vérifiée.
+- [ ] Vérifier visuellement dans l’éditeur réel les cadres et les en-têtes
+  adhérents sur écran large et étroit.
+- [ ] Après validation des en-têtes, reporter leur contrat dans la
+  spécification d’organisation et dans les spécifications des BDC concernés.

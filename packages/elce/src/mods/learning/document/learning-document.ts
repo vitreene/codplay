@@ -4,8 +4,9 @@ import { authoredTextToPlainText } from '../../../core/document/rich-text-utils'
 import { isRichTextDocument, parseInlineTextTokens } from '../inline-text/learning-inline-text-value'
 import { migrateLegacyCarouselCueDurations } from '../../../resources/bdcs/carousel/domain/carousel-service'
 import type { LegacyCarouselContent } from '../../../resources/bdcs/carousel/domain/carousel-service'
+import { scenarioPageIdsInOrder } from '../organization/learning-scenario-tree'
 
-export const ELCE_DOCUMENT_VERSION = 12 as const
+export const ELCE_DOCUMENT_VERSION = 14 as const
 
 /** Owns the serializable Learning document value and its versioned codec. */
 export class LearningDocument {
@@ -28,14 +29,7 @@ export class LearningDocument {
   }
 
   public get scenarioPageIds(): readonly PageId[] {
-    return this.data.scenarioEntries.flatMap((entry) => {
-      switch (entry.kind) {
-        case SCENARIO_ENTRY_KIND.PAGE:
-          return [entry.pageId]
-        case SCENARIO_ENTRY_KIND.CHAPTER:
-          return this.data.chapters.find((chapter) => chapter.id === entry.chapterId)?.pageIds ?? []
-      }
-    })
+    return scenarioPageIdsInOrder(this.data)
   }
 
   public get catalogPageIds(): readonly PageId[] {
@@ -55,10 +49,10 @@ export class LearningDocument {
     return this.data
   }
 
-  /** Rehydrates legacy documents, including the v11 Carousel timing format. */
+  /** Rehydrates legacy documents, including Carousel timing and custom palette formats. */
   public static fromJSON(value: unknown): LearningDocument {
     if (!isRecord(value) || (value.version !== 7 && value.version !== 8 && value.version !== 9 && value.version !== 10
-      && value.version !== 11 && value.version !== ELCE_DOCUMENT_VERSION)) {
+      && value.version !== 11 && value.version !== 12 && value.version !== 13 && value.version !== ELCE_DOCUMENT_VERSION)) {
       const version = isRecord(value) ? value.version : undefined
       throw new Error(`Version de document Elcé non supportée : ${String(version)}`)
     }
@@ -69,7 +63,10 @@ export class LearningDocument {
         : value.version === 9 || value.version === 10
           ? migrateV9Document(value)
           : value
-    const data = v11Data.version === ELCE_DOCUMENT_VERSION ? v11Data as unknown as LearningDocumentData : migrateV11Document(v11Data)
+    const currentData = v11Data.version === 11 ? migrateV11Document(v11Data) : v11Data
+    const data = currentData.version === ELCE_DOCUMENT_VERSION
+      ? currentData as unknown as LearningDocumentData
+      : migrateV13Document(currentData.version === 13 ? currentData : migrateV12Document(currentData))
     return new LearningDocument(normalizeQuestionAnswerLabels(data))
   }
 }
@@ -105,7 +102,7 @@ function migrateV9Document(value: Record<string, unknown>): Record<string, unkno
 }
 
 /** Converts legacy Avatar cue starts into the Carousel's persisted durations. */
-function migrateV11Document(value: Record<string, unknown>): LearningDocumentData {
+function migrateV11Document(value: Record<string, unknown>): Record<string, unknown> {
   const records = Array.isArray(value.bdcs) ? value.bdcs.filter(isRecord) : []
   const voiceDurationByPage = new Map(records.flatMap((bdc) => {
     if (bdc.type !== 'avatar' || typeof bdc.pageId !== 'string' || !isRecord(bdc.avatar) || !isRecord(bdc.avatar.take)
@@ -114,7 +111,7 @@ function migrateV11Document(value: Record<string, unknown>): LearningDocumentDat
   }))
   return {
     ...value,
-    version: ELCE_DOCUMENT_VERSION,
+    version: 12,
     bdcs: mapRecords(value.bdcs, (bdc) => {
       if (!isRecord(bdc.carousel) || !Array.isArray(bdc.carousel.cards)) return bdc
       const voiceDurationMs = typeof bdc.pageId === 'string' ? voiceDurationByPage.get(bdc.pageId) : undefined
@@ -123,6 +120,31 @@ function migrateV11Document(value: Record<string, unknown>): LearningDocumentDat
         carousel: migrateLegacyCarouselCueDurations(bdc.carousel as unknown as LegacyCarouselContent, voiceDurationMs),
       }
     }),
+  }
+}
+
+/** Adds the project-scoped custom color palette to the v13 document shape. */
+function migrateV12Document(value: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...value,
+    version: 13,
+    customAppearanceColors: Array.isArray(value.customAppearanceColors)
+      ? value.customAppearanceColors
+      : [],
+  }
+}
+
+/** Converts each v13 chapter's ordered pages into ordered scenario entries. */
+function migrateV13Document(value: Record<string, unknown>): LearningDocumentData {
+  return {
+    ...value,
+    version: ELCE_DOCUMENT_VERSION,
+    chapters: mapRecords(value.chapters, (chapter) => ({
+      ...chapter,
+      entries: Array.isArray(chapter.entries)
+        ? chapter.entries
+        : (Array.isArray(chapter.pageIds) ? chapter.pageIds : []).map((pageId) => ({ kind: SCENARIO_ENTRY_KIND.PAGE, pageId })),
+    })),
   } as unknown as LearningDocumentData
 }
 

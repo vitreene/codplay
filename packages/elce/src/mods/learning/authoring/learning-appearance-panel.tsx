@@ -149,6 +149,7 @@ export function renderAppearancePanel(props: AppearancePanelProps): RemixNode {
           gradients: card === undefined ? [] : APPEARANCE_BACKGROUND_GRADIENTS,
           gradientColors,
           paletteColors: palette.colors,
+          customColors: document.data.customAppearanceColors,
           allowTransparent: true,
           transparent: resolved.density.value === 'none'
             || !appearanceBackgroundAppliesToSurface(resolved, target),
@@ -164,6 +165,7 @@ export function renderAppearancePanel(props: AppearancePanelProps): RemixNode {
           gradients: [],
           gradientColors,
           paletteColors: palette.colors,
+          customColors: document.data.customAppearanceColors,
           allowTransparent: false,
           transparent: false,
           localSettings,
@@ -251,6 +253,7 @@ interface ColorFieldProps {
   readonly color: string
   readonly backgroundChoice?: AppearanceBackground
   readonly paletteColors: Readonly<Record<AppearanceColorRole, string>>
+  readonly customColors: readonly string[]
   readonly gradients: typeof APPEARANCE_BACKGROUND_GRADIENTS | readonly []
   readonly gradientColors: AppearanceGradientColors
   readonly allowTransparent: boolean
@@ -269,6 +272,7 @@ function renderColorField(props: ColorFieldProps): RemixNode {
     color,
     backgroundChoice,
     paletteColors,
+    customColors,
     gradients,
     gradientColors,
     allowTransparent,
@@ -314,16 +318,29 @@ function renderColorField(props: ColorFieldProps): RemixNode {
     >
       Couleur personnalisée
     </label>
-    <input
-      id={`${id}-picker`}
-      type="color"
-      value={color}
-      mix={on<HTMLInputElement, 'change'>('change', (event) => {
-        const value = event.currentTarget.value
-        if (property === 'background') actions.setAppearanceProperty(target, 'background', { kind: 'custom', value })
-        else actions.setAppearanceProperty(target, 'textColor', { kind: 'custom', value })
-      })}
-    />
+    <div id={`${id}-picker-actions`} className="elce-appearance-color-picker-actions">
+      <input
+        id={`${id}-picker`}
+        type="color"
+        value={color}
+        mix={on<HTMLInputElement, 'change'>('change', (event) => {
+          const value = event.currentTarget.value
+          if (property === 'background') actions.setAppearanceProperty(target, 'background', { kind: 'custom', value })
+          else actions.setAppearanceProperty(target, 'textColor', { kind: 'custom', value })
+        })}
+      />
+      <button
+        id={`${id}-custom-color-add`}
+        className="elce-appearance-color-add"
+        type="button"
+        aria-label={`Ajouter la couleur ${color} à la palette du projet`}
+        title="Ajouter à la palette du projet"
+        disabled={customColors.some((entry) => entry.toLowerCase() === color.toLowerCase())}
+        mix={on<HTMLButtonElement, 'click'>('click', () => actions.addCustomAppearanceColor(color))}
+      >
+        +
+      </button>
+    </div>
     <div
       id={`${id}-swatches`}
       className="elce-appearance-swatches"
@@ -340,6 +357,15 @@ function renderColorField(props: ColorFieldProps): RemixNode {
         actions,
         target,
       )) : null}
+      {customColors.map((customColor, index) => renderCustomColorSwatch(
+        id,
+        customColor,
+        index,
+        label,
+        property,
+        actions,
+        target,
+      ))}
     </div>
     {renderResetButton(`${id}-reset`, `Réinitialiser ${label.toLowerCase()}`, localSettings, property, actions, target)}
   </fieldset>
@@ -454,6 +480,31 @@ function renderPaletteSwatch(
     title={`${appearanceRoleLabels[role]} · ${color}`}
     mix={on<HTMLButtonElement, 'click'>('click', () => {
       const choice = { kind: 'palette', role } as const
+      if (property === 'background') actions.setAppearanceProperty(target, 'background', choice)
+      else actions.setAppearanceProperty(target, 'textColor', choice)
+    })}
+  />
+}
+
+/** Renders a saved project color and applies it to the selected scope. */
+function renderCustomColorSwatch(
+  id: string,
+  color: string,
+  index: number,
+  label: string,
+  property: 'background' | 'textColor',
+  actions: LearningEditorFacade,
+  target: AppearanceTarget,
+): RemixNode {
+  return <button
+    id={`${id}-custom-swatch-${index}`}
+    className="elce-appearance-swatch"
+    type="button"
+    style={{ backgroundColor: color }}
+    aria-label={`Utiliser la couleur personnalisée ${color} pour ${label.toLowerCase()}`}
+    title={`Couleur du projet · ${color}`}
+    mix={on<HTMLButtonElement, 'click'>('click', () => {
+      const choice = { kind: 'custom', value: color } as const
       if (property === 'background') actions.setAppearanceProperty(target, 'background', choice)
       else actions.setAppearanceProperty(target, 'textColor', choice)
     })}

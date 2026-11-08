@@ -56,6 +56,7 @@ export type LearningDocumentCommand =
       chapterId: ChapterId
       name: string
       chapterType?: LearningChapter['type']
+      parentChapterId?: ChapterId
     }>
   | Readonly<{ type: 'chapter.rename'; chapterId: ChapterId; name: AuthoredTextValue }>
   | Readonly<{
@@ -64,7 +65,7 @@ export type LearningDocumentCommand =
       attemptLimit: number | null
       retryScope: EvaluationRetryScope
     }>
-  | Readonly<{ type: 'chapter.move'; chapterId: ChapterId; index?: number }>
+  | Readonly<{ type: 'chapter.move'; chapterId: ChapterId; parentChapterId?: ChapterId | null; index?: number }>
   | Readonly<{ type: 'chapter.delete'; chapterId: ChapterId }>
   | (Readonly<{ type: 'page.create' }> & CreatePageCommandInput)
   | Readonly<{ type: 'page.rename'; pageId: PageId; name: AuthoredTextValue }>
@@ -110,3 +111,4 @@ export type LearningDocumentCommand =
   | AppearancePropertySetCommand
   | AppearancePropertyResetCommand
   | Readonly<{ type: 'document.rename'; name: string }>
+  | Readonly<{ type: 'appearance.palette.color.add'; color: string }>

@@ -46,7 +46,6 @@ export function renderRemixCardEditor(
           target: { kind: 'bdc', bdcId: bdc.id },
           label: `Ouvrir le style de la carte ${authoredTextToPlainText(bdc.card.title).trim() || ''}`,
           onOpen: onOpenAppearanceTarget,
-          className: 'elce-appearance-trigger elce-bdc-style-trigger',
         })}
         {onDelete === undefined ? null : <button
           id={`elce-card-editor-delete-${bdc.id}`}

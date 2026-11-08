@@ -158,7 +158,10 @@ du titre les remplace.
 Une icône Palette ouvre le style du projet depuis l’en-tête Scénario. Chaque
 page et BDC possède son bouton de style accessible ; dans l’en-tête d’un BDC,
 il est placé à côté de la corbeille et reprend le gabarit d’icône standard.
-Les commandes sont reliées au même contrôleur XState et à ses changements
+Tous ces boutons partagent la classe `.elce-appearance-trigger` et gardent la
+même taille carrée (`1.7rem`) ainsi qu’une icône fixe de `0.75rem`, quelle que
+soit leur cible. Les classes de placement ne modifient pas leur taille. Les
+commandes sont reliées au même contrôleur XState et à ses changements
 documentaires.
 
 ## Projection sur les scènes

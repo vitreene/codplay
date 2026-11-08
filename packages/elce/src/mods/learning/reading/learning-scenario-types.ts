@@ -4,6 +4,7 @@ import type { LearningChapter } from '../document/learning-document-types'
 import type { ProfileConstraint, ProfileProperty, ReadingConstraint, SummarySettings } from '../profile/domain/learning-profile-types'
 import type { ProjectTestState } from './learning-test-state-types'
 import type { SummaryEntry } from '../organization/reading/learning-summary-scene-builder'
+import type { ScenarioEntry } from '../organization/learning-scenario-entry-types'
 
 export type ElceSceneKey =
   | typeof ELCE_SCENARIO.LAYOUT_SCENE
@@ -35,8 +36,11 @@ export type ElcePresentation = Readonly<{
 }>
 
 export type ElceRuntimeChapter = Pick<LearningChapter,
-  'id' | 'name' | 'type' | 'pageIds' | 'evaluationThreshold' | 'evaluationAttemptLimit' | 'evaluationRetryScope'
->
+  'id' | 'name' | 'type' | 'pageIds' | 'entries' | 'evaluationThreshold' | 'evaluationAttemptLimit' | 'evaluationRetryScope'
+> & Readonly<{
+  parentChapterId: string | null
+  subtreePageIds: readonly string[]
+}>
 
 export type ElceRuntimeData = Readonly<{
   pageIds: readonly string[]
@@ -47,6 +51,7 @@ export type ElceRuntimeData = Readonly<{
   previewStartPageId: string
   evaluationResultPageIds: readonly string[]
   chapterIds: readonly string[]
+  scenarioEntries: readonly ScenarioEntry[]
   pages: Readonly<Record<string, Readonly<{ chapterId: string | null; bdcIds: readonly string[] }>>>
   chapters: Readonly<Record<string, ElceRuntimeChapter>>
   bdcTypes: Readonly<Record<string, string>>
@@ -56,8 +61,8 @@ export type ElceRuntimeData = Readonly<{
   profile: Readonly<{
     fieldPropertyIds: readonly string[]
     properties: readonly ProfileProperty[]
-    pageVisibility: Readonly<Record<string, ProfileConstraint>>
-    chapterVisibility: Readonly<Record<string, ProfileConstraint>>
+    pageVisibility: Readonly<Record<string, readonly ProfileConstraint[]>>
+    chapterVisibility: Readonly<Record<string, readonly ProfileConstraint[]>>
     readingConstraints: readonly ReadingConstraint[]
   }>
   summaryEntries: readonly SummaryEntry[]

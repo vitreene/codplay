@@ -17,7 +17,7 @@ export class LearningPresentationService {
     readerContext: Readonly<Record<string, unknown>>,
   ): Promise<ElcePresentation> {
     const scormChapter = this.scopedScormChapter(runtime, readerContext)
-    const presentationPageIds = scormChapter?.pageIds ?? runtime.pageIds
+    const presentationPageIds = scormChapter?.subtreePageIds ?? runtime.pageIds
     const activeContentSelection = scenarioState.current.find((selection) => selection.slotName === ELCE_SCENARIO.CONTENT_SLOT)
     const activeSceneKey = activeContentSelection?.sceneKey ?? scenarioState.active?.sceneKey
     const activePageId = pageIdFromSceneKey(activeSceneKey)
@@ -43,7 +43,7 @@ export class LearningPresentationService {
       ? { path: nestedSummaryPageList && activeContentPath !== undefined
           ? `${activeContentPath.slice(0, activeContentPath.lastIndexOf('/') + 1)}${nextPageId}`
           : pagePathFromTable(runtime.pagePaths, nextPageId) }
-      : scormChapter === undefined && activeChapter?.pageIds.at(-1) === activePageId
+      : scormChapter === undefined && activeChapter?.subtreePageIds.at(-1) === activePageId
       && runtime.summary.endChapterDestination === 'summary'
       && runtime.summary.showAtRoot
       ? { path: `${ELCE_SCENARIO.ROOT_VIEW}/${ELCE_SCENARIO.SUMMARY_ENTRY_VIEW}` }
@@ -89,7 +89,7 @@ export class LearningPresentationService {
     )
     const finishedPages = new Set(learningTestStateService.readFinishedPages(readerContext))
     const chapterReadingStatuses = runtime.chapterIds.flatMap((chapterId) => {
-      const chapterPageIds = runtime.chapters[chapterId]?.pageIds.filter((pageId) => presentationPageIds.includes(pageId)) ?? []
+      const chapterPageIds = runtime.chapters[chapterId]?.subtreePageIds.filter((pageId) => presentationPageIds.includes(pageId)) ?? []
       if (chapterPageIds.length === 0) return []
       const firstPageState = menu.states.find((state) => state.id === chapterPageIds[0])
       const status: ElcePresentation['chapterReadingStatuses'][number]['status'] = firstPageState?.allowed === false
@@ -138,7 +138,7 @@ export class LearningPresentationService {
     const scormChapter = scormChapterId === undefined ? undefined : runtime.chapters[scormChapterId]
     const entries = scormChapter === undefined
       ? runtime.summaryEntries
-      : runtime.summaryEntries.filter((entry) => scormChapter.pageIds.includes(entry.pageId))
+      : runtime.summaryEntries.filter((entry) => scormChapter.subtreePageIds.includes(entry.pageId))
     const access = await Promise.all(entries.map(async (entry) => {
       const pageAllowed = entry.pageId === activePageId
         ? true

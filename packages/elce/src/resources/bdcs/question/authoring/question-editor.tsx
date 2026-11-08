@@ -52,7 +52,6 @@ export function renderQuestionEditor(props: QuestionEditorProps): RemixNode {
           target: { kind: 'bdc', bdcId },
           label: 'Ouvrir le style de la question',
           onOpen: props.onOpenAppearanceTarget,
-          className: 'elce-appearance-trigger elce-bdc-style-trigger',
         })}
         {props.canDelete === false ? null : <button
           id={`elce-question-delete-${bdcId}`}

@@ -9,7 +9,7 @@ import { MEDIA_TYPE } from '../../../core/media/media-config'
 import type { ElceCatalogMediaEntry } from '../../../core/catalog/catalog-types'
 import { renderCoreBdcCatalogList, renderCoreMediaCatalogList } from '../../../core/authoring/catalog/catalog-content-list'
 import { renderLucideIcon } from '../../../core/authoring/lucide-static-icon'
-import { Library } from 'lucide-static'
+import { Library, X } from 'lucide-static'
 import type { AppearanceTarget } from '../../../domain/appearance/appearance-target-types'
 import type { LearningEditorFacade } from './learning-editor-facade'
 import type { EditorViewModel } from './learning-authoring-service'
@@ -30,6 +30,7 @@ export interface LearningCatalogPaletteProps {
   readonly dropTarget: string | null
   readonly getDraggedEntry: () => DraggedScenarioEntry
   readonly onSetTab: (tab: CatalogPaletteTab) => void
+  readonly onClose: () => void
   readonly onSetDropTarget: (targetId: string | null) => void
   readonly onSetDraggedEntry: (entry: DraggedScenarioEntry) => void
   readonly onOpenAppearanceTarget: (target: AppearanceTarget, triggerId: string) => void
@@ -37,6 +38,31 @@ export interface LearningCatalogPaletteProps {
 
 /** Renders the floating Pages, BDC and media catalogs with their existing drop actions. */
 export function renderLearningCatalogPalette(props: LearningCatalogPaletteProps): RemixNode {
+  /** Moves the floating palette by its title bar while keeping its header visible. */
+  const onPalettePointerDown = (event: PointerEvent): void => {
+    if (event.button !== 0 || (event.target instanceof Element && event.target.closest('button') !== null)) return
+    const palette = document.getElementById('elce-catalog-palette')
+    if (palette === null) return
+    event.preventDefault()
+    const bounds = palette.getBoundingClientRect()
+    const offsetX = event.clientX - bounds.left
+    const offsetY = event.clientY - bounds.top
+    const movePalette = (moveEvent: PointerEvent): void => {
+      const left = Math.max(0, Math.min(window.innerWidth - bounds.width, moveEvent.clientX - offsetX))
+      const top = Math.max(0, Math.min(window.innerHeight - 44, moveEvent.clientY - offsetY))
+      palette.style.left = `${left}px`
+      palette.style.right = 'auto'
+      palette.style.top = `${top}px`
+    }
+    const finishPaletteDrag = (): void => {
+      window.removeEventListener('pointermove', movePalette)
+      window.removeEventListener('pointerup', finishPaletteDrag)
+      window.removeEventListener('pointercancel', finishPaletteDrag)
+    }
+    window.addEventListener('pointermove', movePalette)
+    window.addEventListener('pointerup', finishPaletteDrag)
+    window.addEventListener('pointercancel', finishPaletteDrag)
+  }
   /** Accepts existing page and BDC placements anywhere on the palette. */
   const onDragOverPalette = (event: DragEvent): void => {
     if (!isPaletteDrag(event, props.getDraggedEntry())) return
@@ -97,8 +123,19 @@ export function renderLearningCatalogPalette(props: LearningCatalogPaletteProps)
     <header
       id="elce-catalog-palette-heading"
       className="elce-catalog-palette__heading"
+      mix={on<HTMLElement, 'pointerdown'>('pointerdown', onPalettePointerDown)}
     >
       <h2 id="elce-catalog-palette-title">Catalogue</h2>
+      <button
+        id="elce-catalog-palette-close"
+        className="elce-catalog-palette__close"
+        type="button"
+        aria-label="Fermer le catalogue"
+        title="Fermer le catalogue"
+        mix={on<HTMLButtonElement, 'click'>('click', props.onClose)}
+      >
+        {renderLucideIcon(X, 'elce-catalog-palette-close-icon')}
+      </button>
     </header>
     <div
       id="elce-catalog-palette-tabs"

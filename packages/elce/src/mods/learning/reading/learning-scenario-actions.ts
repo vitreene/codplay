@@ -113,7 +113,7 @@ export class LearningScenarioActions {
     // Sighty initializes the complete exported scenario before the SCO can
     // route to its chapter. The launch page stays hidden during that transition.
     if (event?.name === ELCE_EVENTS.RUNTIME_INITIALIZE) return true
-    if (scormChapter !== undefined && !scormChapter.pageIds.includes(pageId)) return false
+    if (scormChapter !== undefined && !scormChapter.subtreePageIds.includes(pageId)) return false
     if (!learningProgressionService.runtimePageProfileConstraintsAllowAccess(runtime, pageId, context)) return false
     const submitsProfile = event?.name === ELCE_EVENTS.PROFILE_SUBMIT
       && learningProgressionService.isValidProfileSubmission(runtime.profile.properties, runtime.profile.fieldPropertyIds, event.data)
@@ -121,10 +121,10 @@ export class LearningScenarioActions {
     if (event?.name?.startsWith(ELCE_EVENTS.PAGE_LINK_PREFIX) === true
       && event.name.slice(ELCE_EVENTS.PAGE_LINK_PREFIX.length) === pageId
       && !runtime.evaluationResultPageIds.includes(pageId)) return true
-    const accessPageIds = scormChapter?.pageIds ?? runtime.pageIds
+    const accessPageIds = scormChapter?.subtreePageIds ?? runtime.pageIds
     const pageIndex = accessPageIds.indexOf(pageId)
     if (pageIndex <= 0) return pageIndex === 0
-    const previewStartPageId = scormChapter?.pageIds[0] ?? runtime.previewStartPageId
+    const previewStartPageId = scormChapter?.subtreePageIds[0] ?? runtime.previewStartPageId
     if (pageId === previewStartPageId) return true
     if (runtime.summary.pageContinuationMode === 'free' && !runtime.evaluationResultPageIds.includes(pageId)) return true
     const previewStartIndex = accessPageIds.indexOf(previewStartPageId)
@@ -147,10 +147,10 @@ export class LearningScenarioActions {
     const pageId = pageIdFromSceneKey(sceneKey)
     if (pageId === undefined || pageId === ELCE_SCENARIO.EMPTY_PAGE) return true
     if (scormChapter !== undefined) {
-      const chapterIndex = scormChapter.pageIds.indexOf(pageId)
+      const chapterIndex = scormChapter.subtreePageIds.indexOf(pageId)
       if (chapterIndex < 0) {
         return event?.name?.startsWith(ELCE_EVENTS.MENU_PREFIX) === true
-          && scormChapter.pageIds.includes(event.name.slice(ELCE_EVENTS.MENU_PREFIX.length))
+          && scormChapter.subtreePageIds.includes(event.name.slice(ELCE_EVENTS.MENU_PREFIX.length))
       }
       switch (event?.name) {
         case ELCE_EVENTS.NAVIGATION_PREVIOUS:
@@ -164,7 +164,7 @@ export class LearningScenarioActions {
             return learningProgressionService.canLeavePage(runtime, pageId, context, runtime.earlyExitPageIds.includes(pageId))
           }
           if (event?.name?.startsWith(ELCE_EVENTS.MENU_PREFIX) === true) {
-            return scormChapter.pageIds.includes(event.name.slice(ELCE_EVENTS.MENU_PREFIX.length))
+            return scormChapter.subtreePageIds.includes(event.name.slice(ELCE_EVENTS.MENU_PREFIX.length))
           }
           return event?.name?.startsWith(ELCE_EVENTS.MENU_PREFIX) === true
       }
@@ -413,8 +413,8 @@ export class LearningScenarioActions {
     const pageId = pageIdFromSceneKey(pageSelection?.sceneKey)
     if (chapter === undefined || pageId === undefined || pageId === ELCE_SCENARIO.EMPTY_PAGE) return
     const isAtBoundary = direction > 0
-      ? chapter.pageIds.at(-1) === pageId
-      : chapter.pageIds[0] === pageId
+      ? chapter.subtreePageIds.at(-1) === pageId
+      : chapter.subtreePageIds[0] === pageId
     if (!isAtBoundary || (direction > 0 && !learningProgressionService.canLeavePage(
       runtime,
       pageId,
@@ -596,7 +596,7 @@ export class LearningScenarioActions {
   ): boolean {
     const chapterId = context[ELCE_SCORM_CHAPTER_CONTEXT_KEY]
     if (typeof chapterId !== 'string') return true
-    return runtime.chapters[chapterId]?.pageIds.includes(pageId) === true
+    return runtime.chapters[chapterId]?.subtreePageIds.includes(pageId) === true
   }
 
   /** Reads the runtime configuration embedded in the compact scenario data. */

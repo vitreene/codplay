@@ -1,4 +1,4 @@
-import { Activity, ChevronDown, ChevronUp, GripVertical, RectangleHorizontal, Trash2 } from 'lucide-static'
+import { Activity, ChevronDown, ChevronUp, GripVertical, Library, Plus, RectangleHorizontal, Trash2 } from 'lucide-static'
 import {
   CAROUSEL_ASPECT_RATIO_OPTIONS,
   CAROUSEL_CONFIG,
@@ -21,10 +21,70 @@ import { authoredTextToPlainText } from '../../../../core/document/rich-text-uti
 /** Renders Carousel settings and its ordered illustration BDCs in the Remix runtime. */
 export function RemixCarouselEditor(handle: Handle<ElceCarouselEditorProps>) {
   let draggedCardBdcId: string | null = null
+  let isAddViewMenuOpen = false
+  let isTrashDropTargetActive = false
+  let isCatalogDropTargetActive = false
+  let trashAnimationToken = 0
+  let trashAnimationTimer: ReturnType<typeof setTimeout> | undefined
+
+  /** Updates transient visibility of the horizontal add-view menu. */
+  const updateAddViewMenuOpen = (isOpen: boolean): void => {
+    if (isAddViewMenuOpen === isOpen) return
+    isAddViewMenuOpen = isOpen
+    if (!handle.signal.aborted) void handle.update()
+  }
+
+  /** Closes this Carousel's add-view menu when a pointer press lands outside it. */
+  const dismissAddViewMenuOnOutsidePointerDown = (event: PointerEvent): void => {
+    if (!isAddViewMenuOpen) return
+    const addContainer = document.getElementById(`elce-carousel-view-add-${handle.props.bdcId}`)
+    if (event.target instanceof Node && addContainer?.contains(event.target)) return
+    updateAddViewMenuOpen(false)
+  }
+
+  document.addEventListener('pointerdown', dismissAddViewMenuOnOutsidePointerDown, true)
+  handle.signal.addEventListener('abort', () => {
+    document.removeEventListener('pointerdown', dismissAddViewMenuOnOutsidePointerDown, true)
+  }, { once: true })
+
+  /** Updates the highlighted state of the view-strip trash target. */
+  const updateTrashDropTarget = (isActive: boolean): void => {
+    if (isTrashDropTargetActive === isActive) return
+    isTrashDropTargetActive = isActive
+    if (!handle.signal.aborted) void handle.update()
+  }
+
+  /** Updates the highlighted state of the view-strip catalog target. */
+  const updateCatalogDropTarget = (isActive: boolean): void => {
+    if (isCatalogDropTargetActive === isActive) return
+    isCatalogDropTargetActive = isActive
+    if (!handle.signal.aborted) void handle.update()
+  }
+
+  /** Confirms a completed view deletion with one short trash-icon turn. */
+  const animateTrashDropSuccess = (): void => {
+    trashAnimationToken += 1
+    if (trashAnimationTimer !== undefined) clearTimeout(trashAnimationTimer)
+    if (!handle.signal.aborted) void handle.update()
+    trashAnimationTimer = setTimeout(() => {
+      trashAnimationTimer = undefined
+      trashAnimationToken = 0
+      if (!handle.signal.aborted) void handle.update()
+    }, 420)
+  }
+
   return () => renderCarouselEditor(handle.props, {
     beginCardDrag: (bdcId) => { draggedCardBdcId = bdcId },
     draggedCardBdcId: () => draggedCardBdcId,
     clearDraggedCard: () => { draggedCardBdcId = null },
+    isAddViewMenuOpen: () => isAddViewMenuOpen,
+    updateAddViewMenuOpen,
+    isTrashDropTargetActive: () => isTrashDropTargetActive,
+    updateTrashDropTarget,
+    isCatalogDropTargetActive: () => isCatalogDropTargetActive,
+    updateCatalogDropTarget,
+    trashAnimationToken: () => trashAnimationToken,
+    animateTrashDropSuccess,
   })
 }
 
@@ -32,6 +92,14 @@ interface CarouselEditorTransientState {
   readonly beginCardDrag: (bdcId: string) => void
   readonly draggedCardBdcId: () => string | null
   readonly clearDraggedCard: () => void
+  readonly isAddViewMenuOpen: () => boolean
+  readonly updateAddViewMenuOpen: (isOpen: boolean) => void
+  readonly isTrashDropTargetActive: () => boolean
+  readonly updateTrashDropTarget: (isActive: boolean) => void
+  readonly isCatalogDropTargetActive: () => boolean
+  readonly updateCatalogDropTarget: (isActive: boolean) => void
+  readonly trashAnimationToken: () => number
+  readonly animateTrashDropSuccess: () => void
 }
 
 /** Offers timestamp-valued radio choices inside each eligible Carousel Card. */
@@ -127,62 +195,32 @@ function renderCarouselEditor(props: ElceCarouselEditorProps, state: CarouselEdi
           target: { kind: 'bdc', bdcId },
           label: 'Ouvrir le style du Carousel',
           onOpen: props.onOpenAppearanceTarget,
-          className: 'elce-appearance-trigger elce-bdc-style-trigger',
         })}
-        <button
-          id={`elce-carousel-delete-${bdcId}`}
-          className="elce-carousel-editor__delete-bdc"
-          type="button"
-          aria-label="Supprimer le bloc Carousel"
-          title="Supprimer le bloc Carousel"
-          mix={on<HTMLButtonElement, 'click'>('click', actions.deleteCarousel)}
-        >
-          {renderLucideIcon(Trash2, `elce-carousel-delete-icon-${bdcId}`)}
-        </button>
       </div>
     </header>
     {renderCarouselSettings(props)}
     <div
       id={`elce-carousel-card-tabs-${bdcId}`}
       className="elce-carousel-editor__views"
-      role="tablist"
-      aria-label="Vues du Carousel"
     >
-      {[
-        ...orderedViews.map(({ bdc }, index) => renderCardTab(bdcId, bdc, index, bdc.id === selected?.bdc.id, actions, state)),
-        <button
-          id={`elce-carousel-card-add-${bdcId}`}
-          className="elce-carousel-editor__view-add elce-add-content-action"
-          type="button"
-          aria-label="Ajouter une carte"
-          title="Ajouter une carte"
-          mix={on<HTMLButtonElement, 'click'>('click', actions.addCard)}
-        >
-          {renderLucideIcon(RectangleHorizontal, `elce-carousel-card-add-icon-${bdcId}`)}
-          <span
-            id={`elce-carousel-card-add-label-${bdcId}`}
-            className="elce-add-content-action__label"
-          >
-            Carte
-          </span>
-        </button>,
-        <button
-          id={`elce-carousel-graph-add-${bdcId}`}
-          className="elce-carousel-editor__view-add elce-add-content-action"
-          type="button"
-          aria-label="Ajouter un graphe"
-          title="Ajouter un graphe"
-          mix={on<HTMLButtonElement, 'click'>('click', actions.addStatisticalGraph)}
-        >
-          {renderLucideIcon(Activity, `elce-carousel-graph-add-icon-${bdcId}`)}
-          <span
-            id={`elce-carousel-graph-add-label-${bdcId}`}
-            className="elce-add-content-action__label"
-          >
-            Graphe
-          </span>
-        </button>,
-      ]}
+      <div
+        id={`elce-carousel-view-tablist-${bdcId}`}
+        className="elce-carousel-editor__view-tabs"
+        role="tablist"
+        aria-label="Vues du Carousel"
+      >
+        {orderedViews.map(({ bdc }, index) => renderCardTab(bdcId, bdc, index, bdc.id === selected?.bdc.id, actions, state))}
+      </div>
+      {renderCarouselViewActions(
+        bdcId,
+        content,
+        orderedViews,
+        selected,
+        selectedCardBdcId,
+        props.onReturnBdcToCatalog,
+        actions,
+        state,
+      )}
     </div>
     {selected === undefined
       ? <p
@@ -191,8 +229,257 @@ function renderCarouselEditor(props: ElceCarouselEditorProps, state: CarouselEdi
       >
         Ajoutez une vue pour commencer.
       </p>
-      : renderSelectedCard(props, selected, selectedCardBdcId)}
+      : renderSelectedCard(props, selected)}
   </section>
+}
+
+/** Renders the horizontal add and delete controls beside the Carousel view tabs. */
+function renderCarouselViewActions(
+  carouselBdcId: string,
+  content: ElceCarouselEditorProps['content'],
+  orderedViews: readonly Readonly<{
+    entry: ElceCarouselEditorProps['content']['cards'][number]
+    bdc: ResourceBdc
+  }>[],
+  selected: Readonly<{
+    entry: ElceCarouselEditorProps['content']['cards'][number]
+    bdc: ResourceBdc
+  }> | undefined,
+  selectedCardBdcId: string | null,
+  onReturnBdcToCatalog: ElceCarouselEditorProps['onReturnBdcToCatalog'],
+  actions: ElceCarouselEditorProps['actions'],
+  state: CarouselEditorTransientState,
+): RemixNode {
+  const canRemoveView = content.cards.length > 1
+  const trashClassNames = [
+    'elce-carousel-editor__view-trash',
+    ...(state.isTrashDropTargetActive() ? ['elce-carousel-editor__view-trash--drop-target'] : []),
+    ...(canRemoveView ? [] : ['elce-carousel-editor__view-trash--disabled']),
+  ]
+  const trashLabel = canRemoveView
+    ? 'Corbeille : déposer une vue pour la supprimer'
+    : 'Corbeille indisponible : le Carousel doit conserver au moins une vue'
+  const catalogLabel = canRemoveView
+    ? 'Catalogue : déposer une vue pour la rendre disponible'
+    : 'Catalogue indisponible : le Carousel doit conserver au moins une vue'
+  const menuId = `elce-carousel-view-add-menu-${carouselBdcId}`
+  const catalogClassNames = [
+    'elce-carousel-editor__view-catalog',
+    ...(state.isCatalogDropTargetActive() ? ['elce-carousel-editor__view-catalog--drop-target'] : []),
+    ...(canRemoveView ? [] : ['elce-carousel-editor__view-catalog--disabled']),
+  ]
+
+  return <div
+    id={`elce-carousel-view-actions-${carouselBdcId}`}
+    className="elce-carousel-editor__view-actions"
+    role="group"
+    aria-label="Actions des vues du Carousel"
+  >
+    <div
+      id={`elce-carousel-view-add-${carouselBdcId}`}
+      className="elce-carousel-editor__view-add-container"
+    >
+      <button
+        id={`elce-carousel-view-add-toggle-${carouselBdcId}`}
+        className="elce-carousel-editor__view-action"
+        type="button"
+        aria-label="Ajouter une vue"
+        title="Ajouter une vue"
+        aria-expanded={state.isAddViewMenuOpen()}
+        aria-controls={menuId}
+        mix={on<HTMLButtonElement, 'click'>('click', () => state.updateAddViewMenuOpen(!state.isAddViewMenuOpen()))}
+      >
+        {renderLucideIcon(Plus, `elce-carousel-view-add-icon-${carouselBdcId}`)}
+      </button>
+      <div
+        id={menuId}
+        className="elce-carousel-editor__view-add-menu"
+        role="group"
+        aria-label="Ajouter une vue au Carousel"
+        hidden={!state.isAddViewMenuOpen()}
+      >
+        <button
+          id={`elce-carousel-card-add-${carouselBdcId}`}
+          className="elce-carousel-editor__view-add elce-add-content-action"
+          type="button"
+          aria-label="Ajouter une carte"
+          title="Ajouter une carte"
+          mix={on<HTMLButtonElement, 'click'>('click', () => {
+            state.updateAddViewMenuOpen(false)
+            actions.addCard()
+          })}
+        >
+          {renderLucideIcon(RectangleHorizontal, `elce-carousel-card-add-icon-${carouselBdcId}`)}
+          <span
+            id={`elce-carousel-card-add-label-${carouselBdcId}`}
+            className="elce-add-content-action__label"
+          >
+            Carte
+          </span>
+        </button>
+        <button
+          id={`elce-carousel-graph-add-${carouselBdcId}`}
+          className="elce-carousel-editor__view-add elce-add-content-action"
+          type="button"
+          aria-label="Ajouter un graphe"
+          title="Ajouter un graphe"
+          mix={on<HTMLButtonElement, 'click'>('click', () => {
+            state.updateAddViewMenuOpen(false)
+            actions.addStatisticalGraph()
+          })}
+        >
+          {renderLucideIcon(Activity, `elce-carousel-graph-add-icon-${carouselBdcId}`)}
+          <span
+            id={`elce-carousel-graph-add-label-${carouselBdcId}`}
+            className="elce-add-content-action__label"
+          >
+            Graphe
+          </span>
+        </button>
+      </div>
+    </div>
+    <div
+      id={`elce-carousel-view-trash-${carouselBdcId}`}
+      className={trashClassNames.join(' ')}
+      role="region"
+      aria-label={trashLabel}
+      aria-disabled={!canRemoveView}
+      title={trashLabel}
+      mix={[
+        on<HTMLElement, 'dragover'>('dragover', (event) => {
+          if (!canRemoveView || !isCarouselViewDrag(event, state)) return
+          event.preventDefault()
+          event.stopPropagation()
+          if (event.dataTransfer !== null) event.dataTransfer.dropEffect = 'move'
+          state.updateCatalogDropTarget(false)
+          state.updateTrashDropTarget(true)
+        }),
+        on<HTMLElement, 'dragleave'>('dragleave', () => state.updateTrashDropTarget(false)),
+        on<HTMLElement, 'drop'>('drop', (event) => dropCarouselViewOnTrash(
+          event,
+          orderedViews,
+          selectedCardBdcId ?? selected?.bdc.id ?? null,
+          canRemoveView,
+          actions,
+          state,
+        )),
+      ]}
+    >
+      <span
+        key={state.trashAnimationToken()}
+        id={`elce-carousel-view-trash-icon-${carouselBdcId}`}
+        className={state.trashAnimationToken() === 0
+          ? 'elce-carousel-editor__view-trash-icon'
+          : 'elce-carousel-editor__view-trash-icon elce-carousel-editor__view-trash-icon--success'}
+        aria-hidden={true}
+      >
+        {renderLucideIcon(Trash2, `elce-carousel-view-trash-symbol-${carouselBdcId}`)}
+      </span>
+    </div>
+    <div
+      id={`elce-carousel-view-catalog-${carouselBdcId}`}
+      className={catalogClassNames.join(' ')}
+      role="region"
+      aria-label={catalogLabel}
+      aria-disabled={!canRemoveView}
+      title={catalogLabel}
+      mix={[
+        on<HTMLElement, 'dragover'>('dragover', (event) => {
+          if (!canRemoveView || !isCarouselViewDrag(event, state)) return
+          event.preventDefault()
+          event.stopPropagation()
+          if (event.dataTransfer !== null) event.dataTransfer.dropEffect = 'move'
+          state.updateTrashDropTarget(false)
+          state.updateCatalogDropTarget(true)
+        }),
+        on<HTMLElement, 'dragleave'>('dragleave', () => state.updateCatalogDropTarget(false)),
+        on<HTMLElement, 'drop'>('drop', (event) => dropCarouselViewOnCatalog(
+          event,
+          orderedViews,
+          canRemoveView,
+          onReturnBdcToCatalog,
+          state,
+        )),
+      ]}
+    >
+      <span
+        id={`elce-carousel-view-catalog-icon-${carouselBdcId}`}
+        className="elce-carousel-editor__view-catalog-icon"
+        aria-hidden={true}
+      >
+        {renderLucideIcon(Library, `elce-carousel-view-catalog-symbol-${carouselBdcId}`)}
+      </span>
+    </div>
+  </div>
+}
+
+/** Accepts only a local Carousel view drag while a removable view remains. */
+function isCarouselViewDrag(event: DragEvent, state: CarouselEditorTransientState): boolean {
+  const transfer = event.dataTransfer
+  return transfer !== null
+    && (Array.from(transfer.types).includes(CAROUSEL_CONFIG.cardDragMimeType) || state.draggedCardBdcId() !== null)
+}
+
+/** Removes the dragged Carousel child through its existing typed facade action. */
+function dropCarouselViewOnTrash(
+  event: DragEvent,
+  orderedViews: readonly Readonly<{
+    entry: ElceCarouselEditorProps['content']['cards'][number]
+    bdc: ResourceBdc
+  }>[],
+  selectedCardBdcId: string | null,
+  canRemoveView: boolean,
+  actions: ElceCarouselEditorProps['actions'],
+  state: CarouselEditorTransientState,
+): void {
+  if (!canRemoveView || !isCarouselViewDrag(event, state) || event.dataTransfer === null) {
+    state.updateTrashDropTarget(false)
+    state.clearDraggedCard()
+    return
+  }
+  const draggedBdcId = event.dataTransfer.getData(CAROUSEL_CONFIG.cardDragMimeType) || state.draggedCardBdcId()
+  const draggedView = orderedViews.find(({ bdc }) => bdc.id === draggedBdcId)
+  if (draggedView === undefined) {
+    state.updateTrashDropTarget(false)
+    state.clearDraggedCard()
+    return
+  }
+  event.preventDefault()
+  if (draggedView.bdc.type === 'card') actions.removeCard(draggedView.bdc.id, selectedCardBdcId)
+  if (draggedView.bdc.type === 'statistical-graph') actions.removeStatisticalGraph(draggedView.bdc.id, selectedCardBdcId)
+  state.updateTrashDropTarget(false)
+  state.clearDraggedCard()
+  state.animateTrashDropSuccess()
+}
+
+/** Returns the dragged Carousel child through Learning's existing catalog command. */
+function dropCarouselViewOnCatalog(
+  event: DragEvent,
+  orderedViews: readonly Readonly<{
+    entry: ElceCarouselEditorProps['content']['cards'][number]
+    bdc: ResourceBdc
+  }>[],
+  canRemoveView: boolean,
+  onReturnBdcToCatalog: ElceCarouselEditorProps['onReturnBdcToCatalog'],
+  state: CarouselEditorTransientState,
+): void {
+  if (!canRemoveView || !isCarouselViewDrag(event, state) || event.dataTransfer === null) {
+    state.updateCatalogDropTarget(false)
+    state.clearDraggedCard()
+    return
+  }
+  const draggedBdcId = event.dataTransfer.getData(CAROUSEL_CONFIG.cardDragMimeType) || state.draggedCardBdcId()
+  const draggedView = orderedViews.find(({ bdc }) => bdc.id === draggedBdcId)
+  if (draggedView === undefined) {
+    state.updateCatalogDropTarget(false)
+    state.clearDraggedCard()
+    return
+  }
+  event.preventDefault()
+  event.stopPropagation()
+  onReturnBdcToCatalog(draggedView.bdc.id)
+  state.updateCatalogDropTarget(false)
+  state.clearDraggedCard()
 }
 
 /** Renders Carousel playback, timing, transition and ratio controls. */
@@ -432,7 +719,6 @@ function dropCard(event: DragEvent, index: number, actions: ElceCarouselEditorPr
 function renderSelectedCard(
   props: ElceCarouselEditorProps,
   selected: { readonly entry: ElceCarouselEditorProps['content']['cards'][number]; readonly bdc: ResourceBdc },
-  selectedCardBdcId: string | null,
 ): RemixNode {
   const { content, mediaById, actions } = props
   const cardIndex = content.cards.findIndex((entry) => entry.bdcId === selected.bdc.id)
@@ -474,54 +760,51 @@ function renderSelectedCard(
     role="tabpanel"
   >
     {selected.bdc.type === 'card'
-      ? <RemixCardEditorFields
-        bdc={selected.bdc}
-        mediaById={mediaById}
-        actions={actions}
-        idPrefix="elce-carousel"
-        imageAspectRatio={content.aspectRatio}
-        textFieldAttributes={props.textFieldAttributes}
-        textFieldFeature={props.textFieldFeature}
-        allowMultipleMediaFiles={true}
-        importMediaFiles={actions.importMediaFiles}
-        toolbarContent={durationControl}
-        belowToolbarContent={renderTranscriptAssociation(props, selected, cardIndex)}
-        toolbarEnd={<div
-          id={`elce-carousel-card-header-actions-${selected.bdc.id}`}
-          className="elce-bdc-header-actions elce-carousel-card-header-actions"
+      ? <>
+        <header
+          id={`elce-carousel-card-heading-${selected.bdc.id}`}
+          className="elce-carousel-editor__view-heading"
         >
-          {renderAppearanceTrigger({
-            id: `elce-carousel-card-style-${selected.bdc.id}`,
-            target: { kind: 'bdc', bdcId: selected.bdc.id },
-            label: `Ouvrir le style de la carte ${selected.bdc.card == null ? '' : authoredTextToPlainText(selected.bdc.card.title).trim()}`,
-            onOpen: props.onOpenAppearanceTarget,
-            className: 'elce-appearance-trigger elce-bdc-style-trigger',
-          })}
-          <button
-            id={`elce-carousel-card-delete-${selected.bdc.id}`}
-            className="elce-carousel-editor__delete"
-            type="button"
-            aria-label="Supprimer cette carte"
-            title="Supprimer cette carte"
-            disabled={content.cards.length <= 1}
-            mix={on<HTMLButtonElement, 'click'>('click', () => actions.removeCard(selected.bdc.id, selectedCardBdcId))}
+          <h3 id={`elce-carousel-card-heading-title-${selected.bdc.id}`} className="elce-carousel-editor__view-heading-title">
+            Carte
+          </h3>
+          <div
+            id={`elce-carousel-card-header-actions-${selected.bdc.id}`}
+            className="elce-bdc-header-actions"
           >
-            {renderLucideIcon(Trash2, `elce-carousel-card-delete-icon-${selected.bdc.id}`)}
-          </button>
-        </div>}
-      />
+            {renderAppearanceTrigger({
+              id: `elce-carousel-card-style-${selected.bdc.id}`,
+              target: { kind: 'bdc', bdcId: selected.bdc.id },
+              label: `Ouvrir le style de la carte ${selected.bdc.card == null ? '' : authoredTextToPlainText(selected.bdc.card.title).trim()}`,
+              onOpen: props.onOpenAppearanceTarget,
+            })}
+          </div>
+        </header>
+        <RemixCardEditorFields
+          bdc={selected.bdc}
+          mediaById={mediaById}
+          actions={actions}
+          idPrefix="elce-carousel"
+          imageAspectRatio={content.aspectRatio}
+          textFieldAttributes={props.textFieldAttributes}
+          textFieldFeature={props.textFieldFeature}
+          allowMultipleMediaFiles={true}
+          importMediaFiles={actions.importMediaFiles}
+          toolbarContent={durationControl}
+          belowToolbarContent={renderTranscriptAssociation(props, selected, cardIndex)}
+        />
+      </>
       : selected.bdc.type === 'statistical-graph' && selected.bdc.statisticalGraph != null
         ? renderRemixStatisticalGraphEditor(
           selected.bdc,
           props.createStatisticalGraphActions(selected.bdc.id, selected.bdc.statisticalGraph),
-          () => actions.removeStatisticalGraph(selected.bdc.id, selectedCardBdcId),
+          undefined,
           durationControl,
           renderAppearanceTrigger({
             id: `elce-carousel-graph-style-${selected.bdc.id}`,
             target: { kind: 'bdc', bdcId: selected.bdc.id },
             label: 'Ouvrir le style du graphe',
             onOpen: props.onOpenAppearanceTarget,
-            className: 'elce-appearance-trigger elce-bdc-style-trigger',
           }),
           props.textFieldAttributes,
           props.textFieldFeature,

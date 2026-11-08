@@ -9,6 +9,7 @@ import { LearningMediaCommandService } from './learning-media-command-service'
 import { LearningPageCommandService } from './learning-page-command-service'
 import { LearningRevelationCommandService } from './learning-revelation-command-service'
 import {
+  addCustomAppearanceColor,
   resetAppearanceProperty,
   setAppearanceBackground,
   setAppearanceProperty,
@@ -75,6 +76,8 @@ export class LearningDocumentCommandService {
         return setAppearanceProperty(document, command.target, command.property, command.value)
       case 'appearance.property.reset':
         return resetAppearanceProperty(document, command.target, command.property)
+      case 'appearance.palette.color.add':
+        return addCustomAppearanceColor(document, command.color)
       case 'document.rename':
         return new LearningDocument({ ...document.data, name: command.name })
       default:

@@ -145,6 +145,33 @@
   cursor: pointer;
 }
 
+.elce-appearance-color-picker-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.elce-appearance-color-add {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: #fffdf8;
+  background: #46726b;
+  border: 1px solid #46726b;
+  border-radius: 0.25rem;
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.elce-appearance-color-add:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .elce-appearance-swatches {
   display: flex;
   flex-wrap: wrap;

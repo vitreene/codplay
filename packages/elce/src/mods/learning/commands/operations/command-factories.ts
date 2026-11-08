@@ -7,12 +7,13 @@ export function createPageCommand(input: CreatePageCommandInput): Extract<Learni
   return { type: 'page.create', ...input }
 }
 
-/** Creates the command that moves a chapter among root scenario entries. */
+/** Creates the command that moves a chapter into an ordered scenario entry list. */
 export function createChapterMoveCommand(
   chapterId: ChapterId,
   index?: number,
+  parentChapterId: ChapterId | null = null,
 ): Extract<LearningDocumentCommand, { type: 'chapter.move' }> {
-  return { type: 'chapter.move', chapterId, index }
+  return { type: 'chapter.move', chapterId, parentChapterId, index }
 }
 
 /** Creates the command used to move a page between the document's page collections. */

@@ -54,5 +54,5 @@ export interface EditorWorkspaceViewProps {
   readonly exportError: string | null
   readonly exportNotice: string | null
   readonly onMovePage: (pageId: PageId, placement: PagePlacement) => void
-  readonly onMoveChapter: (chapterId: ChapterId, index: number) => void
+  readonly onMoveChapter: (chapterId: ChapterId, index: number, parentChapterId?: ChapterId | null) => void
 }

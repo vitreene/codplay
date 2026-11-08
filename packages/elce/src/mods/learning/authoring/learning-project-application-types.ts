@@ -57,5 +57,5 @@ export interface ProjectApplicationWorkspaceState {
   readonly exportError: string | null
   readonly exportNotice: string | null
   readonly movePage: (pageId: string, placement: PagePlacement) => void
-  readonly moveChapter: (chapterId: string, index: number) => void
+  readonly moveChapter: (chapterId: string, index: number, parentChapterId?: string | null) => void
 }

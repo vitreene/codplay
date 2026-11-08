@@ -4,7 +4,7 @@ import type { ResourceTextFieldFeature } from '../resource-text-field-feature'
 import type { AuthoredTextValue } from '../../document/rich-text-types'
 import type { AppearanceTarget } from '../../../domain/appearance/appearance-target-types'
 import { renderLucideIcon } from '../lucide-static-icon'
-import { Plus, Trash2 } from 'lucide-static'
+import { Library, Plus, Trash2 } from 'lucide-static'
 import { renderAppearanceTrigger } from '../appearance-trigger'
 
 export interface PageEditorViewProps<TPage extends ContentPage = ContentPage> {
@@ -32,6 +32,8 @@ export interface PageEditorViewProps<TPage extends ContentPage = ContentPage> {
   readonly onDropBdcNavigationItem: (event: DragEvent, bdcId: string, index: number) => void
   readonly onDragOverBdcTrash: (event: DragEvent) => void
   readonly onDropBdcTrash: (event: DragEvent) => void
+  readonly onDragOverBdcCatalog?: (event: DragEvent) => void
+  readonly onDropBdcCatalog?: (event: DragEvent) => void
   readonly onDragOverSeparator: (event: DragEvent, targetId: string, index: number) => void
   readonly onDragLeaveDropTarget: (event: DragEvent) => void
   readonly onDropBdc: (event: DragEvent, index: number) => void
@@ -118,9 +120,40 @@ function renderPageBdcLayout<TPage extends ContentPage>(page: TPage, props: Page
     >
       {props.sequence.map((entry) => renderBdcNavigationItem(entry, props))}
       {renderAddContentMenu(page.id, props)}
+      {renderBdcCatalog(page.id, props)}
       {renderBdcTrash(page.id, props)}
     </nav>
     {renderPageBdcSequence(page, props)}
+  </div>
+}
+
+/** Renders a drop target that returns a direct page BDC to the catalog. */
+function renderBdcCatalog<TPage extends ContentPage>(pageId: string, props: PageEditorViewProps<TPage>): RemixNode {
+  if (props.onDragOverBdcCatalog === undefined || props.onDropBdcCatalog === undefined) return null
+  const id = `elce-page-bdc-catalog-${pageId}`
+  const classNames = [
+    'elce-page-bdc-catalog',
+    ...(props.dropTarget === `${id}-drop` ? ['elce-page-bdc-catalog--drop-target'] : []),
+  ]
+  return <div
+    id={id}
+    className={classNames.join(' ')}
+    role="region"
+    aria-label="Catalogue : déposer un bloc pour le rendre disponible"
+    title="Déposer un bloc ici pour le remettre au catalogue"
+    mix={[
+      on<HTMLElement, 'dragover'>('dragover', props.onDragOverBdcCatalog),
+      on<HTMLElement, 'dragleave'>('dragleave', props.onDragLeaveDropTarget),
+      on<HTMLElement, 'drop'>('drop', props.onDropBdcCatalog),
+    ]}
+  >
+    <span
+      id={`elce-page-bdc-catalog-icon-${pageId}`}
+      className="elce-page-bdc-catalog__icon"
+      aria-hidden={true}
+    >
+      {renderLucideIcon(Library, `elce-page-bdc-catalog-symbol-${pageId}`)}
+    </span>
   </div>
 }
 

@@ -7,6 +7,12 @@ import type {
 import type { SightySceneSourceValue } from '@codplay/sighty'
 import { ELCE_EVENTS, ELCE_SCENARIO, ELCE_SCENARIO_HANDLERS } from './learning-reading-events'
 import { SCENARIO_ENTRY_KIND } from '../organization/learning-organization-config'
+import {
+  scenarioChapterAncestors,
+  scenarioChapterIdsInOrder,
+  scenarioChapterPageIds,
+  scenarioParentChapterId,
+} from '../organization/learning-scenario-tree'
 import type { LearningDocument } from '../document/learning-document'
 import { authoredTextToPlainText } from '../../../core/document/rich-text-utils'
 import { BDC_TYPE } from '../learning-definition'
@@ -172,7 +178,8 @@ export class LearningScenarioBuilder {
       questionBdcByPage: input.questionBdcByPage,
       previewStartPageId: input.previewStartPageId,
       evaluationResultPageIds: input.evaluationResultPageIds,
-      chapterIds: document.chapters.map((chapter) => chapter.id),
+      chapterIds: scenarioChapterIdsInOrder(document.data),
+      scenarioEntries: document.data.scenarioEntries,
       pages: Object.fromEntries(document.pages.map((page) => [page.id, {
         chapterId: page.chapterId,
         bdcIds: page.bdcIds,
@@ -182,6 +189,9 @@ export class LearningScenarioBuilder {
         name: authoredTextToPlainText(chapter.name),
         type: chapter.type,
         pageIds: chapter.pageIds,
+        entries: chapter.entries,
+        parentChapterId: scenarioParentChapterId(document.data, chapter.id),
+        subtreePageIds: scenarioChapterPageIds(document.data, chapter.id),
         ...(chapter.evaluationThreshold === undefined ? {} : { evaluationThreshold: chapter.evaluationThreshold }),
         ...(chapter.evaluationAttemptLimit === undefined ? {} : { evaluationAttemptLimit: chapter.evaluationAttemptLimit }),
         ...(chapter.evaluationRetryScope === undefined ? {} : { evaluationRetryScope: chapter.evaluationRetryScope }),
@@ -200,12 +210,12 @@ export class LearningScenarioBuilder {
         fieldPropertyIds: document.data.profile.fieldPropertyIds,
         properties: document.data.profile.properties,
         pageVisibility: Object.fromEntries(document.pages.flatMap((page) => {
-          const constraint = learningProfileService.profileVisibilityForPage(document, page.id)
-          return constraint === undefined ? [] : [[page.id, constraint]]
+          const constraints = learningProfileService.profileVisibilityRulesForPage(document, page.id)
+          return constraints.length === 0 ? [] : [[page.id, constraints]]
         })),
         chapterVisibility: Object.fromEntries(document.chapters.flatMap((chapter) => {
-          const constraint = learningProfileService.profileVisibilityForChapter(document, chapter.id)
-          return constraint === undefined ? [] : [[chapter.id, constraint]]
+          const constraints = learningProfileService.profileVisibilityRulesForChapter(document, chapter.id)
+          return constraints.length === 0 ? [] : [[chapter.id, constraints]]
         })),
         readingConstraints: document.data.profile.readingConstraints,
       },
@@ -313,11 +323,12 @@ export class LearningScenarioBuilder {
         }]]
       case SCENARIO_ENTRY_KIND.CHAPTER: {
         const chapter = findChapter(document.chapters, entry.chapterId)
-        if (chapter.pageIds.length === 0) return []
+        const chapterPageIds = scenarioChapterPageIds(document.data, chapter.id)
+        if (chapterPageIds.length === 0) return []
         return [[scenarioEntryViewId(entry), {
           view: {
             slots: {
-              [ELCE_SCENARIO.CONTENT_SLOT]: this.createPageViews(document, chapter.pageIds, firstPageId, pageIds),
+              [ELCE_SCENARIO.CONTENT_SLOT]: this.createPageViews(document, chapterPageIds, firstPageId, pageIds),
             },
           },
         }]]
@@ -398,7 +409,10 @@ export class LearningScenarioBuilder {
     const chapter = page?.chapterId === null || page?.chapterId === undefined
       ? undefined
       : document.chapters.find((candidate) => candidate.id === page.chapterId)
-    const goesToSummary = chapter?.pageIds.at(-1) === pageId
+    const pageChapterIds = chapter === undefined
+      ? []
+      : [...scenarioChapterAncestors(document.data, chapter.id).map((ancestor) => ancestor.id), chapter.id]
+    const goesToSummary = pageChapterIds.some((chapterId) => scenarioChapterPageIds(document.data, chapterId).at(-1) === pageId)
       && document.data.summary.endChapterDestination === 'summary'
       && document.data.summary.showAtRoot
     const nextPath = goesToSummary

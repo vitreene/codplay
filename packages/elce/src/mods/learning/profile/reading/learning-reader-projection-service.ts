@@ -97,26 +97,29 @@ export class LearningReaderProjectionService {
       projectedById.set(bdcId, this.projectBdcText(bdc, textContext))
     }
 
+    const retainedEntriesByChapter = new Map<string, ScenarioEntry[]>()
+    const projectScenarioEntries = (entries: readonly ScenarioEntry[]): ScenarioEntry[] => entries.flatMap<ScenarioEntry>((entry) => {
+      if (entry.kind === SCENARIO_ENTRY_KIND.PAGE) return retainedPages.has(entry.pageId) ? [entry] : []
+      const chapter = document.chapters.find((candidate) => candidate.id === entry.chapterId)
+      if (chapter === undefined) return []
+      const retainedEntries = projectScenarioEntries(chapter.entries)
+      if (retainedEntries.length === 0) return []
+      retainedEntriesByChapter.set(chapter.id, retainedEntries)
+      return [entry]
+    })
+    const scenarioEntries = projectScenarioEntries(document.data.scenarioEntries)
     const chapters = document.chapters.flatMap((chapter) => {
-      const pageIds = chapter.pageIds.filter((pageId) => retainedPages.has(pageId))
-      return pageIds.length === 0 ? [] : [{
+      const entries = retainedEntriesByChapter.get(chapter.id)
+      if (entries === undefined) return []
+      const pageIds = entries.flatMap((entry) => entry.kind === SCENARIO_ENTRY_KIND.PAGE ? [entry.pageId] : [])
+      return [{
         ...chapter,
         name: this.projectAuthoredText(chapter.name, textContext),
+        entries,
         pageIds,
       }]
     })
     const retainedChapterIds = new Set(chapters.map((chapter) => chapter.id))
-    const scenarioEntries: ScenarioEntry[] = []
-    for (const entry of document.data.scenarioEntries) {
-      switch (entry.kind) {
-        case SCENARIO_ENTRY_KIND.PAGE:
-          if (retainedPages.has(entry.pageId)) scenarioEntries.push(entry)
-          break
-        case SCENARIO_ENTRY_KIND.CHAPTER:
-          if (retainedChapterIds.has(entry.chapterId)) scenarioEntries.push(entry)
-          break
-      }
-    }
     if (profileEnabled) this.assertReadingTargetsRetained(document, retainedChapterIds)
 
     const pages = document.pages.flatMap((page) => {

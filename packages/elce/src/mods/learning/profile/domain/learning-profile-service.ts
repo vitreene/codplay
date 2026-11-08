@@ -7,6 +7,9 @@ import type { ChapterId, PageId } from '../../../../core/document/content-docume
 import type { RichTextNode } from '../../../../resources/bdcs/section/domain/section-types'
 import type { AuthoredTextValue } from '../../../../resources/document/rich-text-types'
 import type { ProfileCondition, ProfileConstraint, ProfileConditionRow, ProfileProperty, ProfileValue, ReadingConstraint } from './learning-profile-types'
+import { scenarioChapterAncestors } from '../../organization/learning-scenario-tree'
+import { scenarioEntriesForParent, scenarioParentChapterId, scenarioChapterIdsInOrder } from '../../organization/learning-scenario-tree'
+import { SCENARIO_ENTRY_KIND } from '../../organization/learning-organization-config'
 
 export class LearningProfileService {
 
@@ -95,7 +98,17 @@ export class LearningProfileService {
         }
       }
     }
-    this.assertNoReadingCycle(profile.readingConstraints, document.chapters.map((chapter) => chapter.id))
+    this.assertNoReadingCycle(
+      profile.readingConstraints,
+      scenarioChapterIdsInOrder(document.data),
+      new Map(document.chapters.map((chapter) => {
+        const parentChapterId = scenarioParentChapterId(document.data, chapter.id)
+        const entries = scenarioEntriesForParent(document.data, parentChapterId)
+        const chapterIndex = entries.findIndex((entry) => entry.kind === SCENARIO_ENTRY_KIND.CHAPTER && entry.chapterId === chapter.id)
+        const previousEntry = chapterIndex > 0 ? entries[chapterIndex - 1] : undefined
+        return [chapter.id, previousEntry?.kind === SCENARIO_ENTRY_KIND.CHAPTER ? previousEntry.chapterId : undefined]
+      })),
+    )
   }
 
   /** Resolves profile defaults without inventing values for absent properties. */
@@ -206,22 +219,41 @@ export class LearningProfileService {
     return candidates.toSorted((left, right) => specificity(left) - specificity(right)).at(-1)
   }
 
-  /** Resolves the page visibility rule, with a local page rule replacing its chapter rule. */
-  public profileVisibilityForPage(document: LearningDocument, pageId: string): ProfileConstraint | undefined {
-    const local = document.data.profile.constraints.find((constraint) =>
-      constraint.target.kind === 'page' && constraint.target.id === pageId)
-    if (local !== undefined) return local
+  /** Returns visibility rules inherited through the chapter path and any local page rule. */
+  public profileVisibilityRulesForPage(document: LearningDocument, pageId: string): readonly ProfileConstraint[] {
     const page = document.pages.find((candidate) => candidate.id === pageId)
-    return page?.chapterId === null || page?.chapterId === undefined
+    const chapter = page?.chapterId === null || page?.chapterId === undefined
       ? undefined
-      : document.data.profile.constraints.find((constraint) =>
-        constraint.target.kind === 'chapter' && constraint.target.id === page.chapterId)
+      : document.chapters.find((candidate) => candidate.id === page.chapterId)
+    const chapterPath = chapter === undefined
+      ? []
+      : [...scenarioChapterAncestors(document.data, chapter.id), chapter]
+    const chapterRules = chapterPath.flatMap((candidate) => document.data.profile.constraints.filter(
+      (constraint) => constraint.target.kind === 'chapter' && constraint.target.id === candidate.id,
+    ))
+    const pageRule = document.data.profile.constraints.find((constraint) =>
+      constraint.target.kind === 'page' && constraint.target.id === pageId)
+    return pageRule === undefined ? chapterRules : [...chapterRules, pageRule]
   }
 
-  /** Resolves the chapter's own visibility rule for a chapter entry in the summary. */
+  /** Resolves the page's nearest visibility rule for controls that need one display target. */
+  public profileVisibilityForPage(document: LearningDocument, pageId: string): ProfileConstraint | undefined {
+    return this.profileVisibilityRulesForPage(document, pageId).at(-1)
+  }
+
+  /** Returns every visibility rule inherited by one chapter from its ancestor path. */
+  public profileVisibilityRulesForChapter(document: LearningDocument, chapterId: string): readonly ProfileConstraint[] {
+    const chapter = document.chapters.find((candidate) => candidate.id === chapterId)
+    if (chapter === undefined) return []
+    const chapterPath = [...scenarioChapterAncestors(document.data, chapter.id), chapter]
+    return chapterPath.flatMap((candidate) => document.data.profile.constraints.filter(
+      (constraint) => constraint.target.kind === 'chapter' && constraint.target.id === candidate.id,
+    ))
+  }
+
+  /** Resolves the chapter's nearest visibility rule for the summary editor. */
   public profileVisibilityForChapter(document: LearningDocument, chapterId: string): ProfileConstraint | undefined {
-    return document.data.profile.constraints.find((constraint) =>
-      constraint.target.kind === 'chapter' && constraint.target.id === chapterId)
+    return this.profileVisibilityRulesForChapter(document, chapterId).at(-1)
   }
 
   /** Returns whether a profile-locked page can be opened. */
@@ -230,10 +262,9 @@ export class LearningProfileService {
     pageId: string,
     profileValues: Readonly<Record<string, ProfileValue>>,
   ): boolean {
-    const visibility = this.profileVisibilityForPage(document, pageId)
-    return visibility === undefined
-      || visibility.unmetBehavior !== 'lock'
-      || this.profileVisibilityMatches(visibility.conditions, new Map(document.data.profile.properties.map((property) => [property.id, property])), profileValues)
+    const properties = new Map(document.data.profile.properties.map((property) => [property.id, property]))
+    return this.profileVisibilityRulesForPage(document, pageId).every((visibility) =>
+      this.profileVisibilityMatches(visibility.conditions, properties, profileValues))
   }
 
   /** Returns whether a profile-locked chapter remains openable from its own summary entry. */
@@ -242,10 +273,9 @@ export class LearningProfileService {
     chapterId: string,
     profileValues: Readonly<Record<string, ProfileValue>>,
   ): boolean {
-    const visibility = this.profileVisibilityForChapter(document, chapterId)
-    return visibility === undefined
-      || visibility.unmetBehavior !== 'lock'
-      || this.profileVisibilityMatches(visibility.conditions, new Map(document.data.profile.properties.map((property) => [property.id, property])), profileValues)
+    const properties = new Map(document.data.profile.properties.map((property) => [property.id, property]))
+    return this.profileVisibilityRulesForChapter(document, chapterId).every((visibility) =>
+      this.profileVisibilityMatches(visibility.conditions, properties, profileValues))
   }
 
   /** Returns whether one BDC remains visible under the reader's profile values. */
@@ -256,6 +286,14 @@ export class LearningProfileService {
   ): boolean {
     const properties = new Map(document.data.profile.properties.map((property) => [property.id, property]))
     const visibility = this.profileVisibilityForBdc(document, bdcId)
+    const bdc = document.bdcs.find((candidate) => candidate.id === bdcId)
+    const pageId = bdc === undefined ? null : bdc.pageId ?? this.parentPageId(document, bdc)
+    const page = pageId === null ? undefined : document.pages.find((candidate) => candidate.id === pageId)
+    const chapterVisibility = page === undefined || page.chapterId === null
+      ? []
+      : this.profileVisibilityRulesForChapter(document, page.chapterId)
+    if (chapterVisibility.some((constraint) => constraint.unmetBehavior !== 'lock'
+      && !this.profileVisibilityMatches(constraint.conditions, properties, profileValues))) return false
     if (visibility === undefined) return true
     return this.profileVisibilityMatches(visibility.conditions, properties, profileValues)
       || visibility.target.kind !== 'bdc' && visibility.unmetBehavior === 'lock'
@@ -288,14 +326,20 @@ export class LearningProfileService {
   }
 
   /** Detects an explicit chapter dependency cycle and reports its path. */
-  public assertNoReadingCycle(constraints: readonly ReadingConstraint[], chapterOrder: readonly string[]): void {
+  public assertNoReadingCycle(
+    constraints: readonly ReadingConstraint[],
+    chapterOrder: readonly string[],
+    previousChapterById?: ReadonlyMap<string, string | undefined>,
+  ): void {
     const edges = new Map<string, readonly string[]>()
     for (const constraint of constraints) {
       if (constraint.requirement.kind === 'chapters') {
         edges.set(constraint.target.id, constraint.requirement.chapterIds)
       } else {
         const targetIndex = chapterOrder.indexOf(constraint.target.id)
-        const previousChapterId = targetIndex > 0 ? chapterOrder[targetIndex - 1] : undefined
+        const previousChapterId = previousChapterById === undefined
+          ? targetIndex > 0 ? chapterOrder[targetIndex - 1] : undefined
+          : previousChapterById.get(constraint.target.id)
         if (previousChapterId !== undefined) edges.set(constraint.target.id, [previousChapterId])
       }
     }

@@ -33,13 +33,15 @@ dépôt pour créer ou rejoindre un chapitre parent.
 
 ## Contrat
 
-Dans le bandeau du Scénario, les quatre actions de création affichent un
-libellé sous l’icône : « Chapitre », « Éval. », « Page » et « Diapo ». Les
-actions Page et Diapo intégrées aux lignes de chapitre restent iconographiques,
-avec nom accessible et infobulle complets. Les boutons de création du bandeau
-sont regroupés côte à côte ; les pages racine restent sous cet en-tête, sans
-second titre « Pages à la racine ». La
-création d’un chapitre Évaluation passe le type au constructeur de commande
+Le bandeau du Scénario regroupe le bouton « + », la Corbeille et le Catalogue ;
+le réglage de style du projet reste à droite. « + » ouvre à sa droite un menu
+flottant avec les quatre créations existantes — Chapitre, Page, Diapo et
+Évaluation — dont les commandes gardent leur nom accessible et leur infobulle.
+Un clic à l’extérieur ferme le menu, y compris sur une autre commande flottante.
+Le menu ne déplace pas les contrôles de la rangée. Les actions Page et Diapo
+intégrées aux lignes de chapitre restent iconographiques. Les pages racine
+restent sous l’en-tête, sans second titre « Pages à la racine ». La création
+d’un chapitre Évaluation passe le type au constructeur de commande
 documentaire, qui applique le seuil par défaut configuré de 80 %. Les deux
 types de chapitre et les pages sont créés par les commandes XState existantes.
 Chaque bouton de page envoie
@@ -48,6 +50,10 @@ création à la racine produit une page sans chapitre du type indiqué, celle du
 chapitre l’ajoute à ce chapitre avec le type indiqué. Aucune création ne
 choisit implicitement le premier chapitre. Sans nom fourni, la page reçoit le
 prochain nom automatique et devient la page sélectionnée.
+
+Le 8 novembre 2026, Safari MCP sur Projet 3 confirme les commandes, le menu et
+sa fermeture lorsqu’un clic vise le rail de page. Les comportements de dépôt
+dans Corbeille et Catalogue restent à valider dans le plan actif.
 
 Les listes des chapitres et des pages n’affichent pas de puces. Leur texte est
 plus petit que le titre « Scénario » ; la corbeille compacte reste au bord droit
@@ -94,6 +100,32 @@ de retour par BDC n’est affiché dans la colonne. Les médias réutilisables
 restent dans leur onglet distinct. Le retour d’une Carte ancrée continue
 d’utiliser le circuit d’ancre.
 
+Le rail de navigation des BDC directs de la page se termine par « Ajouter un
+contenu ». Son menu réutilise les créations disponibles et se ferme au clic
+extérieur, y compris si le clic ouvre une autre commande flottante. Safari MCP
+sur Projet 3 confirme l’ouverture puis la fermeture du menu par clic dans le
+contenu de la page et dans une autre commande ; le comportement est porté par
+[`learning-page-editor.tsx`](../src/mods/learning/authoring/learning-page-editor.tsx).
+
+### Cadres des BDC directs
+
+Chaque BDC direct de la page est rendu dans son propre `.elce-page-bdc` :
+fond clair, bordure pleine, coins arrondis et `1rem` d’espace intérieur. Le
+conteneur commun porte l’unique cadre extérieur ; la racine de l’éditeur BDC
+direct perd son fond, sa bordure, son arrondi et son padding propres pour éviter
+un double cadre. Cela couvre Section, Question, Résultat, Carousel, Carte
+(dont Avatar) et Graphe. Les éditeurs imbriqués, comme les Cartes d’un Carousel,
+gardent leur style intérieur. Les séparateurs d’insertion restent les cibles
+de déplacement entre les cadres.
+
+Le 8 novembre 2026, Safari MCP sur Projet 3 confirme sur les BDC Avatar et
+Carousel les dimensions calculées du conteneur : padding de `16px`, bordure
+pleine de `1px` couleur `#d9d4c9`, coins de `6.4px` et fond `#fffdf8`. À 800 px
+et 1139 px, les cadres gardent leur largeur disponible et le document ne
+déborde pas horizontalement. L’outil de capture Safari MCP a renvoyé une image
+entièrement vide ; la vérification porte donc sur le DOM et les styles
+calculés, pas sur une inspection visuelle de la capture.
+
 L’onglet « Profil » apparaît quand un champ textuel compatible a le focus et que
 le document contient des propriétés de profil. Il contient l’unique contrôle
 d’insertion ; la sélection d’un autre contexte le retire. Les champs simples et
@@ -133,7 +165,13 @@ Prévisualiser au milieu et Contenus à droite ; entre 801 et
 Au-delà de 1200 px, seul
 « Prévisualiser » reste dans cette barre, les deux panneaux étant visibles.
 L’erreur d’ouverture de la fenêtre de lecture y reste annoncée avec `role="alert"`.
-Le bouton continue d’appeler la même action de preview du workspace.
+Le bouton continue d’appeler la même action de preview du workspace, affiche une
+icône Œil à côté de son libellé et a la même hauteur minimale de 2,25 rem que le
+bouton Catalogue adjacent. Le 8 novembre 2026, Safari MCP sur Projet 3 confirme
+une hauteur calculée de 36 px pour chacun. Une marge basse de `0.5rem` sépare
+cette rangée du contenu central. Safari MCP mesure 8 px entre le bas de la barre
+et le haut de la page à 800 px et à 1139 px, sans débordement horizontal à
+800 px.
 
 La barre d’ajout de page est rendue dans
 `#elce-remix-page-editor-host-container`, hors de `#elce-work-area` et avant

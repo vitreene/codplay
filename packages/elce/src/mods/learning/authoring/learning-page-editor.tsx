@@ -67,6 +67,15 @@ export function LearningPageEditor(handle: Handle<LearningPageEditorProps>) {
     if (!handle.signal.aborted) void handle.update()
   }
 
+  /** Closes the page's add-content menu when a pointer press lands outside it. */
+  const dismissAddContentMenuOnOutsidePointerDown = (event: PointerEvent): void => {
+    if (!isAddContentMenuOpen) return
+    const pageId = current.view.selectedPage?.id
+    const addContainer = pageId === undefined ? null : document.getElementById(`elce-page-bdc-add-${pageId}`)
+    if (event.target instanceof Node && addContainer?.contains(event.target)) return
+    updateAddContentMenuOpen(false)
+  }
+
   const updateDropTarget = (targetId: string | null): void => {
     if (dropTargetId === targetId) return
     dropTargetId = targetId
@@ -92,6 +101,7 @@ export function LearningPageEditor(handle: Handle<LearningPageEditorProps>) {
   }
 
   handle.queueTask(() => {
+    document.addEventListener('pointerdown', dismissAddContentMenuOnOutsidePointerDown, true)
     const subscription = controller.subscribe((snapshot) => {
       const nextView = actions.authoring.selectEditorViewModel(snapshot)
       if (editorViewModelEqual(current.view, nextView)) return
@@ -114,6 +124,7 @@ export function LearningPageEditor(handle: Handle<LearningPageEditorProps>) {
     })
     handle.signal.addEventListener('abort', () => {
       subscription.unsubscribe()
+      document.removeEventListener('pointerdown', dismissAddContentMenuOnOutsidePointerDown, true)
       sectionSession.destroy()
       if (trashAnimationTimer !== undefined) clearTimeout(trashAnimationTimer)
     }, { once: true })
@@ -265,6 +276,8 @@ function renderPageEditor(view: EditorViewModel, actions: LearningEditorFacade, 
     onDropBdcNavigationItem: (event, bdcId, index) => dropBdcNavigationItem(event, bdcId, index, state),
     onDragOverBdcTrash: (event) => dragOverBdcTrash(event, state),
     onDropBdcTrash: (event) => dropBdcOnTrash(event, state),
+    onDragOverBdcCatalog: (event) => dragOverBdcCatalog(event, state),
+    onDropBdcCatalog: (event) => dropBdcOnCatalog(event, state),
     onDragOverSeparator: (event, targetId, index) => dragOverBdcSeparator(event, targetId, index, state),
     onDragLeaveDropTarget: (event) => dragLeaveBdcSeparator(event, state),
     onDropBdc: (event, index) => dropBdc(event, index, state),
@@ -382,7 +395,6 @@ function renderBdcEditor(
         audioSource={bdc.avatar.take === null ? undefined : view.mediaSources[bdc.avatar.take.audioMediaId]}
         onInsert={(audio, timeline) => actions.importAvatarTake(bdc.id, audio, timeline)}
         onUpdate={(content) => actions.updateAvatar(bdc.id, content)}
-        onDelete={() => actions.deleteAvatar(bdc.id)}
         onOpenAppearanceTarget={state.onOpenAppearanceTarget}
       />
     case BDC_TYPE.SECTION:
@@ -421,6 +433,7 @@ function renderBdcEditor(
         mediaType: media === null ? null : mediaTypeFromMimeType(media.mimeType),
         mediaSource: mediaId === null ? null : view.mediaSources[mediaId] ?? null,
         actions: actions.createQuestionEditorActions(bdc.id, bdc.question),
+        canDelete: false,
         textFieldAttributes: LEARNING_PROFILE_TEXT_FIELD_ATTRIBUTES,
         textFieldFeature,
         onCatalogReference: (reference) => actions.attachQuestionMediaReference(bdc.id, reference),
@@ -433,7 +446,6 @@ function renderBdcEditor(
         bdc.id,
         bdc.evaluationResult,
         (evaluationResult) => actions.updateEvaluationResult(bdc.id, evaluationResult),
-        () => actions.deleteEvaluationResult(bdc.id),
         state.onOpenAppearanceTarget,
         textFieldFeature,
       )
@@ -448,6 +460,7 @@ function renderBdcEditor(
         content={bdc.carousel}
         avatar={view.selectedPageBdcs.find((candidate) => candidate.type === BDC_TYPE.AVATAR)}
         onAssociateWord={(cardBdcId, avatarBdcId, wordIndex, startAtMs) => actions.associateCarouselWord(bdc.id, cardBdcId, avatarBdcId, wordIndex, startAtMs)}
+        onReturnBdcToCatalog={(childBdcId) => state.actions.returnBdcToCatalog(childBdcId)}
         bdcs={views}
         selectedCardBdcId={view.selectedCarouselCardBdcId}
         mediaById={view.mediaById}
@@ -468,7 +481,7 @@ function renderBdcEditor(
         bdc,
         view.mediaById,
         actions.createCardEditorActions(view.documentModel.bdcs),
-        () => actions.deleteCard(bdc.id),
+        undefined,
         state.onOpenAppearanceTarget,
         LEARNING_PROFILE_TEXT_FIELD_ATTRIBUTES,
         textFieldFeature,
@@ -478,14 +491,13 @@ function renderBdcEditor(
       return renderRemixStatisticalGraphEditor(
         bdc,
         actions.createStatisticalGraphEditorActions(bdc.id, bdc.statisticalGraph),
-        () => actions.deleteStatisticalGraph(bdc.id),
+        undefined,
         undefined,
         renderAppearanceTrigger({
           id: `elce-statistical-graph-style-${bdc.id}`,
           target: { kind: 'bdc', bdcId: bdc.id },
           label: 'Ouvrir le style du graphe',
           onOpen: state.onOpenAppearanceTarget,
-          className: 'elce-appearance-trigger elce-bdc-style-trigger',
         }),
         LEARNING_PROFILE_TEXT_FIELD_ATTRIBUTES,
         textFieldFeature,
@@ -589,6 +601,31 @@ function dropBdcOnTrash(event: DragEvent, state: PageEditorRenderState): void {
   event.preventDefault()
   event.stopPropagation()
   if (deletePageBdc(bdc, state) && !state.hasBdc(bdcId)) state.animateTrashDropSuccess()
+  endBdcDrag(state)
+}
+
+/** Accepts only a direct BDC from the selected page as a catalog drop target. */
+function dragOverBdcCatalog(event: DragEvent, state: PageEditorRenderState): void {
+  const page = state.current.view.selectedPage
+  const bdcId = state.draggedBdcId()
+  if (event.dataTransfer === null || page === undefined || bdcId === null || !page.bdcIds.includes(bdcId)) return
+  event.preventDefault()
+  event.stopPropagation()
+  event.dataTransfer.dropEffect = 'move'
+  state.updateDropTarget(`elce-page-bdc-catalog-${page.id}-drop`)
+}
+
+/** Returns the dragged direct page BDC to its catalog by its existing command. */
+function dropBdcOnCatalog(event: DragEvent, state: PageEditorRenderState): void {
+  const page = state.current.view.selectedPage
+  const bdcId = state.draggedBdcId()
+  if (event.dataTransfer === null || page === undefined || bdcId === null || !page.bdcIds.includes(bdcId)) {
+    state.updateDropTarget(null)
+    return
+  }
+  event.preventDefault()
+  event.stopPropagation()
+  state.actions.returnBdcToCatalog(bdcId)
   endBdcDrag(state)
 }
 

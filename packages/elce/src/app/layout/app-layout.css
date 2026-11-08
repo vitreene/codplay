@@ -240,9 +240,20 @@ body {
 
 #elce-outline-heading {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 0.45rem 0.75rem;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.35rem;
   align-items: center;
+}
+
+#elce-outline-heading > h1 {
+  white-space: nowrap;
+}
+
+#elce-outline-heading #elce-outline-actions {
+  grid-column: auto;
+  min-width: 0;
+  justify-content: flex-start;
+  gap: 0.25rem;
 }
 
 .elce-panel-heading button {
@@ -273,6 +284,7 @@ body {
   min-width: 0;
   gap: 0.25rem;
   min-height: 2.25rem;
+  margin-block-end: 0.5rem;
   padding: 0 0.25rem;
 }
 
@@ -350,10 +362,6 @@ body {
 #elce-outline-actions {
   grid-column: 1 / -1;
   justify-content: flex-start;
-}
-
-#elce-outline-actions .elce-add-content-action {
-  padding: var(--elce-icon-padding);
 }
 
 #elce-outline-actions #elce-summary-profile-open {
@@ -485,14 +493,22 @@ body {
 }
 
 .elce-inline-text-field__toolbar button {
-  padding: 0.18rem 0.45rem;
+  display: inline-flex;
+  width: 1.8rem;
+  min-height: 1.8rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
   color: #52645f;
   background: #fffdf8;
   border: 1px solid #d2d1c8;
   border-radius: 0.25rem;
   cursor: pointer;
-  font: inherit;
-  font-size: 0.75rem;
+}
+
+.elce-inline-text-field__toolbar button > .elce-ui-icon {
+  width: 0.9rem;
+  height: 0.9rem;
 }
 
 .elce-inline-text-field__toolbar button[aria-pressed='true'] {
@@ -683,9 +699,14 @@ body {
 }
 
 .elce-preview-open-button {
+  display: inline-flex;
   grid-column: 2;
   justify-self: center;
   width: max-content;
+  min-height: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
   padding: 0.45rem 0.75rem;
   color: #fffdf8;
   background: #46726b;
@@ -783,6 +804,10 @@ body {
 .elce-page-bdc {
   position: relative;
   min-width: 0;
+  padding: 1rem;
+  background: #fffdf8;
+  border: 1px solid #d9d4c9;
+  border-radius: 0.4rem;
 }
 
 .elce-question-editor {
@@ -1303,32 +1328,6 @@ body {
   }
 }
 
-.elce-appearance-trigger {
-  display: inline-flex;
-  width: 2rem;
-  min-width: 2rem;
-  height: 2rem;
-  min-height: 2rem;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  padding: 0.25rem;
-  color: #263b3a;
-  background: #fffdf8;
-  border: 1px solid #c9c4b9;
-  border-radius: 0.3rem;
-  cursor: pointer;
-}
-
-.elce-appearance-trigger:hover {
-  background: #e8e4db;
-}
-
-.elce-appearance-trigger:focus-visible {
-  outline: 3px solid #80b4a8;
-  outline-offset: 2px;
-}
-
 .elce-work-area-page-heading {
   display: flex;
   min-width: 0;
@@ -1384,12 +1383,10 @@ body {
   margin-left: auto;
 }
 
-.elce-bdc-header-actions > .elce-appearance-trigger,
 .elce-bdc-header-actions > .elce-bdc-icon-button,
 .elce-bdc-header-actions > .elce-card-editor__delete,
 .elce-bdc-header-actions > .elce-carousel-editor__delete-bdc,
 .elce-bdc-header-actions > .elce-danger-action,
-.elce-statistical-graph-editor__header-actions > .elce-bdc-style-trigger,
 .elce-statistical-graph-editor__header-actions > .elce-bdc-icon-button {
   width: 1.7rem;
   min-width: 1.7rem;

@@ -615,6 +615,12 @@ export const LEARNING_LAYOUT_STYLE_RULES = [
   grid-template-columns: minmax(0, 1fr);
 }
 
+.elce-summary__chapter-row--nested {
+  grid-template-columns: minmax(0, 1fr);
+  margin-inline-start: 0.75rem;
+  gap: 0.35rem;
+}
+
 .elce-summary__chapter-row--standalone .elce-summary__chapter-spacer {
   grid-column: 1;
 }`],

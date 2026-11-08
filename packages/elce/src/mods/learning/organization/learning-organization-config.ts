@@ -11,6 +11,8 @@ export const CHAPTER_TYPE = {
   EVALUATION: 'evaluation',
 } as const
 
+export const MAX_SCENARIO_CHAPTER_DEPTH = 6
+
 export const CHAPTER_TYPE_CONFIG = {
   [CHAPTER_TYPE.STANDARD]: {
     label: null,

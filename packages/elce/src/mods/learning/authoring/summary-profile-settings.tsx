@@ -3,6 +3,8 @@ import { Plus, Trash2 } from 'lucide-static'
 import { CATALOG_REFERENCE } from '../../../core/catalog/catalog-config'
 import { MEDIA_FILE_ACCEPT, MEDIA_TYPE } from '../../../core/media/media-config'
 import { SCENARIO_ENTRY_KIND } from '../organization/learning-organization-config'
+import type { ScenarioEntry } from '../organization/learning-scenario-entry-types'
+import { scenarioChapterAncestors, scenarioChapterPageIds } from '../organization/learning-scenario-tree'
 import { LEARNING_AUTHORING_CONFIG } from './learning-authoring-config'
 import { createStableId } from '../../../core/document/stable-id'
 import type { LearningDocument } from '../document/learning-document'
@@ -445,26 +447,20 @@ function renderConstraintTargetTree(props: SummaryProfileSettingsProps): RemixNo
   const document = props.document
   const pages = new Map(document.pages.map((page) => [page.id, page]))
   const chapters = new Map(document.chapters.map((chapter) => [chapter.id, chapter]))
-  const entries: RemixNode[] = []
-  for (const entry of document.data.scenarioEntries) {
+  const renderEntries = (scenarioEntries: readonly ScenarioEntry[]): RemixNode[] => scenarioEntries.flatMap((entry) => {
     if (entry.kind === SCENARIO_ENTRY_KIND.PAGE) {
       const page = pages.get(entry.pageId)
-      if (page !== undefined) entries.push(renderConstraintTargetItem(props, { kind: 'page', id: page.id }, plainTextFromValue(page.name)))
-      continue
+      return page === undefined ? [] : [renderConstraintTargetItem(props, { kind: 'page', id: page.id }, plainTextFromValue(page.name))]
     }
     const chapter = chapters.get(entry.chapterId)
-    if (chapter === undefined) continue
-    const pageItems = chapter.pageIds.flatMap((pageId) => {
-      const page = pages.get(pageId)
-      return page === undefined ? [] : [renderConstraintTargetItem(props, { kind: 'page', id: page.id }, plainTextFromValue(page.name))]
-    })
-    entries.push(renderConstraintTargetItem(
+    return chapter === undefined ? [] : [renderConstraintTargetItem(
       props,
       { kind: 'chapter', id: chapter.id },
       plainTextFromValue(chapter.name),
-      pageItems,
-    ))
-  }
+      renderEntries(chapter.entries),
+    )]
+  })
+  const entries = renderEntries(document.data.scenarioEntries)
   return <ul id="elce-profile-constraint-target-tree" className="elce-outline-list">
     {entries}
   </ul>
@@ -492,7 +488,7 @@ function renderConstraintTargetItem(
           if (form === null) return
           if (target.kind === 'chapter') {
             const chapter = document.chapters.find((candidate) => candidate.id === target.id)
-            const pageIds = new Set(chapter?.pageIds ?? [])
+            const pageIds = new Set(chapter === undefined ? [] : scenarioChapterPageIds(document.data, chapter.id))
             for (const checkbox of form.querySelectorAll<HTMLInputElement>('input[name="targets"]')) {
               const childTarget = parseTarget(checkbox.value)
               if (childTarget?.kind === 'page' && pageIds.has(childTarget.id)) {
@@ -564,13 +560,14 @@ function renderProfileConstraintEditor(props: SummaryProfileSettingsProps): Remi
 /** Renders the exclusive previous-or-multiple-chapters prerequisite selector. */
 function renderReadingConstraintEditor(props: SummaryProfileSettingsProps): RemixNode {
   const chapters = props.document.chapters
+  const canConfigureReadingRules = chapters.length > 1 || hasPreviousScenarioEntry(props.document.data.scenarioEntries, new Map(chapters.map((chapter) => [chapter.id, chapter])))
   return <fieldset
     id="elce-reading-rule-editor"
     className="elce-summary-profile-settings__subgroup"
-    disabled={chapters.length < 2}
+    disabled={!canConfigureReadingRules}
   >
     <legend id="elce-reading-rule-editor-title">Prérequis de lecture</legend>
-    {chapters.length < 2 ? <p id="elce-reading-constraints-needs-chapters">Ajoutez un chapitre pour définir un prérequis.</p> : <div
+    {!canConfigureReadingRules ? <p id="elce-reading-constraints-needs-chapters">Ajoutez un chapitre précédé d’un élément ou plusieurs chapitres pour définir un prérequis.</p> : <div
       id="elce-reading-rule-fields"
       className="elce-summary-profile-settings__rule-fields"
     >
@@ -806,11 +803,14 @@ function syncParentChapterSelection(form: HTMLFormElement, document: LearningDoc
   )
   const chapter = document.chapters.find((candidate) => candidate.id === page.chapterId)
   if (chapter === undefined) return
-  const chapterCheckbox = checkboxes.get(`chapter:${chapter.id}`)
-  if (chapterCheckbox === undefined) return
-  const hasSelectedPage = chapter.pageIds.some((childPageId) => checkboxes.get(`page:${childPageId}`)?.checked === true)
-  chapterCheckbox.checked = false
-  chapterCheckbox.indeterminate = hasSelectedPage
+  for (const ancestor of [...scenarioChapterAncestors(document.data, chapter.id), chapter]) {
+    const chapterCheckbox = checkboxes.get(`chapter:${ancestor.id}`)
+    if (chapterCheckbox === undefined) continue
+    const descendantPageIds = scenarioChapterPageIds(document.data, ancestor.id)
+    const selectedPageCount = descendantPageIds.filter((childPageId) => checkboxes.get(`page:${childPageId}`)?.checked === true).length
+    chapterCheckbox.checked = false
+    chapterCheckbox.indeterminate = selectedPageCount > 0
+  }
 }
 
 /** Enables the constraint editor only while the author has selected a target. */
@@ -821,12 +821,26 @@ function syncConstraintEditorState(form: HTMLFormElement, document: LearningDocu
   const readingEditor = form.querySelector<HTMLFieldSetElement>('#elce-reading-rule-editor')
   const selectedChapterCount = targets.filter((target) => target.kind === 'chapter').length
   if (editor !== null) editor.disabled = targets.length === 0
-  if (readingEditor !== null) readingEditor.disabled = document.chapters.length < 2 || selectedChapterCount === 0
+  const canConfigureReadingRules = document.chapters.length > 1
+    || hasPreviousScenarioEntry(document.data.scenarioEntries, new Map(document.chapters.map((chapter) => [chapter.id, chapter])))
+  if (readingEditor !== null) readingEditor.disabled = !canConfigureReadingRules || selectedChapterCount === 0
   if (state !== null) {
     state.textContent = targets.length === 0
       ? 'Sélectionnez au moins un élément du Sommaire.'
       : `${targets.length} élément${targets.length > 1 ? 's' : ''} sélectionné${targets.length > 1 ? 's' : ''}.`
   }
+}
+
+/** Checks whether a chapter has any preceding page or chapter at its own level. */
+function hasPreviousScenarioEntry(
+  entries: readonly ScenarioEntry[],
+  chapters: ReadonlyMap<string, LearningDocument['chapters'][number]>,
+): boolean {
+  return entries.some((entry, index) => {
+    if (entry.kind !== SCENARIO_ENTRY_KIND.CHAPTER) return false
+    if (index > 0) return true
+    return hasPreviousScenarioEntry(chapters.get(entry.chapterId)?.entries ?? [], chapters)
+  })
 }
 
 /** Handles add and remove buttons for the delegated visibility row editor. */
@@ -1285,7 +1299,7 @@ function chapterLabel(document: LearningDocument, chapterId: string): string {
 /** Describes one chapter-reading prerequisite. */
 function readingRequirementLabel(document: LearningDocument, requirement: ReadingRequirement): string {
   return requirement.kind === 'previous-chapter'
-    ? 'chapitre précédent retenu'
+    ? 'élément précédent au même niveau'
     : requirement.chapterIds.map((chapterId) => chapterLabel(document, chapterId)).join(' et ')
 }
 

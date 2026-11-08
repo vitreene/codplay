@@ -1,5 +1,7 @@
 import type { PageId, ChapterId } from '../../../core/document/content-document-types'
 import type { PagePlacement } from '../organization/learning-page-placement'
+import type { ScenarioEntryPlacement } from '../organization/learning-scenario-entry-types'
+import type { DraggedScenarioEntry } from './learning-workspace-types'
 import type { EditorViewModel } from './learning-authoring-service'
 import type { LearningEditorFacade } from './learning-editor-facade'
 import type { AppearanceTarget } from '../../../domain/appearance/appearance-target-types'
@@ -10,7 +12,7 @@ export type LearningResponsivePanel = 'outline' | 'properties' | null
 export interface LearningScenarioWorkspaceProps {
   readonly view: EditorViewModel
   readonly actions: Pick<LearningEditorFacade,
-    'createChapter' | 'createEvaluationChapter' | 'createPage' | 'selectPage' | 'deletePage' | 'selectChapter' | 'deleteChapter'
+    'createChapter' | 'createEvaluationChapter' | 'createPage' | 'selectPage' | 'deletePage' | 'selectChapter' | 'deleteChapter' | 'movePage'
   >
   readonly responsivePanel: LearningResponsivePanel
   readonly panelVisibility?: WorkspacePanelVisibility
@@ -24,12 +26,14 @@ export interface LearningScenarioWorkspaceProps {
 
 export interface ScenarioPanelProps {
   readonly workspace: LearningScenarioWorkspaceProps
+  readonly getDraggedEntry: () => DraggedScenarioEntry
+  readonly onSetDropTarget: (targetId: string | null) => void
   readonly onDragStartPage: (event: DragEvent, pageId: PageId) => void
   readonly onDragStartChapter: (event: DragEvent, chapterId: ChapterId) => void
   readonly onDragEnd: () => void
-  readonly onDragOverRoot: (event: DragEvent, targetId: string) => void
   readonly onDragOverPage: (event: DragEvent, targetId: string) => void
-  readonly onDropRoot: (event: DragEvent, placement: PagePlacement) => void
+  readonly onDragOverScenarioEntry: (event: DragEvent, targetId: string) => void
+  readonly onDropScenarioEntry: (event: DragEvent, placement: ScenarioEntryPlacement) => void
   readonly onDropPage: (event: DragEvent, placement: PagePlacement) => void
   readonly onDragLeave: (event: DragEvent) => void
 }

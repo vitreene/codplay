@@ -27,6 +27,7 @@ import { SECTION_SQLITE_SELECT, prepareSectionInsert, sectionContentFromSqliteRo
 import { STATISTICAL_GRAPH_SQLITE_SELECT, prepareStatisticalGraphInsert, statisticalGraphContentFromSqliteRow } from '../../../../../resources/bdcs/statistical-graph/persistence/sqlite/statistical-graph-queries'
 import { INITIAL_PROJECT_TEST_STATE, type ProjectTestState, type VersionedProjectTestState } from '../../../reading/learning-test-state-types'
 import type { AppearanceSettings } from '../../../../../config/appearance/appearance-types'
+import type { ScenarioEntry } from '../../../organization/learning-scenario-entry-types'
 import { learningDocumentCommandService } from '../../../commands/learning-command-composition'
 import { LearningDocument } from '../../../document/learning-document'
 import type { AcquireProjectEditResult, DeleteProjectResult, EditProjectResult, ProjectEditGrant, ProjectPersistence, ProjectSummary, StoredProject } from '../../../../../core/server/projects/project-persistence'
@@ -225,8 +226,8 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
         INSERT INTO projects (
           project_id, name, format_version, mod_key, revision, created_at, updated_at,
           default_intro_transition_ref, default_outro_transition_ref,
-          summary_json, profile_json, appearance_json
-        ) VALUES (?, ?, ?, 'learning', 0, ?, ?, ?, ?, ?, ?, ?)
+          summary_json, profile_json, appearance_json, custom_appearance_colors_json
+        ) VALUES (?, ?, ?, 'learning', 0, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(project_id) DO NOTHING
         RETURNING project_id
       `, [
@@ -240,6 +241,7 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
         JSON.stringify(document.data.summary),
         JSON.stringify(document.data.profile),
         serializeOptionalJson(document.data.appearance),
+        JSON.stringify(document.data.customAppearanceColors),
       ])
 
       switch (inserted.length) {
@@ -308,7 +310,7 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
         SET name = ?, format_version = ?, revision = revision + 1, updated_at = ?,
             edit_lease_expires_at = ?,
             default_intro_transition_ref = ?, default_outro_transition_ref = ?,
-            summary_json = ?, profile_json = ?, appearance_json = ?
+            summary_json = ?, profile_json = ?, appearance_json = ?, custom_appearance_colors_json = ?
         WHERE project_id = ? AND revision = ? AND mod_key = 'learning'
         RETURNING project_id, name, revision
       `, [
@@ -321,6 +323,7 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
         JSON.stringify(document.data.summary),
         JSON.stringify(document.data.profile),
         serializeOptionalJson(document.data.appearance),
+        JSON.stringify(document.data.customAppearanceColors),
         projectId,
         expectedRevision,
       ])
@@ -390,7 +393,7 @@ async function readStoredProject(database: ProjectDatabase, projectId: string): 
   const projectRows = await queryRows(database, `
     SELECT project_id, name, format_version, revision,
            default_intro_transition_ref, default_outro_transition_ref, summary_json, profile_json,
-           appearance_json
+           appearance_json, custom_appearance_colors_json
     FROM projects WHERE project_id = ?
       AND mod_key = 'learning'
   `, [projectId])
@@ -398,7 +401,7 @@ async function readStoredProject(database: ProjectDatabase, projectId: string): 
 
   const projectRow = projectRows[0]!
   const version = numberValue(projectRow, 'format_version')
-  if (version !== 7 && version !== 8 && version !== 9 && version !== 10 && version !== 11 && version !== 12) {
+  if (version !== 7 && version !== 8 && version !== 9 && version !== 10 && version !== 11 && version !== 12 && version !== 13 && version !== 14) {
     throw new Error(`Version documentaire SQLite non prise en charge : ${String(projectRow.format_version)}`)
   }
   const document = await readDocument(database, projectRow)
@@ -458,6 +461,7 @@ async function readDocument(database: ProjectDatabase, projectRow: SqlRow): Prom
     id: projectId,
     version: numberValue(projectRow, 'format_version'),
     name: stringValue(projectRow, 'name'),
+    customAppearanceColors: parseJsonColumn<readonly string[]>(projectRow, 'custom_appearance_colors_json'),
     ...optionalAppearance(projectRow),
     revelationDefaults: {
       intro: stringValue(projectRow, 'default_intro_transition_ref') as LearningDocumentData['revelationDefaults']['intro'],
@@ -494,8 +498,13 @@ function chapterFromRow(row: SqlRow, scenarioRows: readonly SqlRow[]): LearningC
     type,
     pageIds: scenarioRows
       .filter((entry) => entry.parent_chapter_id === stringValue(row, 'chapter_id'))
+      .filter((entry) => entry.chapter_id === null)
       .sort(byPosition)
       .map((entry) => stringValue(entry, 'page_id')),
+    entries: scenarioRows
+      .filter((entry) => entry.parent_chapter_id === stringValue(row, 'chapter_id'))
+      .sort(byPosition)
+      .map(scenarioEntryFromRow),
   }
 
   switch (type) {
@@ -637,24 +646,23 @@ async function insertPage(database: ProjectDatabase, projectId: string, page: Le
     [projectId, page.id, nullableSerializedText(page.name), page.type, serializeOptionalJson(page.appearance), page.allowEarlyExit === undefined ? null : Number(page.allowEarlyExit)])
 }
 
-/** Persists root scenario order and each chapter’s page order in one relation. */
+/** Persists the mixed root and nested scenario order in one relation. */
 async function insertScenarioRows(database: ProjectDatabase, document: LearningDocument): Promise<void> {
-  for (const [position, entry] of document.data.scenarioEntries.entries()) {
-    switch (entry.kind) {
-      case SCENARIO_ENTRY_KIND.PAGE:
-        await insertScenarioEntry(database, document.id, null, entry.pageId, null, position)
-        break
-      case SCENARIO_ENTRY_KIND.CHAPTER:
-        await insertScenarioEntry(database, document.id, null, null, entry.chapterId, position)
-        break
+  const persistEntries = async (parentChapterId: string | null, entries: readonly ScenarioEntry[]): Promise<void> => {
+    for (const [position, entry] of entries.entries()) {
+      switch (entry.kind) {
+        case SCENARIO_ENTRY_KIND.PAGE:
+          await insertScenarioEntry(database, document.id, parentChapterId, entry.pageId, null, position)
+          break
+        case SCENARIO_ENTRY_KIND.CHAPTER:
+          await insertScenarioEntry(database, document.id, parentChapterId, null, entry.chapterId, position)
+          const chapter = document.chapters.find((candidate) => candidate.id === entry.chapterId)
+          if (chapter !== undefined) await persistEntries(chapter.id, chapter.entries)
+          break
+      }
     }
   }
-
-  for (const chapter of document.chapters) {
-    for (const [position, pageId] of chapter.pageIds.entries()) {
-      await insertScenarioEntry(database, document.id, chapter.id, pageId, null, position)
-    }
-  }
+  await persistEntries(null, document.data.scenarioEntries)
 }
 
 /** Inserts one ordered page or chapter membership in the scenario. */

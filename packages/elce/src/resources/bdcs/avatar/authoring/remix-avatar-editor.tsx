@@ -1,5 +1,5 @@
 import { on, type Handle } from 'remix/component'
-import { Maximize2, Mic, Minimize2, Trash2, X } from 'lucide-static'
+import { Maximize2, Mic, Minimize2, X } from 'lucide-static'
 import { registerAudioCaptureElement } from '@codplay/audio-capture'
 import type { AvatarContent } from '../domain/avatar-types'
 import { mattAvatarProfile } from '../reading/avatar-profile'
@@ -16,7 +16,6 @@ interface AvatarEditorProps {
   readonly audioSource?: string
   readonly onInsert: (audio: File, timeline: File) => Promise<void>
   readonly onUpdate: (content: AvatarContent) => void
-  readonly onDelete: () => void
   readonly onOpenAppearanceTarget: (target: AppearanceTarget, triggerId: string) => void
 }
 
@@ -44,18 +43,7 @@ export function RemixAvatarEditor(handle: Handle<AvatarEditorProps>) {
             target: { kind: 'bdc', bdcId },
             label: 'Régler le fond et le style de l’Avatar',
             onOpen: handle.props.onOpenAppearanceTarget,
-            className: 'elce-appearance-trigger elce-bdc-style-trigger',
           })}
-          <button
-            id={`elce-avatar-delete-${bdcId}`}
-            className="elce-card-editor__delete"
-            type="button"
-            aria-label="Supprimer l’Avatar"
-            title="Supprimer l’Avatar"
-            mix={on<HTMLButtonElement, 'click'>('click', handle.props.onDelete)}
-          >
-            {renderLucideIcon(Trash2, `elce-avatar-delete-icon-${bdcId}`)}
-          </button>
         </div>
       </header>
 

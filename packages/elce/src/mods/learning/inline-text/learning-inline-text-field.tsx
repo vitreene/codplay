@@ -1,3 +1,4 @@
+import { Bold, Italic } from 'lucide-static'
 import { Editor } from '@tiptap/core'
 import { NodeSelection } from '@tiptap/pm/state'
 import StarterKit from '@tiptap/starter-kit'
@@ -15,6 +16,7 @@ import {
 import { createLocalDateLabelExtension, createPageLinkLabelExtension } from './learning-inline-label-extensions'
 import { toTiptapContent } from './learning-tiptap-content'
 import { createProfileLabelExtension } from '../profile/authoring/profile-label-extension'
+import { renderLucideIcon } from '../../../core/authoring/lucide-static-icon'
 import type { ResourceTextFieldFeature } from '../../../core/authoring/resource-text-field-feature'
 import {
   INLINE_TEXT_DRAG_TYPE,
@@ -197,6 +199,7 @@ function renderFormatButton(
     id={`${id}-format-${mark}`}
     type="button"
     aria-label={label}
+    title={label}
     aria-pressed={false}
     mix={[
       on<HTMLButtonElement, 'mousedown'>('mousedown', (event) => event.preventDefault()),
@@ -210,7 +213,7 @@ function renderFormatButton(
       }),
     ]}
   >
-    {label}
+    {renderLucideIcon(mark === 'bold' ? Bold : Italic, `${id}-format-${mark}-icon`)}
   </button>
 }
 

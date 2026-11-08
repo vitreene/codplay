@@ -5,6 +5,9 @@ import type { LearningDocument } from '../../document/learning-document'
 import type { ElceTextValue } from '../../../../resources/document/rich-text-types'
 import { plainTextFromValue } from '../../inline-text/learning-inline-text-value'
 import { createInlineTextSceneParts, wrapInlineTextSceneParts } from '../../inline-text/learning-inline-text-scene'
+import { SCENARIO_ENTRY_KIND } from '../learning-organization-config'
+import { scenarioChapterPageIds } from '../learning-scenario-tree'
+import type { ScenarioEntry } from '../learning-scenario-entry-types'
 
 export type SummaryPresentation = 'menu' | 'root'
 export type SummaryChapterReadingStatus = 'locked' | 'read' | 'partial' | 'unread'
@@ -14,12 +17,9 @@ interface InlineMarkupProjection {
   readonly persos: readonly PersoDoc<string>[]
 }
 
-interface SummaryRootGroup {
-  readonly id: string
-  readonly chapterTitle: ElceTextValue | null
-  readonly chapterEntry?: SummaryEntry
-  readonly pages: readonly SummaryEntry[]
-}
+type SummaryTreeEntry =
+  | Readonly<{ kind: 'page'; entry: SummaryEntry }>
+  | Readonly<{ kind: 'chapter'; id: string; title: ElceTextValue; entry?: SummaryEntry; children: readonly SummaryTreeEntry[] }>
 
 /** Builds an Elcé-owned CodPlay scene for either presentation of the same summary. */
 export function buildSummaryScene(
@@ -31,28 +31,23 @@ export function buildSummaryScene(
   const summary = document.data.summary
   const prefix = `${document.id}:summary:${presentation}`
   const entries = buildSummaryEntries(document)
-  const rootGroups = presentation === 'root' ? createRootSummaryGroups(document, entries) : []
+  const summaryTree = createSummaryTree(document, entries)
   const entryProjection = presentation === 'root'
-    ? createRootEntryListMarkup(prefix, rootGroups, summary.displayMode === 'pages')
-    : createEntryListMarkup(document, prefix, entries)
+    ? createRootEntryListMarkup(prefix, summaryTree)
+    : createEntryListMarkup(prefix, summaryTree)
   const descriptionProjection = presentation === 'root'
     ? createInlineMarkup(summary.description, `${prefix}-description`, 'p', 'elce-summary__description')
     : { markup: '', persos: [] as readonly PersoDoc<string>[] }
   const entryPersos = presentation === 'root'
-    ? rootGroups.flatMap((group) => [
-      ...(group.chapterEntry === undefined ? [] : [createEntryPerso(prefix, group.chapterEntry, 'root')]),
-      ...group.pages.map((entry) => createEntryPerso(prefix, entry, 'root')),
-    ])
+    ? entries.map((entry) => createEntryPerso(prefix, entry, 'root'))
     : entries.map((entry) => createEntryPerso(prefix, entry, 'menu'))
   const chapterStatusPersos = presentation === 'root'
-    ? rootGroups
-      .filter((group) => group.chapterTitle !== null && group.chapterEntry === undefined)
-      .map((group) => createChapterStatusPerso(prefix, group.id))
+    ? summaryChapterIds(summaryTree)
+      .filter((chapterId) => !entries.some((entry) => entry.kind === 'chapter' && entry.id === chapterId))
+      .map((chapterId) => createChapterStatusPerso(prefix, chapterId))
     : []
   const chapterStatusEvents = presentation === 'root'
-    ? rootGroups
-      .filter((group) => group.chapterTitle !== null)
-      .flatMap((group) => chapterStatusEventsFor(group.id))
+    ? summaryChapterIds(summaryTree).flatMap((chapterId) => chapterStatusEventsFor(chapterId))
     : []
   const menuPersos = presentation === 'menu'
     ? createMenuDrawerPersos(
@@ -109,70 +104,68 @@ export type SummaryEntry = Readonly<{
   readonly parentChapterId: string | null
 }>
 
-/** Builds menu entries from the same retained chapter and page projection. */
+/** Builds flat click targets while preserving depth-first scenario order. */
 export function buildSummaryEntries(document: LearningDocument): readonly SummaryEntry[] {
   const pages = new Map(document.pages.map((page) => [page.id, page]))
   const entries: SummaryEntry[] = []
-  if (document.data.summary.displayMode === 'chapters') {
-    for (const entry of document.data.scenarioEntries) {
-      if (entry.kind !== 'chapter') continue
-      const chapter = document.chapters.find((candidate) => candidate.id === entry.chapterId)
-      const pageId = chapter?.pageIds[0]
-      if (chapter !== undefined && pageId !== undefined) entries.push({ id: chapter.id, title: chapter.name, pageId, kind: 'chapter', parentChapterId: null })
+  const chapters = new Map(document.chapters.map((chapter) => [chapter.id, chapter]))
+  const visit = (scenarioEntries: readonly ScenarioEntry[], parentChapterId: string | null): void => {
+    for (const scenarioEntry of scenarioEntries) {
+      switch (scenarioEntry.kind) {
+        case SCENARIO_ENTRY_KIND.PAGE: {
+          const page = pages.get(scenarioEntry.pageId)
+          if (document.data.summary.displayMode === 'pages' && page !== undefined) {
+            entries.push({ id: page.id, title: page.name, pageId: page.id, kind: 'page', parentChapterId })
+          }
+          break
+        }
+        case SCENARIO_ENTRY_KIND.CHAPTER: {
+          const chapter = chapters.get(scenarioEntry.chapterId)
+          if (chapter === undefined) break
+          if (document.data.summary.displayMode === 'chapters') {
+            const pageId = scenarioChapterPageIds(document.data, chapter.id)[0]
+            if (pageId !== undefined) entries.push({ id: chapter.id, title: chapter.name, pageId, kind: 'chapter', parentChapterId })
+          }
+          visit(chapter.entries, chapter.id)
+          break
+        }
+      }
     }
-    return entries
   }
-
-  for (const entry of document.data.scenarioEntries) {
-    if (entry.kind === 'page') {
-      const page = pages.get(entry.pageId)
-      if (page !== undefined) entries.push({ id: page.id, title: page.name, pageId: page.id, kind: 'page', parentChapterId: null })
-      continue
-    }
-    const chapter = document.chapters.find((candidate) => candidate.id === entry.chapterId)
-    if (chapter === undefined) continue
-    for (const pageId of chapter.pageIds) {
-      const page = pages.get(pageId)
-      if (page !== undefined) entries.push({ id: page.id, title: page.name, pageId: page.id, kind: 'page', parentChapterId: chapter.id })
-    }
-  }
+  visit(document.data.scenarioEntries, null)
   return entries
 }
 
-/** Groups root summary links into chapter and page columns using the display option. */
-function createRootSummaryGroups(
+/** Builds the presentation tree from ordered entries and their retained click targets. */
+function createSummaryTree(
   document: LearningDocument,
   entries: readonly SummaryEntry[],
-): readonly SummaryRootGroup[] {
-  const showPageTitles = document.data.summary.displayMode === 'pages'
-  const pageEntries = new Map(entries.filter((entry) => entry.kind === 'page').map((entry) => [entry.pageId, entry]))
+): readonly SummaryTreeEntry[] {
+  const chapters = new Map(document.chapters.map((chapter) => [chapter.id, chapter]))
+  const pages = new Map(entries.filter((entry) => entry.kind === 'page').map((entry) => [entry.pageId, entry]))
   const chapterEntries = new Map(entries.filter((entry) => entry.kind === 'chapter').map((entry) => [entry.id, entry]))
-  const groups: SummaryRootGroup[] = []
-
-  for (const scenarioEntry of document.data.scenarioEntries) {
-    if (scenarioEntry.kind === 'page') {
-      const page = pageEntries.get(scenarioEntry.pageId)
-      if (showPageTitles && page !== undefined) groups.push({ id: page.id, chapterTitle: null, pages: [page] })
-      continue
+  const visit = (scenarioEntries: readonly ScenarioEntry[]): readonly SummaryTreeEntry[] => scenarioEntries.flatMap<SummaryTreeEntry>((scenarioEntry) => {
+    switch (scenarioEntry.kind) {
+      case SCENARIO_ENTRY_KIND.PAGE: {
+        const page = pages.get(scenarioEntry.pageId)
+        return page === undefined ? [] : [{ kind: 'page', entry: page }]
+      }
+      case SCENARIO_ENTRY_KIND.CHAPTER: {
+        const chapter = chapters.get(scenarioEntry.chapterId)
+        if (chapter === undefined) return []
+        const children = visit(chapter.entries)
+        const entry = chapterEntries.get(chapter.id)
+        if (entry === undefined && children.length === 0) return []
+        return [{ kind: 'chapter', id: chapter.id, title: chapter.name, ...(entry === undefined ? {} : { entry }), children }]
+      }
     }
+  })
+  return visit(document.data.scenarioEntries)
+}
 
-    const chapter = document.chapters.find((candidate) => candidate.id === scenarioEntry.chapterId)
-    if (chapter === undefined) continue
-    const pages = chapter.pageIds.flatMap((pageId) => {
-      const page = pageEntries.get(pageId)
-      return page?.parentChapterId === chapter.id ? [page] : []
-    })
-    const chapterEntry = chapterEntries.get(chapter.id)
-    if (chapterEntry === undefined && pages.length === 0) continue
-    groups.push({
-      id: chapter.id,
-      chapterTitle: chapter.name,
-      ...(chapterEntry === undefined ? {} : { chapterEntry }),
-      pages: showPageTitles ? pages : [],
-    })
-  }
-
-  return groups
+/** Returns all retained chapter identifiers in their visible tree order. */
+function summaryChapterIds(entries: readonly SummaryTreeEntry[]): readonly string[] {
+  return entries.flatMap((entry) => entry.kind === 'page' ? [] : [entry.id, ...summaryChapterIds(entry.children)])
 }
 
 /** Writes the semantic summary frame and stable entry hosts. */
@@ -333,34 +326,31 @@ function createEntryMarkup(prefix: string, entry: SummaryEntry, presentation: Su
   return `<li id="${rowId}" class="${className}" data-chapter-id="${entry.parentChapterId ?? ''}"><!-- data-part="${partId}" --></li>`
 }
 
-/** Writes root summary rows with separate chapter and page title columns. */
+/** Writes the ordered summary tree with chapter links or page links as configured. */
 function createRootEntryListMarkup(
   prefix: string,
-  groups: readonly SummaryRootGroup[],
-  showPageTitles: boolean,
+  entries: readonly SummaryTreeEntry[],
 ): InlineMarkupProjection {
   const persos: PersoDoc<string>[] = []
-  const markup = groups.map((group) => {
-    let chapterMarkup: string
-    if (group.chapterTitle === null) {
-      chapterMarkup = `<span id="${prefix}-chapter-spacer-${group.id}" class="elce-summary__chapter-spacer" aria-hidden="true"></span>`
-    } else if (group.chapterEntry === undefined) {
-      const title = createInlineMarkup(group.chapterTitle, `${prefix}-chapter-title-${group.id}`, 'span')
-      persos.push(...title.persos)
-      chapterMarkup = `<h2 id="${prefix}-chapter-heading-${group.id}" class="elce-summary__chapter-title elce-summary__chapter-title--with-status">${createChapterStatusHostMarkup(prefix, group.id)}${title.markup}</h2>`
-    } else {
-      chapterMarkup = `<h2 id="${prefix}-chapter-heading-${group.id}" class="elce-summary__chapter-title"><!-- data-part="${prefix}:entry:${group.chapterEntry.id}" --></h2>`
+  const renderEntry = (entry: SummaryTreeEntry, depth: number): string => {
+    if (entry.kind === 'page') {
+      const pageMarkup = createEntryMarkup(prefix, entry.entry, 'root')
+      if (depth > 0) return pageMarkup
+      return `<li id="${prefix}-chapter-row-${entry.entry.id}" class="elce-summary__chapter-row elce-summary__chapter-row--standalone"><span id="${prefix}-chapter-spacer-${entry.entry.id}" class="elce-summary__chapter-spacer" aria-hidden="true"></span><ol id="${prefix}-chapter-pages-${entry.entry.id}" class="elce-summary__chapter-pages">${pageMarkup}</ol></li>`
     }
-    const pagesMarkup = showPageTitles && group.pages.length > 0
-      ? `<ol id="${prefix}-chapter-pages-${group.id}" class="elce-summary__chapter-pages">${group.pages.map((entry) => createEntryMarkup(prefix, entry, 'root')).join('')}</ol>`
-      : ''
-    const rowClassName = [
-      'elce-summary__chapter-row',
-      group.chapterTitle === null ? 'elce-summary__chapter-row--standalone' : '',
-      showPageTitles ? '' : 'elce-summary__chapter-row--levels-only',
-    ].filter(Boolean).join(' ')
-    return `<li id="${prefix}-chapter-row-${group.id}" class="${rowClassName}">${chapterMarkup}${pagesMarkup}</li>`
-  }).join('')
+    const title = entry.entry === undefined
+      ? createInlineMarkup(entry.title, `${prefix}-chapter-title-${entry.id}`, 'span')
+      : undefined
+    if (title !== undefined) persos.push(...title.persos)
+    const heading = entry.entry === undefined
+      ? `<h2 id="${prefix}-chapter-heading-${entry.id}" class="elce-summary__chapter-title elce-summary__chapter-title--with-status">${createChapterStatusHostMarkup(prefix, entry.id)}${title?.markup ?? ''}</h2>`
+      : `<h2 id="${prefix}-chapter-heading-${entry.id}" class="elce-summary__chapter-title"><!-- data-part="${prefix}:entry:${entry.entry.id}" --></h2>`
+    const childMarkup = entry.children.map((child) => renderEntry(child, depth + 1)).join('')
+    const children = childMarkup.length === 0 ? '' : `<ol id="${prefix}-chapter-pages-${entry.id}" class="elce-summary__chapter-pages">${childMarkup}</ol>`
+    const rowClassName = depth === 0 ? 'elce-summary__chapter-row' : 'elce-summary__chapter-row elce-summary__chapter-row--nested'
+    return `<li id="${prefix}-chapter-row-${entry.id}" class="${rowClassName}">${heading}${children}</li>`
+  }
+  const markup = entries.map((entry) => renderEntry(entry, 0)).join('')
   return { markup, persos }
 }
 
@@ -422,40 +412,26 @@ function createChapterStatusActions(
   }
 }
 
-/** Groups menu page buttons under their retained chapter while preserving scenario order. */
+/** Writes nested menu entries in the same order as the root summary. */
 function createEntryListMarkup(
-  document: LearningDocument,
   prefix: string,
-  entries: readonly SummaryEntry[],
+  entries: readonly SummaryTreeEntry[],
 ): InlineMarkupProjection {
   const persos: PersoDoc<string>[] = []
-  if (document.data.summary.displayMode === 'chapters') {
-    return { markup: entries.map((entry) => createEntryMarkup(prefix, entry, 'menu')).join(''), persos }
+  const renderEntry = (entry: SummaryTreeEntry): string => {
+    if (entry.kind === 'page') return createEntryMarkup(prefix, entry.entry, 'menu')
+    const title = entry.entry === undefined
+      ? createInlineMarkup(entry.title, `${prefix}-chapter-heading-${entry.id}`, 'h2', 'elce-player-menu__group-title')
+      : undefined
+    if (title !== undefined) persos.push(...title.persos)
+    const heading = entry.entry === undefined
+      ? title?.markup ?? ''
+      : `<h2 id="${prefix}-chapter-heading-${entry.id}" class="elce-player-menu__group-title"><!-- data-part="${prefix}:entry:${entry.entry.id}" --></h2>`
+    const children = entry.children.map(renderEntry).join('')
+    const list = children.length === 0 ? '' : `<ol id="${prefix}-chapter-pages-${entry.id}" class="elce-player-menu__pages">${children}</ol>`
+    return `<li id="${prefix}-chapter-${entry.id}" class="elce-player-menu__group">${heading}${list}</li>`
   }
-  const pagesById = new Map(document.pages.map((page) => [page.id, page]))
-  const markup = document.data.scenarioEntries.map((scenarioEntry) => {
-    if (scenarioEntry.kind === 'page') {
-      const entry = entries.find((candidate) => candidate.id === scenarioEntry.pageId)
-      return entry === undefined ? '' : createEntryMarkup(prefix, entry, 'menu')
-    }
-    const chapter = document.chapters.find((candidate) => candidate.id === scenarioEntry.chapterId)
-    if (chapter === undefined) return ''
-    const chapterPages = chapter.pageIds.flatMap((pageId) => {
-      if (!pagesById.has(pageId)) return []
-      const entry = entries.find((candidate) => candidate.id === pageId)
-      return entry === undefined ? [] : [createEntryMarkup(prefix, entry, 'menu')]
-    }).join('')
-    if (chapterPages.length === 0) return ''
-    const listClass = 'elce-player-menu__pages'
-    const groupClass = 'elce-player-menu__group'
-    const titleClass = 'elce-player-menu__group-title'
-    const title = createInlineMarkup(chapter.name, `${prefix}-chapter-heading-${chapter.id}`, 'h2', titleClass)
-    persos.push(...title.persos)
-    return `<li id="${prefix}-chapter-${chapter.id}" class="${groupClass}">
-      ${title.markup}
-      <ol id="${prefix}-chapter-pages-${chapter.id}" class="${listClass}">${chapterPages}</ol>
-    </li>`
-  }).join('')
+  const markup = entries.map(renderEntry).join('')
   return { markup, persos }
 }
 

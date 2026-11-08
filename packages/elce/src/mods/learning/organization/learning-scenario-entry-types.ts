@@ -5,3 +5,8 @@ import type { ChapterId, PageId } from '../../../core/document/content-document-
 export type ScenarioEntry =
   | Readonly<{ kind: typeof SCENARIO_ENTRY_KIND.PAGE; pageId: PageId }>
   | Readonly<{ kind: typeof SCENARIO_ENTRY_KIND.CHAPTER; chapterId: ChapterId }>
+
+export type ScenarioEntryPlacement = Readonly<{
+  readonly parentChapterId: ChapterId | null
+  readonly index: number
+}>

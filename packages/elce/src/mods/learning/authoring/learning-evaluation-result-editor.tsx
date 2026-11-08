@@ -1,4 +1,3 @@
-import { Trash2 } from 'lucide-static'
 import {
   EVALUATION_RESULT_BRANCH,
   EVALUATION_RESULT_CONFIG,
@@ -12,7 +11,6 @@ import type { EvaluationResultContent } from '../evaluation/domain/learning-eval
 import type { AppearanceTarget } from '../../../domain/appearance/appearance-target-types'
 import { on, type RemixNode } from 'remix/component'
 
-import { renderLucideIcon } from '../../../core/authoring/lucide-static-icon'
 import { renderAppearanceTrigger } from '../../../core/authoring/appearance-trigger'
 import type { ElceTextValue } from '../../../resources/document/rich-text-types'
 import type { ResourceTextFieldFeature } from '../../../core/authoring/resource-text-field-feature'
@@ -24,7 +22,6 @@ export function renderRemixEvaluationResultEditor(
   bdcId: string,
   content: EvaluationResultContent,
   onChange: (content: EvaluationResultContent) => void,
-  onDelete: () => void,
   onOpenAppearanceTarget: (target: AppearanceTarget, triggerId: string) => void,
   textFieldFeature: ResourceTextFieldFeature,
 ): RemixNode {
@@ -52,18 +49,7 @@ export function renderRemixEvaluationResultEditor(
             target: { kind: 'bdc', bdcId },
             label: 'Ouvrir le style du résultat',
             onOpen: onOpenAppearanceTarget,
-            className: 'elce-appearance-trigger elce-bdc-style-trigger',
           })}
-          <button
-            id={`elce-evaluation-result-delete-${bdcId}`}
-            className="elce-danger-action"
-            type="button"
-            aria-label="Supprimer le bloc résultat"
-            title="Supprimer le bloc résultat"
-            mix={on<HTMLButtonElement, 'click'>('click', onDelete)}
-          >
-            {renderLucideIcon(Trash2, `elce-evaluation-result-delete-icon-${bdcId}`)}
-          </button>
         </div>
       </div>,
       ...Object.values(EVALUATION_RESULT_BRANCH).map((branch) => renderResultBranch(bdcId, branch, content, onChange, textFieldFeature)),

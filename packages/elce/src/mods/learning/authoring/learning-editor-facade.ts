@@ -120,8 +120,8 @@ export class LearningEditorFacade {
   }
 
   /** Creates a standard chapter using the current document command factory. */
-  public createChapter(document: LearningDocument): void {
-    this.apply(learningDocumentService.createChapterCommand(document))
+  public createChapter(document: LearningDocument, parentChapterId?: ChapterId): void {
+    this.apply(learningDocumentService.createChapterCommand(document, undefined, CHAPTER_TYPE.STANDARD, parentChapterId))
   }
 
   /** Creates an Evaluation chapter using the current document command factory. */
@@ -135,8 +135,8 @@ export class LearningEditorFacade {
   }
 
   /** Moves a chapter in the mixed root scenario order. */
-  public moveChapter(chapterId: ChapterId, index: number): void {
-    this.apply(createChapterMoveCommand(chapterId, index))
+  public moveChapter(chapterId: ChapterId, index: number, parentChapterId: ChapterId | null = null): void {
+    this.apply(createChapterMoveCommand(chapterId, index, parentChapterId))
   }
 
   /** Permanently deletes a page and its placed BDCs. */
@@ -336,6 +336,11 @@ export class LearningEditorFacade {
     property: Property,
   ): void {
     this.apply({ type: 'appearance.property.reset', target, property } as LearningDocumentCommand)
+  }
+
+  /** Adds a custom color to the shared project palette. */
+  public addCustomAppearanceColor(color: string): void {
+    this.apply({ type: 'appearance.palette.color.add', color })
   }
 
   /** Saves both outcomes of a Result BDC. */

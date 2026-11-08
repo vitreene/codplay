@@ -1,6 +1,6 @@
 import { on, type RemixNode } from 'remix/component'
 
-import { ClipboardCheck, Folder, FolderPlus, GripVertical, Trash2 } from 'lucide-static'
+import { ClipboardCheck, Folder, FolderPlus, GripVertical, Library, Plus, Trash2 } from 'lucide-static'
 import { PAGE_TYPE, type PageType } from '../learning-definition'
 import { CHAPTER_TYPE, CHAPTER_TYPE_CONFIG, SCENARIO_ENTRY_KIND } from '../organization/learning-organization-config'
 import { PAGE_LOCATION, type PagePlacement } from '../organization/learning-page-placement'
@@ -14,11 +14,16 @@ import { renderAppearanceTrigger } from '../../../core/authoring/appearance-trig
 import { plainTextFromValue } from '../inline-text/learning-inline-text-value'
 import { renderWorkspacePanelReduceButton } from './workspace-panel-controls'
 import { workspacePanelVisibilityFromResponsiveState } from './workspace-panel-state'
+import { MAX_SCENARIO_CHAPTER_DEPTH } from '../organization/learning-organization-config'
+import { scenarioChapterDepth } from '../organization/learning-scenario-tree'
+
+const SCENARIO_TRASH_DROP_TARGET = 'elce-scenario-trash-drop'
+const SCENARIO_CATALOG_DROP_TARGET = 'elce-scenario-catalog-drop'
 
 /** Renders the ordered scenario and its native Remix page/chapter controls. */
 export function renderScenarioPanel(props: ScenarioPanelProps): RemixNode {
   const { workspace } = props
-  const { view, actions, responsivePanel } = workspace
+  const { view, responsivePanel } = workspace
   const panelVisibility = workspace.panelVisibility
     ?? workspacePanelVisibilityFromResponsiveState(responsivePanel, typeof window === 'undefined' ? 1280 : window.innerWidth)
   return <section
@@ -38,7 +43,7 @@ export function renderScenarioPanel(props: ScenarioPanelProps): RemixNode {
     </div>
     <div
       id="elce-outline-heading"
-      className="elce-panel-heading"
+      className="elce-panel-heading elce-outline-heading"
     >
       <h1
         id="elce-outline-title"
@@ -49,37 +54,179 @@ export function renderScenarioPanel(props: ScenarioPanelProps): RemixNode {
         id="elce-outline-actions"
         className="elce-outline-actions"
       >
-        {renderIconButton('elce-create-chapter', CHAPTER_TYPE_CONFIG[CHAPTER_TYPE.STANDARD].createLabel, FolderPlus, () => actions.createChapter(view.documentModel), 'elce-icon-action', 'Chapitre')}
-        {renderIconButton('elce-create-evaluation-chapter', CHAPTER_TYPE_CONFIG[CHAPTER_TYPE.EVALUATION].createLabel, ClipboardCheck, () => actions.createEvaluationChapter(view.documentModel), 'elce-icon-action', 'Éval.')}
-        {renderIconButton('elce-create-scenario-page', 'Ajouter une Page à la racine du scénario', getLearningPageTypeIcon(PAGE_TYPE.FLUX), () => actions.createPage({ kind: PAGE_LOCATION.SCENARIO }, PAGE_TYPE.FLUX), 'elce-icon-action', 'Page')}
-        {renderIconButton('elce-create-scenario-diapo', 'Ajouter une Diapo à la racine du scénario', getLearningPageTypeIcon(PAGE_TYPE.DIAPO), () => actions.createPage({ kind: PAGE_LOCATION.SCENARIO }, PAGE_TYPE.DIAPO), 'elce-icon-action', 'Diapo')}
-        {renderAppearanceTrigger({
-          id: 'elce-scenario-project-style-trigger',
-          target: { kind: 'document' },
-          label: 'Ouvrir les réglages de style du projet',
-          onOpen: workspace.onOpenAppearanceTarget,
-          className: 'elce-appearance-trigger elce-icon-action',
-        })}
+        {renderScenarioAddMenu(props)}
+        {renderScenarioDropTarget(props, 'trash')}
+        {renderScenarioDropTarget(props, 'catalog')}
       </div>
+      {renderAppearanceTrigger({
+        id: 'elce-scenario-project-style-trigger',
+        target: { kind: 'document' },
+        label: 'Ouvrir les réglages de style du projet',
+        onOpen: workspace.onOpenAppearanceTarget,
+      })}
     </div>
     <div
       id="elce-outline-scroll-content"
       className="elce-outline-scroll-content"
     >
-      <p
+      <h2
         id="elce-document-name"
       >
         {view.documentModel.data.name}
-      </p>
-      <p
-        id="elce-page-dnd-help"
-        className="elce-muted"
-      >
-        Glissez une page pour la déplacer ou la réordonner.
-      </p>
-      {renderScenarioEntryList(props, view.documentModel.data.scenarioEntries)}
+      </h2>
+      {renderScenarioEntryList(props, view.documentModel.data.scenarioEntries, null)}
     </div>
   </section>
+}
+
+/** Renders the horizontal plus menu with the existing scenario creation actions. */
+function renderScenarioAddMenu(props: ScenarioPanelProps): RemixNode {
+  const { view, actions } = props.workspace
+  return <details
+    id="elce-scenario-add"
+    className="elce-scenario-add elce-page-bdc-add"
+  >
+    <summary
+      id="elce-scenario-add-toggle"
+      className="elce-scenario-add-toggle elce-bdc-icon-button elce-page-bdc-add-toggle"
+      aria-label="Ajouter au scénario"
+      title="Ajouter au scénario"
+      aria-controls="elce-scenario-add-menu"
+    >
+      {renderLucideIcon(Plus, 'elce-scenario-add-icon')}
+    </summary>
+    <div
+      id="elce-scenario-add-menu"
+      className="elce-scenario-add-menu elce-page-bdc-add-menu"
+      role="group"
+      aria-label="Ajouter un élément au scénario"
+    >
+      {renderScenarioCreateButton('elce-create-chapter', CHAPTER_TYPE_CONFIG[CHAPTER_TYPE.STANDARD].createLabel, 'Chapitre', FolderPlus, () => runScenarioCreateAction(() => actions.createChapter(view.documentModel)))}
+      {renderScenarioCreateButton('elce-create-scenario-page', 'Ajouter une Page à la racine du scénario', 'Page', getLearningPageTypeIcon(PAGE_TYPE.FLUX), () => runScenarioCreateAction(() => actions.createPage({ kind: PAGE_LOCATION.SCENARIO }, PAGE_TYPE.FLUX)))}
+      {renderScenarioCreateButton('elce-create-scenario-diapo', 'Ajouter une Diapo à la racine du scénario', 'Diapo', getLearningPageTypeIcon(PAGE_TYPE.DIAPO), () => runScenarioCreateAction(() => actions.createPage({ kind: PAGE_LOCATION.SCENARIO }, PAGE_TYPE.DIAPO)))}
+      {renderScenarioCreateButton('elce-create-evaluation-chapter', CHAPTER_TYPE_CONFIG[CHAPTER_TYPE.EVALUATION].createLabel, 'Évaluation', ClipboardCheck, () => runScenarioCreateAction(() => actions.createEvaluationChapter(view.documentModel)))}
+    </div>
+  </details>
+}
+
+/** Renders one labeled creation action inside the Scenario add menu. */
+function renderScenarioCreateButton(id: string, label: string, visibleLabel: string, icon: string, action: () => void): RemixNode {
+  return <button
+    id={id}
+    className="elce-add-content-action"
+    type="button"
+    aria-label={label}
+    title={label}
+    mix={on<HTMLButtonElement, 'click'>('click', action)}
+  >
+    {renderLucideIcon(icon, `${id}-icon`)}
+    <span
+      id={`${id}-label`}
+      className="elce-add-content-action__label"
+    >
+      {visibleLabel}
+    </span>
+  </button>
+}
+
+/** Closes the plus menu before applying a selected existing creation action. */
+function runScenarioCreateAction(action: () => void): void {
+  const addMenu = document.getElementById('elce-scenario-add')
+  if (addMenu instanceof HTMLDetailsElement) addMenu.open = false
+  action()
+}
+
+/** Renders the horizontal Scenario trash or page-catalog drop target. */
+function renderScenarioDropTarget(props: ScenarioPanelProps, target: 'trash' | 'catalog'): RemixNode {
+  const isTrash = target === 'trash'
+  const targetId = isTrash ? SCENARIO_TRASH_DROP_TARGET : SCENARIO_CATALOG_DROP_TARGET
+  const icon = isTrash ? Trash2 : Library
+  const ariaLabel = isTrash
+    ? 'Corbeille : déposer une page ou un chapitre vide pour le supprimer'
+    : 'Catalogue : déposer une page pour la rendre disponible'
+  const title = isTrash
+    ? 'Déposer une page ou un chapitre vide pour le supprimer'
+    : 'Déposer une page pour la rendre disponible dans le catalogue'
+  const classNames = [
+    'elce-scenario-drop-target',
+    isTrash ? 'elce-scenario-trash' : 'elce-scenario-catalog',
+    props.workspace.dropTarget === targetId ? 'is-drop-target' : '',
+  ].filter(Boolean).join(' ')
+  return <div
+    id={`elce-scenario-${target}`}
+    className={classNames}
+    role="region"
+    aria-label={ariaLabel}
+    title={title}
+    mix={[
+      on<HTMLElement, 'dragover'>('dragover', (event) => dragOverScenarioTarget(event, target, props)),
+      on<HTMLElement, 'dragleave'>('dragleave', (event) => leaveScenarioTarget(event, targetId, props)),
+      on<HTMLElement, 'drop'>('drop', (event) => dropScenarioEntryOnTarget(event, target, props)),
+    ]}
+  >
+    <span
+      id={`elce-scenario-${target}-icon`}
+      aria-hidden={true}
+    >
+      {renderLucideIcon(icon, `elce-scenario-${target}-symbol`)}
+    </span>
+  </div>
+}
+
+/** Accepts only deletable scenario entries or pages returning to the catalog. */
+function dragOverScenarioTarget(event: DragEvent, target: 'trash' | 'catalog', props: ScenarioPanelProps): void {
+  const entry = props.getDraggedEntry()
+  if (!canDropScenarioEntry(entry, target, props)) return
+  const transfer = event.dataTransfer
+  if (transfer === null) return
+  event.preventDefault()
+  event.stopPropagation()
+  transfer.dropEffect = 'move'
+  props.onSetDropTarget(target === 'trash' ? SCENARIO_TRASH_DROP_TARGET : SCENARIO_CATALOG_DROP_TARGET)
+}
+
+/** Applies the existing delete or page-catalog placement to one dragged entry. */
+function dropScenarioEntryOnTarget(event: DragEvent, target: 'trash' | 'catalog', props: ScenarioPanelProps): void {
+  const entry = props.getDraggedEntry()
+  if (entry === null || !canDropScenarioEntry(entry, target, props) || event.dataTransfer === null) {
+    props.onSetDropTarget(null)
+    return
+  }
+  event.preventDefault()
+  event.stopPropagation()
+  if (target === 'catalog' && entry.kind === SCENARIO_ENTRY_KIND.PAGE) {
+    props.workspace.actions.movePage(entry.pageId, { kind: PAGE_LOCATION.CATALOG })
+  }
+  if (target === 'trash') {
+    switch (entry.kind) {
+      case SCENARIO_ENTRY_KIND.PAGE:
+        props.workspace.actions.deletePage(entry.pageId)
+        break
+      case SCENARIO_ENTRY_KIND.CHAPTER:
+        props.workspace.actions.deleteChapter(entry.chapterId)
+        break
+    }
+  }
+  props.onDragEnd()
+}
+
+/** Rejects catalog drops of chapters and deletion of nonempty chapters. */
+function canDropScenarioEntry(
+  entry: ScenarioEntry | null,
+  target: 'trash' | 'catalog',
+  props: ScenarioPanelProps,
+): boolean {
+  if (entry === null) return false
+  if (target === 'catalog') return entry.kind === SCENARIO_ENTRY_KIND.PAGE
+  if (entry.kind === SCENARIO_ENTRY_KIND.PAGE) return true
+  return props.workspace.view.documentModel.chapters.find((chapter) => chapter.id === entry.chapterId)?.entries.length === 0
+}
+
+/** Clears a Scenario drop highlight only after leaving its target surface. */
+function leaveScenarioTarget(event: DragEvent, targetId: string, props: ScenarioPanelProps): void {
+  const currentTarget = event.currentTarget
+  if (currentTarget instanceof Node && event.relatedTarget instanceof Node && currentTarget.contains(event.relatedTarget)) return
+  if (props.workspace.dropTarget === targetId) props.onSetDropTarget(null)
 }
 
 /** Renders the existing page catalog list for the floating catalog palette. */
@@ -103,18 +250,23 @@ export function renderScenarioPageCatalog(props: ScenarioPanelProps): RemixNode 
 }
 
 /** Renders root pages and chapters between their explicit insertion separators. */
-function renderScenarioEntryList(props: ScenarioPanelProps, entries: readonly ScenarioEntry[]): RemixNode {
-  const { workspace, onDropRoot, onDragOverRoot, onDragLeave } = props
+function renderScenarioEntryList(
+  props: ScenarioPanelProps,
+  entries: readonly ScenarioEntry[],
+  parentChapterId: string | null,
+): RemixNode {
+  const { workspace, onDropScenarioEntry, onDragOverScenarioEntry, onDragLeave } = props
   const { view, dropTarget } = workspace
+  const listId = parentChapterId === null ? 'elce-scenario-entry-list' : `elce-scenario-entry-list-${parentChapterId}`
   const children: RemixNode[] = []
 
   entries.forEach((entry, index) => {
-    const placement = { kind: PAGE_LOCATION.SCENARIO, index } as const
-    children.push(renderDropSeparator(`elce-scenario-entry-list-drop-${index}`, dropTarget, onDragOverRoot, onDragLeave, (event) => onDropRoot(event, placement)))
+    const placement = { parentChapterId, index } as const
+    children.push(renderDropSeparator(`${listId}-drop-${index}`, dropTarget, onDragOverScenarioEntry, onDragLeave, (event) => onDropScenarioEntry(event, placement), undefined, parentChapterId === null))
     switch (entry.kind) {
       case SCENARIO_ENTRY_KIND.PAGE: {
         const page = view.documentModel.pages.find((candidate) => candidate.id === entry.pageId)
-        if (page !== undefined) children.push(renderPageItem(props, 'elce-scenario-entry-list', page, view.selectedChapter === undefined ? view.selectedPage?.id : undefined))
+        if (page !== undefined) children.push(renderPageItem(props, listId, page, view.selectedChapter === undefined ? view.selectedPage?.id : undefined, false))
         return
       }
       case SCENARIO_ENTRY_KIND.CHAPTER: {
@@ -125,33 +277,36 @@ function renderScenarioEntryList(props: ScenarioPanelProps, entries: readonly Sc
     }
   })
 
-  const finalPlacement = { kind: PAGE_LOCATION.SCENARIO, index: entries.length } as const
+  const finalPlacement = { parentChapterId, index: entries.length } as const
   children.push(renderDropSeparator(
-    `elce-scenario-entry-list-drop-${entries.length}`,
+    `${listId}-drop-${entries.length}`,
     dropTarget,
-    onDragOverRoot,
+    onDragOverScenarioEntry,
     onDragLeave,
-    (event) => onDropRoot(event, finalPlacement),
-    entries.length === 0 ? 'Déposer une page à la racine du scénario' : undefined,
+    (event) => onDropScenarioEntry(event, finalPlacement),
+    entries.length === 0 ? parentChapterId === null ? 'Déposer une page ou un chapitre à la racine du scénario' : 'Déposer une page ou un sous-chapitre ici' : undefined,
+    parentChapterId === null,
   ))
   return <ul
-    id="elce-scenario-entry-list"
-    className="elce-outline-list"
+    id={listId}
+    className={parentChapterId === null ? 'elce-outline-list elce-outline-list--root' : 'elce-outline-list elce-outline-list--nested'}
   >
-    <li id="elce-scenario-summary-entry">
-      <button
-        id="elce-scenario-summary-page"
-        type="button"
-        className={workspace.summarySettingsOpen
-          ? 'elce-page-button elce-page-button--selected elce-scenario-summary-page'
-          : 'elce-page-button elce-scenario-summary-page'}
-        aria-pressed={workspace.summarySettingsOpen}
-        mix={on<HTMLButtonElement, 'click'>('click', () => workspace.onSetSummarySettingsOpen(!workspace.summarySettingsOpen))}
-      >
-        {renderLucideIcon(SUMMARY_PROFILE_ACCESS_ICON, 'elce-scenario-summary-page-icon')}
-        <span id="elce-scenario-summary-page-title">{plainTextFromValue(view.documentModel.data.summary.title)}</span>
-      </button>
-    </li>
+    {parentChapterId === null
+      ? <li id="elce-scenario-summary-entry">
+          <button
+            id="elce-scenario-summary-page"
+            type="button"
+            className={workspace.summarySettingsOpen
+              ? 'elce-page-button elce-page-button--selected elce-scenario-summary-page'
+              : 'elce-page-button elce-scenario-summary-page'}
+            aria-pressed={workspace.summarySettingsOpen}
+            mix={on<HTMLButtonElement, 'click'>('click', () => workspace.onSetSummarySettingsOpen(!workspace.summarySettingsOpen))}
+          >
+            {renderLucideIcon(SUMMARY_PROFILE_ACCESS_ICON, 'elce-scenario-summary-page-icon')}
+            <span id="elce-scenario-summary-page-title">{plainTextFromValue(view.documentModel.data.summary.title)}</span>
+          </button>
+        </li>
+      : null}
     {children}
   </ul>
 }
@@ -209,19 +364,15 @@ function renderChapterItem(props: ScenarioPanelProps, chapter: LearningChapter):
         id={`elce-chapter-actions-${chapter.id}`}
         className="elce-outline-item-actions"
       >
+        {chapter.type === CHAPTER_TYPE.STANDARD && scenarioChapterDepth(view.documentModel.data, chapter.id) < MAX_SCENARIO_CHAPTER_DEPTH
+          ? renderIconButton(`elce-create-chapter-${chapter.id}`, `Ajouter un sous-chapitre dans ${chapter.name}`, FolderPlus, () => actions.createChapter(view.documentModel, chapter.id), 'elce-location-page-action')
+          : null}
         {renderIconButton(`elce-create-page-${chapter.id}`, `Ajouter une Page dans ${chapter.name}`, getLearningPageTypeIcon(PAGE_TYPE.FLUX), () => onAddChapterPage(chapter.id, PAGE_TYPE.FLUX), 'elce-location-page-action')}
         {renderIconButton(`elce-create-diapo-${chapter.id}`, `Ajouter une Diapo dans ${chapter.name}`, getLearningPageTypeIcon(PAGE_TYPE.DIAPO), () => onAddChapterPage(chapter.id, PAGE_TYPE.DIAPO), 'elce-location-page-action')}
-        {renderDeleteButton(`elce-chapter-delete-${chapter.id}`, () => actions.deleteChapter(chapter.id), chapter.pageIds.length > 0)}
+        {renderDeleteButton(`elce-chapter-delete-${chapter.id}`, () => actions.deleteChapter(chapter.id), chapter.entries.length > 0)}
       </div>
     </div>
-    {renderPageList(
-      props,
-      `elce-pages-${chapter.id}`,
-      chapter.pageIds,
-      'Déposer une page dans ce chapitre',
-      (index) => ({ kind: PAGE_LOCATION.CHAPTER, chapterId: chapter.id, index }),
-      view.selectedChapter === undefined ? view.selectedPage?.id : undefined,
-    )}
+    {renderScenarioEntryList(props, chapter.entries, chapter.id)}
   </li>
 }
 
@@ -233,6 +384,7 @@ function renderPageList(
   emptyLabel: string,
   placementAt: (index: number) => PagePlacement,
   selectedPageId: string | undefined,
+  showDelete = true,
 ): RemixNode {
   const children: RemixNode[] = []
   const { workspace, onDragOverPage, onDragLeave, onDropPage } = props
@@ -242,7 +394,7 @@ function renderPageList(
     if (page === undefined) return
     const placement = placementAt(index)
     children.push(renderDropSeparator(`${id}-drop-${index}`, workspace.dropTarget, onDragOverPage, onDragLeave, (event) => onDropPage(event, placement)))
-    children.push(renderPageItem(props, id, page, selectedPageId))
+    children.push(renderPageItem(props, id, page, selectedPageId, showDelete))
   })
 
   children.push(renderDropSeparator(
@@ -262,7 +414,7 @@ function renderPageList(
 }
 
 /** Renders a page as a draggable source, never as a drop target. */
-function renderPageItem(props: ScenarioPanelProps, listId: string, page: LearningPage, selectedPageId?: string): RemixNode {
+function renderPageItem(props: ScenarioPanelProps, listId: string, page: LearningPage, selectedPageId: string | undefined, showDelete: boolean): RemixNode {
   const { workspace, onDragStartPage, onDragEnd } = props
   const pageName = plainTextFromValue(page.name)
   return <li
@@ -270,7 +422,7 @@ function renderPageItem(props: ScenarioPanelProps, listId: string, page: Learnin
   >
     <div
       id={`${listId}-row-${page.id}`}
-      className="elce-page-row"
+      className={showDelete ? 'elce-page-row elce-page-row--deletable' : 'elce-page-row'}
       draggable={true}
       aria-label={`Glisser pour déplacer ${pageName}`}
       mix={[
@@ -298,20 +450,15 @@ function renderPageItem(props: ScenarioPanelProps, listId: string, page: Learnin
           workspace.actions.selectPage(page.id)
         })}
       >
+        {renderLucideIcon(getLearningPageTypeIcon(page.type), `${listId}-type-icon-${page.id}`)}
         {pageName}
       </button>
-      <span
-        id={`${listId}-type-${page.id}`}
-        className="elce-muted"
-      >
-        {` · ${pageTypeLabel(page.type)}`}
-      </span>
-      <div
+      {showDelete ? <div
         id={`${listId}-actions-${page.id}`}
         className="elce-page-actions"
       >
         {renderDeleteButton(`${listId}-delete-${page.id}`, () => workspace.actions.deletePage(page.id))}
-      </div>
+      </div> : null}
     </div>
   </li>
 }
@@ -324,10 +471,14 @@ function renderDropSeparator(
   onDragLeave: (event: DragEvent) => void,
   onDrop: (event: DragEvent) => void,
   label?: string,
+  isPrimary = false,
 ): RemixNode {
+  const separatorClass = dropTarget === id
+    ? `elce-drop-separator elce-drop-separator--active${isPrimary ? ' elce-drop-separator--primary' : ''}`
+    : `elce-drop-separator${isPrimary ? ' elce-drop-separator--primary' : ''}`
   return <li
     id={id}
-    className={dropTarget === id ? 'elce-drop-separator elce-drop-separator--active' : 'elce-drop-separator'}
+    className={separatorClass}
     aria-label={label ?? 'Point d’insertion'}
     mix={[
       on<HTMLLIElement, 'dragover'>('dragover', (event) => onDragOver(event, id)),
@@ -361,23 +512,17 @@ function renderChapterTypeIcon(chapter: LearningChapter): RemixNode {
   }
 }
 
-/** Renders an accessible compact action button, with an optional short visible label. */
-function renderIconButton(id: string, label: string, icon: string, action: () => void, className = 'elce-icon-action', visibleLabel?: string): RemixNode {
+/** Renders an icon-only action button with an accessible name and tooltip. */
+function renderIconButton(id: string, label: string, icon: string, action: () => void, className = 'elce-icon-action'): RemixNode {
   return <button
     id={id}
-    className={visibleLabel === undefined ? className : `elce-add-content-action ${className}`}
+    className={className}
     type="button"
     aria-label={label}
     title={label}
     mix={on<HTMLButtonElement, 'click'>('click', action)}
   >
     {renderLucideIcon(icon, `${id}-icon`)}
-    {visibleLabel === undefined ? null : <span
-      id={`${id}-label`}
-      className="elce-add-content-action__label"
-    >
-      {visibleLabel}
-    </span>}
   </button>
 }
 
@@ -394,18 +539,6 @@ function renderDeleteButton(id: string, action: () => void, disabled = false): R
   >
     {renderLucideIcon(Trash2, `${id}-icon`)}
   </button>
-}
-
-/** Provides the visible label for each configured page format. */
-function pageTypeLabel(pageType: PageType): 'Page' | 'Diapo' {
-  switch (pageType) {
-    case PAGE_TYPE.FLUX:
-      return 'Page'
-    case PAGE_TYPE.DIAPO:
-      return 'Diapo'
-    default:
-      return assertNever(pageType)
-  }
 }
 
 /** Makes additional chapter types require an explicit visual definition. */
