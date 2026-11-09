@@ -54,7 +54,7 @@ import type { ElceQuestionEditorActions } from '../../../resources/bdcs/question
 import { StatisticalGraphFacade } from '../../../resources/bdcs/statistical-graph/authoring/statistical-graph-facade'
 import { ElceStatisticalGraphService } from '../../../resources/bdcs/statistical-graph/domain/statistical-graph-service'
 import type { StatisticalGraphEditorActions } from '../../../resources/bdcs/statistical-graph/authoring/statistical-graph-facade-types'
-import { CoreEditorFacade } from '../../../core/authoring/core-editor-facade'
+import { CoreEditorFacade, runProjectOperationAndWait } from '../../../core/authoring/core-editor-facade'
 import { LearningAuthoringService } from './learning-authoring-service'
 import type { ElceTextValue } from '../../../resources/document/rich-text-types'
 
@@ -79,6 +79,7 @@ export class LearningEditorFacade {
     this.core = new CoreEditorFacade(
       (event) => controller.send(event),
       (name) => this.apply({ type: 'document.rename', name }),
+      (operation) => runProjectOperationAndWait(controller, operation),
     )
     const dispatch = (command: LearningDocumentCommand): void => {
       this.apply(command)

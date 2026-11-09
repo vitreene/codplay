@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { createActor } from 'xstate'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { render } from 'remix/component/test'
 import { CHAPTER_TYPE } from '../organization/learning-organization-config'
@@ -34,6 +34,69 @@ vi.mock('../../../export/elce-scorm-export-client', () => ({
 }))
 
 describe('Remix project application', () => {
+  beforeEach(() => {
+    window.history.replaceState(null, '', '/learning/test-document')
+  })
+
+  it('shows the mod catalogue above the workspace on the orientation route', async () => {
+    window.history.replaceState(null, '', '/')
+    const project = { id: 'chooser-project', name: 'Document du catalogue', revision: 0 }
+    const projectSession: ProjectSessionPort = {
+      rememberedProjectId: () => null,
+      perform: async (_operation, document) => ({
+        projects: [project], activeProject: project, document, status: 'active', editAccess: 'waiting',
+      }),
+      startLock: () => {},
+      dispose: async () => {},
+    }
+    const controller = createActor(controllerMachine, { input: { projectSession } })
+    controller.start()
+    controller.send({ type: 'project.operation', operation: { kind: 'bootstrap', rememberedProjectId: null } })
+    await vi.waitFor(() => expect(controller.getSnapshot().context.activeProject?.id).toBe(project.id))
+    const rendered = render(<LearningEditorContextProvider
+      controller={controller}
+      actions={new LearningEditorFacade(controller)}
+    ><LearningProjectApplication /></LearningEditorContextProvider>)
+
+    expect(rendered.$('#elce-project-selection')?.getAttribute('role')).toBeNull()
+    expect(rendered.$('#elce-project-selection-panel')?.getAttribute('role')).toBe('dialog')
+    expect(rendered.$('#elce-project-selection-panel')?.getAttribute('aria-modal')).toBe('true')
+    expect(rendered.$('#elce-project-selection-mod-name')?.textContent).toContain('Learning')
+    expect(rendered.$('#elce-project-selection-list #elce-project-selection-chooser-project-open')?.textContent)
+      .toBe('Document Elcé')
+    expect(rendered.$('#elce-project-selection-chooser-project-delete svg[aria-hidden="true"]')).not.toBeNull()
+
+    rendered.cleanup()
+    controller.stop()
+  })
+
+  it('asks for a document name on the new route', async () => {
+    window.history.replaceState(null, '', '/new')
+    const projectSession: ProjectSessionPort = {
+      rememberedProjectId: () => null,
+      perform: async () => ({
+        projects: [], activeProject: null, document: null, status: 'list', editAccess: 'waiting',
+      }),
+      startLock: () => {},
+      dispose: async () => {},
+    }
+    const controller = createActor(controllerMachine, { input: { projectSession } })
+    controller.start()
+    controller.send({ type: 'project.operation', operation: { kind: 'bootstrap', rememberedProjectId: null } })
+    await vi.waitFor(() => expect(controller.getSnapshot().context.projectStatus).toBe('list'))
+    const rendered = render(<LearningEditorContextProvider
+      controller={controller}
+      actions={new LearningEditorFacade(controller)}
+    ><LearningProjectApplication /></LearningEditorContextProvider>)
+
+    expect(rendered.$('#elce-project-create-name')?.getAttribute('required')).not.toBeNull()
+    expect(rendered.$('#elce-project-create-submit')?.textContent).toBe('Valider')
+    expect(rendered.$('#elce-project-other-mod')?.textContent).toContain('Quiz Hunt')
+
+    rendered.cleanup()
+    controller.stop()
+  })
+
   it('prevents the browser from opening a file dropped outside an authoring target', async () => {
     const project = { id: 'outside-file-drop-project', name: 'Dépôt hors cible', revision: 0 }
     const projectSession: ProjectSessionPort = {
@@ -412,8 +475,9 @@ describe('Remix project application', () => {
     expect(rendered.$('#elce-work-area-title')).not.toBeNull()
     expect(rendered.$('#elce-remix-section-editor-host-bdc-section-1')).not.toBeNull()
     expect(rendered.$(`#elce-question-editor-${questionId}`)).not.toBeNull()
-    expect(rendered.$('#elce-content-catalog-title')?.textContent).toBe('Contenus')
-    expect(rendered.$('#elce-content-catalog-tab-profile')).toBeNull()
+    expect(rendered.$('#elce-clipboard-title')?.textContent).toBe('Presse-papiers')
+    expect(rendered.$('#elce-catalog-palette-toggle')).toBeNull()
+    expect(rendered.$('#elce-clipboard-tabpanel')).not.toBeNull()
 
     await rendered.act(() => rendered.$('#elce-history-undo')?.click())
     expect(controller.getSnapshot().context.document.bdcs.some((bdc) => bdc.id === questionId)).toBe(false)
@@ -427,7 +491,7 @@ describe('Remix project application', () => {
     if (title === null) throw new Error('Le titre de page doit être éditable.')
     const scenarioTitleId = page.chapterId === null
       ? `elce-scenario-entry-list-select-${page.id}`
-      : `elce-pages-${page.chapterId}-select-${page.id}`
+      : `elce-scenario-entry-list-${page.chapterId}-select-${page.id}`
     await rendered.act(() => {
       const field = rendered.$(`#elce-page-title-${page.id}`) as HTMLInputElement
       field.focus()
@@ -462,15 +526,14 @@ describe('Remix project application', () => {
       prompt.focus()
       prompt.setSelectionRange(0, prompt.value.length)
     })
-    await vi.waitFor(() => expect(rendered.$('#elce-content-catalog-tab-profile')).not.toBeNull())
-    await rendered.act(() => rendered.$('#elce-content-catalog-tab-profile')?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    await vi.waitFor(() => expect(rendered.$('#elce-side-panel-tab-variables')?.getAttribute('aria-selected')).toBe('true'))
     expect(controller.getSnapshot().context.composition.catalogTab).toBe('profile')
     await vi.waitFor(() => expect(rendered.$('#elce-profile-token-insertion-profile-profile-audience')).not.toBeNull())
     await rendered.act(() => {
       const insert = rendered.$('#elce-profile-token-insertion-profile-profile-audience') as HTMLButtonElement | null
       insert?.dispatchEvent(new Event('pointerdown', { bubbles: true, cancelable: true }))
       insert?.focus()
-      expect(rendered.$('#elce-content-catalog-tab-profile')).not.toBeNull()
+      expect(rendered.$('#elce-side-panel-tab-variables')?.getAttribute('aria-selected')).toBe('true')
       insert?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     const promptHost = rendered.$(`#elce-question-prompt-${questionId}-editor-host`) as HTMLElement | null
@@ -492,7 +555,7 @@ describe('Remix project application', () => {
       const insertDate = rendered.$('#elce-profile-token-insertion-date-today-0') as HTMLButtonElement | null
       insertDate?.dispatchEvent(new Event('pointerdown', { bubbles: true, cancelable: true }))
       insertDate?.focus()
-      expect(rendered.$('#elce-content-catalog-tab-profile')).not.toBeNull()
+      expect(rendered.$('#elce-side-panel-tab-variables')?.getAttribute('aria-selected')).toBe('true')
       insertDate?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     expect(rendered.$(`#${cardMessageId}-editor-host`)?.querySelector('[data-elce-date-kind="today"]')).not.toBeNull()
@@ -515,7 +578,7 @@ describe('Remix project application', () => {
       .toBe('today')
 
     await rendered.act(() => (rendered.$('#elce-preview-open') as HTMLButtonElement).focus())
-    await vi.waitFor(() => expect(rendered.$('#elce-content-catalog-tab-profile')).toBeNull())
+    await vi.waitFor(() => expect(rendered.$('#elce-profile-token-insertion')).toBeNull())
 
     rendered.cleanup()
     controller.stop()
@@ -592,8 +655,19 @@ describe('Remix project application', () => {
   })
 
   it('updates the central work area when a chapter is selected through the scenario', async () => {
-    const controller = createActor(controllerMachine, { input: {} })
+    const project = { id: 'chapter-selection-project', name: 'Projet chapitre', revision: 0 }
+    const projectSession: ProjectSessionPort = {
+      rememberedProjectId: () => null,
+      perform: async (_operation, document) => ({
+        projects: [project], activeProject: project, document, status: 'active', editAccess: 'waiting',
+      }),
+      startLock: () => {},
+      dispose: async () => {},
+    }
+    const controller = createActor(controllerMachine, { input: { projectSession } })
     controller.start()
+    controller.send({ type: 'project.operation', operation: { kind: 'bootstrap', rememberedProjectId: null } })
+    await vi.waitFor(() => expect(controller.getSnapshot().context.activeProject?.id).toBe(project.id))
     controller.send({ type: 'editor.access.activate' })
     const actions = new LearningEditorFacade(controller)
     actions.createEvaluationChapter(controller.getSnapshot().context.document)

@@ -11,6 +11,7 @@ import { LearningProjectSyncCoordinator as ProjectSyncCoordinator } from '../per
 import { attachLearningDocumentPersistence as attachDocumentPersistence } from '../persistence/learning-document-persistence'
 import type { AttachedDocumentPersistence } from '../../../core/persistence/document-persistence'
 import type { ProjectSessionOperation, ProjectSessionPort, ProjectSessionResult } from '../../../core/projects/project-session-types'
+import { runProjectOperationAndWait } from '../../../core/authoring/core-editor-facade'
 import { learningControllerMachine as controllerMachine } from '../authoring/learning-controller-machine'
 
 type LearningProjectSessionPort = ProjectSessionPort<LearningDocument, ElceProjectSummary>
@@ -153,6 +154,20 @@ class DeferredDocumentStore implements ElceDocumentStore {
 }
 
 describe('Elcé project operations in the application actor', () => {
+  it('settles a waited route operation through the owning actor', async () => {
+    const session = new ProjectSessionFixture()
+    const actor = createActor(controllerMachine, { input: { projectSession: session } })
+    actor.start()
+
+    const outcome = await runProjectOperationAndWait(actor, { kind: 'refresh' })
+
+    expect(session.operations).toEqual([{ kind: 'refresh' }])
+    expect(outcome.activeProject).toBeNull()
+    expect(outcome.projectError).toBeNull()
+    expect(actor.getSnapshot().context.projectStatus).toBe('list')
+    actor.stop()
+  })
+
   it('loads an empty server list without creating or activating the temporary document', async () => {
     const session = new ProjectSessionFixture()
     const actor = createActor(controllerMachine, { input: { projectSession: session } })

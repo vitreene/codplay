@@ -28,5 +28,23 @@ export function createElceSpaRouter(roots: ElceSpaRoots) {
     return renderRoute(root)
   })
 
+  router.get('/new', ({ render: renderRoute, url }) => {
+    const root = rootForUrl(url)
+    if (root === null) return renderRoute(<p id="elce-remix-unavailable">Cette page Elcé est indisponible.</p>, { status: 404 })
+    return renderRoute(root)
+  })
+
+  router.get('/learning/:documentId', ({ render: renderRoute, url }) => {
+    const root = rootForUrl(url)
+    if (root === null) return renderRoute(<p id="elce-remix-unavailable">Cette page Elcé est indisponible.</p>, { status: 404 })
+    return renderRoute(root)
+  })
+
+  router.get('/hunt/:documentId', ({ render: renderRoute, url }) => {
+    const root = rootForUrl(url)
+    if (root === null) return renderRoute(<p id="elce-remix-unavailable">Cette page Elcé est indisponible.</p>, { status: 404 })
+    return renderRoute(root)
+  })
+
   return router
 }

@@ -155,6 +155,17 @@ Le champ Fond propose les trois dégradés sur les Cartes. Pour le layout Titre
 sur image, Couleur du texte et Contraste auto sont masqués : le traitement fixe
 du titre les remplace.
 
+Les couleurs du fond et du texte pilotent le rendu documentaire. Les champs
+et les surfaces de l’éditeur conservent leur habillage d’interface.
+Le picker natif transmet `input` et `change` à la même commande d’apparence ;
+une valeur déjà transmise par `input` n’ajoute pas un second geste à l’arrivée
+de `change`. La réinitialisation retire l’exception locale et retrouve la
+valeur héritée, sans modifier les autres cibles.
+L’ajout d’une couleur à la palette du projet utilise le bouton d’icône
+secondaire commun et l’icône Plus. Les cases Cadre, Transparent et Contraste
+auto partagent la même présentation : ligne flex, case de `1rem`, marge nulle
+et couleur d’accent auteur commune.
+
 Une icône Palette ouvre le style du projet depuis l’en-tête Scénario. Chaque
 page et BDC possède son bouton de style accessible ; dans l’en-tête d’un BDC,
 il est placé à côté de la corbeille et reprend le gabarit d’icône standard.

@@ -16,6 +16,8 @@ BDC directs de la page.
   l’icône et le libellé du BDC.
 - Un clic à l’extérieur ferme la liste ; cliquer sur une autre commande flottante
   ferme aussi celle-ci avant d’ouvrir la suivante.
+- La liste ouverte s’affiche au premier plan par-dessus les en-têtes et barres
+  d’outils collants des BDC.
 - Sous « + », une icône de corbeille sans contour ni fond de bouton accepte le
   dépôt d’une icône BDC du rail et supprime ce BDC par sa commande typée
   existante. Le déplacement vers « Blocs disponibles » garde sa fonction de
@@ -49,6 +51,8 @@ BDC directs de la page.
   barre d’ajout supérieure.
 - [x] Fermer la liste de création au clic extérieur, y compris quand l’auteur
   clique dans une autre commande flottante.
+- [x] Vérifier que la liste ouverte recouvre les en-têtes et barres d’outils
+  collants des BDC.
 - [x] Garder le bouton « + » accessible pour une page vide.
 - [ ] Mettre à jour la spécification d’organisation après validation du rendu
   et des gestes.

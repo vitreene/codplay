@@ -325,6 +325,7 @@ export function QuizHuntProjectApplication(handle: Handle) {
       onSetPanelVisibility: setPanelVisibility,
     } satisfies QuizHuntWorkspaceInteraction) : null
     return renderCoreProjectApplication({
+      mod: 'quiz-hunt',
       view: view.project,
       actions: actions.core,
       editorWorkspace: workspace,

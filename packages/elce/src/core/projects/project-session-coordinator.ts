@@ -87,17 +87,19 @@ implements ProjectSessionPort<TDocument, ElceProjectSummary> {
   ): Promise<ProjectSessionResult<TDocument, ElceProjectSummary>> {
     switch (operation.kind) {
       case 'bootstrap':
-        return this.bootstrap(operation.rememberedProjectId)
+        return this.bootstrap(operation.rememberedProjectId, operation.requestedProjectId ?? null)
       case 'refresh':
         return this.projectList(activeProject, hadEditAccess)
       case 'create':
-        return this.createProject(document, hadEditAccess)
+        return this.createProject(document, hadEditAccess, operation.name)
       case 'save-as':
         return this.saveAs(document, activeProject, operation.name)
       case 'save-local-as':
         return this.saveLocalAs(activeProject, operation.name)
       case 'open':
         return this.openProject(operation.projectId, document, activeProject, hadEditAccess)
+      case 'release-for-route':
+        return this.releaseForRoute(document, activeProject, hadEditAccess)
       case 'close':
         return this.closeProject(document, activeProject, hadEditAccess)
       case 'delete':
@@ -299,15 +301,19 @@ implements ProjectSessionPort<TDocument, ElceProjectSummary> {
   }
 
   /** Loads the server list and restores only this tab's remembered project. */
-  private async bootstrap(rememberedProjectId: string | null): Promise<SessionResult<TDocument>> {
+  private async bootstrap(
+    rememberedProjectId: string | null,
+    requestedProjectId: string | null,
+  ): Promise<SessionResult<TDocument>> {
+    const selectedProjectId = requestedProjectId ?? rememberedProjectId
     let unsupportedRememberedCacheError: unknown = null
-    if (rememberedProjectId !== null) {
+    if (selectedProjectId !== null) {
       try {
-        const cached = await this.store.loadDocument(rememberedProjectId)
-        const checkpoint = await this.store.loadSyncState(rememberedProjectId)
-        if (cached !== null && checkpoint.independentCopyOf !== undefined && checkpoint.status !== 'synced') {
-          this.independentCopies.add(rememberedProjectId)
-          this.activeProjectId = rememberedProjectId
+        const cached = await this.store.loadDocument(selectedProjectId)
+        const checkpoint = await this.store.loadSyncState(selectedProjectId)
+        if (requestedProjectId === null && cached !== null && checkpoint.independentCopyOf !== undefined && checkpoint.status !== 'synced') {
+          this.independentCopies.add(selectedProjectId)
+          this.activeProjectId = selectedProjectId
           const project = {
             id: this.documentServices.id(cached),
             name: this.documentServices.name(cached),
@@ -324,7 +330,10 @@ implements ProjectSessionPort<TDocument, ElceProjectSummary> {
       }
     }
     const projects = await this.api.listProjects()
-    const remembered = rememberedProjectId === null ? null : projects.find((entry) => entry.id === rememberedProjectId) ?? null
+    const remembered = selectedProjectId === null ? null : projects.find((entry) => entry.id === selectedProjectId) ?? null
+    if (requestedProjectId !== null && remembered === null) {
+      return result<TDocument>(projects, null, null, 'list', 'waiting', 'Le document demandé est introuvable dans ce mod.')
+    }
     if (unsupportedRememberedCacheError !== null && remembered === null) {
       return result<TDocument>(projects, null, null, 'list', 'waiting', errorMessage(unsupportedRememberedCacheError))
     }
@@ -356,10 +365,10 @@ implements ProjectSessionPort<TDocument, ElceProjectSummary> {
   }
 
   /** Creates a fresh server project and switches only after the current one is saved. */
-  private async createProject(document: TDocument, hadEditAccess: boolean): Promise<SessionResult<TDocument>> {
+  private async createProject(document: TDocument, hadEditAccess: boolean, name: string): Promise<SessionResult<TDocument>> {
     await this.ensureCurrentProjectSynced(document, hadEditAccess)
     const projects = await this.api.listProjects()
-    const newDocument = this.documentServices.createProjectDocument(projects)
+    const newDocument = this.documentServices.createProjectDocument(projects, name)
     const revision = await this.api.createProject(newDocument)
     await this.store.saveDocument(newDocument)
     await this.store.saveSyncState({
@@ -452,6 +461,21 @@ implements ProjectSessionPort<TDocument, ElceProjectSummary> {
     await this.ensureCurrentProjectSynced(document, hadEditAccess)
     const projects = await this.api.listProjects()
     await this.releaseCurrentProject(true)
+    return result<TDocument>(projects, null, null, 'list', 'waiting')
+  }
+
+  /** Synchronizes and releases the active project while preserving its local copy for route changes. */
+  private async releaseForRoute(
+    document: TDocument,
+    activeProject: ElceProjectSummary | null,
+    hadEditAccess: boolean,
+  ): Promise<SessionResult<TDocument>> {
+    if (activeProject === null || this.activeProjectId === null) {
+      return this.projectList(null, false)
+    }
+    await this.ensureCurrentProjectSynced(document, hadEditAccess)
+    const projects = await this.api.listProjects()
+    await this.releaseCurrentProject(false)
     return result<TDocument>(projects, null, null, 'list', 'waiting')
   }
 

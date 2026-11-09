@@ -8,7 +8,7 @@ export interface ProjectDocumentServices<TDocument> {
 }
 
 export interface ProjectSessionDocumentServices<TDocument> extends ProjectDocumentServices<TDocument> {
-  createProjectDocument(projects: readonly Readonly<{ name: string }>[]): TDocument
+  createProjectDocument(projects: readonly Readonly<{ name: string }>[], name?: string): TDocument
   withProjectIdentity(document: TDocument, id: string, name: string): TDocument
   isUnsupportedFormatError(error: unknown): boolean
 }

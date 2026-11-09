@@ -23,17 +23,28 @@ de celui du paquet `remix`. La branche RC4 et ses anciens runtimes `ui` et
 ## Composition
 
 - [`browser-entry.tsx`](../src/app/remix/browser-entry.tsx) choisit la
-  composition selon les paramètres de l’URL, démarre Remix et dispose le
-  runtime à `pagehide`. La composition auteur publique est
-  [`createLearningAuthoringComposition`](../src/mods/learning/composition/authoring-composition.tsx) :
-  elle construit le store, la session projet, un acteur XState, les façades et
-  les vues Learning, puis fournit `authoringRoot` et `dispose()`. Une URL de
-  preview construit seulement la composition Preview Learning ; elle ne crée
-  pas d’acteur auteur ni de store auteur.
+  composition auteur depuis la route du document. `/learning/:documentId`
+  construit Learning et `/hunt/:documentId` construit Quiz Hunt ; `/` et
+  `/new` choisissent Learning par défaut ou consomment la sélection temporaire
+  de « Autre… ». Une route documentaire transmet son identifiant au bootstrap
+  de la composition. Une URL de preview construit seulement la composition de
+  lecture correspondante, sans acteur ni store auteur.
+- [`createLearningAuthoringComposition`](../src/mods/learning/composition/authoring-composition.tsx)
+  et [`createQuizHuntAuthoringComposition`](../src/mods/quiz-hunt/composition/quiz-hunt-authoring-composition.tsx)
+  créent chacun leur store, leur session, leur acteur XState et leurs façades.
+  Chaque composition expose aussi l’ouverture d’un identifiant de document à
+  son coordinateur, utilisée par l’historique navigateur.
 - [`remix-spa-router.tsx`](../src/app/remix/remix-spa-router.tsx) reçoit
-  `authoringRoot` et `previewRoot`. Il sélectionne une racine selon les
-  paramètres de preview et conserve la route `/` et sa réponse 404. Il ne
-  construit ni machine, ni façade, ni application projet, ni player.
+  `authoringRoot` et `previewRoot`. Il route `/`, `/new`,
+  `/learning/:documentId` et `/hunt/:documentId` vers la racine auteur, et les
+  paramètres de preview vers la racine de lecture. La route par défaut répond
+  404. Il ne construit ni machine, ni façade, ni application projet, ni player.
+- [`renderCoreProjectApplication`](../src/core/authoring/layout/project-application.tsx)
+  fournit le sélecteur commun superposé à l’application sur `/` et `/new`.
+  `/` liste les documents du mod choisi ; Learning est le défaut et « Autre… »
+  charge le catalogue de l’autre mod. Un clic ouvre la route du document ; la
+  corbeille lance sa suppression confirmée. `/new` demande un nom avant
+  d’envoyer la création au coordinateur et d’ouvrir la route obtenue.
 - [`LearningProjectApplication`](../src/mods/learning/authoring/learning-project-application.tsx)
   assemble le workspace Learning avec
   [`renderCoreProjectApplication`](../src/core/authoring/layout/project-application.tsx),
@@ -115,18 +126,6 @@ de celui du paquet `remix`. La branche RC4 et ses anciens runtimes `ui` et
   Le chargeur de composants est `componentHmr()` depuis
   `remix/component-hmr/assets` ; il complète le chargeur JSON existant.
 
-Le 5 novembre 2026, après redémarrage du serveur local, Safari MCP a chargé
-l’éditeur du Projet 3 et ouvert « Capture live » avec le module audio partagé.
-La requête initialement en erreur vers `browser-entry.tsx` ne renvoie plus de
-500. Après la correction du 5 novembre, Safari MCP y voit dix voix de démo
-avec Aria sélectionnée ; une clé temporaire non persistée et un texte activent
-le contrôle TTS sans envoyer de requête API. La case de mémorisation reste
-décochée et aucune clé n’est présente dans `localStorage`. Le typecheck du
-module partagé passe. Le chargement réel des voix du compte et les appels
-ElevenLabs autorisés restent au [lot 5 du plan talking
-head](../plan/2026-11-04-talking-head-plan.md#lot-5--module-audio-réutilisable--phase-1-en-cours) ;
-aucune génération payante n’a été faite.
-
 ## Imports JSON locaux
 
 Le serveur d'assets Elcé accepte les imports de fichiers `.json` locaux dans
@@ -157,28 +156,10 @@ sources des paquets consommateurs.
 - Les source maps sont composées avec celles de la compilation TypeScript.
   La transformation fonctionne aussi avec minification et HMR désactivé.
 
-Preuves : les 16 cas de
 [`json-module-loader.test.ts`](../src/server/json-assets/json-module-loader.test.ts)
-compilent et évaluent les valeurs avec le véritable serveur d'assets Remix.
-Ils couvrent identités, imports/réexports, données invalides ou absentes,
-accès interdits et liens symboliques, invalidation des consommateurs,
-récupération après erreur, retrait des dépendances, fermeture et production.
-Le 29 octobre 2026, sur `develop`, une fixture temporaire importée par l'entrée
-réelle avant démarrage a été modifiée de la révision 1 à 2 : le module HTTP
-compilé restitue la nouvelle valeur et le canal SSE réel publie
-`{"type":"browser:reload"}`. La fixture est ensuite retirée. Le rendu et le
-rechargement dans le navigateur restent au
-[plan d'acceptation Elcé](../plan/2026-10-01-elce-construction-plan.md), l'accès
-MCP Brave ayant échoué pendant ce contrôle.
-
-Après intégration de `elce-remix` et `codplay-replace` le 29 octobre 2026,
-Brave charge l'entrée auteur réelle, ouvre le document Nutrition & Santé et
-affiche son état « Synchronisé ». Le même serveur compile les imports JSON
-du catalogue replace ; la prévisualisation réelle affiche les paragraphes
-de la page d'introduction et son image décodée à 1680 px de largeur native.
-Les 16 tests JSON, le typecheck et le build Elcé passent dans cet état intégré.
-Le suivi de l'intégration et de l'acceptation globale reste dans le
-[plan d'intégration](../../../docs/plans/2026-10-29-develop-integration-plan.md).
+couvre l’identité des modules JSON, les imports/réexports, les valeurs
+invalides ou absentes, les règles d’accès, les liens symboliques, l’invalidation
+HMR, la récupération après erreur et le mode production.
 
 ## Invariants
 
@@ -200,116 +181,31 @@ Le suivi de l'intégration et de l'acceptation globale reste dans le
   enregistrée.
 - Le routeur API reste séparé du routeur SPA. Ses réponses ne remplacent pas
   l’état documentaire possédé par XState.
+- Un identifiant de route est prioritaire sur le projet mémorisé. Le document
+  doit exister dans le catalogue du mod de la route ; un identifiant absent
+  affiche une erreur sans ouvrir un autre document.
+- L’ouverture depuis l’historique passe par la façade et le coordinateur du
+  même mod. Un changement de composition synchronise le document courant puis
+  libère sa session en conservant sa copie IndexedDB confirmée. En cas d’échec,
+  la session et la route courantes restent actives. Deux sessions documentaires
+  ne coexistent pas dans l’onglet.
+- `?mod=quiz-hunt` ne choisit plus la composition auteur. Ce paramètre reste
+  réservé à la sélection de la composition de preview.
 - Aucun code de production ou test du workspace Elcé n’importe React,
   ReactDOM, `@xstate/react`, `@tiptap/react` ou `lucide-react`. Vite reste un
   outil de build, de tests et de chargement SSR du point d’entrée local ; il ne
   sert pas l’interface auteur dans le navigateur.
 
-## Preuves
+## Références de validation
 
-- Le 4 novembre 2026, `npm view remix version dist-tags` confirme la version
-  publiée `latest: 3.1.0`, puis `npm ls remix --all` ne résout que
-  `@codplay/elce → remix@3.1.0`. Les six suites `elce-local-server`,
-  `json-module-loader`, `learning-sqlite-project-persistence`,
-  `remix-spa-router`, `remix-section-production` et
-  `learning-project-application` passent leurs 52 tests après migration des
-  points d’entrée vers `remix/component`. Le build réussit. La comparaison
-  complète avec la RC4 conserve 583 tests réussis et les mêmes 11 échecs sur
-  594 tests ; le typecheck conserve seulement l’erreur préexistante `TS6133`
-  sur `title` dans `statistical-graph-scene-builder.ts`.
-- Le 6 novembre 2026, le typecheck Elcé passe après retrait de la variable
-  locale `title` inutilisée de `statistical-graph-scene-builder.ts`. Safari
-  ouvre le catalogue, puis le Projet 3 et ses éditeurs Avatar/Carousel sur
-  `localhost:5175` après le redémarrage du serveur ; la console ne signale que
-  la connexion HMR.
-- Le même jour, `npm run dev` lance le vrai superviseur et le serveur avec
-  une base temporaire et des ports libres. Les requêtes HTTP sur le document,
-  l’entrée auteur, le runtime JSX `@remix-run/component`, une vue auteur,
-  son module `component-hmr` et l’API répondent `200`. L’URL du flux SSE est
-  lue dans le client HMR émis ; une règle CSS temporaire ajoutée à une feuille
-  réellement chargée provoque `browser:reload`, et la feuille HTTP contient
-  sa nouvelle valeur. La règle est retirée et le serveur arrêté après le
-  contrôle. Cette preuve couvre le serveur et le canal HMR ; l’acceptation
-  navigateur reste dans le [plan de mise à jour](../plan/2026-11-04-remix-latest-upgrade-plan.md).
-- [`learning-page-editor.test.tsx`](../src/mods/learning/authoring/learning-page-editor.test.tsx)
-  et [`learning-workspace.test.tsx`](../src/mods/learning/authoring/learning-workspace.test.tsx)
-  montent les vues de production. Ils vérifient l’ordre et l’unicité des BDC,
-  leurs éditions, les Cartes Carousel et leur réordonnancement, le déplacement
-  d’un BDC, le changement de page, la Carte directe Flux/Diapo et la
-  restitution des sélections enregistrées. Un parcours importe aussi des
-  médias Question, Carte et Carousel par le stockage et la file XState réels.
-- [`chapter-settings.test.tsx`](../src/mods/learning/authoring/chapter-settings.test.tsx)
-  vérifie le réglage enregistré d’un chapitre après remontage.
-- [`remix-section-production.test.tsx`](../src/mods/learning/integration/remix-section-production.test.tsx)
-  vérifie dans le même `LearningPageEditor` le contenu, le titre, les commandes
-  Tiptap, le dépôt et la persistance d’une image, l’aperçu et le déplacement
-  d’ancre, ainsi que la conservation de l’instance Editor et de son DOM. Il
-  vérifie aussi que le bouton de retrait du média rend `lucide-trash-2`, tandis
-  que le bouton de fermeture du panneau rend `lucide-x`.
-- [`learning-project-application.test.tsx`](../src/mods/learning/authoring/learning-project-application.test.tsx)
-  vérifie le montage de l’application Learning, l’historique et les raccourcis
-  clavier dans le projet auteur.
+- [`elce-authoring-routes.test.ts`](../src/app/remix/elce-authoring-routes.test.ts)
+  couvre le choix du mod, l’encodage des identifiants et les routes inconnues.
 - [`remix-spa-router.test.ts`](../src/app/remix/remix-spa-router.test.ts)
-  vérifie que le routeur sélectionne la racine Preview sans monter la racine
-  auteur.
-- [`elce-local-server.test.ts`](../src/server/elce-local-server.test.ts)
-  vérifie que la réponse de développement omet les `modulepreload`, tandis que
-  la réponse de production les conserve.
-- [`popup-player.test.tsx`](../src/mods/learning/integration/popup-player.test.tsx) exerce le
-  protocole de messages et le chargement du média serveur sans Blob IndexedDB.
-- Brave DevTools, le 8 octobre 2026, a ouvert `npm run dev:elce` sur
-  `http://localhost:5176` puisque `localhost:5175` était occupé. La route a
-  rendu la liste des projets et l’éditeur depuis les entrées `.tsx`; les
-  16 modules de composants Remix ont été chargés avec succès. La console était
-  vide et aucun asset React ou ReactDOM n’a été demandé. Le parcours précédent
-  du même portage a aussi affiché le lecteur popup et ses cinq images serveur.
-- Le 9 octobre 2026, après remplacement du serveur Elcé sur le même port,
-  Brave DevTools a relu l’origine `http://localhost:5175` sans réinitialiser
-  IndexedDB. La base existante `elce-poc` (schéma v2) contient les documents
-  v4 de Projet 3 et Projet 1 ; ce dernier conserve 2 chapitres, 7 pages, 15 BDC,
-  5 références média et le checkpoint synchronisé à la révision 93. Les cinq
-  images serveur chargent. Après rechargement, Projet 3 est restauré et la
-  console ne contient aucune erreur.
-- Le 9 octobre 2026, Brave vérifie le HMR sur 5175 : une modification JSX
-  temporaire devient visible après rechargement automatique sans redémarrer le
-  serveur ; une règle CSS temporaire est également appliquée automatiquement.
-  Après chaque rechargement, Projet 1 reste ouvert et l’état revient à
-  « Synchronisé ». Les deux modifications de vérification sont retirées.
-- Le 13 octobre 2026, Brave vérifie le lancement réseau sur 5175/5181 et
-  l’ouverture du lecteur `elce-document` depuis l’éditeur. En émulation mobile
-  390 × 844, la page « Titre » et ses médias s’affichent sans en-tête Elcé ni
-  actions de synchronisation. La lecture API retourne la révision serveur 10.
-  L’API refuse la liste des projets et le prévol d’une mutation. Le téléphone
-  physique reste à vérifier sur le réseau local.
-- Les 206 tests Elcé passent, le typecheck passe et `vite build` réussit. Le
-  bundle JavaScript fait `1 314,76 kB` minifiés (`372,33 kB` gzip) et conserve
-  l’avertissement Vite au-dessus de `500 kB`.
-- Le 27 octobre 2026, Safari MCP ouvre l’éditeur « Démo 5 — comparaison Elcé »
-  sur `http://localhost:5175/`. Une requête sans cache à
-  `/assets/elce/app/remix/browser-entry.tsx` et une autre à
-  `/assets/elceVendor/@remix-run/spa/dist/lib/spa.js` répondent toutes deux
-  `200`; l’éditeur se rend sans réponse HTTP `5xx`. Le runtime Remix local est
-  donc résolu depuis le mount `elceVendor`.
-- [`elce-local-server.test.ts`](../src/server/elce-local-server.test.ts) lance
-  le serveur avec une API locale simulée : un listener sans CORS est refusé,
-  puis le même listener est réutilisé après ajout du contrat CORS. Ce parcours
-  vérifie aussi la compilation de l’entrée Remix et de ses imports montés.
-- Le 28 octobre 2026, Safari MCP sur `http://localhost:5175/` a créé une page
-  de test dans le projet temporaire « Mods L4 MCP 2026-10-28 », puis enregistré
-  son titre et son placement. Le réordonnancement a emprunté les handlers
-  `dragstart`/`dragover`/`drop` de `LearningWorkspace` avec un `DragEvent`
-  synthétique ; un `GET /api/projects/:id` confirme ensuite la nouvelle liste
-  `Page D MCP`, `Page A` dans le chapitre. Cela vérifie le circuit auteur et sa
-  persistance ; l’inventaire Safari MCP n’offre pas de geste physique de souris.
-  L’édition inline du titre a été suivie de `Cmd+Z` et `Cmd+Shift+Z` sur les
-  handlers clavier de l’application. Le viewport a conservé
-  `scrollWidth === clientWidth` à 800, 801, 1200 et 1201 px. La commande
-  « Prévisualiser » ouvre la racine Preview dans un onglet distinct ; celui-ci
-  rend `Page D MCP` et son panneau de lecture. Sa session n’a émis aucune
-  requête API pendant l’observation. Safari étant en arrière-plan, des signaux
-  focus/visibilité de test ont servi à réactiver le bail avant les gestes qui
-  écrivent ; aucune alerte n’était affichée.
-- L’acceptation L5 du 28 octobre 2026 passe sur neuf fichiers et 38 tests,
-  avec `npm run typecheck` et `npm run build`. Le bundle de production est de
-  `1 644,91 kB` minifiés (`458,29 kB` gzip) ; Vite conserve son avertissement
-  au-dessus de `500 kB`.
+  couvre les routes de choix et de document ainsi que la sélection de la racine
+  Preview.
+- [`learning-project-application.test.tsx`](../src/mods/learning/authoring/learning-project-application.test.tsx)
+  couvre le sélecteur superposé et le formulaire de nommage.
+- [`project-session-coordinator.test.ts`](../src/mods/learning/integration/project-session-coordinator.test.ts)
+  et [`project-operations.test.ts`](../src/mods/learning/integration/project-operations.test.ts)
+  couvrent la création nommée, l’ouverture demandée, la conservation de la
+  session après erreur et la libération inter-mod via le même acteur.

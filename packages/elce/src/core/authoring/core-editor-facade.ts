@@ -1,4 +1,30 @@
 import type { ProjectSessionOperation } from '../projects/project-session-types'
+import type { ProjectControllerPort, ProjectControllerSnapshot } from '../controller/controller-types'
+import type { ElceProjectSummary } from '../persistence/project-api/project-api-types'
+
+export type ProjectOperationOutcome = Readonly<{
+  activeProject: ElceProjectSummary | null
+  projectError: string | null
+}>
+
+type ProjectOperationRunner = (operation: ProjectSessionOperation) => Promise<ProjectOperationOutcome>
+
+/** Sends one project operation through the owning actor and returns its settled outcome. */
+export function runProjectOperationAndWait<TDocument, TSelection>(
+  controller: ProjectControllerPort<TDocument, TSelection, ElceProjectSummary, ProjectSessionOperation>,
+  operation: ProjectSessionOperation,
+): Promise<ProjectOperationOutcome> {
+  controller.send({ type: 'project.operation', operation })
+  return new Promise((resolve) => {
+    const completeWhenSettled = (snapshot: ProjectControllerSnapshot<TDocument, TSelection, ElceProjectSummary>): void => {
+      if (snapshot.context.projectStatus === 'busy' || snapshot.context.projectStatus === 'loading') return
+      subscription.unsubscribe()
+      resolve({ activeProject: snapshot.context.activeProject, projectError: snapshot.context.projectError })
+    }
+    const subscription = controller.subscribe(completeWhenSettled)
+    completeWhenSettled(controller.getSnapshot())
+  })
+}
 
 type CoreEditorEvent =
   | Readonly<{ type: 'project.operation'; operation: ProjectSessionOperation }>
@@ -9,10 +35,16 @@ type CoreEditorEvent =
 export class CoreEditorFacade {
   private readonly send: (event: CoreEditorEvent) => void
   private readonly renameDocument: (name: string) => void
+  private readonly runProjectOperation: ProjectOperationRunner | null
 
-  public constructor(send: (event: CoreEditorEvent) => void, renameDocument: (name: string) => void) {
+  public constructor(
+    send: (event: CoreEditorEvent) => void,
+    renameDocument: (name: string) => void,
+    runProjectOperation: ProjectOperationRunner | null = null,
+  ) {
     this.send = send
     this.renameDocument = renameDocument
+    this.runProjectOperation = runProjectOperation
   }
 
   /** Sends a project lifecycle intention through the existing actor. */
@@ -36,8 +68,12 @@ export class CoreEditorFacade {
   }
 
   /** Starts the server-owned project list and restores this tab's selection. */
-  public bootstrapProjects(rememberedProjectId: string | null): void {
-    this.manageProjects({ kind: 'bootstrap', rememberedProjectId })
+  public bootstrapProjects(rememberedProjectId: string | null, requestedProjectId?: string): void {
+    this.manageProjects({
+      kind: 'bootstrap',
+      rememberedProjectId,
+      ...(requestedProjectId === undefined ? {} : { requestedProjectId }),
+    })
   }
 
   /** Re-reads project summaries from the server. */
@@ -46,8 +82,15 @@ export class CoreEditorFacade {
   }
 
   /** Creates a new project and opens it after server creation succeeds. */
-  public createProject(): void {
-    this.manageProjects({ kind: 'create' })
+  public createProject(name: string): void {
+    this.manageProjects({ kind: 'create', name })
+  }
+
+  /** Creates a named project and returns its id after the owning actor accepts it. */
+  public async createProjectAndWait(name: string): Promise<string | null> {
+    if (this.runProjectOperation === null) return null
+    const result = await this.runProjectOperation({ kind: 'create', name })
+    return result.projectError === null ? result.activeProject?.id ?? null : null
   }
 
   /** Starts an independent project from the confirmed document on screen. */
@@ -75,6 +118,20 @@ export class CoreEditorFacade {
     this.manageProjects({ kind: 'open', projectId })
   }
 
+  /** Opens a same-mod project and reports whether it became the actor's active document. */
+  public async openProjectAndWait(projectId: string): Promise<boolean> {
+    if (this.runProjectOperation === null) return false
+    const result = await this.runProjectOperation({ kind: 'open', projectId })
+    return result.projectError === null && result.activeProject?.id === projectId
+  }
+
+  /** Synchronizes and releases the current session while retaining its local cache for a mod transition. */
+  public async prepareForRouteTransition(): Promise<boolean> {
+    if (this.runProjectOperation === null) return false
+    const result = await this.runProjectOperation({ kind: 'release-for-route' })
+    return result.projectError === null && result.activeProject === null
+  }
+
   /** Closes the active project without deleting its server copy. */
   public closeProject(): void {
     this.manageProjects({ kind: 'close' })
@@ -83,6 +140,13 @@ export class CoreEditorFacade {
   /** Deletes one server project and only its corresponding local cache. */
   public deleteProject(projectId: string): void {
     this.manageProjects({ kind: 'delete', projectId })
+  }
+
+  /** Deletes a selected project and reports whether its coordinator operation succeeded. */
+  public async deleteProjectAndWait(projectId: string): Promise<boolean> {
+    if (this.runProjectOperation === null) return false
+    const result = await this.runProjectOperation({ kind: 'delete', projectId })
+    return result.projectError === null
   }
 
   /** Renames the active project through its composition-owned document command. */

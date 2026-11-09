@@ -11,9 +11,8 @@ import { renderScenarioPanel } from './scenario-panel'
 import type { EditorWorkspaceViewProps, WorkspacePanelName } from './learning-workspace-types'
 import type { ScenarioPanelProps } from './scenario-panel-types'
 import { renderSummaryProfileSettings } from './summary-profile-settings'
-import { CATALOG_PALETTE_TAB } from './learning-authoring-config'
-import { renderLearningCatalogPalette, renderLearningCatalogPaletteToggle } from './learning-catalog-palette'
-import type { CatalogPaletteTab } from './learning-authoring-config'
+import { CLIPBOARD_TAB } from './learning-authoring-config'
+import type { ClipboardTab } from './learning-authoring-config'
 import { renderEditorFrame } from '../../../core/authoring/layout/editor-frame'
 import type { DraggedScenarioEntry } from './learning-workspace-types'
 import { workspacePanelVisibilityFromResponsiveState } from './workspace-panel-state'
@@ -23,8 +22,7 @@ import type { ProfileDefinition } from '../profile/domain/learning-profile-types
 /** Holds Learning-only workspace state that the shared project view does not own. */
 export class LearningWorkspaceState {
   public summarySettingsOpen = false
-  public catalogPaletteOpen = false
-  public catalogPaletteTab: CatalogPaletteTab = CATALOG_PALETTE_TAB.PAGES
+  public clipboardTab: ClipboardTab = CLIPBOARD_TAB.PAGES
   public profileDraft: ProfileDefinition | null = null
   public profileTokenTargetId: string | null = null
   public selectedInlineLabel = null as import('../profile/authoring/profile-token-events').InlineTextLabelSelection | null
@@ -33,10 +31,8 @@ export class LearningWorkspaceState {
 
 /** Composes the native Remix scenario, chapter-settings and catalog surfaces. */
 export function renderEditorWorkspace(props: EditorWorkspaceViewProps): RemixNode {
-  const catalogPaletteOpen = props.catalogPaletteOpen ?? false
-  const catalogPaletteTab = props.catalogPaletteTab ?? CATALOG_PALETTE_TAB.PAGES
-  const setCatalogPaletteOpen = props.onSetCatalogPaletteOpen ?? (() => {})
-  const setCatalogPaletteTab = props.onSetCatalogPaletteTab ?? (() => {})
+  const clipboardTab = props.clipboardTab ?? CLIPBOARD_TAB.PAGES
+  const setClipboardTab = props.onSetClipboardTab ?? (() => {})
   const panelVisibility = props.panelVisibility
     ?? workspacePanelVisibilityFromResponsiveState(props.responsivePanel, typeof window === 'undefined' ? 1280 : window.innerWidth)
   const scenarioPageIds = new Set(props.view.documentModel.scenarioPageIds)
@@ -89,21 +85,6 @@ export function renderEditorWorkspace(props: EditorWorkspaceViewProps): RemixNod
       })}
     </div>
 
-  const catalogPalette = renderLearningCatalogPalette({
-    view: props.view,
-    actions: props.actions,
-    scenario: scenarioProps,
-    isOpen: catalogPaletteOpen && props.visible && props.editable !== false,
-    activeTab: catalogPaletteTab,
-    onClose: () => setCatalogPaletteOpen(false),
-    dropTarget: props.dropTarget,
-    getDraggedEntry: props.getDraggedEntry,
-    onSetTab: setCatalogPaletteTab,
-    onSetDropTarget: props.onSetDropTarget,
-    onSetDraggedEntry: props.onSetDraggedEntry,
-    onOpenAppearanceTarget: props.onOpenAppearanceTarget,
-  })
-
   return renderEditorFrame({
     leftPanel: renderScenarioPanel(scenarioProps),
     center,
@@ -119,13 +100,19 @@ export function renderEditorWorkspace(props: EditorWorkspaceViewProps): RemixNod
       onSetSidePanelTab: props.onSetSidePanelTab,
       profileTokenTargetId: props.profileTokenTargetId,
       selectedInlineLabel: props.selectedInlineLabel,
+      scenario: scenarioProps,
+      clipboardTab,
+      dropTarget: props.dropTarget,
+      getDraggedEntry: props.getDraggedEntry,
+      onSetClipboardTab: setClipboardTab,
+      onSetDropTarget: props.onSetDropTarget,
+      onSetDraggedEntry: props.onSetDraggedEntry,
+      onOpenAppearanceTarget: props.onOpenAppearanceTarget,
     }),
-    workspaceAction: renderLearningCatalogPaletteToggle(
-      catalogPaletteOpen,
-      () => setCatalogPaletteOpen(!catalogPaletteOpen),
-    ),
-    workspaceOverlay: catalogPalette,
+    workspaceAction: null,
+    workspaceOverlay: null,
     panelVisibility,
+    propertiesPanelLabel: 'Presse-papiers',
     visible: props.visible,
     editable: props.editable,
     onSetPanelVisibility: (panel: WorkspacePanelName, open: boolean, triggerId?: string) => {

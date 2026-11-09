@@ -1,12 +1,13 @@
 import type { ElceProjectSummary } from '../persistence/project-api/project-api-types'
 
 export type ProjectSessionOperation =
-  | Readonly<{ kind: 'bootstrap'; rememberedProjectId: string | null }>
+  | Readonly<{ kind: 'bootstrap'; rememberedProjectId: string | null; requestedProjectId?: string }>
   | Readonly<{ kind: 'refresh' }>
-  | Readonly<{ kind: 'create' }>
+  | Readonly<{ kind: 'create'; name: string }>
   | Readonly<{ kind: 'save-as'; name: string }>
   | Readonly<{ kind: 'save-local-as'; name: string }>
   | Readonly<{ kind: 'open'; projectId: string }>
+  | Readonly<{ kind: 'release-for-route' }>
   | Readonly<{ kind: 'close' }>
   | Readonly<{ kind: 'delete'; projectId: string }>
 

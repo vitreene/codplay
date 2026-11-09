@@ -71,6 +71,17 @@ regroupe les décisions et acceptations restantes ; la méthode de construction
 et d’application des classes est **A relire**. Ses détails sont conservés
 dans les notes Style.
 
+## Sélecteur « Vos projets » — superposition en cours
+
+La liste de projets doit se superposer à l’espace de travail auteur lorsqu’aucun
+document n’est sélectionné. Elle reste sous l’en-tête commun, couvre le viewport
+disponible avec un fond opaque et ne repousse pas l’espace de travail dans le
+flux. Les actions d’ouverture et de création continuent d’utiliser la façade et
+le contrôleur projet existants. L’acceptation vérifie que l’espace de travail
+reste derrière le sélecteur sans déplacement ni défilement de page, au démarrage
+sans projet et après fermeture du projet. Mettre à jour la
+[spécification de session](../specs/project-session-spec.md) après validation.
+
 ## Export standard réimportable — plan à relire
 
 Le [plan export/import coordonnés](./2026-10-26-elce-standard-export-import-plan.md)

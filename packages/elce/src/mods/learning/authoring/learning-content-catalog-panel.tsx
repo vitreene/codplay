@@ -1,25 +1,24 @@
 import { on, type RemixNode } from 'remix/component'
 
-import { CATALOG_TAB } from './learning-authoring-config'
 import { renderProfileTokenInsertion } from '../profile/authoring/profile-token-insertion'
 import type { LearningContentCatalogPanelProps } from './learning-content-catalog-panel-types'
 import { renderAppearancePanel } from './learning-appearance-panel'
 import { renderWorkspacePanelReduceButton } from './workspace-panel-controls'
+import { renderLearningClipboardPanel } from './learning-clipboard-panel'
 
-/** Renders contextual Variables and the existing Style panel on the right. */
+/** Renders the right-side Presse-papiers, Variables and Style panels. */
 export function renderLearningContentCatalogPanel(props: LearningContentCatalogPanelProps): RemixNode {
   const { view, actions, profileTokenTargetId } = props
   const panelOpen = props.panelOpen ?? true
   const selectedInlineLabel = props.selectedInlineLabel
   const linkablePageIds = new Set(view.documentModel.scenarioPageIds)
   const linkablePages = view.documentModel.pages.filter((page) => linkablePageIds.has(page.id))
-  const canShowProfileTab = profileTokenTargetId !== null
 
   return <aside
     id="elce-properties"
     className="elce-panel elce-properties"
     data-panel-open={panelOpen}
-    aria-labelledby={props.sidePanelTab === 'contents' ? 'elce-content-catalog-title' : 'elce-appearance-title'}
+    aria-labelledby={rightPanelLabelId(props.sidePanelTab)}
   >
     <div
       id="elce-properties-reduce-row"
@@ -41,15 +40,26 @@ export function renderLearningContentCatalogPanel(props: LearningContentCatalogP
         aria-label="Panneau latéral"
       >
         <button
-          id="elce-side-panel-tab-contents"
-          className={props.sidePanelTab === 'contents' ? 'elce-side-panel-tab elce-side-panel-tab--active' : 'elce-side-panel-tab'}
+          id="elce-side-panel-tab-clipboard"
+          className={props.sidePanelTab === 'clipboard' ? 'elce-side-panel-tab elce-side-panel-tab--active' : 'elce-side-panel-tab'}
           type="button"
           role="tab"
-          aria-selected={props.sidePanelTab === 'contents'}
-          aria-controls="elce-content-catalog"
-          mix={on<HTMLButtonElement, 'click'>('click', () => props.onSetSidePanelTab('contents'))}
+          aria-selected={props.sidePanelTab === 'clipboard'}
+          aria-controls="elce-clipboard-tabpanel"
+          mix={on<HTMLButtonElement, 'click'>('click', () => props.onSetSidePanelTab('clipboard'))}
         >
-          Contenus
+          Presse-papiers
+        </button>
+        <button
+          id="elce-side-panel-tab-variables"
+          className={props.sidePanelTab === 'variables' ? 'elce-side-panel-tab elce-side-panel-tab--active' : 'elce-side-panel-tab'}
+          type="button"
+          role="tab"
+          aria-selected={props.sidePanelTab === 'variables'}
+          aria-controls="elce-variables-tabpanel"
+          mix={on<HTMLButtonElement, 'click'>('click', () => props.onSetSidePanelTab('variables'))}
+        >
+          Variables
         </button>
         <button
           id="elce-side-panel-tab-style"
@@ -65,59 +75,50 @@ export function renderLearningContentCatalogPanel(props: LearningContentCatalogP
       </div>
     </div>
     <section
-      id="elce-content-catalog"
-      className="elce-outline-group"
+      id="elce-clipboard-tabpanel"
+      className="elce-properties-tabpanel"
       role="tabpanel"
-      aria-labelledby="elce-side-panel-tab-contents"
-      hidden={props.sidePanelTab !== 'contents'}
+      aria-labelledby="elce-side-panel-tab-clipboard"
+      hidden={props.sidePanelTab !== 'clipboard'}
     >
-      <header
-        id="elce-properties-heading"
-        className="elce-properties-heading"
-      >
-        <h1
-          id="elce-content-catalog-title"
-        >
-          Contenus
-        </h1>
+      {renderLearningClipboardPanel({
+        view,
+        actions,
+        scenario: props.scenario,
+        activeTab: props.clipboardTab,
+        dropTarget: props.dropTarget,
+        getDraggedEntry: props.getDraggedEntry,
+        onSetTab: props.onSetClipboardTab,
+        onSetDropTarget: props.onSetDropTarget,
+        onSetDraggedEntry: props.onSetDraggedEntry,
+        onOpenAppearanceTarget: props.onOpenAppearanceTarget,
+      })}
+    </section>
+    <section
+      id="elce-variables-tabpanel"
+      className="elce-properties-tabpanel elce-variables-panel"
+      role="tabpanel"
+      aria-labelledby="elce-side-panel-tab-variables"
+      hidden={props.sidePanelTab !== 'variables'}
+    >
+      <header id="elce-variables-heading" className="elce-properties-heading">
+        <h1 id="elce-variables-title">Variables</h1>
       </header>
-      <div
-        id="elce-content-catalog-tabs"
-        className="elce-content-catalog-tabs"
-        role="group"
-        aria-label="Variables du profil"
-      >
-        {canShowProfileTab ? <button
-          id="elce-content-catalog-tab-profile"
-          className={view.catalogTab === CATALOG_TAB.PROFILE ? 'elce-content-catalog-tab elce-content-catalog-tab--active' : 'elce-content-catalog-tab'}
-          type="button"
-          aria-pressed={view.catalogTab === CATALOG_TAB.PROFILE}
-          aria-controls="elce-catalog-profile"
-          mix={on<HTMLButtonElement, 'click'>('click', () => actions.selectCatalogTab(CATALOG_TAB.PROFILE))}
-        >
-          Variables
-        </button> : null}
-      </div>
-      <section
-        id="elce-catalog-profile"
-        className="elce-content-catalog-panel"
-        aria-label="Variables et liens"
-        hidden={view.catalogTab !== CATALOG_TAB.PROFILE || !canShowProfileTab}
-      >
-        {profileTokenTargetId === null ? null : renderProfileTokenInsertion(
+      {profileTokenTargetId === null
+        ? <p id="elce-variables-empty" className="elce-muted">
+          Sélectionner un champ de texte pour afficher ses variables.
+        </p>
+        : renderProfileTokenInsertion(
           'elce-profile-token-insertion',
           view.documentModel.data.profile.properties,
           profileTokenTargetId,
           linkablePages,
           selectedInlineLabel,
         )}
-      </section>
-      {canShowProfileTab ? null : <p id="elce-content-catalog-empty" className="elce-muted">
-        Sélectionner un champ de texte pour afficher ses variables.
-      </p>}
     </section>
     <section
       id="elce-appearance-tabpanel"
+      className="elce-properties-tabpanel"
       role="tabpanel"
       aria-labelledby="elce-side-panel-tab-style"
       hidden={props.sidePanelTab !== 'style'}
@@ -129,4 +130,16 @@ export function renderLearningContentCatalogPanel(props: LearningContentCatalogP
       })}
     </section>
   </aside>
+}
+
+/** Resolves the active right-side panel's accessible heading. */
+function rightPanelLabelId(tab: LearningContentCatalogPanelProps['sidePanelTab']): string {
+  switch (tab) {
+    case 'clipboard':
+      return 'elce-clipboard-title'
+    case 'variables':
+      return 'elce-variables-title'
+    case 'style':
+      return 'elce-appearance-title'
+  }
 }

@@ -1,4 +1,6 @@
 import { on, type RemixNode } from 'remix/component'
+import { Plus } from 'lucide-static'
+import { renderLucideIcon } from '../../../core/authoring/lucide-static-icon'
 import { BDC_TYPE, DEFAULT_PRESET_ID } from '../learning-definition'
 import {
   APPEARANCE_COLOR_ROLES,
@@ -227,6 +229,7 @@ export function renderAppearancePanel(props: AppearancePanelProps): RemixNode {
     >
       <label
         id="elce-appearance-auto-contrast-label"
+        className="elce-appearance-inline-choice"
         htmlFor="elce-appearance-auto-contrast"
       >
         <input
@@ -282,6 +285,16 @@ function renderColorField(props: ColorFieldProps): RemixNode {
     actions,
     target,
   } = props
+  const localColor = localSettings?.[property]
+  const selection = { appliedColor: localColor?.kind === 'custom' ? localColor.value : undefined }
+  /** Applies native picker updates once when input is followed by change. */
+  const applyColor = (input: HTMLInputElement): void => {
+    const value = input.value
+    if (selection.appliedColor === value) return
+    selection.appliedColor = value
+    if (property === 'background') actions.setAppearanceProperty(target, 'background', { kind: 'custom', value })
+    else actions.setAppearanceProperty(target, 'textColor', { kind: 'custom', value })
+  }
   return <fieldset
     id={`${id}-field`}
     className="elce-appearance-field"
@@ -323,22 +336,21 @@ function renderColorField(props: ColorFieldProps): RemixNode {
         id={`${id}-picker`}
         type="color"
         value={color}
-        mix={on<HTMLInputElement, 'change'>('change', (event) => {
-          const value = event.currentTarget.value
-          if (property === 'background') actions.setAppearanceProperty(target, 'background', { kind: 'custom', value })
-          else actions.setAppearanceProperty(target, 'textColor', { kind: 'custom', value })
-        })}
+        mix={[
+          on<HTMLInputElement, 'input'>('input', (event) => applyColor(event.currentTarget)),
+          on<HTMLInputElement, 'change'>('change', (event) => applyColor(event.currentTarget)),
+        ]}
       />
       <button
         id={`${id}-custom-color-add`}
-        className="elce-appearance-color-add"
+        className="elce-bdc-icon-button"
         type="button"
         aria-label={`Ajouter la couleur ${color} à la palette du projet`}
         title="Ajouter à la palette du projet"
         disabled={customColors.some((entry) => entry.toLowerCase() === color.toLowerCase())}
         mix={on<HTMLButtonElement, 'click'>('click', () => actions.addCustomAppearanceColor(color))}
       >
-        +
+        {renderLucideIcon(Plus, `${id}-custom-color-add-icon`)}
       </button>
     </div>
     <div

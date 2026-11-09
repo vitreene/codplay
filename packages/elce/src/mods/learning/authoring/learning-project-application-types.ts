@@ -12,7 +12,7 @@ import type {
 } from './learning-workspace-types'
 import type { InlineTextLabelSelection } from '../profile/authoring/profile-token-events'
 import type { ProfileDefinition } from '../profile/domain/learning-profile-types'
-import type { CatalogPaletteTab } from './learning-authoring-config'
+import type { ClipboardTab } from './learning-authoring-config'
 
 export type ProjectApplicationView = Pick<
   LearningAppContext,
@@ -25,8 +25,7 @@ export interface ProjectApplicationWorkspaceState {
   readonly sidePanelTab: SidePanelTab
   readonly appearanceTarget: AppearanceTarget
   readonly summarySettingsOpen: boolean
-  readonly catalogPaletteOpen: boolean
-  readonly catalogPaletteTab: CatalogPaletteTab
+  readonly clipboardTab: ClipboardTab
   readonly profileDraft: ProfileDefinition | null
   readonly getProfileDraft: () => ProfileDefinition | null
   readonly profileTokenTargetId: string | null
@@ -39,8 +38,7 @@ export interface ProjectApplicationWorkspaceState {
   readonly setSidePanelTab: (tab: SidePanelTab) => void
   readonly openAppearanceTarget: (target: AppearanceTarget, triggerId: string) => void
   readonly setSummarySettingsOpen: (open: boolean) => void
-  readonly setCatalogPaletteOpen: (isOpen: boolean) => void
-  readonly setCatalogPaletteTab: (tab: CatalogPaletteTab) => void
+  readonly setClipboardTab: (tab: ClipboardTab) => void
   readonly setProfileDraft: (profile: ProfileDefinition | null) => void
   readonly setAuthoringError: (error: string | null) => void
   readonly setDropTarget: (targetId: string | null) => void

@@ -308,13 +308,13 @@ function renderPieSeriesSelect(bdcId: string, content: StatisticalGraphContent, 
       aria-label="Série affichée dans le graphe en secteurs"
       mix={on<HTMLSelectElement, 'change'>('change', (event) => actions.setPieSeries(event.currentTarget.value))}
     >
-      {content.series.map((series) => <option
+      {content.series.map((series, index) => <option
         id={`elce-statistical-graph-pie-series-option-${bdcId}-${series.id}`}
         key={series.id}
         value={series.id}
         selected={series.id === content.pieSeriesId}
       >
-        {plainTextFromValue(series.label) || 'Série sans nom'}
+        {plainTextFromValue(series.label) || seriesFallbackLabel(index)}
       </option>)}
     </select>
   </label>
@@ -332,13 +332,13 @@ function renderPieCategorySelect(bdcId: string, content: StatisticalGraphContent
       aria-label="Catégorie affichée dans le graphe en secteurs transposé"
       mix={on<HTMLSelectElement, 'change'>('change', (event) => actions.setPieCategory(event.currentTarget.value))}
     >
-      {content.categories.map((category) => <option
+      {content.categories.map((category, index) => <option
         id={`elce-statistical-graph-pie-category-option-${bdcId}-${category.id}`}
         key={category.id}
         value={category.id}
         selected={category.id === (content.pieCategoryId ?? content.categories[0]?.id)}
       >
-        {plainTextFromValue(category.label) || 'Catégorie sans nom'}
+        {plainTextFromValue(category.label) || categoryFallbackLabel(index)}
       </option>)}
     </select>
   </label>
@@ -572,7 +572,7 @@ function renderGridEditor(
                   {renderGridLabelField({
                     id: `elce-statistical-graph-series-label-${bdcId}-${seriesIndex}`,
                     label: `Nom de la série ${seriesIndex + 1}`,
-                    placeholder: `Ser. ${seriesIndex + 1}`,
+                    placeholder: seriesFallbackLabel(seriesIndex),
                     value,
                     position,
                     textFieldFeature,
@@ -602,7 +602,7 @@ function renderGridEditor(
                   {renderGridLabelField({
                     id: `elce-statistical-graph-category-label-${bdcId}-${categoryIndex}`,
                     label: `Nom de la catégorie ${categoryIndex + 1}`,
-                    placeholder: `Cat. ${spreadsheetColumnLetters(categoryIndex)}`,
+                    placeholder: categoryFallbackLabel(categoryIndex),
                     value: category?.label ?? '',
                     position: { rowIndex, columnIndex: 0 },
                     textFieldFeature,
@@ -688,6 +688,16 @@ function renderGridLabelField(options: GraphGridLabelFieldOptions): RemixNode {
     {...options.textFieldAttributes}
     mix={on<HTMLInputElement, 'keydown'>('keydown', options.onKeyDown)}
   />
+}
+
+/** Returns the short fallback label shared by unnamed graph categories. */
+function categoryFallbackLabel(index: number): string {
+  return `Cat. ${spreadsheetColumnLetters(index)}`
+}
+
+/** Returns the short fallback label shared by unnamed graph series. */
+function seriesFallbackLabel(index: number): string {
+  return `Ser. ${index + 1}`
 }
 
 /** Converts a zero-based category index to spreadsheet-style letters. */

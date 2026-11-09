@@ -353,15 +353,25 @@ de reprise, d’interruption et de concurrence envisagées pour DGS.
 
 Le [plan Quiz Hunt](2026-11-04-quiz-hunt-editable-mod-plan.md) est accepté pour
 le second mod. L’utilisateur retient des entrées et catalogues séparés pour
-le moment ; Learning reste le défaut. Les listes d’interface restent filtrées
-par mod dans une base SQLite commune, avec une représentation relationnelle
+le moment ; Learning reste le défaut. Le routage auteur est fixé par mod :
+`/learning/:documentId` et `/hunt/:documentId`, avec `/new` pour le choix ou la
+création. Le préfixe `hunt` remplace `?mod=quiz-hunt` pour sélectionner la
+composition auteur. Les listes d’interface restent filtrées par mod dans une
+base SQLite commune, avec une représentation relationnelle
 identique pour les BDC partagés. La ressource BDC prépare les requêtes SQL et
 convertit ses lignes ; chaque mod exécute ces requêtes dans son dépôt et ses
 transactions. `projects.mod_key` distingue les listes (`learning` par défaut,
 `quiz-hunt` pour les projets du mod) sans champ d’identité dans le document. Le
 dépôt Learning délègue lui aussi aux ressources BDC. Les extensions spécifiques
 restent dans leur mod. La séparation physique ou un stockage JSON spécifique au
-mod ne fait pas partie de ce choix.
+mod ne fait pas partie de ce choix. Le [plan de routage](../../plan/2026-11-09-elce-document-routing-plan.md)
+fixe `/` comme entrée d’orientation, Learning comme mod par défaut, « Autre… »
+pour choisir un autre mod, le catalogue filtré correspondant, l’ouverture par
+clic et la suppression par icône corbeille. `/new` demande un nom avant de
+valider la création. Lors du passage entre compositions, le plan fixe la
+synchronisation puis la libération de la session active en conservant sa copie
+IndexedDB confirmée ; un échec garde le document courant actif. Ne jamais ouvrir
+deux sessions documentaires concurrentes dans l’onglet.
 
 **Statut : En cours — README et skill préparés ; le dossier copiable reste
 bloqué par son contrat d’intégration.** Ce lot outille la création d’un mod à
@@ -377,9 +387,9 @@ partir des compositions Learning sans lancer la réalisation de DGS.
   `.agents/skills/elce-mod` pointe vers les guides pour la découverte locale
   par Codex.
 - [ ] Définir le raccord minimal d’un mod généré au noyau et à ses entrées
-  d’application. Les entrées actuelles choisissent Learning ; D1/D3 reportent
-  l’identité persistée et sa résolution multi-mod. Ne pas inventer de champ ou
-  registre pour le gabarit.
+  d’application. Les routes des deux mods existants sont fixées par le plan de
+  routage ; D1/D3 reportent encore l’identité multi-mod pour le gabarit. Ne pas
+  inventer de champ ou registre pour celui-ci.
 - [ ] Créer `packages/elce/src/mods/template/` avec les seuls raccords au noyau dont
   le contrat est vérifié. La composition reste directe en TypeScript (D2/D7),
   sans registre générique ni acteur documentaire supplémentaire. Chaque mod

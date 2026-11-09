@@ -389,13 +389,15 @@ body {
   white-space: nowrap;
 }
 
-#elce-content-catalog {
+#elce-clipboard-tabpanel,
+#elce-variables-tabpanel {
   margin-top: 0;
   padding-top: 0;
   border-top: 0;
 }
 
-#elce-content-catalog-title {
+#elce-clipboard-title,
+#elce-variables-title {
   font-size: 1rem;
 }
 

@@ -10,8 +10,65 @@ import { controllerMachine } from '../../../app/controller/controller-machine'
 import { LearningEditorFacade } from './learning-editor-facade'
 import { appearanceThemeCssAssetPathsForDocument } from '../../../player/appearance-scene-style-sheet'
 import { renderAppearancePanel } from './learning-appearance-panel'
+import { resolveAppearance } from '../../../domain/appearance/appearance-resolver'
+import { createDocumentAppearanceStyleSheet } from '../../../player/appearance-scene-style-sheet'
 
 describe('appearance panel targets', () => {
+  it.each([
+    { kind: 'document', property: 'background' },
+    { kind: 'page', property: 'background' },
+    { kind: 'bdc', property: 'background' },
+    { kind: 'document', property: 'textColor' },
+    { kind: 'page', property: 'textColor' },
+    { kind: 'bdc', property: 'textColor' },
+  ] as const)('applies picker input and resets the $kind $property without duplicating change', async ({ kind, property }) => {
+    const controller = createActor(controllerMachine, { input: {} })
+    controller.start()
+    controller.send({ type: 'editor.access.activate' })
+    const actions = new LearningEditorFacade(controller)
+    const page = controller.getSnapshot().context.document.pages[0]!
+    const target: AppearanceTarget = kind === 'document' ? { kind }
+      : kind === 'page' ? { kind, pageId: page.id } : { kind, bdcId: page.bdcIds[0]! }
+    if (kind !== 'document') {
+      actions.setAppearanceProperty({ kind: 'document' }, property, { kind: 'custom', value: '#a1c4df' })
+    }
+    const before = controller.getSnapshot().context.document
+    const inheritedColor = resolveAppearance(before.data, target)[property].value.color
+    const historyLength = controller.getSnapshot().context.history.past.length
+    const id = property === 'background' ? 'elce-appearance-background' : 'elce-appearance-text-color'
+    const panel = render(<div id="appearance-input-test">
+      {renderAppearancePanel({ view: actions.authoring.selectEditorViewModel(controller.getSnapshot()), actions, target })}
+    </div>)
+    const picker = panel.$(`#${id}-picker`) as HTMLInputElement
+    await panel.act(() => {
+      picker.value = '#275f94'
+      picker.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    const changed = controller.getSnapshot().context.document
+    expect(resolveAppearance(changed.data, target)[property].value.color).toBe('#275f94')
+    expect(createDocumentAppearanceStyleSheet(changed)).toContain('#275f94')
+    await panel.act(() => {
+      picker.value = '#275f94'
+      picker.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(controller.getSnapshot().context.history.past).toHaveLength(historyLength + 1)
+    panel.cleanup()
+
+    const resetPanel = render(<div id="appearance-reset-test">
+      {renderAppearancePanel({ view: actions.authoring.selectEditorViewModel(controller.getSnapshot()), actions, target })}
+    </div>)
+    await resetPanel.act(() => resetPanel.$(`#${id}-reset`)?.click())
+    const reset = controller.getSnapshot().context.document
+    expect(resolveAppearance(reset.data, target)[property].value.color).toBe(inheritedColor)
+    expect(createDocumentAppearanceStyleSheet(reset)).not.toContain('#275f94')
+    await resetPanel.act(() => actions.core.undo())
+    expect(resolveAppearance(controller.getSnapshot().context.document.data, target)[property].value.color).toBe('#275f94')
+    await resetPanel.act(() => actions.core.redo())
+    expect(resolveAppearance(controller.getSnapshot().context.document.data, target)[property].value.color).toBe(inheritedColor)
+    resetPanel.cleanup()
+    controller.stop()
+  })
+
   it('offers the shared appearance controls for the project, page, and every BDC type', async () => {
     const controller = createActor(controllerMachine, { input: {} })
     controller.start()

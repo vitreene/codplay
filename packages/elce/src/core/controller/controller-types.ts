@@ -100,6 +100,8 @@ export interface ProjectControllerSnapshotContext<TDocument, TSelection, TProjec
   readonly mediaSources: Readonly<Record<MediaId, string>>
   readonly activeProject: TProject | null
   readonly projects: readonly TProject[]
+  readonly projectStatus: ProjectControllerStatus
+  readonly projectError: string | null
   readonly editAccess: 'waiting' | 'active'
   readonly documentChanges: Pick<readonly unknown[], 'length'>
 }

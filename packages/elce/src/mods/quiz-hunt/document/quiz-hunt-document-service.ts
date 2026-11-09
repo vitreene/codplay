@@ -99,8 +99,13 @@ export class QuizHuntDocumentService {
     return { ...document, id, name }
   }
 
-  /** Creates a new Quiz Hunt project with the next unused catalog name. */
-  public createProjectDocument(projects: readonly Readonly<{ name: string }>[]): QuizHuntDocument {
+  /** Creates a project with its supplied name or the next available default name. */
+  public createProjectDocument(projects: readonly Readonly<{ name: string }>[], requestedName?: string): QuizHuntDocument {
+    if (requestedName !== undefined) {
+      const name = requestedName.trim()
+      if (name.length === 0) throw new Error('Le nom du document ne peut pas être vide.')
+      return this.withProjectIdentity(this.createInitialDocument(), createStableId('quiz-hunt'), name)
+    }
     const usedNames = new Set(projects.map((project) => project.name))
     let index = 1
     while (usedNames.has(`Quiz Hunt ${index}`)) index += 1

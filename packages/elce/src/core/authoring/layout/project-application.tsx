@@ -1,10 +1,12 @@
-import { on, type RemixNode } from 'remix/component'
-import { X } from 'lucide-static'
+import { navigate, on, type RemixNode } from 'remix/component'
+import { Trash2, X } from 'lucide-static'
 import type { ScormVersion } from '../../../scorm/scorm-types'
 import type { ElceProjectSummary } from '../../../infrastructure/project-api/project-api-types'
 import type { DocumentSyncStatus, ProjectControllerStatus } from '../../controller/controller-types'
 import { CoreEditorFacade } from '../core-editor-facade'
 import { renderLucideIcon } from '../lucide-static-icon'
+import { elceDocumentRoute, PENDING_AUTHORING_MOD_KEY, resolveElceAuthoringLocation } from '../../../app/remix/elce-authoring-routes.ts'
+import type { ElceAuthoringMod } from '../../../app/remix/elce-authoring-routes.ts'
 
 export interface CoreProjectApplicationView {
   readonly projects: readonly ElceProjectSummary[]
@@ -33,6 +35,7 @@ export interface CoreProjectExportState {
 export interface CoreProjectApplicationProps {
   readonly view: CoreProjectApplicationView
   readonly actions: CoreEditorFacade
+  readonly mod: ElceAuthoringMod
   readonly editorWorkspace: RemixNode
   readonly export: CoreProjectExportState
   readonly runHistoryAction: (kind: 'undo' | 'redo') => void
@@ -41,6 +44,9 @@ export interface CoreProjectApplicationProps {
 /** Renders project management around the workspace supplied by its authoring mod. */
 export function renderCoreProjectApplication(props: CoreProjectApplicationProps): RemixNode {
   const view = props.view
+  const location = resolveElceAuthoringLocation(typeof window === 'undefined' ? '/' : window.location.pathname)
+  const chooserOpen = location.kind === 'chooser'
+  const chooserPath = chooserOpen ? location.pathname : '/'
   const editorVisible = view.activeProject !== null && view.projectStatus === 'active' && view.editAccess === 'active'
   const projectVisible = view.activeProject !== null && view.projectStatus !== 'loading' && view.projectStatus !== 'busy'
   const currentName = view.activeProject === null ? null : view.projectName
@@ -52,6 +58,12 @@ export function renderCoreProjectApplication(props: CoreProjectApplicationProps)
       <div id="elce-project-header-brand" className="elce-project-header-brand">
         <strong id="elce-project-brand-name">Elcé</strong>
       </div>
+      <button
+        id="elce-project-open-chooser"
+        type="button"
+        disabled={view.projectStatus === 'busy' || view.projectStatus === 'loading'}
+        mix={on<HTMLButtonElement, 'click'>('click', () => { void returnToLearningChooser(props.mod, props.actions) })}
+      >Vos projets</button>
       <details id="elce-project-menu" className="elce-project-menu">
         <summary id="elce-project-menu-trigger">{currentName ?? 'Projets'}</summary>
         <div id="elce-project-menu-panel" className="elce-project-menu-panel">
@@ -59,8 +71,8 @@ export function renderCoreProjectApplication(props: CoreProjectApplicationProps)
             id="elce-project-create"
             type="button"
             disabled={view.projectStatus === 'busy' || view.projectStatus === 'loading'}
-            mix={on<HTMLButtonElement, 'click'>('click', () => props.actions.createProject())}
-          >Nouveau projet</button>
+            mix={on<HTMLButtonElement, 'click'>('click', () => navigate('/new'))}
+          >Nouveau document</button>
           <button
             id="elce-project-refresh"
             type="button"
@@ -105,7 +117,7 @@ export function renderCoreProjectApplication(props: CoreProjectApplicationProps)
             <button id="elce-project-rename-submit" type="submit">Renommer</button>
           </form>}
           <ul id="elce-project-menu-list" className="elce-project-list elce-project-list--menu">
-            {renderProjectRows(view, props.actions, 'menu')}
+            {renderProjectRows(view, props.actions, 'menu', props.mod)}
           </ul>
         </div>
       </details>
@@ -135,7 +147,6 @@ export function renderCoreProjectApplication(props: CoreProjectApplicationProps)
       {editorVisible ? renderExportButton(props.export.onExport, props.export.exportBusy) : null}
     </header>
     {editorVisible ? renderExportDialog(props.export) : null}
-    {view.activeProject === null ? renderProjectSelection(view, props.actions) : null}
     {projectVisible && !editorVisible && view.projectError !== null ? <p id="elce-project-reader-status" role="status">{view.projectError}</p> : null}
     {projectVisible && !editorVisible && view.accessRecoveryAvailable ? <button
       id="elce-project-access-retry"
@@ -149,6 +160,9 @@ export function renderCoreProjectApplication(props: CoreProjectApplicationProps)
     >Forcer l’accès</button> : null}
     {editorVisible && view.projectError !== null ? <p id="elce-project-copy-warning" role="alert">{view.projectError}</p> : null}
     {props.editorWorkspace}
+    {chooserOpen || view.activeProject === null
+      ? renderProjectSelection(view, props.actions, props.mod, chooserPath)
+      : null}
   </div>
 }
 
@@ -239,31 +253,108 @@ function isScormVersion(value: FormDataEntryValue | null): value is ScormVersion
 }
 
 /** Renders the project selection surface when no project is active. */
-function renderProjectSelection(view: CoreProjectApplicationView, actions: CoreEditorFacade): RemixNode {
-  return <main id="elce-project-selection" className="elce-project-selection">
-    <section id="elce-project-selection-panel" className="elce-project-selection-panel">
+function renderProjectSelection(
+  view: CoreProjectApplicationView,
+  actions: CoreEditorFacade,
+  mod: ElceAuthoringMod,
+  chooserPath: '/' | '/new',
+): RemixNode {
+  const modName = mod === 'quiz-hunt' ? 'Quiz Hunt' : 'Learning'
+  const otherMod: ElceAuthoringMod = mod === 'quiz-hunt' ? 'learning' : 'quiz-hunt'
+  const otherModName = otherMod === 'quiz-hunt' ? 'Quiz Hunt' : 'Learning'
+  const isNewRoute = chooserPath === '/new'
+  const operationDisabled = view.projectStatus === 'busy' || view.projectStatus === 'loading'
+  return <div id="elce-project-selection" className="elce-project-selection">
+    <section
+      id="elce-project-selection-panel"
+      className="elce-project-selection-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="elce-project-selection-title"
+    >
       <h1 id="elce-project-selection-title">{projectSelectionTitle(view)}</h1>
       {view.projectError === null ? null : <p id="elce-project-error" className="elce-project-error" role="alert">{view.projectError}</p>}
       {view.activeProject !== null && view.editAccess !== 'active' ? <p id="elce-project-access-waiting" role="status">
         {`En attente de l’accès au projet « ${view.activeProject.name} ». Fermez son autre fenêtre si elle ne libère pas l’accès.`}
       </p> : null}
       {view.projectStatus === 'loading' || view.projectStatus === 'busy' ? <p id="elce-project-loading" role="status">Chargement…</p> : null}
-      <button
-        id="elce-project-create-empty"
-        className="elce-project-primary-action"
-        type="button"
-        disabled={view.projectStatus === 'busy' || view.projectStatus === 'loading'}
-        mix={on<HTMLButtonElement, 'click'>('click', () => actions.createProject())}
-      >Créer un projet</button>
+      <div id="elce-project-selection-mod" className="elce-project-selection-mod">
+        <p id="elce-project-selection-mod-name">Type de mod : {modName}</p>
+        <button
+          id="elce-project-other-mod"
+          type="button"
+          disabled={operationDisabled}
+          mix={on<HTMLButtonElement, 'click'>('click', () => { void selectAuthoringMod(otherMod, chooserPath, actions) })}
+        >Autre… · {otherModName}</button>
+      </div>
+      {isNewRoute
+        ? renderProjectCreationForm(view, actions, mod)
+        : <button
+          id="elce-project-create-empty"
+          className="elce-project-primary-action"
+          type="button"
+          disabled={operationDisabled}
+          mix={on<HTMLButtonElement, 'click'>('click', () => navigate('/new'))}
+        >Nouveau document</button>}
       <ul id="elce-project-selection-list" className="elce-project-list">
-        {renderProjectRows(view, actions, 'selection')}
+        {renderProjectRows(view, actions, 'selection', mod)}
+        {view.projects.length === 0 && view.projectStatus === 'list'
+          ? <li id="elce-project-selection-empty">Aucun document disponible pour ce mod.</li>
+          : null}
       </ul>
     </section>
-  </main>
+  </div>
 }
 
-/** Renders project open and delete actions for the server-owned list. */
-function renderProjectRows(view: CoreProjectApplicationView, actions: CoreEditorFacade, surface: 'menu' | 'selection'): RemixNode[] {
+/** Creates a named document through the active mod and follows its document route. */
+function renderProjectCreationForm(view: CoreProjectApplicationView, actions: CoreEditorFacade, mod: ElceAuthoringMod): RemixNode {
+  return <form
+    id="elce-project-create-form"
+    className="elce-project-create-form"
+    mix={on<HTMLFormElement, 'submit'>('submit', (event) => {
+      event.preventDefault()
+      const form = event.currentTarget
+      const nameInput = form.elements.namedItem('documentName')
+      if (!(nameInput instanceof HTMLInputElement)) return
+      const name = nameInput.value.trim()
+      if (name.length === 0) {
+        nameInput.setCustomValidity('Indiquez un nom pour le document.')
+        nameInput.reportValidity()
+        return
+      }
+      nameInput.setCustomValidity('')
+      void actions.createProjectAndWait(name).then((documentId) => {
+        if (documentId !== null) navigate(elceDocumentRoute(mod, documentId))
+      })
+    })}
+  >
+    <label id="elce-project-create-name-label" htmlFor="elce-project-create-name">Nom du document</label>
+    <input
+      id="elce-project-create-name"
+      name="documentName"
+      type="text"
+      autoComplete="off"
+      maxLength={120}
+      required
+      disabled={view.projectStatus === 'busy' || view.projectStatus === 'loading'}
+      mix={on<HTMLInputElement, 'input'>('input', (event) => event.currentTarget.setCustomValidity(''))}
+    />
+    <button
+      id="elce-project-create-submit"
+      className="elce-project-primary-action"
+      type="submit"
+      disabled={view.projectStatus === 'busy' || view.projectStatus === 'loading'}
+    >Valider</button>
+  </form>
+}
+
+/** Renders project open and delete actions for the selected mod's server catalogue. */
+function renderProjectRows(
+  view: CoreProjectApplicationView,
+  actions: CoreEditorFacade,
+  surface: 'menu' | 'selection',
+  mod: ElceAuthoringMod,
+): RemixNode[] {
   return view.projects.map((project) => {
     const isActive = view.activeProject?.id === project.id
     const prefix = `elce-project-${surface}-${project.id}`
@@ -272,23 +363,67 @@ function renderProjectRows(view: CoreProjectApplicationView, actions: CoreEditor
       id={`${prefix}-row`}
       className={isActive ? 'elce-project-list-row elce-project-list-row--active' : 'elce-project-list-row'}
     >
-      <span id={`${prefix}-name`}>{isActive ? view.projectName : project.name}</span>
       <button
         id={`${prefix}-open`}
         type="button"
-        disabled={isActive || view.projectStatus === 'busy' || view.projectStatus === 'loading'}
-        mix={on<HTMLButtonElement, 'click'>('click', () => actions.openProject(project.id))}
-      >{isActive ? 'Ouvert' : 'Ouvrir'}</button>
-      <button
-        id={`${prefix}-delete`}
-        type="button"
+        className="elce-project-list-row-open"
+        aria-current={isActive ? 'page' : undefined}
         disabled={view.projectStatus === 'busy' || view.projectStatus === 'loading'}
         mix={on<HTMLButtonElement, 'click'>('click', () => {
-          if (window.confirm(`Supprimer le projet « ${project.name} » ?`)) actions.deleteProject(project.id)
+          if (isActive) {
+            navigate(elceDocumentRoute(mod, project.id))
+            return
+          }
+          void actions.openProjectAndWait(project.id).then((opened) => {
+            if (opened) navigate(elceDocumentRoute(mod, project.id))
+          })
         })}
-      >Supprimer</button>
+      >{isActive ? view.projectName ?? project.name : project.name}</button>
+      <button
+        id={`${prefix}-delete`}
+        className="elce-project-list-row-delete"
+        type="button"
+        aria-label={`Supprimer le document « ${project.name} »`}
+        title={`Supprimer le document « ${project.name} »`}
+        disabled={view.projectStatus === 'busy' || view.projectStatus === 'loading'}
+        mix={on<HTMLButtonElement, 'click'>('click', () => {
+          if (!window.confirm(`Supprimer le document « ${project.name} » ?`)) return
+          void actions.deleteProjectAndWait(project.id).then((deleted) => {
+            if (deleted && isActive && window.location.pathname !== '/' && window.location.pathname !== '/new') navigate('/')
+          })
+        })}
+      >{renderLucideIcon(Trash2, `${prefix}-delete-icon`)}</button>
     </li>
   })
+}
+
+/** Returns to the default Learning chooser before leaving a Quiz Hunt session. */
+async function returnToLearningChooser(mod: ElceAuthoringMod, actions: CoreEditorFacade): Promise<void> {
+  if (window.location.pathname === '/' || window.location.pathname === '/new') {
+    if (mod === 'learning') return
+    if (!await actions.prepareForRouteTransition()) return
+    window.sessionStorage.removeItem(PENDING_AUTHORING_MOD_KEY)
+    window.location.assign(window.location.pathname)
+    return
+  }
+  if (mod === 'learning') {
+    navigate('/')
+    return
+  }
+  if (!await actions.prepareForRouteTransition()) return
+  window.sessionStorage.removeItem(PENDING_AUTHORING_MOD_KEY)
+  window.location.assign('/')
+}
+
+/** Switches to the selected mod only after the current document has synchronized. */
+async function selectAuthoringMod(
+  mod: ElceAuthoringMod,
+  chooserPath: '/' | '/new',
+  actions: CoreEditorFacade,
+): Promise<void> {
+  if (!await actions.prepareForRouteTransition()) return
+  window.sessionStorage.setItem(PENDING_AUTHORING_MOD_KEY, mod)
+  window.location.assign(chooserPath)
 }
 
 /** Selects the visible synchronization label. */

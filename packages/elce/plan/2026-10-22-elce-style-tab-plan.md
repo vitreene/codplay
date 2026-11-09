@@ -29,6 +29,84 @@ La formule et ses paramètres sont isolés dans la
 [spécification de taille responsive](../specs/responsive-text-sizing-spec.md).
 Le recalibrage réel des fontes et la vérification des autres BDC restent ouverts.
 
+## Reprise de la chaîne des portées
+
+**En cours pour l’audit ; découpage d’exécution A relire.** L’utilisateur demande
+de revoir toute la chaîne suivant un héritage vers les descendants. La capture
+Page A révèle que la surface de page ne couvre pas les mêmes éléments que la
+page métier. L’analyse causale et les autres écarts sont dans
+[l’étude existante](../notes/2026-10-22-style-tab-analysis.md#audit-de-la-chaîne-des-portées--9-novembre-2026).
+Ne pas implémenter les frontières proposées ci-dessous avant leur validation.
+
+### Base acceptée et invariants
+
+- L’apparence documentaire s’applique au rendu uniquement ; l’interface auteur
+  conserve son habillage. Une seule cible métier porte chaque modification.
+- Conserver la chaîne de données Application → Projet → Page → BDC → enfant BDC,
+  les exceptions locales par propriété et les identités de placement existantes.
+  Aucun réglage de chapitre n’est introduit par ce chantier.
+- Réinitialiser retire seulement l’exception locale. Ne pas copier la valeur
+  du parent dans le document enfant et ne pas écraser ses autres propriétés.
+- Les entrées de la palette Style expriment des intentions métier et déclenchent
+  les commandes existantes. Une entrée peut engager un pool d’actions cohérentes
+  qui modifient plusieurs propriétés du modèle ; elle n’attribue pas directement
+  un style CSS. Le CSS est produit ensuite à partir du modèle résolu. Ce principe
+  peut concerner chaque entrée ; les actions précises restent définies par sa
+  commande propriétaire.
+- Choisir une palette locale déclenche sa commande d’apparence, qui applique ses
+  rôles Fond et Texte au niveau courant selon le résolveur existant. Depuis une
+  densité effective `none`, cette commande rétablit aussi Normal et décoche
+  Transparence.
+- Transparent est une commande composée, pas une simple affectation CSS ni une
+  attribution isolée de `density: none` : elle sélectionne cette densité, rend
+  le fond transparent et entraîne les effets de retrait déjà définis dans la
+  [spécification Apparence](../specs/appearance-spec.md). Choisir un Fond ou une
+  palette depuis cet état rétablit Normal. Le couplage Transparent / padding /
+  densité reste inchangé.
+- Réutiliser façade → acteur XState → commandes → SQLite, résolveur d’apparence,
+  générateur OKLCH, producteurs de scène et export existants. Aucune nouvelle
+  observation DOM, mutation finale de styles ou modification CodPlay.
+- Conserver les couleurs fonctionnelles de correction et de données, les médias,
+  les géométries des layouts et le cycle de vie réel Sighty/CodPlay.
+
+### Décisions à relire avant exécution
+
+| Sujet | Proposition à valider |
+| --- | --- |
+| Projet | Porte la base de tout le document rendu ; menu et navigation restent ses descendants directs. La barre technique de preview reste extérieure au document. |
+| Page | Possède son titre et toute la zone de contenu, y compris ses retraits et le vide autour des BDC. Une exception page s’applique à cet ensemble et à ses descendants, sans modifier les pages sœurs ni les régions projet. |
+| BDC | Possède sa surface et ses contenus. Ses enfants héritent de cette cible métier ; leurs exceptions locales priment, sans effet sur les frères ni sur la page. Les layouts Carte conservent leurs zones textuelles et média distinctes. |
+| Sélection auteur | Sélectionner une page dans le Scénario met à jour la cible Style sans ouvrir automatiquement cet onglet ; les boutons Style explicites conservent leur ciblage projet/page/BDC. |
+| Surface héritée | Décider quand une couleur héritée peint la racine descendante et quand elle reste visible par transparence ; préciser le cas d’un parent visuel différent du parent métier. Le pool d’actions de Transparent et son couplage `density: none` / padding sont confirmés. Les autres entrées peuvent aussi engager plusieurs actions ; leurs effets relèvent de leur commande propriétaire. Le choix d’un Fond ou d’une palette depuis Transparent rétablit Normal. |
+
+### Actions ordonnées après validation
+
+1. Fixer dans ce plan la matrice cible métier → valeurs héritées → surface peinte,
+   pour projet, Flux, Diapo, Section, Carte, Carousel, Graphe, Question et Résultat.
+2. Revoir le ciblage dans `learning-project-application.tsx`, `scenario-panel.tsx`
+   et leurs types, sans ajouter une seconde sélection documentaire. Couvrir la
+   sélection d’une page déjà courante après ouverture du style d’un BDC.
+3. Revoir `appearance-resolver.ts`, les commandes et la persistance uniquement
+   pour les décisions qui les changent. Préserver les documents existants ; une
+   évolution de format exige son contrat et sa migration explicites.
+4. Faire correspondre `learning-layout-scene-builder.ts`, Flux/Diapo, les classes
+   d’apparence et `appearance-scene-style-sheet.ts` aux propriétaires retenus.
+   Le titre de page et les retraits ne doivent plus dépendre accidentellement
+   d’une classe projet hors de la portée page. Utiliser les slots, événements et
+   actions de présentation déjà établis, sans nouveau circuit de navigation.
+5. Couvrir projet/page/BDC sans exception puis avec exceptions distinctes, reset,
+   couleurs libres et sémantiques, contraste, transparence et palette locale.
+   Tester enfants Carousel et ancres, déplacement entre pages/parents et retour
+   catalogue/réinsertion : identité et valeurs locales conservées, héritage
+   recalculé, aucun effet sur les frères.
+6. Vérifier la chaîne réelle auteur → persistance → preview synchronisée et
+   fraîche → navigation A/B/A → export autonome. Inclure titre, retraits, zones
+   vides, scroll, resize, Play/Seek/replay, remontage et destruction selon les
+   propriétaires affectés. Les fixtures de tests restent indépendantes des démos.
+7. Exécuter tests ciblés, suite Elcé, typecheck, build et navigateur ; ne déclarer
+   aucune tranche finie sans ces preuves. Consolider ensuite les spécifications
+   Apparence, organisation, Flux, Diapo et Preview avec le seul contrat vérifié.
+
 ## Cadre — appliqué et vérifié (27 octobre 2026)
 
 - `appearance.frame?: boolean` et une case « Cadre » dans le panneau Style,

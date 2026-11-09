@@ -2,13 +2,24 @@ import { run } from 'remix/spa'
 
 import { POPUP_PREVIEW_PROJECT_PARAM, POPUP_PREVIEW_SESSION_PARAM } from '../../core/preview/popup-preview-messages'
 import { createElceSpaRouter } from './remix-spa-router'
+import { consumeChooserMod, resolveElceAuthoringLocation } from './elce-authoring-routes.ts'
 
 /** Starts the selected mod composition inside the Remix browser runtime. */
 async function startRemixEditor(): Promise<void> {
-  const searchParams = new URLSearchParams(window.location.search)
+  const url = new URL(window.location.href)
+  const searchParams = url.searchParams
   const isQuizHunt = searchParams.get('mod') === 'quiz-hunt'
   const isPreview = searchParams.has(POPUP_PREVIEW_SESSION_PARAM) || searchParams.has(POPUP_PREVIEW_PROJECT_PARAM)
-  const composition = isPreview ? null : await createAuthoringComposition(isQuizHunt)
+  const location = resolveElceAuthoringLocation(url.pathname)
+  const authoringMod = location.kind === 'document'
+    ? location.mod
+    : location.kind === 'chooser'
+      ? consumeChooserMod(window.sessionStorage)
+      : 'learning'
+  const composition = isPreview ? null : await createAuthoringComposition(
+    authoringMod,
+    location.kind === 'document' ? location.documentId : undefined,
+  )
   const previewComposition = isPreview
     ? isQuizHunt ? await createQuizHuntPreview(searchParams) : await createLearningPreview(searchParams)
     : null
@@ -25,7 +36,20 @@ async function startRemixEditor(): Promise<void> {
   })
   await runtime.ready()
 
+  /** Reopens the document named by browser history through the active mod session. */
+  const handlePopState = (): void => {
+    const nextLocation = resolveElceAuthoringLocation(window.location.pathname)
+    if (nextLocation.kind !== 'document') return
+    if (nextLocation.mod !== authoringMod) {
+      window.location.reload()
+      return
+    }
+    void composition?.openDocument(nextLocation.documentId)
+  }
+  window.addEventListener('popstate', handlePopState)
+
   const dispose = (): void => {
+    window.removeEventListener('popstate', handlePopState)
     void Promise.all([
       composition?.dispose() ?? Promise.resolve(),
       previewComposition?.dispose() ?? Promise.resolve(),
@@ -35,13 +59,13 @@ async function startRemixEditor(): Promise<void> {
 }
 
 /** Loads the selected authoring mod only when its route is active. */
-async function createAuthoringComposition(isQuizHunt: boolean) {
-  if (isQuizHunt) {
+async function createAuthoringComposition(mod: 'learning' | 'quiz-hunt', requestedProjectId?: string) {
+  if (mod === 'quiz-hunt') {
     const { createQuizHuntAuthoringComposition } = await import('../../mods/quiz-hunt/composition/quiz-hunt-authoring-composition')
-    return createQuizHuntAuthoringComposition()
+    return createQuizHuntAuthoringComposition(requestedProjectId)
   }
   const { createLearningAuthoringComposition } = await import('../../mods/learning/composition/authoring-composition')
-  return createLearningAuthoringComposition()
+  return createLearningAuthoringComposition(requestedProjectId)
 }
 
 /** Keeps Learning's preview modules out of Quiz Hunt's authoring bundle. */

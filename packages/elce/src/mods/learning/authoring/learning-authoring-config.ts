@@ -5,7 +5,7 @@ export const CATALOG_TAB = {
   PROFILE: 'profile',
 } as const
 
-export const CATALOG_PALETTE_TAB = {
+export const CLIPBOARD_TAB = {
   PAGES: 'pages',
   BDCS: 'bdcs',
   MEDIA: 'media',
@@ -16,4 +16,4 @@ export const LEARNING_AUTHORING_CONFIG = {
 } as const
 
 export type CatalogTabType = typeof CATALOG_TAB[keyof typeof CATALOG_TAB]
-export type CatalogPaletteTab = typeof CATALOG_PALETTE_TAB[keyof typeof CATALOG_PALETTE_TAB]
+export type ClipboardTab = typeof CLIPBOARD_TAB[keyof typeof CLIPBOARD_TAB]

@@ -9,6 +9,7 @@ import type { DocumentSyncState, MediaBlob } from '../../../core/persistence/ind
 import { createActor } from 'xstate'
 import { learningControllerMachine as controllerMachine } from '../authoring/learning-controller-machine'
 import { LearningProjectSessionCoordinator as ProjectSessionCoordinator } from '../persistence/learning-project-session-coordinator'
+import { runProjectOperationAndWait } from '../../../core/authoring/core-editor-facade'
 
 afterEach(() => {
   vi.useRealTimers()
@@ -142,16 +143,16 @@ describe('Elcé project session lifecycle', () => {
     await reloaded.dispose()
   })
 
-  it('creates a uniquely identified project and closes it without deleting the server copy', async () => {
+  it('creates a named project and closes it without deleting the server copy', async () => {
     const remote = new Map<string, LearningDocument>()
     const store = new MemoryProjectStore()
     const { coordinator } = createCoordinator(remote, store)
     const emptyDocument = learningDocumentService.createInitialDocument()
 
-    const created = await coordinator.perform({ kind: 'create' }, emptyDocument, null, 'waiting', false)
+    const created = await coordinator.perform({ kind: 'create', name: 'Mon nouveau document' }, emptyDocument, null, 'waiting', false)
 
     expect(created.status).toBe('opening')
-    expect(created.activeProject).toMatchObject({ name: 'Projet 1', revision: 0 })
+    expect(created.activeProject).toMatchObject({ name: 'Mon nouveau document', revision: 0 })
     expect(created.document?.id).not.toBe('elce-document')
     expect(remote.has(created.document!.id)).toBe(true)
     expect(store.checkpoints.get(created.document!.id)).toMatchObject({ remoteRevision: 0, status: 'synced' })
@@ -181,11 +182,82 @@ describe('Elcé project session lifecycle', () => {
     const currentSummary = summaryFor(current)
     await coordinator.perform({ kind: 'open', projectId: current.id }, learningDocumentService.createInitialDocument(), null, 'waiting', false)
 
-    const created = await coordinator.perform({ kind: 'create' }, current, currentSummary, 'waiting', true)
+    const created = await coordinator.perform({ kind: 'create', name: 'Document suivant' }, current, currentSummary, 'waiting', true)
 
     expect(created.status).toBe('opening')
     expect(created.document).not.toBeNull()
     expect(remote.has(created.document!.id)).toBe(true)
+  })
+
+  it('preserves the confirmed local copy when releasing a project for a mod route', async () => {
+    const current = documentForProject('route-current', 'Document courant')
+    const remote = new Map([[current.id, current]])
+    const store = new MemoryProjectStore()
+    const { coordinator } = createCoordinator(remote, store)
+    const opened = await coordinator.perform({ kind: 'open', projectId: current.id }, learningDocumentService.createInitialDocument(), null, 'waiting', false)
+
+    const released = await coordinator.perform({ kind: 'release-for-route' }, opened.document!, opened.activeProject, 'waiting', false)
+
+    expect(released.status).toBe('list')
+    expect(released.activeProject).toBeNull()
+    expect(store.documents.get(current.id)?.data.name).toBe('Document courant')
+    expect(store.checkpoints.get(current.id)).toMatchObject({ remoteRevision: 0, status: 'synced' })
+    expect(store.deletedProjects).not.toContain(current.id)
+    expect(remote.has(current.id)).toBe(true)
+    await coordinator.dispose()
+  })
+
+  it('keeps the active session when catalogue synchronization fails during a mod transition', async () => {
+    const current = documentForProject('route-sync-failure', 'Document à conserver')
+    const remote = new Map([[current.id, current]])
+    const store = new MemoryProjectStore()
+    const network = { online: true }
+    const { coordinator } = createCoordinator(remote, store, new Map(), network)
+    installFakeBrowserEvents(false)
+    const actor = createActor(controllerMachine, { input: { documentStore: store, projectSession: coordinator } })
+    actor.start()
+    await coordinator.attach(actor)
+    actor.send({ type: 'project.operation', operation: { kind: 'bootstrap', rememberedProjectId: current.id } })
+    await vi.waitFor(() => expect(actor.getSnapshot().context.activeProject?.id).toBe(current.id))
+
+    network.online = false
+    const transition = await runProjectOperationAndWait(actor, { kind: 'release-for-route' })
+
+    expect(transition.activeProject?.id).toBe(current.id)
+    expect(transition.projectError).toContain('Network unavailable')
+    expect(actor.getSnapshot().context.projectStatus).toBe('active')
+    expect(store.documents.get(current.id)?.data.name).toBe('Document à conserver')
+    expect(actor.getSnapshot().context.editAccess).toBe('waiting')
+
+    await coordinator.dispose()
+    actor.stop()
+  })
+
+  it('does not open an unlisted local copy for a requested document route', async () => {
+    const current = documentForProject('listed-document', 'Document listé')
+    const unlisted = documentForProject('unlisted-document', 'Copie locale')
+    const remote = new Map([[current.id, current]])
+    const store = new MemoryProjectStore()
+    store.documents.set(unlisted.id, unlisted)
+    store.checkpoints.set(unlisted.id, {
+      documentId: unlisted.id,
+      remoteRevision: 0,
+      uploadedMediaIds: [],
+      status: 'pending',
+      independentCopyOf: current.id,
+    })
+    const { coordinator } = createCoordinator(remote, store)
+
+    const route = await coordinator.perform({
+      kind: 'bootstrap',
+      rememberedProjectId: current.id,
+      requestedProjectId: unlisted.id,
+    }, learningDocumentService.createInitialDocument(), null, 'waiting', false)
+
+    expect(route.activeProject).toBeNull()
+    expect(route.document).toBeNull()
+    expect(route.projectError).toBe('Le document demandé est introuvable dans ce mod.')
+    await coordinator.dispose()
   })
 
   it('deletes the active project after synchronizing when the captured edit right was active', async () => {

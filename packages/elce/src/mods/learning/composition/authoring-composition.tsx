@@ -13,11 +13,12 @@ import { LearningProjectApplication } from '../authoring/learning-project-applic
 
 export interface LearningAuthoringComposition {
   readonly authoringRoot: RemixNode
+  openDocument(documentId: string): Promise<boolean>
   dispose(): Promise<void>
 }
 
 /** Builds the current Learning browser composition and owns its actor and project session. */
-export async function createLearningAuthoringComposition(): Promise<LearningAuthoringComposition> {
+export async function createLearningAuthoringComposition(requestedProjectId?: string): Promise<LearningAuthoringComposition> {
   const documentStore = createLearningDocumentStore()
   try {
     await documentStore.deleteOrphanedMedia()
@@ -35,7 +36,7 @@ export async function createLearningAuthoringComposition(): Promise<LearningAuth
   controller.start()
 
   await projectSession.attach(controller)
-  editorActions.core.bootstrapProjects(projectSession.rememberedProjectId())
+  editorActions.core.bootstrapProjects(projectSession.rememberedProjectId(), requestedProjectId)
 
   const authoringRoot = <LearningEditorContextProvider controller={controller} actions={editorActions}>
     <div id="elce-remix-route-root">
@@ -45,6 +46,7 @@ export async function createLearningAuthoringComposition(): Promise<LearningAuth
 
   return {
     authoringRoot,
+    openDocument: (documentId) => editorActions.core.openProjectAndWait(documentId),
     dispose: async () => {
       await projectSession.dispose()
       controller.stop()

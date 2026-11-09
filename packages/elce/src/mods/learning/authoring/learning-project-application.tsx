@@ -5,7 +5,7 @@ import { LearningEditorContextProvider } from '../composition/learning-editor-co
 import type { LearningEditorFacade } from './learning-editor-facade'
 import { editorViewModelEqual, type LearningAuthoringService } from './learning-authoring-service'
 import { CATALOG_TAB } from './learning-authoring-config'
-import type { CatalogPaletteTab } from './learning-authoring-config'
+import type { ClipboardTab } from './learning-authoring-config'
 import { PopupPreviewHost } from '../../../core/preview/popup-preview-host'
 import { learningDocumentService } from '../document/learning-document-service'
 import type { LearningDocument } from '../document/learning-document'
@@ -46,7 +46,7 @@ export function LearningProjectApplication(handle: Handle) {
   let responsivePanel: ResponsivePanel = null
   let panelVisibility: WorkspacePanelVisibility = initialWorkspacePanelVisibility(window.innerWidth)
   let previousWindowWidth = window.innerWidth
-  let sidePanelTab: SidePanelTab = 'contents'
+  let sidePanelTab: SidePanelTab = 'clipboard'
   let appearanceTarget: AppearanceTarget = { kind: 'document' }
   let appearanceProjectId = view.activeProject?.id ?? null
   let authoringError: string | null = null
@@ -83,19 +83,14 @@ export function LearningProjectApplication(handle: Handle) {
     })
   }
   const setSidePanelTab = (tab: SidePanelTab): void => {
+    if (tab === 'variables') actions.selectCatalogTab(CATALOG_TAB.PROFILE)
     if (sidePanelTab === tab) return
     sidePanelTab = tab
     void handle.update()
   }
-  const setCatalogPaletteOpen = (isOpen: boolean): void => {
-    if (learningWorkspaceState.catalogPaletteOpen === isOpen) return
-    learningWorkspaceState.catalogPaletteOpen = isOpen
-    if (!isOpen) dropTarget = null
-    void handle.update()
-  }
-  const setCatalogPaletteTab = (tab: CatalogPaletteTab): void => {
-    if (learningWorkspaceState.catalogPaletteTab === tab) return
-    learningWorkspaceState.catalogPaletteTab = tab
+  const setClipboardTab = (tab: ClipboardTab): void => {
+    if (learningWorkspaceState.clipboardTab === tab) return
+    learningWorkspaceState.clipboardTab = tab
     dropTarget = null
     void handle.update()
   }
@@ -122,7 +117,16 @@ export function LearningProjectApplication(handle: Handle) {
   }
   /** Keeps profile-variable insertion available only for the active text target. */
   const setProfileTokenTarget = (targetId: string | null): void => {
-    if (learningWorkspaceState.profileTokenTargetId === targetId) return
+    const targetIsCurrent = learningWorkspaceState.profileTokenTargetId === targetId
+    if (targetId !== null) {
+      sidePanelTab = 'variables'
+      if (view.editor.catalogTab !== CATALOG_TAB.PROFILE) actions.selectCatalogTab(CATALOG_TAB.PROFILE)
+      if (targetIsCurrent) {
+        void handle.update()
+        return
+      }
+    }
+    if (targetIsCurrent) return
     learningWorkspaceState.profileTokenTargetId = targetId
     if (targetId === null && view.editor.catalogTab === CATALOG_TAB.PROFILE) {
       actions.selectCatalogTab(CATALOG_TAB.AVAILABLE_BDCS)
@@ -137,8 +141,6 @@ export function LearningProjectApplication(handle: Handle) {
       : { targetId: detail.targetId, ...detail.selection }
     if (detail.selection !== null) {
       setProfileTokenTarget(detail.targetId)
-      sidePanelTab = 'contents'
-      actions.selectCatalogTab(CATALOG_TAB.PROFILE)
       if (!panelVisibility.properties) setPanelVisibility('properties', true)
     }
     void handle.update()
@@ -322,8 +324,7 @@ export function LearningProjectApplication(handle: Handle) {
     sidePanelTab,
     appearanceTarget,
     summarySettingsOpen: learningWorkspaceState.summarySettingsOpen,
-    catalogPaletteOpen: learningWorkspaceState.catalogPaletteOpen,
-    catalogPaletteTab: learningWorkspaceState.catalogPaletteTab,
+    clipboardTab: learningWorkspaceState.clipboardTab,
     profileDraft: learningWorkspaceState.profileDraft,
     getProfileDraft: () => learningWorkspaceState.profileDraft,
     profileTokenTargetId: learningWorkspaceState.profileTokenTargetId,
@@ -336,8 +337,7 @@ export function LearningProjectApplication(handle: Handle) {
     setSidePanelTab,
     openAppearanceTarget,
     setSummarySettingsOpen,
-    setCatalogPaletteOpen,
-    setCatalogPaletteTab,
+    setClipboardTab,
     setProfileDraft,
     setAuthoringError,
     setDropTarget,
@@ -443,6 +443,7 @@ function renderApplication(
   runHistoryAction: (kind: 'undo' | 'redo') => void,
 ): RemixNode {
   return renderCoreProjectApplication({
+    mod: 'learning',
     view: {
       projects: view.projects,
       activeProject: view.activeProject,
@@ -469,8 +470,7 @@ function renderApplication(
       sidePanelTab: workspace.sidePanelTab,
       appearanceTarget: workspace.appearanceTarget,
       summarySettingsOpen: workspace.summarySettingsOpen,
-      catalogPaletteOpen: workspace.catalogPaletteOpen,
-      catalogPaletteTab: workspace.catalogPaletteTab,
+      clipboardTab: workspace.clipboardTab,
       profileDraft: workspace.profileDraft,
       getProfileDraft: workspace.getProfileDraft,
       profileTokenTargetId: workspace.profileTokenTargetId,
@@ -484,8 +484,7 @@ function renderApplication(
       onSetSidePanelTab: workspace.setSidePanelTab,
       onOpenAppearanceTarget: workspace.openAppearanceTarget,
       onSetSummarySettingsOpen: workspace.setSummarySettingsOpen,
-      onSetCatalogPaletteOpen: workspace.setCatalogPaletteOpen,
-      onSetCatalogPaletteTab: workspace.setCatalogPaletteTab,
+      onSetClipboardTab: workspace.setClipboardTab,
       onSetProfileDraft: workspace.setProfileDraft,
       onSetAuthoringError: workspace.setAuthoringError,
       onSetDropTarget: workspace.setDropTarget,

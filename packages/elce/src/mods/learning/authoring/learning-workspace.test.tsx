@@ -7,7 +7,7 @@ import { CHAPTER_TYPE } from '../organization/learning-organization-config'
 import { learningControllerMachine as controllerMachine } from './learning-controller-machine'
 import { LearningEditorFacade } from './learning-editor-facade'
 import { renderEditorWorkspace } from './learning-workspace'
-import type { DraggedScenarioEntry, ResponsivePanel } from './learning-workspace-types'
+import type { DraggedScenarioEntry, ResponsivePanel, SidePanelTab } from './learning-workspace-types'
 
 describe('Remix editor workspace', () => {
   it('keeps the summary first in the scenario without changing document pages or insertion positions', async () => {
@@ -143,17 +143,13 @@ describe('Remix editor workspace', () => {
     await rendered.act(() => rendered.$('#elce-scenario-summary-page')?.dispatchEvent(new Event('click', { bubbles: true })))
     rendered.cleanup()
     rendered = mount()
-    expect(rendered.$('#elce-content-catalog-title')?.textContent).toBe('Contenus')
+    expect(rendered.$('#elce-variables-title')?.textContent).toBe('Variables')
     expect(rendered.$('#elce-workspace-profile-token-insertion')).toBeNull()
-    expect(rendered.$('#elce-content-catalog-tab-profile')).toBeNull()
+    expect(rendered.$('#elce-profile-token-insertion')).toBeNull()
     setProfileTokenTargetId('elce-test-profile-target')
     rendered.cleanup()
     rendered = mount()
-    expect(rendered.$('#elce-content-catalog-tab-profile')?.textContent).toBe('Variables')
-    await rendered.act(() => rendered.$('#elce-content-catalog-tab-profile')?.dispatchEvent(new Event('click', { bubbles: true })))
-    rendered.cleanup()
-    rendered = mount()
-    expect(rendered.$('#elce-content-catalog-tab-profile')?.getAttribute('aria-pressed')).toBe('true')
+    expect(rendered.$('#elce-side-panel-tab-variables')?.getAttribute('aria-selected')).toBe('true')
     expect(rendered.$(`#elce-profile-token-insertion-profile-${propertyId}`)).not.toBeNull()
 
     const target = rendered.$('#elce-test-profile-target') as HTMLTextAreaElement
@@ -169,8 +165,8 @@ describe('Remix editor workspace', () => {
     setProfileTokenTargetId(null)
     rendered.cleanup()
     rendered = mount()
-    expect(rendered.$('#elce-content-catalog-tab-profile')).toBeNull()
-    expect(rendered.$('#elce-catalog-profile')?.hasAttribute('hidden')).toBe(true)
+    expect(rendered.$('#elce-profile-token-insertion')).toBeNull()
+    expect(rendered.$('#elce-variables-empty')?.textContent).toContain('Sélectionner un champ')
 
     rendered.cleanup()
     cleanup()
@@ -192,6 +188,7 @@ function createWorkspace(
   const actions = new LearningEditorFacade(controller)
   actions.createEvaluationChapter(controller.getSnapshot().context.document)
   let responsivePanel: ResponsivePanel = null
+  let sidePanelTab: SidePanelTab = 'clipboard'
   let summarySettingsOpen = false
   let profileTokenTargetId: string | null = null
   let authoringError: string | null = null
@@ -208,7 +205,7 @@ function createWorkspace(
         <textarea id="elce-test-profile-target" data-elce-profile-token-target="true" defaultValue="Bonjour monde" />
       </div>,
       responsivePanel,
-      sidePanelTab: 'contents',
+      sidePanelTab,
       appearanceTarget: { kind: 'document' },
       summarySettingsOpen,
       profileTokenTargetId,
@@ -217,7 +214,7 @@ function createWorkspace(
       dropTarget,
       visible: true,
       onSetResponsivePanel: (panel) => { responsivePanel = panel },
-      onSetSidePanelTab: () => undefined,
+      onSetSidePanelTab: (tab) => { sidePanelTab = tab },
       onOpenAppearanceTarget: () => undefined,
       onSetSummarySettingsOpen: (open) => { summarySettingsOpen = open },
       onSetAuthoringError: (error) => { authoringError = error },
@@ -243,5 +240,13 @@ function createWorkspace(
     draggedEntry = null
   }
 
-  return { controller, mount, cleanup, setProfileTokenTargetId: (targetId: string | null) => { profileTokenTargetId = targetId } }
+  return {
+    controller,
+    mount,
+    cleanup,
+    setProfileTokenTargetId: (targetId: string | null) => {
+      profileTokenTargetId = targetId
+      if (targetId !== null) sidePanelTab = 'variables'
+    },
+  }
 }

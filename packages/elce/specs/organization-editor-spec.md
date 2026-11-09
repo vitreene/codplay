@@ -106,6 +106,9 @@ extérieur, y compris si le clic ouvre une autre commande flottante. Safari MCP
 sur Projet 3 confirme l’ouverture puis la fermeture du menu par clic dans le
 contenu de la page et dans une autre commande ; le comportement est porté par
 [`learning-page-editor.tsx`](../src/mods/learning/authoring/learning-page-editor.tsx).
+Quand il est ouvert, le menu reste au premier plan au-dessus des en-têtes et
+barres d’outils collants des BDC, y compris la barre de mise en forme d’une
+Section.
 
 ### Cadres des BDC directs
 

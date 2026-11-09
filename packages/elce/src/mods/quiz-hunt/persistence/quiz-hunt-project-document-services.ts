@@ -12,7 +12,7 @@ export function createQuizHuntProjectDocumentServices(
     name: (document) => document.name,
     media: (document) => document.medias,
     serialize: writeQuizHuntDocument,
-    createProjectDocument: (projects) => documentService.createProjectDocument(projects),
+    createProjectDocument: (projects, name) => documentService.createProjectDocument(projects, name),
     withProjectIdentity: (document, id, name) => documentService.withProjectIdentity(document, id, name),
     isUnsupportedFormatError: (error) => error instanceof Error && error.message.startsWith('Format Quiz Hunt non pris en charge.'),
   }

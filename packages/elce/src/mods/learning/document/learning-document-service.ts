@@ -90,8 +90,13 @@ export class LearningDocumentService {
     return document.toJSON()
   }
 
-  /** Creates the next default project name from the current project list. */
-  public createProjectDocument(projects: readonly Readonly<{ name: string }>[]): LearningDocument {
+  /** Creates a new project with its supplied name or the next available default name. */
+  public createProjectDocument(projects: readonly Readonly<{ name: string }>[], requestedName?: string): LearningDocument {
+    if (requestedName !== undefined) {
+      const name = requestedName.trim()
+      if (name.length === 0) throw new Error('Le nom du document ne peut pas être vide.')
+      return this.withProjectIdentity(this.createInitialDocument(), createStableId('elce-document'), name)
+    }
     const usedNames = new Set(projects.map((project) => project.name))
     let index = 1
     while (usedNames.has(`Projet ${index}`)) index += 1

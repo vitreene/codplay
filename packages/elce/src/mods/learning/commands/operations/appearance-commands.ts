@@ -13,7 +13,13 @@ export function setAppearanceProperty(
   value: NonNullable<AppearanceSettings[AppearanceProperty]>,
 ): LearningDocument {
   const current = appearanceForTarget(document, target)
-  return replaceAppearanceForTarget(document, target, { ...current, [property]: value })
+  const leavesTransparent = property === 'paletteId'
+    && resolveAppearance(document.data, target).density.value === 'none'
+  return replaceAppearanceForTarget(document, target, {
+    ...current,
+    [property]: value,
+    ...(leavesTransparent ? { density: 'normal' } : {}),
+  })
 }
 
 /** Sets a surface color and restores the Normal density when leaving Transparent. */

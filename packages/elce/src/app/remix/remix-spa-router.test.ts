@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { run } from 'remix/spa'
 import { createElceSpaRouter } from './remix-spa-router'
 import { createLearningPreviewComposition } from '../../mods/learning/composition/preview-composition'
@@ -14,13 +14,18 @@ describe('Elcé Remix SPA route', () => {
   let dispose: (() => void) | undefined
   let openerDescriptor: PropertyDescriptor | undefined
 
+  beforeEach(() => {
+    if (document.body === null) document.documentElement.append(document.createElement('body'))
+  })
+
   afterEach(() => {
     dispose?.()
     dispose = undefined
     if (openerDescriptor === undefined) delete (window as Window & { opener?: Window }).opener
     else Object.defineProperty(window, 'opener', openerDescriptor)
     openerDescriptor = undefined
-    document.body.replaceChildren()
+    document.body?.replaceChildren()
+    if (document.body === null) document.documentElement.append(document.createElement('body'))
     window.history.replaceState(null, '', '/')
   })
 
@@ -41,5 +46,17 @@ describe('Elcé Remix SPA route', () => {
     expect(document.querySelector('#elce-remix-route-root')).not.toBeNull()
     expect(document.querySelector('#elce-authoring-root')).toBeNull()
     expect(document.querySelector('#elce-remix-project-app')).toBeNull()
+  })
+
+  it('renders the authoring root across chooser and mod-specific document routes', async () => {
+    const router = createElceSpaRouter({
+      authoringRoot: '<div id="elce-authoring-root"></div>',
+      previewRoot: null,
+    })
+
+    for (const path of ['/', '/new', '/learning/project-a', '/hunt/project-b']) {
+      const response = await router.fetch(`http://elce.test${path}`)
+      expect(response.status).toBe(200)
+    }
   })
 })

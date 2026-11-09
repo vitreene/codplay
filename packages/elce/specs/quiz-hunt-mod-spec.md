@@ -36,6 +36,15 @@ XState ; Annuler et Rétablir restaurent aussi la page sélectionnée.
 
 ## Interface auteur
 
+L’édition d’un document Quiz Hunt est accessible sur `/hunt/:documentId` ; le
+segment `hunt` choisit sa composition auteur et l’identifiant est validé dans
+le catalogue Quiz Hunt. `/` et `/new` utilisent le sélecteur commun, Learning
+étant le choix par défaut ; « Autre… » permet de choisir Quiz Hunt et son
+catalogue `projects.mod_key` dédié. Le paramètre `?mod=quiz-hunt` ne choisit
+plus la composition auteur. Les règles de création, de transfert de session,
+de suppression et d’historique sont décrites dans la
+[spécification de session documentaire](./project-session-spec.md).
+
 `QuizHuntProjectApplication` compose l’édition dans le cadre partagé
 `renderEditorFrame`. Le panneau Scénario reprend la hiérarchie de Learning : le
 Sommaire est une entrée fixe à la racine de la vue auteur, puis les chapitres

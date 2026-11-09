@@ -12,7 +12,7 @@ export function createLearningProjectDocumentServices(
     name: (document) => document.data.name,
     media: (document) => document.medias,
     serialize: (document) => document.toJSON(),
-    createProjectDocument: (projects) => documentService.createProjectDocument(projects),
+    createProjectDocument: (projects, name) => documentService.createProjectDocument(projects, name),
     withProjectIdentity: (document, id, name) => documentService.withProjectIdentity(document, id, name),
     isUnsupportedFormatError: (error) => documentService.isUnsupportedFormatError(error),
   }

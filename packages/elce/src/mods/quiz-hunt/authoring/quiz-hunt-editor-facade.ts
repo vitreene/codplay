@@ -1,5 +1,5 @@
 import type { Actor } from 'xstate'
-import { CoreEditorFacade } from '../../../core/authoring/core-editor-facade'
+import { CoreEditorFacade, runProjectOperationAndWait } from '../../../core/authoring/core-editor-facade'
 import type { QuestionContent, QuestionType } from '../../../resources/bdcs/question/domain/question-types'
 import { QUESTION_TYPE } from '../../../resources/bdcs/question/question-config'
 import { ElceQuestionService } from '../../../resources/bdcs/question/domain/question-service'
@@ -36,6 +36,7 @@ export class QuizHuntEditorFacade {
     this.core = new CoreEditorFacade(
       (event) => controller.send(event),
       (name) => this.apply({ type: 'document.rename', name }),
+      (operation) => runProjectOperationAndWait(controller, operation),
     )
   }
 
