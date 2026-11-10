@@ -88,6 +88,12 @@ annonce l’attente, le nom du fichier ou l’erreur à l’aide d’un état ac
 Un document ou média invalide, ou une erreur de paquetage, n’entraîne pas de
 téléchargement partiel.
 
+Les deux mods utilisent les capacités partagées de `core/export/` pour lire
+uniquement les médias référencés, contrôler leur taille, soumettre le formulaire
+et valider le type ZIP ainsi que le nom transmis. Le téléchargement commun
+retire son lien temporaire après le clic et révoque son Object URL après une
+seconde. Les messages et les routes restent fournis par chaque mod.
+
 ## Preuves
 
 - [`learning-scenario-exporter.test.ts`](../src/mods/learning/persistence/server/learning-scenario-exporter.test.ts)
@@ -109,6 +115,11 @@ téléchargement partiel.
 - [`learning-sighty-export-client.test.ts`](../src/mods/learning/persistence/learning-sighty-export-client.test.ts)
   vérifie l’envoi du document et des médias référencés ainsi que le traitement
   des erreurs.
+- [`export-transport.test.ts`](../src/core/export/export-transport.test.ts) et
+  [`browser-download.test.ts`](../src/core/export/browser-download.test.ts)
+  vérifient l’absence de source pour un média référencé, l’échec de lecture, la taille
+  incorrecte, les erreurs HTTP, les réponses non ZIP, le nom manquant et la
+  libération de l’Object URL.
 - [`sighty-export-api-controller.test.ts`](../src/server/export/sighty-export-api-controller.test.ts)
   vérifie la réponse ZIP et l’absence d’écriture de persistance.
 - [`project-application.test.tsx`](../src/app/remix/project-application.test.tsx)
@@ -125,6 +136,12 @@ téléchargement partiel.
   et `Cache-Control: no-store`. L’interface annonce le téléchargement et la
   console ne contient pas d’erreur. Cette requête ne déclenche aucune
   sauvegarde du document.
+- [`learning-scenario-exporter.test.ts`](../src/mods/learning/persistence/server/learning-scenario-exporter.test.ts)
+  ouvre l’archive Sighty Learning réellement générée, la transmet au packageur
+  SCORM et ouvre l’archive SCORM produite. Le test Quiz Hunt
+  [`quiz-hunt-sighty-exporter.test.ts`](../src/mods/quiz-hunt/persistence/server/quiz-hunt-sighty-exporter.test.ts)
+  ouvre son export réel et vérifie les références de fonctions compactées par
+  identité, y compris les callbacks `onReset` des scènes.
 - Les 385 tests Elcé passent sur l’exécution complète et le rerun des tests
   d’intégration qui ouvrent un serveur local ; le typecheck et le build passent.
   Le parcours visuel

@@ -49,7 +49,7 @@ describe('Avatar authoring through Learning commands', () => {
     expect(() => applyDocumentCommand(document, { type: 'bdc.carousel.word.set', bdcId: 'carousel-test', cardBdcId: 'card-one', avatarBdcId: 'avatar-test', wordIndex: 1, startAtMs: 2400 })).toThrow('première')
   })
 
-  it('migrates v11 absolute starts into v12 per-view durations', () => {
+  it('migrates v11 absolute starts into per-view durations in the current document format', () => {
     const source = createAvatarDocumentFixture()
     const starts = [0, 2400, 6800]
     const legacy = {
@@ -69,7 +69,7 @@ describe('Avatar authoring through Learning commands', () => {
 
     const migrated = LearningDocument.fromJSON(legacy)
 
-    expect(migrated.data.version).toBe(12)
+    expect(migrated.data.version).toBe(14)
     expect(carouselIn(migrated).cards.map((entry) => entry.durationMs)).toEqual([2400, 4400, 5200])
     expect(carouselIn(migrated).cards.map((entry) => entry.cue)).toEqual([
       undefined,

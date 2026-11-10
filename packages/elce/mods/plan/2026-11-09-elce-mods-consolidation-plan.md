@@ -1,6 +1,7 @@
 # Plan d’exécution — consolidation des mods Elcé
 
-**Statut : En cours.** Plan accepté pour exécution. M0, M1 et M2 sont validés.
+**Statut : En cours.** Plan accepté pour exécution. M0 à M8 sont validés ; M9
+reste ouvert pour le parcours navigateur final.
 Les previews Learning et Quiz Hunt sont exercées dans Safari avec des projets
 temporaires supprimés après validation.
 
@@ -112,6 +113,17 @@ Quiz Hunt, deux tests serveur bloqués par `listen EPERM`, et tests d’éditeur
 Avatar et profil. Ces échecs sont le point de comparaison ; ils ne sont pas
 attribués à M1. Le script de graphe classe aussi 37 imports `node:` comme non
 résolus ; ce sont des built-ins Node, à exclure du futur diagnostic M8.
+
+Revue ciblée du 10 novembre 2026 dans le worktree courant : une exécution JSON
+de la suite a donné 642 succès et 14 échecs sur 656 tests. Les deux erreurs
+`listen EPERM` disparaissent quand les tests peuvent ouvrir leur port local ;
+les tests serveur sont conservés. Les attentes de version 12 ont été alignées
+sur la version 14, et les tests d’éditeur, de profil et de Quiz Hunt ont été
+actualisés d’après leurs contrats. Cette revue a aussi révélé un défaut réel :
+la grille Quiz Hunt omettait ses cases vides désactivées ; elles sont rendues
+maintenant. Les six fichiers ciblés passent (78/78) et `npm run typecheck`
+passe. La suite complète n’a pas été relancée après ces corrections ; ce relevé
+ne revendique donc pas un succès global.
 
 Acceptation M0 terminée le 10 novembre 2026 dans Safari Technology Preview.
 Depuis `/`, les projets Learning et Quiz Hunt ont été créés par le sélecteur,
@@ -261,7 +273,8 @@ les raccords Section/ancres, `src/domain/anchor/anchor-position.ts` et
 - [x] Préserver les sorties Learning pour `profileLabel`, `pageLinkLabel`,
   `localDateLabel`, les paragraphes et retours à la ligne. Les conversions
   de Learning restent inchangées ; le Graphe et les aperçus Card lui délèguent
-  leur projection. Les tests ciblés des valeurs enrichies restent à exécuter.
+  leur projection. Les tests couvrent la projection Learning et son défaut
+  neutre.
 - [x] Déplacer `domain/anchor/anchor-position.ts` dans
   `resources/anchoring/domain/anchor-position.ts`, utiliser `CARD_PRESET_ID`
   depuis la ressource Carte et migrer ses importateurs. Retirer l’ancien point
@@ -275,21 +288,12 @@ d’import, types compris. Éprouver les projections texte, l’édition du Grap
 et les aperçus d’ancres ; vérifier une Section et une Carte ancrée dans le vrai
 lecteur pour les contextes des deux mods qui les proposent.
 
-État M3 : les adaptations de projection, le déplacement d’ancre et les imports
-`ScormVersion` sont implémentés. `npm run typecheck` passe. L’inspection AST du
-graphe de production ne trouve plus de chemin `core/ressources → mods`. Safari
-Technology Preview a affiché le Graphe auteur puis sa lecture réelle, ainsi
-qu’une page Learning contenant une Section et des Cartes ancrées, sur des
-documents existants ouverts sans modification. La console signale un 404 d’une
-ressource image déjà référencée ; aucun autre avertissement ou erreur n’est
-relevé. La preview Quiz Hunt réelle échoue actuellement avec « Version de
-document Elcé non supportée : 1 » : le popup local omettait le paramètre de mod
-attendu par la sélection du lecteur. Ce circuit est corrigé et vérifié dans
-Safari : le clic Preview transmet le mod et charge le jeu Quiz Hunt ; la preview
-Learning conserve le lecteur Learning. La preuve navigateur ne qualifie pas
-encore les valeurs enrichies Learning. Restent les tests ciblés des projections
-neutre et Learning, le contrôle de Sections/cartes ancrées dans les contextes
-Quiz Hunt pertinents, puis l’acceptation complète du lot.
+État M3 : la projection de texte est spécifiée dans
+[`resource-text-projection-spec.md`](../../specs/resource-text-projection-spec.md).
+Les projections neutre et Learning, l’édition du Graphe, les aperçus d’ancres,
+le montage d’une Carte ancrée dans le vrai lecteur Learning et le rendu d’une
+Section dans le vrai lecteur Quiz Hunt passent leurs tests. Le contrôle de
+frontières ne trouve aucun chemin core/ressources → mods. M3 est `Fini`.
 
 **M4 — Partager le transport et le téléchargement des exports.**
 
@@ -316,13 +320,13 @@ Learning. Tester média absent, taille incorrecte, erreur HTTP, réponse non ZIP
 et libération de l’Object URL. Télécharger et ouvrir un export Sighty et SCORM
 de chaque mod ; préserver le monoSCO Quiz Hunt et les options SCORM Learning.
 
-État M4 : le téléchargement, le nommage, la lecture des octets média et la
-validation des archives sont partagés sous `core/export`. Les clients et
-l’exporteur serveur Learning sont désormais sous `mods/learning/persistence` ;
-Quiz Hunt conserve ses endpoints, son codec, ses messages et son calcul média
-fondé sur son propre scénario. Le typecheck passe. Les contrôles de transport,
-les deux exports réels de chaque mod et l’ouverture de leurs archives restent
-à valider ; M4 reste `En cours`.
+État M4 : les contrôles du transport partagé et du téléchargement passent.
+Les exports Sighty Learning et Quiz Hunt sont ouverts depuis leurs ZIP réels ;
+les packages SCORM réels sont également ouverts pour les deux mods. Le package
+Quiz Hunt enregistre les callbacks compacts des vues et les `onReset` des scènes
+par identité. Le package Learning inclut les métadonnées de distribution de
+son moteur Rive. Les exports SCORM préservent les chapitres Learning et le
+monoSCO Quiz Hunt. M4 est `Fini`.
 
 **M5 — Réutiliser les adaptations d’édition des ressources.**
 
@@ -348,13 +352,11 @@ média, et Annuler/Rétablir. Vérifier aussi la Carte résultat Quiz Hunt, la C
 directe Learning et la Carte enfant de Carousel. Préserver la Question requise
 des pages de banque et les commandes de création propres à chaque mod.
 
-État M5 : les façades Question et Carte reçoivent un getter du contenu courant ;
-leurs callbacks d’édition, règles de réponses, champs, transitions et médias
-sont réutilisés par Learning et Quiz Hunt. Quiz Hunt compose les sous-unions de
-commandes d’édition ressource ; Learning et Quiz Hunt gardent leurs commandes
-de création et leurs règles documentaires propres. Le typecheck et le build
-passent. L’acceptation des éditions successives, médias, Annuler/Rétablir et des
-trois contextes Carte reste à effectuer ; M5 demeure `En cours`.
+État M5 : les éditions successives Question/Carte, les changements de type et
+de réponses, les imports/suppressions média et Undo/Redo passent dans Learning
+et Quiz Hunt. Les tests couvrent la page Remix Learning, ses Cartes directes et
+Carousel, ainsi que la Carte résultat Quiz Hunt et la protection de la Question
+de banque. Les créations et placements restent propres aux mods. M5 est `Fini`.
 
 **M6 — Partager les protocoles SQLite de bail et de fichier média.**
 
@@ -382,13 +384,14 @@ une reprise concurrente et refusent ensuite l’ancien droit.
   base pour le nettoyage du stockage physique partagé. Les autres lectures
   et mutations projet/média restent filtrées par le mod.
 
-État M6 : les primitives SQLite, le protocole de bail, son contrôle dans les
-mutations et la publication média transactionnelle sont partagés sous `core/`.
-Les deux dépôts fournissent explicitement leur `mod_key` et gardent la
-transaction qui encadre chaque opération. Le renouvellement après échéance
-préserve le droit tant qu’aucune autre page ne l’a repris. Le typecheck, le
-build et le contrôle d’architecture passent. L’acceptation des transitions
-d’accès et des résultats média reste à effectuer ; M6 demeure `En cours`.
+État M6 : les tests couvrent les acquisitions répétées, le refus d’une autre
+page, l’expiration, le renouvellement tardif, la reprise forcée, le refus de
+l’ancien droit et la libération. Les publications et lectures média sont
+filtrées par mod ; les tests vérifient le stockage, le retour déjà stocké,
+la taille incorrecte, le doublon, la perte de droit et la conservation d’un
+fichier Quiz Hunt après suppression du projet Learning, puis le nettoyage
+final. Le typecheck, le build et le contrôle d’architecture passent. M6 est
+`Fini`.
 
 Acceptation : projets des deux mods dans une même base ; vérifier acquisition
 répétée par la même page, refus d’une autre page, expiration, forçage, ancien
@@ -418,7 +421,7 @@ appellent `loadMigrations('./migrations/')`.
 - [x] Comparer la liste ordonnée des 23 IDs composés et les empreintes des 38
   fichiers SQL historiques avant/après le déplacement. L’ID doublon de la copie
   non chargée ne subsiste que dans le nouvel emplacement canonique.
-- [ ] Vérifier une base vierge, les fixtures des anciennes versions et la
+- [x] Vérifier une base vierge, les fixtures des anciennes versions et la
   réouverture d’une copie de base contenant les deux mods.
 
 État M7 : les 19 migrations historiques Learning ont été déplacées sous le
@@ -427,8 +430,9 @@ SHA-256 correspondent au commit de départ. Le doublon homonyme qui n’était p
 chargé a été retiré. Le chargeur Elcé compose toujours ces migrations avec
 celles de Quiz Hunt et les trie par ID ; les chargeurs et références des
 fixtures Learning pointent vers l’emplacement canonique. Le typecheck et le
-build passent. L’application des migrations sur base vierge, anciennes
-fixtures et copie mixte reste à valider ; M7 demeure `En cours`.
+build passent. Les tests ciblés confirment une base vierge, un document Learning
+v8 et la réouverture d’un document Quiz Hunt dans la même base que Learning
+(3 tests passent). M7 est `Fini`.
 
 Acceptation : même schéma et mêmes valeurs documentaires, aucune migration
 rejouée du fait du déplacement et mêmes tests de migration descendante. Ce lot
@@ -445,19 +449,19 @@ requiert un lot distinct.
   autre mod, pour les valeurs comme pour les types. Les entrées produit peuvent
   composer plusieurs mods. Signaler les imports dynamiques non résolus plutôt
   que certifier un graphe incomplet.
-- [ ] Qualifier le contrôle avec des fixtures autonomes montrant dépendance
+- [x] Qualifier le contrôle avec des fixtures autonomes montrant dépendance
   directe, réexport, type et chemin indirect.
 - [x] Migrer les importateurs encore signalés vers leurs propriétaires
   canoniques et retirer uniquement les réexports devenus inutiles. Le graphe
   courant ne contient aucun chemin interdit ; conserver les points d’entrée
   réellement publics dont les consommateurs subsistent.
 
-État M8 : `npm run check:architecture` analyse les 415 sources de production
-avec 2 143 imports internes résolus. Il ne détecte aucun chemin interdit entre
+État M8 : `npm run check:architecture` analyse 417 sources de production avec
+2 156 imports internes résolus. Il ne détecte aucun chemin interdit entre
 core/ressources et mods, aucun import entre mods et aucun import non résolu
-hors built-ins Node. Les diagnostics incluent chaque fichier, ligne et
-spécificateur du chemin responsable. La qualification par fixtures directes,
-réexportées, typées et indirectes reste à faire ; M8 demeure `En cours`.
+hors built-ins Node. Quatre fixtures autonomes vérifient les imports directs,
+les réexports, les types et un chemin core → ressource → mod ; les quatre tests
+passent. M8 est `Fini`.
 
 Acceptation : zéro chemin interdit, avec un contrôle reproductible depuis le
 package. Une réintroduction des imports vers Learning signalés par l’audit
@@ -465,15 +469,15 @@ fait échouer ce contrôle, sans règle d’exemption propre à Learning.
 
 **M9 — Fermer l’acceptation et actualiser les guides.**
 
-- [ ] Actualiser les seules spécifications propriétaires concernées avec les
+- [x] Actualiser les seules spécifications propriétaires concernées avec les
   comportements implémentés et vérifiés. Mettre à jour
   `src/mods/docs/{README.md,SKILL.md}` et le point de découverte
-  `../../.agents/skills/elce-mod/SKILL.md` selon son mode de raccord réel : deux mods,
-  routes `/learning/:documentId` et `/hunt/:documentId`, choix `/` et `/new`,
-  rôles communs, compositions publiques, conventions de migration et contrôle
-  des dépendances. Retirer les indications devenues fausses sur le second mod
-  et le routage `?mod=quiz-hunt`.
-- [ ] Conserver les compositions directes et petites factories actuelles ;
+  `../../../../.agents/skills/elce-mod/SKILL.md` selon son mode de raccord
+  réel : deux mods, routes `/learning/:documentId` et `/hunt/:documentId`,
+  choix `/` et `/new`, rôles communs, compositions publiques, conventions de
+  migration et contrôle des dépendances. Retirer les indications devenues
+  fausses sur le second mod et le routage `?mod=quiz-hunt`.
+- [x] Conserver les compositions directes et petites factories actuelles ;
   le plan ne demande ni registre dynamique, ni classe de base Learning, ni
   réécriture du moteur de lecture. Les découpages internes supplémentaires des
   grands fichiers doivent découler des responsabilités extraites ci-dessus.
@@ -497,6 +501,22 @@ Annuler/Rétablir, sauvegarde/rechargement et réouverture ; menus et responsive
 de M1/M2 ; preview et export du vrai lecteur. En Learning, inclure une Diapo
 Avatar/Carousel et ses associations ; en Quiz Hunt, une épreuve, sa finale et
 Recommencer. Appliquer les règles MCP et d’activation du navigateur d’AGENTS.
+
+État M9 : les guides, le skill de découverte et les spécifications propriétaires
+sont actualisés. Dans la preview réelle Quiz Hunt, la Question M9 apparaît dans
+le scénario et le lecteur ; une bonne réponse ouvre la finale, mène au résultat
+de réussite, puis « Recommencer » réinitialise la partie. Dans Learning, la
+preview d’Interstellar monte le Carousel et affiche l’Avatar au-dessus après
+Play. Ces parcours n’ont signalé aucune erreur console côté Quiz Hunt ; la
+preview Learning a signalé un 404 sans requête HTTP en échec corrélée. Le projet
+Learning temporaire créé pour le contrôle a été supprimé.
+
+Les étapes d’écriture auteur, Undo/Redo, sauvegarde/rechargement et export UI
+restent à valider. L’unique onglet exposé par Safari MCP a été sélectionné et
+rechargé ; l’éditeur est resté en lecture seule. Après un clic dans le champ,
+MCP renvoyait encore `active: false` et `document.hasFocus() === false`. Ce
+constat ne prouve pas qu’une autre session détient le projet. M9 demeure
+`En cours` jusqu’à validation de ces parcours.
 
 **Critère de clôture.** Tous les lots doivent être validés dans les deux
 compositions concernées, les anciens circuits remplacés retirés et le contrôle

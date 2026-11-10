@@ -91,8 +91,9 @@ celui-ci annule les associations ultérieures qu’il dépasse.
 ## Éditeur de l’Avatar
 
 L’éditeur reprend les composants visuels partagés des BDC. Il fournit les
-réglages de coin et le slider de largeur, une action de suppression par icône,
-le lecteur audio de la prise et son transcript. Le BDC n’affiche que son titre
+réglages de coin et le slider de largeur, le lecteur audio de la prise et son
+transcript. Le cadre Avatar n’affiche pas de corbeille ; le retrait du BDC se
+fait avec les commandes de placement communes de la page. Le BDC n’affiche que son titre
 « Avatar » ; aucun sous-titre « Prise sonore » ne précède la zone audio. Le
 bouton coloré « Capture live », plus grand que les icônes d’action, est placé à
 droite du lecteur sur la même ligne. Le transcript vient avant son bilan de
@@ -108,7 +109,8 @@ son contenu défile à l’intérieur.
 ## Preuves
 
 - [`avatar-authoring.test.ts`](../src/mods/learning/integration/avatar-authoring.test.ts)
-  vérifie la cardinalité, la conversion d’un document v11 en durées v12, la
+  vérifie la cardinalité, la conversion d’un document v11 vers les durées du
+  format courant v14, la
   conservation des durées au retrait/remplacement et la réassociation à une
   nouvelle prise. Il vérifie aussi qu’un réordonnancement rend un lien hors
   ordre inactif pour le calcul des durées, puis le réactive au retour.

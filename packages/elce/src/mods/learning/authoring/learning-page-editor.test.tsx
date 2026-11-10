@@ -333,7 +333,7 @@ describe('Remix production page editor', () => {
     const avatarEditor = rendered.$('#elce-avatar-editor-avatar-test')
     expect(avatarEditor?.classList.contains('elce-card-editor')).toBe(true)
     expect(rendered.$('#elce-avatar-start-avatar-test')).toBeNull()
-    expect(rendered.$('#elce-avatar-delete-icon-avatar-test')).not.toBeNull()
+    expect(rendered.$('#elce-avatar-delete-icon-avatar-test')).toBeNull()
     expect((rendered.$('#elce-avatar-width-avatar-test') as HTMLInputElement).type).toBe('range')
     expect((rendered.$('#elce-avatar-width-avatar-test') as HTMLInputElement).max).toBe('5')
     expect(avatarEditor?.querySelector('input[type="file"]')).toBeNull()
@@ -445,6 +445,14 @@ describe('Remix production page editor', () => {
     expect(questionPickerClick).toHaveBeenCalledOnce()
     await rendered.act(() => selectFiles(questionFileInput, [questionImage]))
     await vi.waitFor(() => expect(controller.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === questionId)?.question?.mediaId).not.toBeNull())
+    const importedQuestionMediaId = controller.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === questionId)?.question?.mediaId
+    if (importedQuestionMediaId == null) throw new Error('L’import Question doit produire une ressource média.')
+    actions.createQuestionEditorActions(questionId).clearMedia()
+    await vi.waitFor(() => expect(controller.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === questionId)?.question?.mediaId).toBeNull())
+    controller.send({ type: 'history.undo' })
+    await vi.waitFor(() => expect(controller.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === questionId)?.question?.mediaId).toBe(importedQuestionMediaId))
+    controller.send({ type: 'history.redo' })
+    await vi.waitFor(() => expect(controller.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === questionId)?.question?.mediaId).toBeNull())
 
     const droppedQuestionImage = new File(['dropped question image'], 'question-drop.png', { type: 'image/png' })
     await rendered.act(() => dispatchDrag(

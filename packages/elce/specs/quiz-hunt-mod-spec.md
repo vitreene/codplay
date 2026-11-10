@@ -183,6 +183,19 @@ catalogues sans ajouter le mod au document.
 Les contrats d’ouverture de la base, des routes de projet et des ressources
 média figurent dans la [spécification API projet](./project-api-spec.md).
 
+## Export Sighty
+
+`POST /api/quiz-hunt/exports/sighty` compacts the Quiz Hunt scenario, its scene
+packages, the `quiz-hunt-runtime.json` sidecar and referenced media. The
+exporter registers callbacks retained by compact views, actions, guards and
+scene `onReset` handlers with their original function identities. It uses the
+shared Sighty exporter and keeps the Quiz Hunt document codec, media selection
+and route in the mod.
+
+[`quiz-hunt-sighty-exporter.test.ts`](../src/mods/quiz-hunt/persistence/server/quiz-hunt-sighty-exporter.test.ts)
+opens the generated ZIP and compares callback paths and identities between the
+source scenario and its compact package, including scene reset handlers.
+
 ## Export SCORM
 
 Quiz Hunt possède une route et un packageur SCORM dédiés. L’export auteur

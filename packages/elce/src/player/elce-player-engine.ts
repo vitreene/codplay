@@ -6,6 +6,13 @@ import { SCROLL_CONTAINER_MODULE_DEFINITION } from '@codplay/component-v2/scroll
 /** Holds the CodPlay capabilities required to compile every Elcé scene. */
 export const ELCE_ENGINE_CAPABILITIES: Pick<CodPlayEngineOptions, 'components' | 'modules' | 'libraries'> = {
   ...RIVE_ENGINE,
+  libraries: {
+    register: (RIVE_ENGINE.libraries?.register ?? []).map((library) => ({
+      ...library,
+      module: '@rive-app/canvas-advanced-single',
+      delivery: { mode: 'package' },
+    })),
+  },
   components: {
     register: [
       ...(RIVE_ENGINE.components?.register ?? []),

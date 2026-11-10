@@ -65,6 +65,10 @@ second acteur pour l’historique.
 - [`document-store.test.ts`](../src/mods/learning/integration/document-store.test.ts)
   vérifie que le nettoyage garde les médias utilisés par n’importe quel cache
   projet et retire les blobs orphelins.
+- [`learning-editor-facade.test.ts`](../src/mods/learning/authoring/learning-editor-facade.test.ts)
+  et [`quiz-hunt-controller.test.ts`](../src/mods/quiz-hunt/authoring/quiz-hunt-controller.test.ts)
+  vérifient que les éditions partagées Question/Carte consécutives et leurs
+  imports média restent dans l’historique du mod courant.
 - [`project-application.test.tsx`](../src/app/remix/project-application.test.tsx)
   couvre les boutons, le titre non validé, le raccourci synthétique Rétablir
   et le bouton distinct d’arrêt d’un import.

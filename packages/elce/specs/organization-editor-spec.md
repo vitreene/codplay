@@ -56,8 +56,12 @@ sa fermeture lorsqu’un clic vise le rail de page. Les comportements de dépôt
 dans Corbeille et Catalogue restent à valider dans le plan actif.
 
 Les listes des chapitres et des pages n’affichent pas de puces. Leur texte est
-plus petit que le titre « Scénario » ; la corbeille compacte reste au bord droit
-de chaque ligne. Les pages gardent un léger retrait sous leur chapitre.
+plus petit que le titre « Scénario » ; les pages n’ont pas de corbeille répétée
+sur chaque ligne. La rangée du titre Scénario porte les commandes Ajouter,
+Corbeille et Catalogue. Une page peut être déplacée au Catalogue en la faisant
+glisser sur cette cible, ou supprimée en la déposant dans la Corbeille. Les
+chapitres vides gardent leur corbeille sur la ligne ; un chapitre non vide ne
+peut être supprimé. Les pages gardent un léger retrait sous leur chapitre.
 
 Dans une ligne de chapitre, la poignée et l’icône du type précèdent le nom,
 qui s’aligne à gauche et occupe l’espace disponible ; les actions restent à

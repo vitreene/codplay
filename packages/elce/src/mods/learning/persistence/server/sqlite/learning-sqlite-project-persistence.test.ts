@@ -21,7 +21,7 @@ import {
 } from '../../../../../core/document/content-location'
 import { applyDocumentCommand, assertDocumentInvariants, createStatisticalGraphCarouselBdcCommand } from '../../../../../domain/commands/document-commands'
 import { learningDocumentService } from '../../../document/learning-document-service'
-import { LearningDocument } from '../../../document/learning-document'
+import { ELCE_DOCUMENT_VERSION, LearningDocument } from '../../../document/learning-document'
 import { learningControllerMachine } from '../../../authoring/learning-controller-machine'
 import { LearningEditorFacade } from '../../../authoring/learning-editor-facade'
 import { INITIAL_PROJECT_TEST_STATE, type ProjectTestState } from '../../../reading/learning-test-state-types'
@@ -37,6 +37,8 @@ import { createSqliteDatabase } from 'remix/data-table/sqlite'
 import type { SqliteDatabase } from 'remix/data-table/sqlite'
 import type { RichTextDocument } from '../../../../../resources/document/rich-text-types'
 import { createAvatarDocumentFixture } from '../../../integration/fixtures/avatar-document-fixture'
+import { QuizHuntDocumentService } from '../../../../quiz-hunt/document/quiz-hunt-document-service'
+import { writeQuizHuntDocument } from '../../../../quiz-hunt/persistence/quiz-hunt-document-codec'
 
 const LEGACY_MIGRATIONS_DIRECTORY = fileURLToPath(new URL('../../../../../server/sqlite/migrations/legacy-learning/', import.meta.url))
 
@@ -79,11 +81,11 @@ describe('SQLite project persistence through the Remix API', () => {
     const restored = (await reopened.findProject(source.id))!.document
     expect(restored.bdcs.find((bdc) => bdc.id === 'avatar-test')?.avatar).toEqual(source.bdcs.find((bdc) => bdc.id === 'avatar-test')?.avatar)
     expect(restored.bdcs.find((bdc) => bdc.id === 'carousel-test')?.carousel?.cards).toEqual(source.bdcs.find((bdc) => bdc.id === 'carousel-test')?.carousel?.cards)
-    expect(restored.data.version).toBe(12)
+    expect(restored.data.version).toBe(ELCE_DOCUMENT_VERSION)
     expect((await reopened.findMediaFile(source.id, 'voice-test'))?.storageKey).toBeTruthy()
   })
 
-  it('migrates a fresh database and round-trips the v12 scenario and BDC relations', async () => {
+  it('migrates a fresh database and round-trips the current scenario and BDC relations', async () => {
     database = await openProjectDatabase(':memory:')
     const persistence = new LearningSqliteProjectPersistence(database)
     const router = createLearningApiRouter(persistence)
@@ -167,7 +169,7 @@ describe('SQLite project persistence through the Remix API', () => {
       throw new Error('The second facade-created Card was not placed after the first one.')
     }
     const secondSaved = await saveAndReload()
-    expect(secondSaved.data.version).toBe(12)
+    expect(secondSaved.data.version).toBe(ELCE_DOCUMENT_VERSION)
     expect(secondSaved.pages.find((page) => page.id === pageId)?.bdcIds).toContain(firstCardId)
     expect(secondSaved.pages.find((page) => page.id === pageId)?.bdcIds).toContain(secondCardId)
     actor.stop()
@@ -219,7 +221,7 @@ describe('SQLite project persistence through the Remix API', () => {
     const body = await opened.json() as { document: ReturnType<LearningDocument['toJSON']> }
     const restored = LearningDocument.fromJSON(body.document)
 
-    expect(restored.data.version).toBe(12)
+    expect(restored.data.version).toBe(ELCE_DOCUMENT_VERSION)
     expect(restored.bdcs.find((bdc) => bdc.id === 'bdc-card-photo')?.card?.message).toEqual(richMessage)
     expect(restored.bdcs.find((bdc) => bdc.id === 'bdc-question')?.question?.answers[0]?.label).toBe('Réponse conservée')
   })
@@ -787,6 +789,41 @@ describe('SQLite project persistence through the Remix API', () => {
       const address = server.address() as AddressInfo
       const origin = `http://127.0.0.1:${address.port}`
 
+      const quizDocuments = new QuizHuntDocumentService()
+      const initialQuizDocument = quizDocuments.createInitialDocument('project-shared-media-cleanup', 'Quiz Hunt media cleanup')
+      const quizQuestionPage = initialQuizDocument.pages.find((page) => page.chapterId !== null)
+      const quizQuestionBdcId = quizQuestionPage?.bdcIds[0]
+      if (quizQuestionBdcId === undefined) throw new Error('Quiz Hunt doit conserver sa Question de banque.')
+      const quizMediaBytes = new TextEncoder().encode('quiz-hunt-shared-media')
+      const quizMedia = {
+        id: 'quiz-hunt-shared-cleanup-media',
+        name: 'quiz.png',
+        mimeType: 'image/png',
+        size: quizMediaBytes.byteLength,
+        caption: '',
+      }
+      const quizDocument = quizDocuments.attachQuestionMedia(initialQuizDocument, quizQuestionBdcId, quizMedia)
+      const createdQuizProject = await fetch(`${origin}/api/quiz-hunt/projects`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(writeQuizHuntDocument(quizDocument)),
+      })
+      expect(createdQuizProject.status).toBe(201)
+      const quizAccess = await fetch(`${origin}/api/quiz-hunt/projects/${quizDocument.id}/edit-access`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pageId: 'quiz-hunt-editor' }),
+      })
+      const quizGrantId = (await quizAccess.json() as { grantId: string }).grantId
+      const quizGrant = { 'X-Elce-Page-Id': 'quiz-hunt-editor', 'X-Elce-Edit-Grant': quizGrantId }
+      const quizMediaUrl = `${origin}/api/quiz-hunt/projects/${quizDocument.id}/media/${quizMedia.id}`
+      const uploadedQuizMedia = await fetch(quizMediaUrl, {
+        method: 'PUT',
+        headers: quizGrant,
+        body: new Blob([quizMediaBytes], { type: quizMedia.mimeType }),
+      })
+      expect(uploadedQuizMedia.status).toBe(201)
+
       const preflight = await fetch(`${origin}/api/projects`, {
         method: 'OPTIONS',
         headers: {
@@ -888,6 +925,14 @@ describe('SQLite project persistence through the Remix API', () => {
 
       const deletedProject = await fetch(`${origin}/api/projects/${document.id}`, { method: 'DELETE', headers: grant })
       expect(deletedProject.status).toBe(204)
+      const retainedQuizMedia = await fetch(quizMediaUrl)
+      expect(retainedQuizMedia.status).toBe(200)
+      expect(new Uint8Array(await retainedQuizMedia.arrayBuffer())).toEqual(quizMediaBytes)
+      const deletedQuizProject = await fetch(`${origin}/api/quiz-hunt/projects/${quizDocument.id}`, {
+        method: 'DELETE',
+        headers: quizGrant,
+      })
+      expect(deletedQuizProject.status).toBe(204)
     } finally {
       await api.close()
     }

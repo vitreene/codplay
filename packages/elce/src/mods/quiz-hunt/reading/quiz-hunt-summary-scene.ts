@@ -30,6 +30,11 @@ export function buildQuizHuntSummaryScene(
       document.settings.extraEnabled && trial.page.id === game.extraPageId,
     )]
   })
+  const slotCount = Object.values(game.trialSlotsByColor).reduce((total, slots) => total + slots.length, 0)
+  const emptyTiles = Array.from(
+    { length: Math.max(0, slotCount - tiles.length) },
+    (_unused, index) => createEmptyTile(tiles.length + index + 1),
+  )
 
   return {
     id: 'quiz-hunt-summary-scene',
@@ -45,9 +50,31 @@ export function buildQuizHuntSummaryScene(
             event.data?.terminal,
           ),
         },
-        persos: [createSummaryLayout(), ...tiles],
+        persos: [createSummaryLayout(), ...tiles, ...emptyTiles],
       },
     },
+  }
+}
+
+/** Creates one visible but non-playable tile for an unused draw slot. */
+function createEmptyTile(position: number): SummaryPerso {
+  const id = `quiz-hunt-menu-empty-${position}`
+  return {
+    id,
+    type: 'tag',
+    initial: {
+      tag: 'button',
+      content: '',
+      attr: {
+        id: `${id}-button`,
+        type: 'button',
+        disabled: true,
+        'aria-label': `Emplacement vide ${position}`,
+      },
+      className: 'quiz-hunt-grid-tile',
+      move: { target: 'quiz-hunt:menu:grid' },
+    },
+    actions: {},
   }
 }
 

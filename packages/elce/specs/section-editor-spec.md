@@ -43,7 +43,9 @@ ni le HTML exporté.
 Le contrat de texte est une contribution optionnelle `SectionTextFeature`.
 L’adaptateur fonctionne sans cette contribution ; Learning fournit
 `LearningSectionTextFeature` pour ses tokens de profil et ses attributs de
-champ. La ressource Section ne lit donc pas la définition du profil.
+champ. La ressource Section ne lit donc pas la définition du profil. Les
+projections auteur et lecteur injectées par chaque composition suivent le
+[contrat de projection du texte riche](./resource-text-projection-spec.md).
 `SectionEditorSession` possède les adaptateurs et barres d’outils montés ; la
 vue lui délègue leur actualisation, la restauration du caret et leur destruction.
 

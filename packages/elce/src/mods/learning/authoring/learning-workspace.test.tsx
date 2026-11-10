@@ -91,7 +91,7 @@ describe('Remix editor workspace', () => {
     controller.stop()
   })
 
-  it('opens editable chapter settings in the central work area and deletes a page through XState', async () => {
+  it('opens chapter settings and moves a page to the catalogue through the Scenario drop target', async () => {
     const { controller, mount, cleanup } = createWorkspace()
     let rendered = mount()
     const evaluationChapter = controller.getSnapshot().context.document.chapters.find((chapter) => chapter.type === CHAPTER_TYPE.EVALUATION)
@@ -109,8 +109,23 @@ describe('Remix editor workspace', () => {
     const pageId = controller.getSnapshot().context.document.pages[0]?.id
     const pageChapterId = controller.getSnapshot().context.document.pages[0]?.chapterId
     if (pageId === undefined || pageChapterId === null || pageChapterId === undefined) throw new Error('Workspace fixture page is missing.')
-    await rendered.act(() => rendered.$(`#elce-pages-${pageChapterId}-delete-${pageId}`)?.dispatchEvent(new Event('click', { bubbles: true })))
-    expect(controller.getSnapshot().context.document.pages.some((page) => page.id === pageId)).toBe(false)
+    const pageRow = rendered.$(`#elce-scenario-entry-list-${pageChapterId}-row-${pageId}`)
+    expect(pageRow?.querySelector('.elce-delete-button')).toBeNull()
+    const dataTransfer = {
+      effectAllowed: 'none',
+      dropEffect: 'none',
+      setData: () => undefined,
+    }
+    const dragStart = new Event('dragstart', { bubbles: true, cancelable: true })
+    Object.defineProperty(dragStart, 'dataTransfer', { value: dataTransfer })
+    await rendered.act(() => pageRow?.dispatchEvent(dragStart))
+    const catalogDrop = new Event('drop', { bubbles: true, cancelable: true })
+    Object.defineProperty(catalogDrop, 'dataTransfer', { value: dataTransfer })
+    await rendered.act(() => rendered.$('#elce-scenario-catalog')?.dispatchEvent(catalogDrop))
+    const movedDocument = controller.getSnapshot().context.document
+    expect(movedDocument.pages.some((page) => page.id === pageId)).toBe(true)
+    expect(movedDocument.catalogPageIds).toContain(pageId)
+    expect(movedDocument.scenarioPageIds).not.toContain(pageId)
 
     rendered.cleanup()
     cleanup()

@@ -85,7 +85,15 @@ async function writeScenarioModules(
   mediaSources: Readonly<Record<MediaId, string>>,
 ): Promise<void> {
   const model = createQuizHuntScenarioModel(document, mediaSources, 'release')
-  const scenarioCallbackCount = collectFunctionValues([model.scenario.actions, model.scenario.guards]).length
+  const scenarioCallbackValues = {
+    views: model.scenario.views,
+    actions: model.scenario.actions,
+    guards: model.scenario.guards,
+    sceneResetCallbacks: Object.values(model.scenario.scenes ?? {}).flatMap((source) =>
+      typeof source === 'object' && source !== null && 'onReset' in source ? [source.onReset] : [],
+    ),
+  }
+  const scenarioCallbackCount = collectFunctionValues(scenarioCallbackValues).length
   const sceneCallbackCount = collectFunctionValues(model.scenario.scenes).length
   const dataModule = join(temporaryDirectory, 'scenario-data.ts')
   const modelModule = join(temporaryDirectory, 'scenario-model.ts')
@@ -109,7 +117,7 @@ async function writeScenarioModules(
   ].join('\n'))
   await writeFile(scenarioFunctionsModule, createFunctionGroupModule(
     './scenario-model.ts',
-    'collectScenarioFunctions(model.scenario.actions, model.scenario.guards)',
+    'collectScenarioFunctions({ views: model.scenario.views, actions: model.scenario.actions, guards: model.scenario.guards, sceneResetCallbacks: Object.values(model.scenario.scenes ?? {}).flatMap((source) => typeof source === "object" && source !== null && "onReset" in source ? [source.onReset] : []) })',
     scenarioCallbackCount,
   ))
   await writeFile(sceneFunctionsModule, createFunctionGroupModule(

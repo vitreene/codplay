@@ -182,6 +182,10 @@ test initial.
 - [`learning-page-editor.test.tsx`](../src/mods/learning/authoring/learning-page-editor.test.tsx)
   vérifie l’édition Question dans la page Remix de production ainsi que
   l’import d’une illustration par la file média XState existante.
+- [`quiz-hunt-controller.test.ts`](../src/mods/quiz-hunt/authoring/quiz-hunt-controller.test.ts)
+  vérifie les éditions Question successives, le changement de type, les
+  réponses, les médias et Undo/Redo par la façade Quiz Hunt, tout en protégeant
+  la Question requise de la banque.
 - Le 4 octobre, Safari MCP confirme qu’une page créée dans un chapitre
   Évaluation est une page Flux avec un BDC Question, et que la preview réelle
   CodPlay affiche cette Question avec ses réponses Oui/Non. La page et le

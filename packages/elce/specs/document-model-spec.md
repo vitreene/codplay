@@ -2,7 +2,7 @@
 
 ## Statut
 
-**Fixe — structure documentaire v10 et invariants de placement vérifiés. La
+**Fixe — structure documentaire v14 et invariants de placement vérifiés. La
 validation complète des transitions de Révélation par Carte reste en cours dans
 le [plan de synchronisation locale](../plan/2026-10-06-elce-local-first-synchronisation-plan.md).
 Sommaire et profils sont décrits dans la [spécification dédiée](./summary-profile-spec.md).**
@@ -14,7 +14,7 @@ Flux.
 
 ## Modèle
 
-Un `ElceDocument` version 10 contient des tableaux de chapitres, pages, BDC et
+Un `ElceDocument` version 14 contient des tableaux de chapitres, pages, BDC et
 médias, ainsi que `scenarioEntries`, une séquence ordonnée de références de
 type `page` ou `chapter`. Une page autonome est une entrée racine sœur d’une
 entrée de chapitre ; ces deux formes peuvent alterner dans la même séquence.
@@ -51,18 +51,20 @@ catégorie image/vidéo : l’application déduit celle-ci du MIME. Changer de l
 masque éventuellement des valeurs, mais ne les retire pas du BDC. La création
 propose un Carousel avec sa première Carte enfant.
 
-`ElceDocument` v10 conserve `data.summary`, `data.profile` et les réglages
+`ElceDocument` v14 conserve `data.summary`, `data.profile` et les réglages
 d’apparence facultatifs sur le document, chaque page et chaque BDC. Le preset
-général d’apparence est réservé au document ; le modèle v10 enregistre séparément
+général d’apparence est réservé au document ; le modèle enregistre séparément
 les polices de titre et de corps. Les détails et la résolution par propriété
 figurent dans la [spécification d’apparence](./appearance-spec.md).
 `data.summary` et `data.profile` gardent leur structure et leurs invariants
 décrits dans la [spécification Sommaire et profils](./summary-profile-spec.md).
-`ElceDocument.fromJSON()` accepte les versions 7 à 10 et retourne toujours un
-modèle v10. La migration v7 → v10 convertit les textes enrichis existants ; la
-migration v8 → v10 ajoute le réglage facultatif de page ; la migration v9 → v10
-ajoute à chaque Carte l’objet `revelation` avec `intro` et `outro` initialisés à
-`null`. SQLite conserve le réglage automatique de sortie anticipée comme `NULL`
+`ElceDocument.fromJSON()` accepte les versions 7 à 14 et retourne toujours un
+modèle v14. La migration v7 convertit les anciens textes enrichis ; la migration
+v8 ajoute le réglage facultatif de sortie anticipée ; les versions v9 et v10
+reçoivent les transitions Carte par défaut ; v11 convertit les anciens repères
+Avatar en durées de Carousel ; v12 ajoute la palette de couleurs du projet ;
+v13 convertit les listes de pages des chapitres en entrées de scénario ordonnées.
+SQLite conserve le réglage automatique de sortie anticipée comme `NULL`
 et les choix explicites comme `0` ou `1` dans `pages.allow_early_exit`. Les
 autres versions documentaires sont rejetées.
 
@@ -89,7 +91,7 @@ Les identifiants, métadonnées et vues de placement minimales partagées sont
 dans [`content-document-types.ts`](../src/core/document/content-document-types.ts).
 Les payloads BDC et leur vue de lecture commune sont dans
 [`resource-document-types.ts`](../src/resources/document/resource-document-types.ts).
-Le modèle documentaire v10 complet et ses types appartiennent à Learning dans
+Le modèle documentaire v14 complet et ses types appartiennent à Learning dans
 [`learning-document.ts`](../src/mods/learning/document/learning-document.ts) et
 [`learning-document-types.ts`](../src/mods/learning/document/learning-document-types.ts).
 Le contenu
@@ -107,7 +109,7 @@ Carte, Question, Carousel et Graphe utilisent leurs unions de ressource. Les
 factories de création de BDC correspondantes appartiennent à ces ressources.
 Les factories de page par défaut, chapitre et Résultat sont des méthodes de
 `LearningDocumentService`. Aucune de ces extractions ne change les noms des
-commandes envoyées ni le format documentaire courant v10.
+commandes envoyées ni le format documentaire courant v14.
 
 `LearningDocumentCommandService` est l’unique répartiteur des commandes
 documentaires Learning. Il délègue aux services de page, BDC, ancrage, média et
@@ -146,7 +148,7 @@ il est créé atomiquement avec un BDC Carte enfant au layout initial
 métier.
 
 `LearningDocument.toJSON()` fournit la valeur structurée enregistrable en
-version 10. Les octets des médias sont conservés à part par la frontière IndexedDB.
+version 14. Les octets des médias sont conservés à part par la frontière IndexedDB.
 
 Les types communs ne contiennent pas les payloads Learning : les services
 d’ancre, d’apparence et de réglages de lecture consultent `ResourceDocumentData`
@@ -347,10 +349,10 @@ serveur.
   vérifie l’ajout des colonnes d’apparence facultatives et la migration ciblée
   des anciens presets locaux de Demo5, avec restauration des presets canoniques
   au rollback. Les autres projets ne sont pas convertis.
-- Le même fichier vérifie la migration des projets v8 vers v10, la conservation
+- Le même fichier vérifie la migration des projets v8 vers v14, la conservation
   du défaut automatique sous forme de valeur nulle, l’aller-retour SQLite des
   choix explicites de sortie anticipée et l’ajout des colonnes de transition de
-  Carte pour le format v10.
+  Carte pour le format v14.
 - Le même fichier vérifie les champs et médias d’un BDC Carte à travers les
   layouts, le déplacement vers un autre Carousel, la suppression enfant/parent,
   la Carte autonome dans la séquence Flux et comme unique BDC direct d’une

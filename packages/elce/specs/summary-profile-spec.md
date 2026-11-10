@@ -24,11 +24,12 @@ Les règles de Visibilité ciblent un chapitre, une page ou un BDC. Une règle
 contient une liste ordonnée de conditions ; chaque ligne associe une propriété,
 une comparaison typée et une valeur. Une propriété peut être répétée. Le
 connecteur ET ou OU choisi entre chaque paire est enregistré avec la condition
-qui le précède ; l’évaluation donne priorité à ET sur OU. La règle locale la
-plus spécifique remplace toute la liste héritée : chapitre, page, BDC ancêtre,
-puis BDC lui-même. Sans règle locale, la cible hérite de la règle applicable la
-plus proche. Une liste locale vide retire la règle et rétablit l’héritage. Les
-textes sont comparés sans tenir compte de la casse ni des espaces de bord. Les
+qui le précède ; l’évaluation donne priorité à ET sur OU. Les règles des
+chapitres ancêtres restent cumulatives pour toute leur sous-arborescence : une
+règle locale de page ne les remplace pas. À l’intérieur de la page, la règle
+locale la plus spécifique remplace la règle héritée d’un BDC ancêtre. Une liste
+locale vide retire la règle et rétablit l’héritage. Les textes sont comparés
+sans tenir compte de la casse ni des espaces de bord. Les
 conditions de choix acceptent une correspondance au moins. Une valeur absente
 ne valide jamais une condition, y compris une différence.
 

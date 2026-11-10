@@ -69,7 +69,7 @@ describe('Quiz Hunt Sighty export', () => {
       'http://elce.test/api/quiz-hunt/exports/sighty',
       { method: 'POST', body: form },
     ))
-    expect(sightyResponse.status).toBe(200)
+    expect(sightyResponse.status, await sightyResponse.clone().text()).toBe(200)
     expect(sightyResponse.headers.get('Content-Type')).toBe('application/zip')
     expect(sightyResponse.headers.get('Content-Disposition')).toBe('attachment; filename="Quiz-Hunt-export.sighty.zip"')
 
@@ -128,13 +128,31 @@ describe('Quiz Hunt Sighty export', () => {
         await writeFile(destination, bytes)
       }))
       const scenarioPackage = await import(pathToFileURL(join(extractionDirectory, 'scenario.mjs')).href) as {
-        scenario: Readonly<{ actions?: Readonly<Record<string, unknown>>; guards?: Readonly<Record<string, unknown>> }>
+        scenario: Readonly<{
+          views?: unknown
+          scenes?: Readonly<Record<string, unknown>>
+          actions?: Readonly<Record<string, unknown>>
+          guards?: Readonly<Record<string, unknown>>
+        }>
       }
       const sourceScenario = createQuizHuntScenarioModel(document, { [media.id]: './media/media-0.svg' }, 'release').scenario
-      const sourceCallbacks = collectCallbacksByPath({ actions: sourceScenario.actions, guards: sourceScenario.guards })
+      const sourceSceneResetCallbacks = Object.values(sourceScenario.scenes ?? {}).flatMap((source) =>
+        typeof source === 'object' && source !== null && 'onReset' in source ? [source.onReset] : [],
+      )
+      const packagedSceneResetCallbacks = Object.values(scenarioPackage.scenario.scenes ?? {}).flatMap((source) =>
+        typeof source === 'object' && source !== null && 'onReset' in source ? [source.onReset] : [],
+      )
+      const sourceCallbacks = collectCallbacksByPath({
+        views: sourceScenario.views,
+        actions: sourceScenario.actions,
+        guards: sourceScenario.guards,
+        sceneResetCallbacks: sourceSceneResetCallbacks,
+      })
       const packagedCallbacks = collectCallbacksByPath({
+        views: scenarioPackage.scenario.views,
         actions: scenarioPackage.scenario.actions,
         guards: scenarioPackage.scenario.guards,
+        sceneResetCallbacks: packagedSceneResetCallbacks,
       })
       expect(sourceCallbacks.size).toBeGreaterThan(0)
       expect([...packagedCallbacks.keys()].toSorted()).toEqual([...sourceCallbacks.keys()].toSorted())

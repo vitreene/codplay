@@ -54,5 +54,10 @@ ces en-têtes aux origines locales de l’éditeur.
   manifeste et le lanceur, tout en conservant le chemin technique fondé sur
   son identifiant. Il vérifie aussi que le lanceur transmet au runtime la
   table des identifiants SCORM des chapitres.
+- [`learning-scenario-exporter.test.ts`](../src/mods/learning/persistence/server/learning-scenario-exporter.test.ts)
+  enchaîne l’export Sighty Learning réel avec le packageur SCORM et ouvre le
+  ZIP résultant pour vérifier les chapitres et leurs lanceurs. Le package
+  monoSCO Quiz Hunt réel est vérifié dans
+  [`quiz-hunt-scorm-package.test.ts`](../src/mods/quiz-hunt/scorm/quiz-hunt-scorm-package.test.ts).
 - [`sqlite-project-persistence.test.ts`](../src/mods/learning/persistence/server/sqlite/learning-sqlite-project-persistence.test.ts)
   vérifie l’exposition CORS de l’en-tête de nom de fichier.

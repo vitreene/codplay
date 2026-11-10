@@ -283,6 +283,12 @@ n’est ajouté dans React ou dans Elcé.
 - [`learning-project-application.test.tsx`](../src/mods/learning/authoring/learning-project-application.test.tsx) vérifie la
   création du Carousel, l’édition de cartes identifiées, leurs layouts et
   l’attachement de média par les commandes de l’éditeur.
+- [`learning-editor-facade.test.ts`](../src/mods/learning/authoring/learning-editor-facade.test.ts)
+  vérifie que les éditions successives de Question et Carte lisent le dernier
+  document et partagent Undo/Redo. [`learning-page-editor.test.tsx`](../src/mods/learning/authoring/learning-page-editor.test.tsx)
+  exerce les BDC directs et les Cartes enfants du Carousel dans la page Remix.
+  Quiz Hunt couvre sa Carte résultat et son import média dans
+  [`quiz-hunt-controller.test.ts`](../src/mods/quiz-hunt/authoring/quiz-hunt-controller.test.ts).
 - [`flux-scene-builder.test.ts`](../src/mods/learning/integration/flux-scene-builder.test.ts)
   vérifie la projection des BDC Carte, des champs visibles, des médias selon
   le layout, les commentaires d’insertion et les plages Capsule, ainsi que dix

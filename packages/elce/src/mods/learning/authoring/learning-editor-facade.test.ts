@@ -69,4 +69,38 @@ describe('LearningEditorFacade', () => {
 
     actor.stop()
   })
+
+  it('reads the latest Question and Card values for successive edits and shared Undo/Redo', () => {
+    const actor = createActor(controllerMachine, { input: {} })
+    const actions = new LearningEditorFacade(actor)
+    actor.start()
+    actor.send({ type: 'editor.access.activate' })
+    const initial = actor.getSnapshot().context.document
+    const page = initial.pages[0]
+    if (page === undefined) throw new Error('La fixture Learning doit contenir une page.')
+
+    actions.createQuestion(initial, page.id, page.bdcIds.length)
+    const questionBdcId = actor.getSnapshot().context.document.pages[0]?.bdcIds.at(-1)
+    if (questionBdcId === undefined) throw new Error('La façade doit créer la Question.')
+    const question = actions.createQuestionEditorActions(questionBdcId)
+    question.setTitle('Titre actuel')
+    question.setPrompt('Énoncé actuel')
+    expect(actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === questionBdcId)?.question)
+      .toMatchObject({ title: 'Titre actuel', prompt: 'Énoncé actuel' })
+
+    actions.createStandaloneCard(page.id)
+    const cardBdcId = actor.getSnapshot().context.document.pages[0]?.bdcIds.at(-1)
+    if (cardBdcId === undefined) throw new Error('La façade doit créer une Carte directe.')
+    const card = actions.createCardEditorActions()
+    card.setCardText(cardBdcId, 'title', 'Titre Carte')
+    card.setCardText(cardBdcId, 'message', 'Message Carte')
+    expect(actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === cardBdcId)?.card)
+      .toMatchObject({ title: 'Titre Carte', message: 'Message Carte' })
+
+    actor.send({ type: 'history.undo' })
+    expect(actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === cardBdcId)?.card?.message).toBe('')
+    actor.send({ type: 'history.redo' })
+    expect(actor.getSnapshot().context.document.bdcs.find((bdc) => bdc.id === cardBdcId)?.card?.message).toBe('Message Carte')
+    actor.stop()
+  })
 })

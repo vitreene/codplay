@@ -3,9 +3,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { QuizHuntDocumentService } from '../document/quiz-hunt-document-service'
 import type { QuizHuntDocument } from '../document/quiz-hunt-document-types'
+import { SECTION_BDC_TYPE } from '../../../resources/bdcs/section/section-config'
 import { QuizHuntPlayer } from './quiz-hunt-player'
 import { createQuizHuntGameCatalog } from './quiz-hunt-game-catalog'
 import { QUIZ_HUNT_EXTRA_RETRY_HIDE_DURATION_MS } from './quiz-hunt-layout-scene'
+import { createEmptyRichTextDocument } from '../../../resources/bdcs/section/domain/section-service'
 import type { QuizHuntSavedGameState } from '../persistence/quiz-hunt-game-state-persistence'
 
 type RuntimeHarness = Readonly<{
@@ -85,6 +87,17 @@ function dispatchPointerEvent(target: Element, type: 'pointerdown' | 'pointerup'
   target.dispatchEvent(event)
 }
 
+/** Finds one native answer input inside the page that owns the Question. */
+function questionAnswerInput(stage: HTMLElement, pageId: string, answerId: string | undefined) {
+  return Array.from(stage.querySelectorAll<HTMLInputElement>(`#${pageId}-article .elce-card--question input`))
+    .find((input) => input.value === answerId)
+}
+
+/** Finds the validation button inside the page that owns the Question. */
+function questionValidationButton(stage: HTMLElement, pageId: string) {
+  return stage.querySelector<HTMLButtonElement>(`#${pageId}-article .elce-question-validate`)
+}
+
 /** Creates one playable trial and finale while leaving other colors as empty slots. */
 function createPlayableDocument(): QuizHuntDocument {
   const documents = new QuizHuntDocumentService()
@@ -147,17 +160,16 @@ describe('Quiz Hunt real reading runtime', () => {
     runtime.events.onEvent((event) => observedEvents.push(event))
 
     expect(stage.querySelector('.quiz-hunt-layout')).not.toBeNull()
-    expect(stage.querySelectorAll('.quiz-hunt-summary-tile')).toHaveLength(16)
-    expect(stage.querySelectorAll('.quiz-hunt-summary-tile:disabled')).toHaveLength(15)
-    expect(stage.querySelector('.quiz-hunt-summary-final')?.hasAttribute('disabled')).toBe(true)
+    expect(stage.querySelectorAll('.quiz-hunt-grid-tile')).toHaveLength(16)
+    expect(stage.querySelectorAll('.quiz-hunt-grid-tile:disabled')).toHaveLength(15)
+    expect(stage.querySelector('.quiz-hunt-final-button')?.hasAttribute('disabled')).toBe(true)
 
     stage.querySelector<HTMLButtonElement>(`[data-quiz-hunt-page-id="${trial.page.id}"]`)?.click()
     await flushPlayer(pendingFrames)
     const trialQuestion = trial.questionBdc.question
     const correctTrialAnswer = trialQuestion?.answers.find((answer) => answer.correct)
-    const trialAnswer = Array.from(stage.querySelectorAll<HTMLInputElement>('.elce-card--question input'))
-      .find((input) => input.value === correctTrialAnswer?.id)
-    const trialValidate = stage.querySelector<HTMLButtonElement>('.elce-question-validate')
+    const trialAnswer = questionAnswerInput(stage, trial.page.id, correctTrialAnswer?.id)
+    const trialValidate = questionValidationButton(stage, trial.page.id)
     expect(trialAnswer).not.toBeNull()
     expect(trialValidate).not.toBeNull()
     trialAnswer?.click()
@@ -175,23 +187,22 @@ describe('Quiz Hunt real reading runtime', () => {
     await flushPlayer(pendingFrames)
     expect(runtime.scenarioState.context.game).toMatchObject({ screen: 'menu', trialStatus: { [trial.page.id]: 'success' } })
     expect(player.getCurrentPageId()).toBe(authored.pages.find((page) => page.type === 'summary')?.id)
-    expect(stage.querySelector('.quiz-hunt-basket__word')?.textContent).toContain(trial.page.name)
+    expect(stage.querySelector('.quiz-hunt-basket-slot')?.textContent).toContain(trial.page.name)
     expect(playerLogs).toEqual(['Joueur Quiz Hunt initialisé.'])
-    const finalButton = stage.querySelector<HTMLButtonElement>('.quiz-hunt-summary-final')
+    const finalButton = stage.querySelector<HTMLButtonElement>('.quiz-hunt-final-button')
     expect(finalButton?.disabled).toBe(false)
     finalButton?.click()
     await flushPlayer(pendingFrames)
     expect(observedEvents).toContainEqual(expect.objectContaining({
       name: 'quiz-hunt:final:open',
-      sourceSceneKey: 'scene-summary',
+      sourceSceneKey: 'scene-basket',
     }))
     expect(player.getCurrentPageId()).toBe(final.page.id)
 
     const finalQuestion = final.questionBdc.question
     const incorrectFinalAnswer = finalQuestion?.answers.find((answer) => !answer.correct)
-    const finalAnswer = Array.from(stage.querySelectorAll<HTMLInputElement>('.elce-card--question input'))
-      .find((input) => input.value === incorrectFinalAnswer?.id)
-    const finalValidate = stage.querySelector<HTMLButtonElement>('.elce-question-validate')
+    const finalAnswer = questionAnswerInput(stage, final.page.id, incorrectFinalAnswer?.id)
+    const finalValidate = questionValidationButton(stage, final.page.id)
     expect(finalAnswer).not.toBeNull()
     expect(finalValidate).not.toBeNull()
     finalAnswer?.click()
@@ -202,16 +213,49 @@ describe('Quiz Hunt real reading runtime', () => {
 
     await new Promise<void>((resolve) => setTimeout(resolve, 275))
     await flushPlayer(pendingFrames)
-    expect(stage.querySelector('#quiz-hunt-result-failure-overlay-root')?.hasAttribute('hidden')).toBe(false)
+    expect(stage.querySelector('#quiz-hunt-result-failure-root')?.hasAttribute('hidden')).toBe(false)
     expect(player.getCurrentPageId()).toBe(authored.pages.find((page) => page.type === 'summary')?.id)
 
-    stage.querySelector<HTMLButtonElement>('.quiz-hunt-result-restart')?.click()
+    stage.querySelector<HTMLButtonElement>('#quiz-hunt-result-failure-restart-host .quiz-hunt-result-restart')?.click()
     await new Promise<void>((resolve) => setTimeout(resolve, 75))
     await flushPlayer(pendingFrames)
-    expect(stage.querySelector('#quiz-hunt-result-failure-overlay-root')?.hasAttribute('hidden')).toBe(true)
-    expect(stage.querySelector('.quiz-hunt-basket__word')?.textContent).toBe('—')
-    expect(stage.querySelector('.quiz-hunt-summary-final')?.hasAttribute('disabled')).toBe(true)
+    const resetRuntime = (player as unknown as { runtime: RuntimeHarness }).runtime.api
+    expect(resetRuntime.scenarioState.context.game).toMatchObject({ screen: 'menu', basket: { [trial.colorId]: null } })
+    expect(stage.querySelector('.quiz-hunt-basket-slot')?.textContent).toBe('—')
+    expect(stage.querySelector('.quiz-hunt-final-button')?.hasAttribute('disabled')).toBe(true)
     expect(player.getCurrentPageId()).toBe(authored.pages.find((page) => page.type === 'summary')?.id)
+  })
+
+  it('renders a shared Section in a bank page through the real Quiz Hunt reader', async () => {
+    installBrowserTestAdapters(pendingFrames)
+    const documents = new QuizHuntDocumentService()
+    const initial = createPlayableDocument()
+    const page = initial.pages.find((candidate) => candidate.type === 'flux')
+    if (page === undefined) throw new Error('The Quiz Hunt reader fixture has no bank page.')
+    const withSection = documents.addSection(initial, page.id, page.bdcIds.length)
+    const sectionBdc = withSection.bdcs.find((bdc) => bdc.type === SECTION_BDC_TYPE)
+    if (sectionBdc?.section == null) throw new Error('The Quiz Hunt Section fixture has no content.')
+    const authored = documents.updateSection(withSection, sectionBdc.id, {
+      ...sectionBdc.section,
+      title: 'Indice partagé',
+      markup: '<p id="quiz-hunt-section-text">Texte du bloc partagé</p>',
+      content: {
+        ...createEmptyRichTextDocument(),
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Texte du bloc partagé' }] }],
+      },
+    })
+    const trial = createQuizHuntGameCatalog(authored, 'authoring').trials[0]
+    if (trial === undefined) throw new Error('The Quiz Hunt reader fixture has no playable Question.')
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    player = new QuizHuntPlayer({ stage, document: authored, context: 'authoring' })
+
+    await player.initialize()
+    await flushPlayer(pendingFrames)
+    stage.querySelector<HTMLButtonElement>(`[data-quiz-hunt-page-id="${trial.page.id}"]`)?.click()
+    await flushPlayer(pendingFrames)
+
+    expect(stage.querySelector('.elce-card--section')?.textContent).toContain('Texte du bloc partagé')
   })
 
   it('defers an actual scenario timeout until the required answer feedback finishes', async () => {
@@ -239,9 +283,8 @@ describe('Quiz Hunt real reading runtime', () => {
     expect(runtime.scenarioState.context.game).toMatchObject({ screen: 'trial', outcome: null })
 
     const incorrectAnswer = trial.questionBdc.question?.answers.find((answer) => !answer.correct)
-    const answerInput = Array.from(stage.querySelectorAll<HTMLInputElement>('.elce-card--question input'))
-      .find((input) => input.value === incorrectAnswer?.id)
-    const validate = stage.querySelector<HTMLButtonElement>('.elce-question-validate')
+    const answerInput = questionAnswerInput(stage, trial.page.id, incorrectAnswer?.id)
+    const validate = questionValidationButton(stage, trial.page.id)
     answerInput?.click()
     await flushPlayer(pendingFrames)
     validate?.click()
@@ -258,7 +301,7 @@ describe('Quiz Hunt real reading runtime', () => {
     await new Promise<void>((resolve) => setTimeout(resolve, 300))
     await flushPlayer(pendingFrames)
     expect(runtime.scenarioState.context.game).toMatchObject({ screen: 'result', outcome: 'failure', pendingTimerExpiry: false })
-    expect(stage.querySelector('#quiz-hunt-result-failure-overlay-root')?.hasAttribute('hidden')).toBe(false)
+    expect(stage.querySelector('#quiz-hunt-result-failure-root')?.hasAttribute('hidden')).toBe(false)
   })
 
   it('collects the offered extra and retries a failed trial through the layout drop path', async () => {
@@ -298,9 +341,8 @@ describe('Quiz Hunt real reading runtime', () => {
     expect(observedEvents).toContainEqual(expect.objectContaining({ name: 'quiz-hunt:extra:collect' }))
 
     const incorrectAnswer = trial.questionBdc.question?.answers.find((answer) => !answer.correct)
-    const answerInput = Array.from(stage.querySelectorAll<HTMLInputElement>('.elce-card--question input'))
-      .find((input) => input.value === incorrectAnswer?.id)
-    const validate = stage.querySelector<HTMLButtonElement>('.elce-question-validate')
+    const answerInput = questionAnswerInput(stage, trial.page.id, incorrectAnswer?.id)
+    const validate = questionValidationButton(stage, trial.page.id)
     answerInput?.click()
     await flushPlayer(pendingFrames)
     validate?.click()
@@ -330,11 +372,13 @@ describe('Quiz Hunt real reading runtime', () => {
     })
 
     const correctAnswer = trial.questionBdc.question?.answers.find((answer) => answer.correct)
-    const retryAnswer = Array.from(stage.querySelectorAll<HTMLInputElement>('.elce-card--question input'))
-      .find((input) => input.value === correctAnswer?.id)
-    const retryValidate = stage.querySelector<HTMLButtonElement>('.elce-question-validate')
+    const retryAnswer = questionAnswerInput(stage, trial.page.id, correctAnswer?.id)
+    const retryValidate = questionValidationButton(stage, trial.page.id)
+    expect(retryAnswer).not.toBeNull()
+    expect(retryValidate).not.toBeNull()
     retryAnswer?.click()
     await flushPlayer(pendingFrames)
+    expect(retryValidate?.disabled).toBe(false)
     retryValidate?.click()
     await flushPlayer(pendingFrames)
     await new Promise<void>((resolve) => setTimeout(resolve, 150))
@@ -366,7 +410,7 @@ describe('Quiz Hunt real reading runtime', () => {
     })
     await player.initialize()
     await flushPlayer(pendingFrames)
-    const firstTrialButton = Array.from(firstStage.querySelectorAll<HTMLButtonElement>('.quiz-hunt-summary-tile'))
+    const firstTrialButton = Array.from(firstStage.querySelectorAll<HTMLButtonElement>('.quiz-hunt-grid-tile'))
       .find((button) => !button.disabled)
     expect(firstTrialButton).toBeDefined()
     firstTrialButton?.click()
@@ -383,11 +427,13 @@ describe('Quiz Hunt real reading runtime', () => {
     firstStage.querySelector<HTMLButtonElement>(`[data-quiz-hunt-page-id="${trial.page.id}"]`)?.click()
     await flushPlayer(pendingFrames)
     const correctTrialAnswer = trial.questionBdc.question?.answers.find((answer) => answer.correct)
-    const trialAnswer = Array.from(firstStage.querySelectorAll<HTMLInputElement>('.elce-card--question input'))
-      .find((input) => input.value === correctTrialAnswer?.id)
-    const trialValidate = firstStage.querySelector<HTMLButtonElement>('.elce-question-validate')
+    const trialAnswer = questionAnswerInput(firstStage, trial.page.id, correctTrialAnswer?.id)
+    const trialValidate = questionValidationButton(firstStage, trial.page.id)
+    expect(trialAnswer).not.toBeNull()
+    expect(trialValidate).not.toBeNull()
     trialAnswer?.click()
     await flushPlayer(pendingFrames)
+    expect(trialValidate?.disabled).toBe(false)
     trialValidate?.click()
     await flushPlayer(pendingFrames)
     await new Promise<void>((resolve) => setTimeout(resolve, 150))
@@ -454,7 +500,7 @@ describe('Quiz Hunt real reading runtime', () => {
     await flushPlayer(pendingFrames)
     const resetRuntime = (player as unknown as { runtime: RuntimeHarness }).runtime.api
     expect(resetRuntime.scenarioState.context.game).toMatchObject({ screen: 'menu', basket: { [trial.colorId]: null } })
-    const resetTrialButton = Array.from(resumedStage.querySelectorAll<HTMLButtonElement>('.quiz-hunt-summary-tile'))
+    const resetTrialButton = Array.from(resumedStage.querySelectorAll<HTMLButtonElement>('.quiz-hunt-grid-tile'))
       .find((button) => !button.disabled)
     expect(resetTrialButton).toBeDefined()
     resetTrialButton?.click()
@@ -521,7 +567,7 @@ describe('Quiz Hunt real reading runtime', () => {
       const restoredTrial = resumedStage.querySelector<HTMLButtonElement>(`[data-quiz-hunt-page-id="${trial.page.id}"]`)
       expect(restoredTrial?.textContent).toBe(succeeded ? '✓' : '1')
       expect(restoredTrial?.disabled).toBe(true)
-      expect(resumedStage.querySelector<HTMLButtonElement>('.quiz-hunt-summary-final')?.disabled).toBe(true)
+      expect(resumedStage.querySelector<HTMLButtonElement>('.quiz-hunt-final-button')?.disabled).toBe(true)
 
       player.destroy()
       player = undefined
@@ -541,9 +587,9 @@ describe('Quiz Hunt real reading runtime', () => {
     await flushPlayer(pendingFrames)
 
     expect(createQuizHuntGameCatalog(authored, 'authoring').activeColorIds).toEqual([])
-    expect(stage.querySelector('.quiz-hunt-summary')).not.toBeNull()
-    expect(stage.querySelector('.quiz-hunt-summary-final')).toBeNull()
-    expect(Array.from(stage.querySelectorAll<HTMLButtonElement>('.quiz-hunt-summary-tile')).every((tile) => tile.disabled)).toBe(true)
+    expect(stage.querySelector('#quiz-hunt-menu-grid-root')).not.toBeNull()
+    expect(stage.querySelector('.quiz-hunt-final-button')).toBeNull()
+    expect(Array.from(stage.querySelectorAll<HTMLButtonElement>('.quiz-hunt-grid-tile')).every((tile) => tile.disabled)).toBe(true)
     expect(stage.querySelector('.quiz-hunt-result-page')).toBeNull()
   })
 })

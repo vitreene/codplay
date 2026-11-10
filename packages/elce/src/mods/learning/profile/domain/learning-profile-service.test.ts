@@ -104,22 +104,23 @@ describe('Elcé profile rules', () => {
     ], properties, { [propertyA.id]: yes, [propertyB.id]: 'no', [propertyC.id]: 'no' })).toBe(false)
   })
 
-  it('lets a local visibility replace the complete inherited list', () => {
+  it('keeps ancestor chapter visibility alongside a local page rule', () => {
     const secondProperty: ProfileProperty = { ...textProperty, id: 'property-level', name: 'level' }
     const chapterVisibility = {
       id: 'chapter-visibility',
       target: { kind: 'chapter' as const, id: 'chapter-1' },
-      conditions: [
-        { propertyId: textProperty.id, condition: { kind: 'text' as const, operator: 'equals' as const, value: 'Nord' }, joinWithNext: 'and' as const },
-        { propertyId: secondProperty.id, condition: { kind: 'text' as const, operator: 'equals' as const, value: 'débutant' }, joinWithNext: null },
-      ],
+      conditions: [{
+        propertyId: textProperty.id,
+        condition: { kind: 'text' as const, operator: 'equals' as const, value: 'Nord' },
+        joinWithNext: null,
+      }],
     }
     const pageVisibility = {
       id: 'page-visibility',
       target: { kind: 'page' as const, id: 'page-a' },
       conditions: [{
-        propertyId: textProperty.id,
-        condition: { kind: 'text' as const, operator: 'equals' as const, value: 'Sud' },
+        propertyId: secondProperty.id,
+        condition: { kind: 'text' as const, operator: 'equals' as const, value: 'avancé' },
         joinWithNext: null,
       }],
     }
@@ -131,8 +132,18 @@ describe('Elcé profile rules', () => {
     })
 
     expect(learningProfileService.profileVisibilityForBdc(document, 'bdc-section-1')).toEqual(pageVisibility)
-    expect(learningProfileService.bdcMatchesProfile(document, 'bdc-section-1', { [textProperty.id]: 'Sud' })).toBe(true)
-    expect(learningProfileService.bdcMatchesProfile(document, 'bdc-section-1', { [textProperty.id]: 'Nord' })).toBe(false)
+    expect(learningProfileService.bdcMatchesProfile(document, 'bdc-section-1', {
+      [textProperty.id]: 'Nord',
+      [secondProperty.id]: 'avancé',
+    })).toBe(true)
+    expect(learningProfileService.bdcMatchesProfile(document, 'bdc-section-1', {
+      [textProperty.id]: 'Sud',
+      [secondProperty.id]: 'avancé',
+    })).toBe(false)
+    expect(learningProfileService.bdcMatchesProfile(document, 'bdc-section-1', {
+      [textProperty.id]: 'Nord',
+      [secondProperty.id]: 'débutant',
+    })).toBe(false)
   })
 
   it('keeps locked chapter and page content in the projection while denying access', () => {

@@ -15,6 +15,7 @@ import {
 import { learningDocumentService } from '../../document/learning-document-service'
 import { createElcePlayerScenario } from '../../reading/learning-player'
 import { exportLearningSightyPackage } from './learning-scenario-exporter'
+import { runElceScormPackage } from '../../../../server/export/scorm-package-runner'
 
 describe('Elcé Sighty package export', () => {
   it('exports the preview scenario as an autonomous ZIP with intact scene packages and media', async () => {
@@ -232,6 +233,15 @@ describe('Elcé Sighty package export', () => {
     const mediaResource = pagePackageManifest.resources.find((resource) => resource.file.endsWith('.svg'))
     expect(mediaResource).toBeDefined()
     expect(strFromU8(files[`${pagePackageRoot}${mediaResource!.file}`]!)).toBe(strFromU8(imageBytes))
+
+    const scorm = await runElceScormPackage(zipBytes, { version: '1.2', monoSco: false })
+    const scormFiles = unzipSync(scorm.archive)
+    const scormManifest = strFromU8(scormFiles['imsmanifest.xml'] ?? new Uint8Array())
+    expect(scorm.packageCount).toBe(1)
+    expect(scormManifest).toContain('Chapitre 1')
+    expect(scormManifest).toContain('Chapitre suivant')
+    expect(scormFiles['chapter-1.html']).toBeDefined()
+    expect(scormFiles['chapter-export-next.html']).toBeDefined()
   }, 180_000)
 
   it('requires bytes for a media source referenced by the Sighty scenes', async () => {

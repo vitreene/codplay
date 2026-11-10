@@ -3,12 +3,11 @@
 ## Rôle
 
 Le routeur Fetch Remix expose les opérations du catalogue local des projets.
-Les projets existants peuvent conserver un document v7, v8, v9 ou v10. Le
-navigateur lit ces formats ; `LearningDocument.fromJSON()` migre les formats
-v7, v8 et v9 en v10 dans l’éditeur. Les créations et remplacements envoyés par
-l’éditeur utilisent le format courant v10. Le navigateur crée le document
-initial ; le serveur reçoit ensuite sa valeur structurée et la persiste. Le
-routeur ne crée pas un second document initial.
+Les projets existants peuvent conserver un document v7 à v14.
+`LearningDocument.fromJSON()` migre les versions v7 à v13 vers le modèle v14.
+Les créations et remplacements envoyés par l’éditeur utilisent le format v14.
+Le navigateur crée le document initial ; le serveur reçoit ensuite sa valeur
+structurée et la persiste. Le routeur ne crée pas un second document initial.
 
 Cette spécification décrit le contrat HTTP du routeur et du contrôleur. La
 frontière `ProjectPersistence` isole le stockage ; ce contrat ne transforme
@@ -59,10 +58,10 @@ lorsqu’une copie indépendante récupère les médias du projet source.
 
 | Méthode et chemin | Requête | Réponse |
 | --- | --- | --- |
-| `POST /api/exports/sighty` | `multipart/form-data` : `document` JSON v7, v8, v9 ou v10 et un fichier `media:<id>` par média référencé | `200 application/zip`, `Content-Disposition: attachment; filename="<nom>.sighty.zip"`, `Cache-Control: no-store` ; aucune persistance |
+| `POST /api/exports/sighty` | `multipart/form-data` : `document` JSON v7 à v14 et un fichier `media:<id>` par média référencé | `200 application/zip`, `Content-Disposition: attachment; filename="<nom>.sighty.zip"`, `Cache-Control: no-store` ; aucune persistance |
 | `POST /api/exports/scorm` | `multipart/form-data` : `sightyPackage` ZIP, `documentName`, `version` (`1.2`, `2004v3` ou `2004v4`) et `monoSco` (`true` ou `false`) | `200 application/zip`, nom stable dans `Content-Disposition` et `X-Elce-Scorm-Filename`, nombre de packages dans `X-Elce-Scorm-Package-Count`, `Cache-Control: no-store` ; aucune persistance |
 | `GET /api/projects` | — | `200 { "projects": [{ "id", "name", "revision" }] }` |
-| `POST /api/projects` | `ElceDocumentData` v10 en JSON | `201 { "project": { "id", "name", "revision": 0 } }` et `ETag: "0"` |
+| `POST /api/projects` | `ElceDocumentData` v14 en JSON | `201 { "project": { "id", "name", "revision": 0 } }` et `ETag: "0"` |
 | `GET /api/projects/:projectId` | — | `200 { "project", "document" }` et l’ETag de la révision courante |
 | `POST /api/projects/:projectId/edit-access` | `{ "pageId": string, "force"?: true }` | `200 { "grantId": string, "recovered": boolean }` ; une répétition normale par la page détentrice retrouve son droit ; `force: true` le remplace |
 | `GET /api/projects/:projectId/edit-access` | En-têtes de droit | `200 { "held": boolean }` |
@@ -70,16 +69,16 @@ lorsqu’une copie indépendante récupère les médias du projet source.
 | `DELETE /api/projects/:projectId/edit-access` | En-têtes de droit | `204` si la paire courante a libéré le droit |
 | `PATCH /api/projects/:projectId` | `{ "name": string }` et en-têtes de droit | `200 { "project" }`, avec le nom mis à jour, la révision suivante et son ETag |
 | `DELETE /api/projects/:projectId` | En-têtes de droit | `204` |
-| `PUT /api/projects/:projectId/document` | `ElceDocumentData` v10, `If-Match: "<revision>"` et en-têtes de droit | `200 { "project" }` et l’ETag de la nouvelle révision |
+| `PUT /api/projects/:projectId/document` | `ElceDocumentData` v14, `If-Match: "<revision>"` et en-têtes de droit | `200 { "project" }` et l’ETag de la nouvelle révision |
 | `GET /api/projects/:projectId/test-state` | — | `200 { "state" }` et un ETag de révision indépendant |
 | `PUT /api/projects/:projectId/test-state` | `{ "state": ProjectTestState }`, `If-Match: "<revision>"` | `200 { "state" }` et l’ETag suivant ; `412` si périmé |
 | `PUT /api/projects/:projectId/test-state/profile` | `{ "profileValues": ProjectTestState["profileValues"] }`, `If-Match: "<revision>"` | Enregistre le profil soumis sans remplacer les autres champs de l’état ; `200 { "state" }` et l’ETag suivant ; `412` si périmé |
 | `PUT /api/projects/:projectId/media/:mediaId` | Octets du média en corps brut et en-têtes de droit | `201 { "media": { "id", "url" } }`, ou `204` si les octets sont déjà enregistrés sous cette ressource |
 | `GET /api/projects/:projectId/media/:mediaId` | — | Fichier média avec son type MIME et sa taille |
 
-Les corps JSON de création et de remplacement sont les documents v10 structurés
+Les corps JSON de création et de remplacement sont les documents v14 structurés
 produits par `LearningDocument.toJSON()`. La route d’export Sighty peut aussi
-lire les formats v7 à v9 et les reconstitue avant l’export. La persistance
+lire les formats v7 à v13 et les reconstitue avant l’export. La persistance
 projette le document vers les tables ; le JSON riche de Tiptap et le contenu
 complet du BDC Graphe sont les deux champs JSON en base. Les autres BDC, dont
 Question/Réponses, conservent leurs projections relationnelles.
@@ -127,7 +126,7 @@ spécifiques :
 
 | Statut | Code | Sens |
 | --- | --- | --- |
-| `400` | `invalid_request` | JSON, document v10, identifiant ou nom de type invalide ; un `PUT /document` ajoute le diagnostic décrit ci-dessous |
+| `400` | `invalid_request` | JSON, document v14, identifiant ou nom de type invalide ; un `PUT /document` ajoute le diagnostic décrit ci-dessous |
 | `404` | `project_not_found` | Le projet demandé n’existe pas |
 | `409` | `project_already_exists` | L’identifiant du document existe déjà |
 | `409` | `edit_access_occupied` / `edit_access_lost` | Une autre page détient le projet, ou la paire envoyée n’est plus courante |
@@ -164,7 +163,7 @@ attente afin de pouvoir l’inspecter ou la récupérer.
 `remix/data-table/sqlite`. À l’ouverture, `openProjectDatabase()` applique les
 migrations SQL chargées avec `loadMigrations()` de Remix. Les tables relationnelles
 stockent les champs du modèle ; la colonne `format_version` permet de lire les
-documents v7 à v10, et les migrations ajoutent les colonnes des versions
+documents v7 à v14, et les migrations ajoutent les colonnes des versions
 ultérieures. Aucune table ne contient le document Elcé entier en JSON.
 `sections.content_json` garde le JSON Tiptap et
 `sections.markup_html` son export HTML. `statistical_graphs` garde le contenu
@@ -236,6 +235,12 @@ d’identité de mod au document. Chaque adaptateur de persistance filtre ses
 lectures et écritures par cette clé et garde ses propres transactions,
 organisation et réglages.
 
+Les protocoles partagés des projets et des médias reçoivent explicitement la
+clé du mod. Les lectures et mutations d’un projet ou de son média restent
+filtrées par cette clé ; seule l’énumération globale des clés de stockage est
+commune, afin que le nettoyage des fichiers physiques protège les médias des
+deux mods.
+
 Les opérations SQLite d’acquisition, de renouvellement, de vérification et de
 libération du droit sont partagées dans
 [`sqlite-project-edit-access.ts`](../src/core/server/projects/sqlite-project-edit-access.ts).
@@ -256,8 +261,9 @@ média restent dans `media_resources`.
 [`quiz-hunt-sqlite-project-persistence.test.ts`](../src/mods/quiz-hunt/persistence/server/sqlite/quiz-hunt-sqlite-project-persistence.test.ts)
 vérifie la sauvegarde et la réouverture d’une Question, d’une Section, d’une
 Carte et de leurs références média dans les tables communes, avec un projet
-Learning dans la même base. Les listes de chaque adaptateur ne retournent que
-les projets de leur mod. Les allers-retours relationnels Learning restent
+Learning dans la même base. Il vérifie aussi que chaque dépôt ne peut pas lire
+le projet ni les médias de l’autre mod. Les listes de chaque adaptateur ne
+retournent que les projets de leur mod. Les allers-retours relationnels Learning restent
 couverts par
 [`learning-sqlite-project-persistence.test.ts`](../src/mods/learning/persistence/server/sqlite/learning-sqlite-project-persistence.test.ts).
 
@@ -319,14 +325,16 @@ services communs dans `core/server/http/` ; la composition du routeur et le
 stockage SQLite restent possédés par Learning. Les tests couvrent les
 opérations API avec le dépôt isolé, puis avec SQLite Remix en mémoire. Une base
 fichier est fermée puis rouverte ; les projets restent lisibles et le document
-v10 conserve ses relations et ordres. La révision périmée est refusée sans
+v14 conserve ses relations et ordres. La révision périmée est refusée sans
 perdre les métadonnées de stockage média.
 
 `createElceHttpServer()` assemble le listener Node, le routeur Fetch Remix,
 SQLite et FileStorage. Le test intégré envoie un vrai `POST`, des `PUT` média
 et des `GET` au serveur en écoute ; il vérifie les octets, la déduplication,
-le cache HTTP, la lecture partielle vidéo, le nettoyage après fusion de médias
-et la suppression du projet. Il vérifie aussi le prévol depuis l’origine
+le cache HTTP, la lecture partielle vidéo, le nettoyage après fusion de médias,
+la suppression d’un projet Learning sans suppression du fichier encore utilisé
+par Quiz Hunt, puis le nettoyage après suppression du dernier projet. Il vérifie
+aussi le prévol depuis l’origine
 éditeur `http://localhost:5175` et le refus d’une origine distante.
 
 `ProjectHttpTransport` dans `core/persistence/project-api/` possède la résolution

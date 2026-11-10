@@ -82,6 +82,10 @@ describe('Quiz Hunt SQLite project persistence', () => {
     expect(learningList.map((project) => project.id)).toEqual([learningDocument.data.id])
     expect(quizReopened).not.toBeNull()
     expect(learningReopened?.document.data.id).toBe(learningDocument.data.id)
+    expect(await quizHunt.findProject(learningDocument.data.id)).toBeNull()
+    expect(await learning.findProject(authored.id)).toBeNull()
+    expect(await quizHunt.findMediaFile(learningDocument.data.id, media.id)).toBeNull()
+    expect(await learning.findMediaFile(authored.id, media.id)).toBeNull()
 
     const restored = quizReopened!.document.data
     expect(restored.name).toBe(savedDocument.name)
