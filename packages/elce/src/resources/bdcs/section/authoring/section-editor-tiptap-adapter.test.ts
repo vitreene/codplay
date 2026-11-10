@@ -67,6 +67,7 @@ describe('SectionTiptapAdapter', () => {
             message: '',
             note: '',
             caption: '',
+            list: null,
             imagePosition: CAROUSEL_IMAGE_POSITION.LEFT,
             imageFit: CARD_IMAGE_FIT.COVER,
             revelation: { intro: null, outro: null },

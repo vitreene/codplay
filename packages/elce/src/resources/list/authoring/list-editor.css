@@ -1,0 +1,65 @@
+.elce-list-editor {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.elce-list-editor__settings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: 0.65rem;
+}
+
+.elce-list-editor__setting {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.elce-list-editor__setting select,
+.elce-list-editor__setting input,
+.elce-list-editor__row > input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+}
+
+.elce-list-editor__rows {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.elce-list-editor__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(5rem, 7rem) auto;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.elce-list-editor__drag,
+.elce-list-editor__delete {
+  flex: none;
+}
+
+.elce-list-editor__add {
+  justify-self: start;
+}
+
+@media (max-width: 34rem) {
+  .elce-list-editor__row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .elce-list-editor__delay {
+    grid-column: 2;
+  }
+
+  .elce-list-editor__delete {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
+}

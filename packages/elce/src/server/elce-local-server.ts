@@ -40,6 +40,7 @@ const SHARED_RESOURCE_STYLE_FILES = [
 const LEARNING_STYLE_FILES = ['packages/elce/src/mods/learning/authoring/learning-appearance-panel.css'] as const
 
 const RESOURCE_STYLE_FILES = [
+  'packages/elce/src/resources/list/authoring/list-editor.css',
   'packages/elce/src/resources/bdcs/card/authoring/card-editor.css',
   'packages/elce/src/resources/bdcs/avatar/authoring/avatar-editor.css',
   'packages/elce/src/resources/bdcs/carousel/authoring/carousel-editor.css',

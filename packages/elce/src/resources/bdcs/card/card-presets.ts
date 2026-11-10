@@ -19,6 +19,35 @@ export const CARD_PRESETS: Readonly<Record<string, CardPreset>> = {
       { id: 'caption', label: 'Légende', required: false, content: 'text', className: 'elce-card__caption' },
     ],
   },
+  [CARD_PRESET_ID.LIST]: {
+    id: CARD_PRESET_ID.LIST,
+    label: 'Liste',
+    rootClassName: 'elce-card elce-card--list',
+    allowedContent: ['text'],
+    markupTemplate: `
+      <article id="{{rootId}}" class="{{rootClassName}}">
+        <!-- data-part="{{partPrefix}}:root" -->
+        <div id="{{rootId}}-content" class="elce-card-list__content">
+          <!-- data-part="{{partPrefix}}:overline" -->
+          <!-- data-part="{{partPrefix}}:title" -->
+          <!-- data-part="{{partPrefix}}:description" -->
+          <!-- data-part="{{partPrefix}}:message" -->
+          <!-- data-part="{{partPrefix}}:note" -->
+          <!-- data-part="{{partPrefix}}:caption" -->
+          <!-- data-part="{{partPrefix}}:list" -->
+        </div>
+      </article>
+    `,
+    zones: [
+      { id: 'overline', label: 'Surtitre', required: false, content: 'text', className: 'elce-card__meta elce-card__overline' },
+      { id: 'title', label: 'Titre', required: false, content: 'text', className: 'elce-card__title' },
+      { id: 'description', label: 'Description', required: false, content: 'text', className: 'elce-card__copy elce-card__description' },
+      { id: 'message', label: 'Message', required: false, content: 'text', className: 'elce-card__copy elce-card__message' },
+      { id: 'note', label: 'Note', required: false, content: 'text', className: 'elce-card__meta' },
+      { id: 'caption', label: 'Légende', required: false, content: 'text', className: 'elce-card__caption' },
+      { id: 'list', label: 'Liste', required: false, content: 'text' },
+    ],
+  },
   [CARD_PRESET_ID.PHOTO]: {
     id: CARD_PRESET_ID.PHOTO,
     label: 'Photo ou vidéo plein cadre',

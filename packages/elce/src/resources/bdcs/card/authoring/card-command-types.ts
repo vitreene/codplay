@@ -2,6 +2,7 @@ import type { BdcId, MediaId, MediaMetadata } from '../../../../core/document/co
 import type { BdcPlacement } from '../../../../core/document/content-location'
 import type { CardContent, CardPresentationOptions } from '../domain/card-types'
 import { CARD_BDC_TYPE, type CardLayoutId } from '../card-config'
+import type { ListContent } from '../../../list/domain/list-types'
 
 /** Commands that author a Card resource. */
 export type CardCommand =
@@ -12,6 +13,7 @@ export type CardCommand =
       presetId: CardLayoutId
       placement: BdcPlacement
       initialCardOptions?: CardPresentationOptions
+      initialList?: ListContent
     }>
   | Readonly<{ type: 'bdc.card.update'; bdcId: BdcId; card: CardContent }>
   | Readonly<{ type: 'bdc.card.layout.set'; bdcId: BdcId; layoutId: CardLayoutId }>

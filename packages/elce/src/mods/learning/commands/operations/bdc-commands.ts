@@ -2,7 +2,7 @@ import { clearAvatarWordAssociations } from '../../../../resources/bdcs/avatar/d
 import { AVATAR_PRESET_ID } from '../../../../resources/bdcs/avatar/avatar-config'
 import { createDefaultAvatar } from '../../../../resources/bdcs/avatar/domain/avatar-service'
 import { BDC_TYPE, DEFAULT_PRESET_ID, PAGE_TYPE } from '../../learning-definition'
-import { CARD_LAYOUT_IDS } from '../../../../resources/bdcs/card/card-config'
+import { CARD_LAYOUT_IDS, CARD_PRESET_ID } from '../../../../resources/bdcs/card/card-config'
 import { CAROUSEL_CONFIG } from '../../../../resources/bdcs/carousel/carousel-config'
 import { STATISTICAL_GRAPH_LAYOUT_IDS } from '../../../../resources/bdcs/statistical-graph/statistical-graph-config'
 import { BDC_LOCATION } from '../../../../core/document/content-location'
@@ -125,6 +125,14 @@ export function createBdc(
   if ('initialCardOptions' in command && command.initialCardOptions !== undefined && command.bdcType !== BDC_TYPE.CARD) {
     fail('Les options initiales ne concernent que la création d’un BDC Carte.')
   }
+  if ('initialList' in command && command.initialList !== undefined
+    && (command.bdcType !== BDC_TYPE.CARD || command.presetId !== CARD_PRESET_ID.LIST)) {
+    fail('Le sous-module Liste ne concerne que la création d’une Carte Liste.')
+  }
+  if (command.bdcType === BDC_TYPE.CARD && command.presetId === CARD_PRESET_ID.LIST
+    && (!('initialList' in command) || command.initialList === undefined)) {
+    fail('Une Carte Liste doit recevoir son sous-module à la création.')
+  }
   if (command.placement.kind === BDC_LOCATION.PAGE) {
     const page = findPage(document.pages, command.placement.pageId)
     if (page.type === PAGE_TYPE.DIAPO
@@ -246,9 +254,17 @@ export function createBdc(
     carousel: command.bdcType === BDC_TYPE.CAROUSEL && command.initialCardBdcId !== undefined
       ? { ...resources.carouselService.createDefault(command.initialCardBdcId), cards: [] }
       : null,
-    card: !('initialCardOptions' in command) || command.initialCardOptions === undefined
+    card: command.bdcType !== BDC_TYPE.CARD
       ? cardForBdc(command.bdcType, resources)
-      : resources.cardService.createDefault(command.initialCardOptions.imagePosition, command.initialCardOptions.imageFit),
+      : resources.cardService.createDefault(
+        'initialCardOptions' in command && command.initialCardOptions !== undefined
+          ? command.initialCardOptions.imagePosition
+          : undefined,
+        'initialCardOptions' in command && command.initialCardOptions !== undefined
+          ? command.initialCardOptions.imageFit
+          : undefined,
+        'initialList' in command && command.initialList !== undefined ? command.initialList : null,
+      ),
     ...(statisticalGraph === null ? {} : { statisticalGraph }),
   }
   const withParent = placeBdc(new LearningDocument({ ...document.data, bdcs: [...document.bdcs, bdc] }), bdc, command.placement)
@@ -425,6 +441,7 @@ export function setCardLayout(document: LearningDocument, bdcId: BdcId, layoutId
   const bdc = findBdc(document.bdcs, bdcId)
   if (bdc.type !== BDC_TYPE.CARD || bdc.card == null) fail(`Le bdc ${bdcId} n’est pas une Carte.`)
   if (!CARD_LAYOUT_IDS.includes(layoutId)) fail(`Layout de carte inconnu : ${layoutId}`)
+  if (layoutId === CARD_PRESET_ID.LIST && bdc.card.list === null) fail('Le sous-module Liste doit être créé avant de choisir cette disposition.')
   return withBdc(document, { ...bdc, presetId: layoutId })
 }
 

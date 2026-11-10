@@ -3,6 +3,7 @@ import type { BdcId, PageId } from '../../../../core/document/content-document-t
 import type { CardPresentationOptions } from '../domain/card-types'
 import { CARD_PRESET_ID, type CardLayoutId } from '../card-config'
 import type { CardCommand } from './card-command-types'
+import type { ListContent } from '../../../list/domain/list-types'
 
 /** Creates a Card command at its requested container position. */
 export function createCardBdcCommand(
@@ -11,6 +12,7 @@ export function createCardBdcCommand(
   index: number,
   layoutId: CardLayoutId,
   initialCardOptions?: CardPresentationOptions,
+  initialList?: ListContent,
 ): Extract<CardCommand, { type: 'bdc.create' }> {
   return {
     type: 'bdc.create',
@@ -19,6 +21,7 @@ export function createCardBdcCommand(
     presetId: layoutId,
     placement: { kind: BDC_LOCATION.PARENT, parentBdcId, index },
     ...(initialCardOptions === undefined ? {} : { initialCardOptions }),
+    ...(initialList === undefined ? {} : { initialList }),
   }
 }
 
@@ -28,6 +31,7 @@ export function createStandaloneCardBdcCommand(
   pageId: PageId,
   layoutId: CardLayoutId = CARD_PRESET_ID.TEXT_SHORT,
   initialCardOptions?: CardPresentationOptions,
+  initialList?: ListContent,
 ): Extract<CardCommand, { type: 'bdc.create' }> {
   return {
     type: 'bdc.create',
@@ -36,5 +40,6 @@ export function createStandaloneCardBdcCommand(
     presetId: layoutId,
     placement: { kind: BDC_LOCATION.PAGE, pageId },
     ...(initialCardOptions === undefined ? {} : { initialCardOptions }),
+    ...(initialList === undefined ? {} : { initialList }),
   }
 }

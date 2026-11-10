@@ -1,6 +1,5 @@
 import { CAROUSEL_CONFIG } from '../carousel-config'
-import { CARD_LAYOUT_IDS } from '../../card/card-config'
-import { CARD_PRESET_ID } from '../../card/card-config'
+import { CARD_LAYOUT_IDS, CARD_PRESET_ID } from '../../card/card-config'
 import type { CardLayoutId } from '../../card/card-config'
 import { createCardBdcCommand } from '../../card/authoring/card-command-factory'
 import { createStatisticalGraphCarouselBdcCommand } from '../../statistical-graph/authoring/statistical-graph-command-factory'
@@ -13,6 +12,7 @@ import type { RevelationTransitionDefaults } from '../../../revelation/revelatio
 import { ElceMediaResourceService } from '../../../../domain/media/media-resource-service'
 import { ElceCarouselService } from '../domain/carousel-service'
 import { ElceCardFacade } from '../../card/authoring/card-facade'
+import { ListService } from '../../../list/domain/list-service'
 
 /** Routes Carousel and Card authoring intents through métier services and XState commands. */
 export class ElceCarouselFacade {
@@ -95,6 +95,7 @@ export class ElceCarouselFacade {
         const previousCard = cards.find((candidate) => candidate.id === previousCardBdcId)
         const previousCardLayoutId = previousCard?.type === 'card'
           && CARD_LAYOUT_IDS.includes(previousCard.presetId as CardLayoutId)
+          && previousCard.presetId !== CARD_PRESET_ID.LIST
           ? previousCard.presetId as CardLayoutId
           : CAROUSEL_CONFIG.initialCardLayoutId
         const initialCardOptions = previousCard?.type === 'card' && previousCard.card != null
@@ -107,6 +108,12 @@ export class ElceCarouselFacade {
           previousCardLayoutId,
           initialCardOptions,
         ))
+        this.selectCard(cardBdcId)
+      },
+      addList: () => {
+        const cardBdcId = createStableId('bdc-card')
+        const list = new ListService().createDefault(createStableId('list-row'))
+        this.dispatch(createCardBdcCommand(cardBdcId, bdcId, content.cards.length, CARD_PRESET_ID.LIST, undefined, list))
         this.selectCard(cardBdcId)
       },
       addStatisticalGraph: () => {

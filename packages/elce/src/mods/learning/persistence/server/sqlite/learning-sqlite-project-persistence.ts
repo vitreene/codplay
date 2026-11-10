@@ -314,7 +314,7 @@ async function readStoredProject(database: ProjectDatabase, projectId: string): 
 
   const projectRow = projectRows[0]!
   const version = numberValue(projectRow, 'format_version')
-  if (version !== 7 && version !== 8 && version !== 9 && version !== 10 && version !== 11 && version !== 12 && version !== 13 && version !== 14) {
+  if (version !== 7 && version !== 8 && version !== 9 && version !== 10 && version !== 11 && version !== 12 && version !== 13 && version !== 14 && version !== 15) {
     throw new Error(`Version documentaire SQLite non prise en charge : ${String(projectRow.format_version)}`)
   }
   const document = await readDocument(database, projectRow)

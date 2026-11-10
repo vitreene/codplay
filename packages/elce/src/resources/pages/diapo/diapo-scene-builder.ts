@@ -1,7 +1,7 @@
 import { AVATAR_BDC_TYPE } from '../../bdcs/avatar/avatar-config'
 import { appendAvatarToDiapoStory } from '../../bdcs/avatar/reading/avatar-diapo-story'
 import type { PersoDoc, StoryDoc } from 'codplay/scene/types'
-import { CARD_BDC_TYPE } from '../../bdcs/card/card-config'
+import { CARD_BDC_TYPE, CARD_PRESET_ID } from '../../bdcs/card/card-config'
 import { CAROUSEL_BDC_TYPE, CAROUSEL_PLAYBACK_MODE } from '../../bdcs/carousel/carousel-config'
 import { QUESTION_BDC_TYPE, QUESTION_EVENTS } from '../../bdcs/question/question-config'
 import { STATISTICAL_GRAPH_BDC_TYPE } from '../../bdcs/statistical-graph/statistical-graph-config'
@@ -12,6 +12,7 @@ import type { ResourceBdc } from '../../document/resource-document-types'
 import type { ContentPage } from '../../../core/document/content-document-types'
 import { createPageBottomMarkerPerso } from '../page-completion/page-bottom-marker'
 import { ElceStatisticalGraphSceneBuilder } from '../../bdcs/statistical-graph/reading/statistical-graph-scene-builder'
+import type { CardBdcSceneBuild } from '../../bdcs/card/reading/card-bdc-scene-builder'
 import { buildQuestionBdcStory, buildQuestionCardPreset } from '../../bdcs/question/reading/question-bdc-scene-builder'
 import type { DiapoSceneBuild, DiapoSceneBuildOptions } from './diapo-scene-builder-types'
 import { addViewportExpansionToScene } from '../../viewport-expansion/viewport-expansion-builder'
@@ -36,6 +37,9 @@ export function buildDiapoScene(
   if (contentBdcs.length > 1) throw new Error(`La Diapo ${page.id} accepte un seul BDC direct.`)
   const bdc = contentBdcs[0]
   const storyId = `${page.id}-diapo-page`
+  const listEntryEventName = bdc?.type === CARD_BDC_TYPE && bdc.presetId === CARD_PRESET_ID.LIST
+    ? `${page.id}:diapo:card:${bdc.id}:enter`
+    : undefined
 
   if (bdc?.type === CAROUSEL_BDC_TYPE) {
     const carouselBuild = buildCarousel(page, bdc, bdcs, options, avatar)
@@ -66,6 +70,7 @@ export function buildDiapoScene(
   let pageBottomMarker: PersoDoc<string> | undefined
   let childStories: Readonly<Record<string, StoryDoc<string>>> = {}
   let pagePersos: readonly PersoDoc<string>[] = []
+  let cardRuntime: Pick<CardBdcSceneBuild, 'straps' | 'listen'> | undefined
   let styleSheets: readonly string[] = []
   let questionReset: DiapoSceneBuild['questionReset']
 
@@ -90,9 +95,12 @@ export function buildDiapoScene(
           bdc,
           mediaSources: options.mediaSources ?? {},
           mediaTypes: options.mediaTypes ?? {},
+          entryEventName: listEntryEventName,
+          ...(listEntryEventName === undefined ? {} : { entryTriggerMode: 'compiled-eventime' as const }),
           appearanceClassNamesByTarget: options.appearanceClassNamesByTarget,
         })
         markup = cardBuild.markup
+        cardRuntime = cardBuild
         bottomPartMarkup = `<!-- data-part="${page.id}:bottom" -->`
         pageBottomMarker = createPageBottomMarkerPerso({
           pageId: page.id,
@@ -169,6 +177,13 @@ export function buildDiapoScene(
 
   const pageStory: StoryDoc<string> = {
     id: storyId,
+    ...(cardRuntime === undefined ? {} : { straps: cardRuntime.straps, listen: cardRuntime.listen }),
+    ...(listEntryEventName === undefined ? {} : {
+      eventimes: [
+        { name: listEntryEventName, startAt: 0, visibility: 'story' as const },
+        ...(cardRuntime?.revealEventimes ?? []).map((event) => ({ ...event, visibility: 'story' as const })),
+      ],
+    }),
     persos: [
       {
         id: scrollPortId,

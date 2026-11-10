@@ -6,6 +6,7 @@ export const CARD_PRESET_ID = {
   TEXT_SHORT: 'text-short-basic',
   IMAGE_CAPTION: 'image-caption',
   IMAGE_TITLE: 'image-title-basic',
+  LIST: 'list-basic',
 } as const
 
 export const CARD_IMAGE_FIT = {
@@ -19,7 +20,10 @@ export const CARD_LAYOUT_IDS = [
   CARD_PRESET_ID.IMAGE_TITLE,
   CARD_PRESET_ID.TEXT_IMAGE,
   CARD_PRESET_ID.TEXT_SHORT,
+  CARD_PRESET_ID.LIST,
 ] as const
+
+export const CARD_LIST_LAYOUT_OPTION = { value: CARD_PRESET_ID.LIST, label: 'Liste' } as const
 
 export const CARD_IMAGE_FIT_OPTIONS = [
   { value: CARD_IMAGE_FIT.CONTAIN, label: 'Contenir' },

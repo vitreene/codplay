@@ -172,6 +172,7 @@ function bdcAppearanceRole(
     case CARD_BDC_TYPE:
       switch (bdc.presetId) {
         case CARD_PRESET_ID.TEXT_SHORT: return 'card-text-short'
+        case CARD_PRESET_ID.LIST: return 'card-text-short'
         case CARD_PRESET_ID.TEXT_IMAGE: return 'card-text-image'
         case CARD_PRESET_ID.IMAGE_CAPTION: return 'card-image-caption'
         case CARD_PRESET_ID.IMAGE_TITLE: return 'card-image-title'

@@ -1,8 +1,14 @@
 import { ImagePlus, Trash2 } from 'lucide-static'
 import { on, type Handle, type RemixNode } from 'remix/component'
 
-import { CARD_BDC_TYPE, CARD_PRESET_ID } from '../card-config'
-import { CARD_IMAGE_FIT, CARD_IMAGE_FIT_OPTIONS, CARD_LAYOUT_OPTIONS } from '../card-config'
+import {
+  CARD_BDC_TYPE,
+  CARD_IMAGE_FIT,
+  CARD_IMAGE_FIT_OPTIONS,
+  CARD_LAYOUT_OPTIONS,
+  CARD_LIST_LAYOUT_OPTION,
+  CARD_PRESET_ID,
+} from '../card-config'
 import { CAROUSEL_CONFIG, CAROUSEL_IMAGE_POSITION_OPTIONS } from '../../carousel/carousel-config'
 import { CAROUSEL_TRANSITION_OPTIONS, REVELATION_TRANSITION_PAIRS } from '../../../revelation/revelation-config'
 import { CATALOG_REFERENCE } from '../../../../core/catalog/catalog-config'
@@ -17,6 +23,8 @@ import type { ResourceTextFieldFeature } from '../../../../core/authoring/resour
 import { cardLayoutAcceptsFile, cardLayoutAcceptsMedia, cardToolbarClassName, parseCardMediaReference } from './card-editor-rules'
 import { renderLucideIcon } from '../../../../core/authoring/lucide-static-icon'
 import { countAuthoredTextCharacters } from '../../../../core/document/rich-text-utils'
+import { renderListEditor } from '../../../list/authoring/list-editor'
+import { createStableId } from '../../../../core/document/stable-id'
 
 export interface RemixCardEditorFieldsProps {
   readonly bdc: ResourceBdc
@@ -92,7 +100,7 @@ function renderCardFields(
       className={cardToolbarClassName(presetId)}
     >
       {[
-        renderCardLayoutSelect(bdcId, presetId, actions, idPrefix),
+        renderCardLayoutSelect(bdcId, presetId, card, actions, idPrefix),
         renderCardTransitionSetting(bdcId, card, actions, idPrefix),
         toolbarContent,
         ...renderCardPresentationSettings(bdcId, presetId, card, mediaById, actions, idPrefix),
@@ -165,7 +173,7 @@ function renderCardTransitionSetting(
 }
 
 /** Renders the layout selector for one identified Card BDC. */
-function renderCardLayoutSelect(bdcId: BdcId, presetId: string, actions: ElceCardEditorActions, idPrefix: string): RemixNode {
+function renderCardLayoutSelect(bdcId: BdcId, presetId: string, card: CardContent, actions: ElceCardEditorActions, idPrefix: string): RemixNode {
   return <label
     id={`${idPrefix}-card-layout-label-${bdcId}`}
     className="elce-carousel-editor__setting elce-carousel-editor__setting--card-layout"
@@ -179,7 +187,7 @@ function renderCardLayoutSelect(bdcId: BdcId, presetId: string, actions: ElceCar
       id={`${idPrefix}-card-layout-${bdcId}`}
       mix={on<HTMLSelectElement, 'change'>('change', (event) => actions.setCardLayout(bdcId, event.currentTarget.value as CardLayoutId))}
     >
-      {CARD_LAYOUT_OPTIONS.map((option) => <option
+      {[...CARD_LAYOUT_OPTIONS, ...(card.list === null ? [] : [CARD_LIST_LAYOUT_OPTION])].map((option) => <option
         id={`${idPrefix}-card-layout-option-${bdcId}-${option.value}`}
         key={option.value}
         value={option.value}
@@ -299,6 +307,17 @@ function renderCardContent(
   switch (presetId) {
     case CARD_PRESET_ID.TEXT_SHORT:
       return renderShortTextFields(bdcId, card, actions, idPrefix, textFieldAttributes, textFieldFeature)
+    case CARD_PRESET_ID.LIST:
+      if (card.list === null) throw new Error(`La Carte Liste ${bdcId} ne contient pas son sous-module.`)
+      return <div id={`${idPrefix}-list-card-fields-${bdcId}`} className="elce-carousel-text-fields elce-card-list-editor-fields">
+        {renderCardTextFields(bdcId, card, actions, idPrefix, textFieldAttributes, textFieldFeature, true)}
+        {renderListEditor({
+          list: card.list,
+          idPrefix: `${idPrefix}-card-list-${bdcId}`,
+          createId: () => createStableId('list-row'),
+          onChange: (list) => actions.setList(bdcId, list),
+        })}
+      </div>
     case CARD_PRESET_ID.PHOTO:
       return renderCardMediaEditor(bdcId, presetId, card, mediaById, actions, idPrefix, imageAspectRatio, allowMultipleMediaFiles, importMediaFiles)
     case CARD_PRESET_ID.IMAGE_CAPTION:
@@ -339,12 +358,26 @@ function renderShortTextFields(
   textFieldAttributes: RemixCardEditorFieldsProps['textFieldAttributes'],
   textFieldFeature: ResourceTextFieldFeature | undefined,
 ): RemixNode {
+  return renderCardTextFields(bdcId, card, actions, idPrefix, textFieldAttributes, textFieldFeature, false)
+}
+
+/** Renders the requested shared Card text fields for Short Text and List layouts. */
+function renderCardTextFields(
+  bdcId: BdcId,
+  card: CardContent,
+  actions: ElceCardEditorActions,
+  idPrefix: string,
+  textFieldAttributes: RemixCardEditorFieldsProps['textFieldAttributes'],
+  textFieldFeature: ResourceTextFieldFeature | undefined,
+  includeCaption: boolean,
+): RemixNode {
   const fields: readonly Readonly<{ field: CardTextField; label: string }>[] = [
     { field: 'overline', label: 'Surtitre' },
     { field: 'title', label: 'Titre' },
     { field: 'description', label: 'Description' },
     { field: 'message', label: 'Message' },
     { field: 'note', label: 'Note' },
+    ...(includeCaption ? [{ field: 'caption' as const, label: 'Légende' }] : []),
   ]
   return <div
     id={`${idPrefix}-text-fields-${bdcId}`}
@@ -362,11 +395,11 @@ function renderShortTextFields(
         field === 'message',
         textFieldAttributes,
       )),
-      <small
+      !includeCaption ? <small
         id={`${idPrefix}-message-count-${bdcId}`}
       >
         {`${countAuthoredTextCharacters(card.message)} / ${CAROUSEL_CONFIG.textShortMessageMaxLength}`}
-      </small>,
+      </small> : null,
     ]}
   </div>
 }

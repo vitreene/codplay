@@ -303,6 +303,7 @@ describe('Elcé reader projection', () => {
             message: '',
             note: '',
             caption: '',
+            list: null,
             imagePosition: 'left',
             imageFit: 'cover',
             revelation: { intro: null, outro: null },

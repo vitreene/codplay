@@ -1,6 +1,5 @@
-import type { PersoDoc } from 'codplay/scene/types'
-import { CARD_IMAGE_FIT } from '../card-config'
-import { CARD_PRESET_ID } from '../card-config'
+import type { AuthorStrapCollection, PersoDoc, SceneListenRule } from 'codplay/scene/types'
+import { CARD_IMAGE_FIT, CARD_PRESET_ID } from '../card-config'
 import { MEDIA_TYPE } from '../../../../core/media/media-config'
 import type { CardImageFit } from '../card-config'
 import type { MediaType } from '../../../../core/media/media-config'
@@ -13,6 +12,8 @@ import { ElceCardPresetBuilder } from '../../../../core/presets/card-preset-buil
 import type { ElceTextValue } from '../../../document/rich-text-types'
 import { authoredTextToPlainText } from '../../../../core/document/rich-text-utils'
 import { wrapResourceInlineTextSceneParts, type ResourceInlineTextSceneFeature } from '../../../document/resource-inline-text-feature'
+import { ListSceneBuilder } from '../../../list/reading/list-scene-builder'
+import type { ListEntryTriggerMode } from '../../../list/reading/list-scene-builder'
 
 export interface CardBdcSceneBuildInput {
   readonly pageId: PageId
@@ -21,6 +22,10 @@ export interface CardBdcSceneBuildInput {
   readonly mediaSources: Readonly<Record<MediaId, string>>
   readonly mediaTypes: Readonly<Record<MediaId, MediaType>>
   readonly photoMediaRoot?: boolean
+  readonly entryEventName?: string
+  readonly entryTriggerMode?: ListEntryTriggerMode
+  readonly exitEventName?: string
+  readonly initiallyVisible?: boolean
   readonly appearanceClassNamesByTarget?: AppearanceClassNamesByTarget
 }
 
@@ -30,6 +35,9 @@ export interface CardBdcSceneBuild {
   readonly zonePartIds: Readonly<Record<string, string>>
   readonly contentPersos: readonly PersoDoc<string>[]
   readonly mediaPersos: readonly PersoDoc<string>[]
+  readonly straps: AuthorStrapCollection
+  readonly listen: readonly SceneListenRule[]
+  readonly revealEventimes: readonly Readonly<{ name: string; startAt: number }>[]
   readonly styleSheet: string
 }
 
@@ -37,6 +45,7 @@ export interface CardBdcSceneBuild {
 export class ElceCardBdcSceneBuilder {
   private readonly presetBuilder: ElceCardPresetBuilder
   private readonly inlineTextSceneFeature: ResourceInlineTextSceneFeature | undefined
+  private readonly listSceneBuilder = new ListSceneBuilder()
 
   /** Creates a Card scene builder with its composed preset engine. */
   public constructor(presetBuilder: ElceCardPresetBuilder, inlineTextSceneFeature?: ResourceInlineTextSceneFeature) {
@@ -53,8 +62,18 @@ export class ElceCardBdcSceneBuilder {
     const layout = this.presetBuilder.build(bdc.presetId, rootId, partId)
     const photoMediaRoot = input.photoMediaRoot === true && bdc.presetId === CARD_PRESET_ID.PHOTO
     const contentProjection = photoMediaRoot
-      ? { markup: layout.markup, persos: [] as readonly PersoDoc<string>[] }
-      : createCardContentProjection(bdc, layout, `${pageId}:${bdc.id}`, this.inlineTextSceneFeature)
+      ? { markup: layout.markup, persos: [] as readonly PersoDoc<string>[], straps: {}, listen: [], revealEventimes: [] }
+      : createCardContentProjection(
+        bdc,
+        layout,
+        `${pageId}:${bdc.id}`,
+        this.inlineTextSceneFeature,
+        this.listSceneBuilder,
+        input.entryEventName,
+        input.entryTriggerMode,
+        input.exitEventName,
+        input.initiallyVisible,
+      )
     const markup = photoMediaRoot ? createPhotoMediaRootMarkup(rootId, partId) : contentProjection.markup
     const appearanceClassName = appearanceClassNameForBdc(bdc.id, input.appearanceClassNamesByTarget)
     const imagePositionClassName = bdc.presetId === CARD_PRESET_ID.TEXT_IMAGE
@@ -67,6 +86,9 @@ export class ElceCardBdcSceneBuilder {
       zonePartIds: layout.zonePartIds,
       contentPersos: contentProjection.persos,
       mediaPersos: createCardMediaPersos(input, partId, bdc.card.imageFit),
+      straps: contentProjection.straps,
+      listen: contentProjection.listen,
+      revealEventimes: contentProjection.revealEventimes,
       styleSheet: '',
     }
   }
@@ -86,7 +108,18 @@ function createCardContentProjection(
   layout: ReturnType<ElceCardPresetBuilder['build']>,
   prefix: string,
   inlineTextSceneFeature: ResourceInlineTextSceneFeature | undefined,
-): Readonly<{ markup: string; persos: readonly PersoDoc<string>[] }> {
+  listSceneBuilder: ListSceneBuilder,
+  entryEventName: string | undefined,
+  entryTriggerMode: ListEntryTriggerMode | undefined,
+  exitEventName: string | undefined,
+  initiallyVisible: boolean | undefined,
+): Readonly<{
+  markup: string
+  persos: readonly PersoDoc<string>[]
+  straps: AuthorStrapCollection
+  listen: readonly SceneListenRule[]
+  revealEventimes: readonly Readonly<{ name: string; startAt: number }>[]
+}> {
   const card = bdc.card
   if (card == null) throw new Error(`Le bdc Carte ${bdc.id} ne contient pas ses champs.`)
   let markup = layout.markup
@@ -112,15 +145,44 @@ function createCardContentProjection(
       addField('description', 'p', card.description)
       addField('message', 'p', card.message)
       addField('note', 'footer', card.note)
-      return { markup, persos }
+      return { markup, persos, straps: {}, listen: [], revealEventimes: [] }
     case CARD_PRESET_ID.IMAGE_TITLE:
       addField('title', 'h2', card.title)
-      return { markup, persos }
+      return { markup, persos, straps: {}, listen: [], revealEventimes: [] }
     case CARD_PRESET_ID.PHOTO:
-      return { markup, persos }
+      return { markup, persos, straps: {}, listen: [], revealEventimes: [] }
     case CARD_PRESET_ID.IMAGE_CAPTION:
       addField('caption', 'p', card.caption)
-      return { markup, persos }
+      return { markup, persos, straps: {}, listen: [], revealEventimes: [] }
+    case CARD_PRESET_ID.LIST: {
+      addField('overline', 'p', card.overline)
+      addField('title', 'h2', card.title)
+      addField('description', 'p', card.description)
+      addField('message', 'p', card.message)
+      addField('note', 'footer', card.note)
+      addField('caption', 'p', card.caption)
+      if (card.list === null) throw new Error(`La Carte Liste ${bdc.id} ne contient pas son sous-module.`)
+      const listPartId = layout.zonePartIds.list
+      if (listPartId === undefined) throw new Error(`La zone Liste manque à la Carte ${bdc.id}.`)
+      const listBuild = listSceneBuilder.build({
+        list: card.list,
+        idPrefix: `${prefix}-card-${bdc.id}`,
+        partId: listPartId,
+        entryEventName,
+        entryTriggerMode,
+        exitEventName,
+        initiallyVisible,
+      })
+      markup = markup.replace(`<!-- data-part="${listPartId}" -->`, listBuild.markup)
+      persos.push(...listBuild.persos)
+      return {
+        markup,
+        persos,
+        straps: listBuild.straps,
+        listen: listBuild.listen,
+        revealEventimes: listBuild.revealEventimes,
+      }
+    }
     default:
       throw new Error(`Layout de carte non pris en charge : ${bdc.presetId}`)
   }
@@ -182,6 +244,7 @@ function cardMediaPartId(layoutId: string, partId: string): string | null {
     case CARD_PRESET_ID.IMAGE_TITLE:
       return `${partId}:image`
     case CARD_PRESET_ID.TEXT_SHORT:
+    case CARD_PRESET_ID.LIST:
       return null
     default:
       throw new Error(`Layout de carte non pris en charge : ${layoutId}`)

@@ -1,7 +1,7 @@
 import { AutoCapsule, CAPSULE_TYPE, EVENT_ACTION } from '@codplay/capsule-automation'
 import { CapsuleDistribution } from '@codplay/scene-factory/capsule-distribution'
 import { CapsulePreset } from '@codplay/scene-factory/capsule-preset'
-import type { PersoDoc, StoryDoc } from 'codplay/scene/types'
+import type { AuthorStrapCollection, PersoDoc, SceneListenRule, StoryDoc } from 'codplay/scene/types'
 import { TRACK_EVENT_DEACTIVATE } from 'codplay/runtime/player'
 import { CARD_BDC_TYPE, CARD_PRESET_ID } from '../../card/card-config'
 import { CAROUSEL_PRESET_ID } from '../carousel-config'
@@ -15,6 +15,7 @@ import type { CarouselContent, CarouselBdcEntry } from '../domain/carousel-types
 import type { ResourceBdc } from '../../../document/resource-document-types'
 import { ElceCardPresetBuilder } from '../../../../core/presets/card-preset-builder'
 import { ElceCardBdcSceneBuilder } from '../../card/reading/card-bdc-scene-builder'
+import type { CardBdcSceneBuildInput } from '../../card/reading/card-bdc-scene-builder'
 import { ElceStatisticalGraphSceneBuilder } from '../../statistical-graph/reading/statistical-graph-scene-builder'
 import { createPageBottomMarkerPerso } from '../../../pages/page-completion/page-bottom-marker'
 import { createResolvedRevelationAction } from '../../../revelation/revelation-action'
@@ -37,6 +38,9 @@ type CarouselViewBuild = Readonly<{
   readonly rootClassName: string
   readonly contentPersos: readonly PersoDoc<string>[]
   readonly mediaPersos: readonly PersoDoc<string>[]
+  readonly straps: AuthorStrapCollection
+  readonly listen: readonly SceneListenRule[]
+  readonly revealEventimes: readonly Readonly<{ name: string; startAt: number }>[]
   readonly styleSheet: string
 }>
 
@@ -124,7 +128,32 @@ export class ElceCarouselSceneBuilder {
     const capsulePresentationClass = sceneStyleClassName('carousel-capsule', rootId)
     const capsuleClassName = `${capsuleResult.capsule.className} ${capsulePresentationClass}`
     const firstCardBdcId = content.cards[0]?.bdcId ?? null
-    const viewBuilds = new Map(schedule.map((entry) => [entry.bdc.id, buildView(input, entry.bdc, displayMode === 'scene', this.cardBdcSceneBuilder, this.inlineTextSceneFeature)]))
+    const viewBuilds = new Map(schedule.map((entry) => {
+      const firstCard = entry.bdc.id === firstCardBdcId
+      const entryEventName = content.playbackMode === CAROUSEL_PLAYBACK_MODE.AUTOMATIC
+        ? `${prefix}:card:${entry.bdc.id}:intro`
+        : `${prefix}:card:${entry.bdc.id}:selected`
+      const exitEventName = content.playbackMode === CAROUSEL_PLAYBACK_MODE.AUTOMATIC
+        ? `${prefix}:card:${entry.bdc.id}:outro`
+        : `${prefix}:card:${entry.bdc.id}:unselected`
+      const entryTriggerMode = content.playbackMode === CAROUSEL_PLAYBACK_MODE.AUTOMATIC
+        ? 'compiled-eventime'
+        : 'live'
+      return [
+        entry.bdc.id,
+        buildView(
+          input,
+          entry.bdc,
+          displayMode === 'scene',
+          this.cardBdcSceneBuilder,
+          this.inlineTextSceneFeature,
+          entryEventName,
+          exitEventName,
+          firstCard,
+          entryTriggerMode,
+        ),
+      ] as const
+    }))
     const lastCardBdcId = capsuleResult.children.at(-1)?.id
     const cardMountTarget = diapoRootId ?? capsulePartId
     const mediaPersos = [...viewBuilds.values()].flatMap((build) => build.mediaPersos)
@@ -154,6 +183,8 @@ export class ElceCarouselSceneBuilder {
     })
     const selectionEvent = `${prefix}:select-card`
     const storyId = input.storyId ?? `${pageId}-${bdcId}`
+    const viewStraps = Object.assign({}, ...Array.from(viewBuilds.values(), (view) => view.straps))
+    const viewListen = Array.from(viewBuilds.values()).flatMap((view) => view.listen)
     const navigationPersos = navigation === 'none' ? [] : content.cards.map((entry, index) => {
       const child = capsuleResult.children.find((candidate) => candidate.id === entry.bdcId)
       const bdc = input.cards.find((candidate) => candidate.id === entry.bdcId)
@@ -212,10 +243,10 @@ export class ElceCarouselSceneBuilder {
         ...navigationPersos,
       ],
       eventimes: content.playbackMode === CAROUSEL_PLAYBACK_MODE.AUTOMATIC
-        ? createAutomaticEventimes(content, capsuleResult.children, schedule[schedule.length - 1]?.endMs ?? 0)
+        ? createAutomaticEventimes(content, capsuleResult.children, schedule[schedule.length - 1]?.endMs ?? 0, viewBuilds)
         : [],
-      straps: { [selectionEvent]: selectCarouselCardStrap },
-      listen: [{ on: selectionEvent, straps: [selectionEvent] }],
+      straps: { [selectionEvent]: selectCarouselCardStrap, ...viewStraps },
+      listen: [{ on: selectionEvent, straps: [selectionEvent] }, ...viewListen],
     }
     const expandedStory = addViewportExpansionToStory(story, input.playerSettings.interactions.viewportExpansion, {
       selectionEvent,
@@ -278,6 +309,10 @@ function buildView(
   photoMediaRoot: boolean,
   cardBdcSceneBuilder: ElceCardBdcSceneBuilder,
   inlineTextSceneFeature: ResourceInlineTextSceneFeature | undefined,
+  entryEventName: string | undefined,
+  exitEventName: string | undefined,
+  initiallyVisible: boolean,
+  entryTriggerMode: NonNullable<CardBdcSceneBuildInput['entryTriggerMode']>,
 ): CarouselViewBuild {
   switch (bdc.type) {
     case CARD_BDC_TYPE:
@@ -288,16 +323,22 @@ function buildView(
         mediaSources: input.mediaSources,
         mediaTypes: input.mediaTypes,
         photoMediaRoot,
+        ...(bdc.presetId === CARD_PRESET_ID.LIST ? { entryEventName, entryTriggerMode, exitEventName, initiallyVisible } : {}),
         appearanceClassNamesByTarget: input.appearanceClassNamesByTarget,
       })
     case STATISTICAL_GRAPH_BDC_TYPE:
-      return statisticalGraphSceneBuilder.build(
-        bdc,
-        `${input.pageId}-${input.bdcId}-graph-${bdc.id}`,
-        `${input.pageId}:${input.bdcId}:card:${bdc.id}`,
-        appearanceClassNameForBdc(bdc.id, input.appearanceClassNamesByTarget),
-        inlineTextSceneFeature,
-      )
+      return {
+        ...statisticalGraphSceneBuilder.build(
+          bdc,
+          `${input.pageId}-${input.bdcId}-graph-${bdc.id}`,
+          `${input.pageId}:${input.bdcId}:card:${bdc.id}`,
+          appearanceClassNameForBdc(bdc.id, input.appearanceClassNamesByTarget),
+          inlineTextSceneFeature,
+        ),
+        straps: {},
+        listen: [],
+        revealEventimes: [],
+      }
     default:
       throw new Error(`Le BDC ${bdc.id} n’est pas une illustration prise en charge par Carousel.`)
   }
@@ -372,18 +413,34 @@ function createAutomaticEventimes(
   content: CarouselContent,
   children: ReturnType<AutoCapsule['resolve']>['children'],
   cycleDurationMs: number,
+  viewBuilds: ReadonlyMap<string, CarouselViewBuild>,
 ): NonNullable<StoryDoc<string>['eventimes']> {
   const repeatCount = content.repeatCount ?? CAROUSEL_CONFIG.defaultRepeatCount
   return Array.from({ length: repeatCount + 1 }, (_, repetitionIndex) =>
-    children.flatMap((child, cardIndex) => Object.values(child.events)
-      .filter((event) => repetitionIndex < repeatCount
-        || cardIndex < children.length - 1
-        || event.action !== EVENT_ACTION.outro)
-      .filter((event) => repetitionIndex !== 0 || cardIndex !== 0 || event.action !== EVENT_ACTION.intro)
-      .map((event) => ({
-        name: event.name,
-        startAt: event.triggerMs + cycleDurationMs * repetitionIndex,
-      })))
+    children.flatMap((child, cardIndex) => {
+      const transitionEventimes = Object.values(child.events)
+        .filter((event) => repetitionIndex < repeatCount
+          || cardIndex < children.length - 1
+          || event.action !== EVENT_ACTION.outro)
+        .filter((event) => repetitionIndex !== 0 || cardIndex !== 0 || event.action !== EVENT_ACTION.intro)
+        .map((event) => ({
+          name: event.name,
+          startAt: event.triggerMs + cycleDurationMs * repetitionIndex,
+        }))
+      const introEvent = child.events.intro
+      if (introEvent === undefined || (repetitionIndex === 0 && cardIndex === 0)) return transitionEventimes
+      const outroEvent = child.events.outro
+      const revealEventimes = viewBuilds.get(child.id)?.revealEventimes ?? []
+      return [
+        ...transitionEventimes,
+        ...revealEventimes
+          .filter((event) => outroEvent === undefined || event.startAt < outroEvent.triggerMs - introEvent.triggerMs)
+          .map((event) => ({
+            name: event.name,
+            startAt: introEvent.triggerMs + cycleDurationMs * repetitionIndex + event.startAt,
+          })),
+      ]
+    })
   ).flat()
 }
 

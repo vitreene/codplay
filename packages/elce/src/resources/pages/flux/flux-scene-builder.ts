@@ -81,6 +81,7 @@ function buildFluxPageScene(page: ContentPage, bdcs: readonly ResourceBdc[], opt
   const pageContents = pageBdcs.filter((bdc): bdc is ResourceBdc => bdc !== undefined)
   const anchorTargets = readAnchorTargets(pageContents, bdcs)
   const mounts = pageContents.map((bdc) => createBdcMount(page, bdc, bdcs, options))
+  const cardBuilds = mounts.flatMap((mount) => mount.cardBuild === undefined ? [] : [mount.cardBuild])
 
   const scrollPortId = `${page.id}-scrollport`
   const articleId = `${page.id}-article`
@@ -100,6 +101,7 @@ function buildFluxPageScene(page: ContentPage, bdcs: readonly ResourceBdc[], opt
     switch (illustration.type) {
       case CARD_BDC_TYPE: {
         const cardBuild = buildFluxCard(page, section.id, illustration, options)
+        cardBuilds.push(cardBuild)
         return createFluxCardPersos(
           page,
           illustration,
@@ -138,6 +140,8 @@ function buildFluxPageScene(page: ContentPage, bdcs: readonly ResourceBdc[], opt
         throw new Error(`Le BDC ${illustration.id} ne peut pas être ancré comme illustration.`)
     }
   })
+  const cardStraps = Object.assign({}, ...cardBuilds.map((cardBuild) => cardBuild.straps))
+  const cardListen = cardBuilds.flatMap((cardBuild) => cardBuild.listen)
 
   const pageStory: StoryDoc<string> = {
     id: `${page.id}-page`,
@@ -175,6 +179,8 @@ function buildFluxPageScene(page: ContentPage, bdcs: readonly ResourceBdc[], opt
       ...pageMediaPersos,
       ...anchoredIllustrationPersos,
     ],
+    straps: cardStraps,
+    listen: cardListen,
   }
 
   const stories: Readonly<Record<string, StoryDoc<string>>> = {
@@ -501,6 +507,10 @@ function buildFluxCard(page: ContentPage, containerBdcId: BdcId, bdc: ResourceBd
     bdc,
     mediaSources: options.mediaSources ?? {},
     mediaTypes: options.mediaTypes ?? {},
+    ...(bdc.presetId === CARD_PRESET_ID.LIST ? {
+      entryEventName: `${page.id}-${bdc.id}-card:enter`,
+      exitEventName: `${page.id}-${bdc.id}-card:leave`,
+    } : {}),
     appearanceClassNamesByTarget: options.appearanceClassNamesByTarget,
   })
 }
