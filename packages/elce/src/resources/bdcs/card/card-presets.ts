@@ -21,7 +21,7 @@ export const CARD_PRESETS: Readonly<Record<string, CardPreset>> = {
   },
   [CARD_PRESET_ID.LIST]: {
     id: CARD_PRESET_ID.LIST,
-    label: 'Liste',
+    label: 'Liste à points',
     rootClassName: 'elce-card elce-card--list',
     allowedContent: ['text'],
     markupTemplate: `
@@ -32,9 +32,9 @@ export const CARD_PRESETS: Readonly<Record<string, CardPreset>> = {
           <!-- data-part="{{partPrefix}}:title" -->
           <!-- data-part="{{partPrefix}}:description" -->
           <!-- data-part="{{partPrefix}}:message" -->
+          <!-- data-part="{{partPrefix}}:list" -->
           <!-- data-part="{{partPrefix}}:note" -->
           <!-- data-part="{{partPrefix}}:caption" -->
-          <!-- data-part="{{partPrefix}}:list" -->
         </div>
       </article>
     `,
@@ -43,9 +43,9 @@ export const CARD_PRESETS: Readonly<Record<string, CardPreset>> = {
       { id: 'title', label: 'Titre', required: false, content: 'text', className: 'elce-card__title' },
       { id: 'description', label: 'Description', required: false, content: 'text', className: 'elce-card__copy elce-card__description' },
       { id: 'message', label: 'Message', required: false, content: 'text', className: 'elce-card__copy elce-card__message' },
+      { id: 'list', label: 'Liste à points', required: false, content: 'text' },
       { id: 'note', label: 'Note', required: false, content: 'text', className: 'elce-card__meta' },
       { id: 'caption', label: 'Légende', required: false, content: 'text', className: 'elce-card__caption' },
-      { id: 'list', label: 'Liste', required: false, content: 'text' },
     ],
   },
   [CARD_PRESET_ID.PHOTO]: {

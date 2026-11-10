@@ -128,6 +128,24 @@ rangée d’actions de création précède maintenant les titres ; le titre de p
 est plus affirmé et distinct du titre de chapitre. `workspace/page-editor.test.tsx`
 vérifie l’ordre de la structure, et Brave confirme l’affichage dans l’éditeur.
 
+**Saisie des titres — correctif vérifié.** Le contrat reste celui
+de la spécification Organisation : les valeurs valides suivent `page.rename`
+et `chapter.rename`, les brouillons vides ou terminés par un espace restent
+locaux et le blur normalise ou restaure le titre. Le champ natif partagé doit
+posséder son brouillon et son propre rendu Remix : une frappe native laisse
+Remix restaurer la valeur contrôlée avant l’écouteur `document`. L’écouteur
+`input` de l’application actualise uniquement la disponibilité d’Annuler.
+- [x] Remplacer le helper natif par un composant local dans
+  `learning-inline-text-field.tsx`, identifié par l’ID du champ ; supprimer la
+  Map globale et les lectures du DOM utilisées comme état de saisie.
+- [x] Réconcilier un changement de valeur du modèle, normaliser au blur et
+  conserver le circuit existant de promotion vers le texte enrichi.
+- [x] Vérifier le brouillon visible avant blur, la frappe suivante, le
+  changement de modèle ou d’identité, et l’intégration XState/historique.
+- [x] Vérifier dans Safari la suppression du dernier signe après un espace,
+  les suppressions successives et la reprise de saisie ; rétablir le titre
+  initial puis consolider la spécification Organisation.
+
 **Mise à jour du 22 octobre 2026 — tranche 3.** Les dix ancres média de Demo5
 ne conservent plus `12rem` : ses neuf images utilisent leur ratio intrinsèque
 (`65.88888889%`, `65%` ou `65.78125%`) et sa vidéo suit le cadre Elcé existant

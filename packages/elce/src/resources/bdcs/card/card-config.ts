@@ -23,7 +23,7 @@ export const CARD_LAYOUT_IDS = [
   CARD_PRESET_ID.LIST,
 ] as const
 
-export const CARD_LIST_LAYOUT_OPTION = { value: CARD_PRESET_ID.LIST, label: 'Liste' } as const
+export const CARD_LIST_LAYOUT_OPTION = { value: CARD_PRESET_ID.LIST, label: 'Liste à points' } as const
 
 export const CARD_IMAGE_FIT_OPTIONS = [
   { value: CARD_IMAGE_FIT.CONTAIN, label: 'Contenir' },

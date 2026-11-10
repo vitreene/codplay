@@ -253,6 +253,16 @@ d’espaces, le champ retrouve sa dernière valeur valide et aucune commande de
 renommage n’est envoyée. Le modèle met à jour son nom sans changer les
 identifiants, l’ordre, l’affectation ou les BDC.
 
+Le champ natif partagé de Learning est un composant Remix identifié par l’ID
+du champ. Il possède le brouillon non validé et actualise sa valeur contrôlée
+depuis son gestionnaire `input`, avant la restauration contrôlée de Remix.
+Une nouvelle valeur du modèle remplace ce brouillon ; un changement d’ID crée
+une nouvelle instance. La valeur modèle est aussi portée par `defaultValue`
+pour que l’historique reconnaisse un titre encore saisi. L’écouteur `input` de
+l’application actualise la disponibilité d’Annuler ; la saisie possède son
+propre rendu local. La promotion d’un texte natif en texte enrichi conserve
+les callbacks et la sélection du circuit d’étiquettes existant.
+
 Dans Remix, `ProjectApplication` compose le Scénario, les réglages centraux du
 chapitre, le catalogue et `RemixPageEditor` depuis le sélecteur
 `selectEditorViewModel`. Le page editor natif rend les titres, les commandes,

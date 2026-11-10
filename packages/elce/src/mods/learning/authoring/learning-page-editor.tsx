@@ -253,7 +253,7 @@ function renderPageEditor(view: EditorViewModel, actions: LearningEditorFacade, 
       renderCreateButton('elce-avatar-create', 'Ajouter un Avatar', 'Avatar', UserRound, !availability.canCreateAvatar, () => { if (page !== undefined && availability.canCreateAvatar) actions.createAvatar(page.id, page.bdcIds.length); state.updateAddContentMenuOpen(false) }),
       renderCreateButton('elce-carousel-create', 'Ajouter un bloc Carousel', 'Carousel', Images, !availability.canCreateCarousel, addCarousel),
       page === undefined ? null : renderCreateButton('elce-card-create', 'Ajouter une carte', 'Carte', RectangleHorizontal, !availability.canCreateStandaloneCard, addStandaloneCard),
-      page === undefined ? null : renderCreateButton('elce-list-card-create', 'Ajouter une carte Liste', 'Liste', List, !availability.canCreateStandaloneCard, addListCard),
+      page === undefined ? null : renderCreateButton('elce-list-card-create', 'Ajouter une carte Liste à points', 'Liste à points', List, !availability.canCreateStandaloneCard, addListCard),
       page === undefined ? null : renderCreateButton('elce-statistical-graph-create', 'Ajouter un graphe', 'Graphe', Activity, !availability.canCreateStatisticalGraph, addStatisticalGraph),
       availability.canCreateEvaluationResult
         ? renderCreateButton('elce-evaluation-result-create', 'Ajouter un bloc résultat', 'Résultat', BadgeCheck, false, addEvaluationResult)

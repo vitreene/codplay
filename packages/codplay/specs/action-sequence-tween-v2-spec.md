@@ -3,8 +3,9 @@
 ## Périmètre certifié
 
 Cette spécification décrit uniquement les comportements logiques vérifiés pour
-les séquences d'actions et les `TweenAction`. L'extension vers un rendu continu
-reste suivie dans le [plan associé](../plan/action-sequence-tween-plan.md).
+les séquences d'actions et les `TweenAction`, ainsi que la présentation continue
+d'une opacité `tag` HTML dans le player. Les autres extensions de rendu restent
+suivies dans le [plan associé](../plan/action-sequence-tween-plan.md).
 
 Les actions sont reconstruites par le circuit commun du player :
 
@@ -43,6 +44,16 @@ l'état par le même résolveur d'action que les autres actions.
 Une référence de fonction absente de la collection provoque une erreur explicite.
 Le test player confirme que la reconstruction par Seek et celle de Play
 produisent le même état logique pour cette forme de `TweenAction`.
+
+### Présentation HTML de l'opacité
+
+Pendant Play, le player évalue l'action active à la position temporelle de
+chaque frame et transmet l'état résolu au composant puis au materializer
+communs. Pour une `TweenAction` qui retourne `style.opacity` sur un perso `tag`,
+le DOM reçoit les valeurs intermédiaires jusqu'à la fin de la durée, selon le
+temps CodPlay. Ce parcours ne dépend pas d'une transition CSS ni d'un minuteur
+propre au composant. Les autres projections continues et la reconstruction
+visuelle Seek de cette intégration restent au plan d'acceptation.
 
 ### Arrêt direct
 

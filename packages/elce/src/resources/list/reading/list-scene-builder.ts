@@ -23,6 +23,8 @@ export interface ListSceneBuild {
   readonly revealEventimes: readonly Readonly<{ name: string; startAt: number }>[]
 }
 
+const LIST_ROW_REVEAL_DURATION_MS = 200
+
 const CLASS_BY_PREFIX: Readonly<Record<ListPrefix, string>> = {
   none: 'none',
   disc: 'disc',
@@ -73,7 +75,11 @@ export class ListSceneBuilder {
       const actions = {
         ...(input.entryEventName === undefined ? {} : {
           [input.entryEventName]: { style: { opacity: 0 } },
-          [revealEventName]: { style: { opacity: 1 } },
+          [revealEventName]: {
+            duration: LIST_ROW_REVEAL_DURATION_MS,
+            ease: 'linear',
+            fn: resolveListRowRevealFrame,
+          },
         }),
         ...(input.exitEventName === undefined ? {} : {
           [input.exitEventName]: { style: { opacity: 0 } },
@@ -97,6 +103,11 @@ export class ListSceneBuilder {
     const revealEventimes = revealRows.map((row) => ({ name: row.revealEventName, startAt: row.offsetMs }))
     return { markup: `<${tag} ${attrs}></${tag}>`, persos, straps, listen, revealEventimes }
   }
+}
+
+/** Resolves the CodPlay opacity frame for one revealed List row. */
+function resolveListRowRevealFrame(input: Readonly<{ progress: number }>) {
+  return { style: { opacity: input.progress } }
 }
 
 /** Schedules row reveals and repairs outstanding events when the List is re-entered. */

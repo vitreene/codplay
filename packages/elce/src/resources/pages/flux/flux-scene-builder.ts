@@ -544,6 +544,7 @@ function createFluxCardPersos(
     emit: {
       observe: {
         root: scrollPortId,
+        ...(bdc.presetId === CARD_PRESET_ID.LIST ? { initial: 'enter' as const } : {}),
         zone: options.editorSettings.revelation.cardObservationZone,
         enter: [{ name: enterEvent }],
         leave: [{ name: leaveEvent }],

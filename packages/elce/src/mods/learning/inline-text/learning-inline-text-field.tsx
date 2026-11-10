@@ -2,7 +2,7 @@ import { Bold, Italic } from 'lucide-static'
 import { Editor } from '@tiptap/core'
 import { NodeSelection } from '@tiptap/pm/state'
 import StarterKit from '@tiptap/starter-kit'
-import { on, ref, type RemixNode } from 'remix/component'
+import { on, ref, type Handle, type RemixNode } from 'remix/component'
 import type { LearningPage } from '../document/learning-document-types'
 import type { RichTextDocument } from '../../../resources/document/rich-text-types'
 import type { ProfileProperty } from '../profile/domain/learning-profile-types'
@@ -56,6 +56,7 @@ export interface InlineTextFieldOptions {
 }
 
 type RichInlineTextFieldOptions = Omit<InlineTextFieldOptions, 'value'> & Readonly<{ value: RichTextDocument }>
+type PlainInlineTextFieldOptions = Omit<InlineTextFieldOptions, 'value'> & Readonly<{ value: string }>
 
 /** Creates the Learning contribution consumed by reusable resource editors. */
 export function createLearningTextFieldFeature(
@@ -77,7 +78,7 @@ export function renderInlineTextField(options: InlineTextFieldOptions): RemixNod
     pages: options.pages ?? currentScenarioPages,
   }
   if (typeof options.value !== 'string') return renderRichField({ ...contextOptions, value: options.value })
-  return renderPlainField(contextOptions, options.value)
+  return <PlainInlineTextField key={options.id} {...contextOptions} value={options.value} />
 }
 
 /** Sets the current document context shared by every Elcé text field. */
@@ -89,79 +90,107 @@ export function setLearningInlineTextFieldContext(
   currentScenarioPages = scenarioPages
 }
 
-/** Renders a plain input or textarea that promotes itself when it receives a label. */
-function renderPlainField(options: InlineTextFieldOptions, value: string): RemixNode {
+/** Owns the native field draft while existing callbacks commit valid values or rich labels. */
+function PlainInlineTextField(handle: Handle<PlainInlineTextFieldOptions>) {
+  let draft: string | null = null
+  let previousValue = handle.props.value
+
+  /** Renders pending native text before Remix restores its controlled value. */
   const handleInput = (input: HTMLInputElement | HTMLTextAreaElement): void => {
+    const options = handle.props
     const promoted = parseInlineTextTokens(input.value, { allowPageLinks: options.allowPageLinks !== false })
     if (promoted === null) {
-      const pendingTrailingSpace = options.required === true && input.value !== input.value.trimEnd()
-      if (options.deferPlainChanges !== true && !pendingTrailingSpace
-        && (options.required !== true || input.value.trim().length > 0)) {
-        options.onChange(input.value)
-      }
+      const pending = options.deferPlainChanges === true || (options.required === true
+        && (input.value !== input.value.trimEnd() || input.value.trim().length === 0))
+      draft = pending ? input.value : null
+      if (!pending) options.onChange(input.value)
+      if (!handle.signal.aborted) void handle.update()
       return
     }
+    draft = null
     const cursor = inlineCaretPosition(input.value, input.selectionStart ?? input.value.length)
     pendingSelections.set(options.id, { from: cursor, to: cursor })
     options.onChange(promoted)
+    if (!handle.signal.aborted) void handle.update()
   }
-  const common = {
-    id: options.id,
-    className: options.className,
-    'aria-label': options.ariaLabel,
-    placeholder: options.placeholder,
-    value,
-    required: options.required,
-    maxLength: options.maxLength,
-    'data-elce-profile-token-target': 'true',
-    'data-elce-allow-page-links': options.allowPageLinks === false ? 'false' : 'true',
-  }
-  const field = options.multiline === true
-    ? <textarea
-      {...common}
-      rows={3}
-      mix={[
-        on<HTMLTextAreaElement, 'input'>('input', (event) => handleInput(event.currentTarget)),
-        on<HTMLTextAreaElement, 'focus'>('focus', options.onFocus ?? (() => undefined)),
-        on<HTMLTextAreaElement, 'keydown'>('keydown', (event) => options.onKeyDown?.(event)),
-        on<HTMLTextAreaElement, 'dragover'>('dragover', (event) => {
-          if (hasInlineTextDrag(event.dataTransfer)) event.preventDefault()
-        }),
-        on<HTMLTextAreaElement, 'drop'>('drop', (event) => insertDroppedText(event.currentTarget, event)),
-        ...(options.deferPlainChanges === true || options.required === true
-          ? [on<HTMLTextAreaElement, 'blur'>('blur', (event) => handlePlainFieldBlur(event.currentTarget, value, options))]
-          : []),
-      ]}
-    />
-    : <input
-      {...common}
-      type="text"
-      mix={[
-        on<HTMLInputElement, 'input'>('input', (event) => handleInput(event.currentTarget)),
-        on<HTMLInputElement, 'focus'>('focus', options.onFocus ?? (() => undefined)),
-        on<HTMLInputElement, 'keydown'>('keydown', (event) => {
-          options.onKeyDown?.(event)
-          if (event.key === 'Enter') event.currentTarget.blur()
-        }),
-        on<HTMLInputElement, 'dragover'>('dragover', (event) => {
-          if (hasInlineTextDrag(event.dataTransfer)) event.preventDefault()
-        }),
-        on<HTMLInputElement, 'drop'>('drop', (event) => insertDroppedText(event.currentTarget, event)),
-        ...(options.deferPlainChanges === true || options.required === true
-          ? [on<HTMLInputElement, 'blur'>('blur', (event) => handlePlainFieldBlur(event.currentTarget, value, options))]
-          : []),
-      ]}
-    />
 
-  if (options.allowBoldItalic !== true) return field
-  const toolbar = <div id={`${options.id}-formatting`} className="elce-inline-text-field__toolbar" role="toolbar" aria-label="Mise en forme">
-    {renderFormatButton(options.id, 'bold', 'Gras', (input) => promotePlainField(input, options, 'bold'))}
-    {renderFormatButton(options.id, 'italic', 'Italique', (input) => promotePlainField(input, options, 'italic'))}
-  </div>
-  return <div id={`${options.id}-field`} className="elce-inline-text-field elce-inline-text-field--plain-rich-capable">
-    {toolbar}
-    {field}
-  </div>
+  /** Commits a normalized draft or restores the last valid required value on blur. */
+  const handleBlur = (input: HTMLInputElement | HTMLTextAreaElement): void => {
+    const options = handle.props
+    const nextValue = input.value.trim().length === 0
+      ? options.value
+      : options.required === true ? input.value.trim() : input.value
+    draft = null
+    input.value = nextValue
+    if (nextValue !== options.value) options.onChange(nextValue)
+    if (!handle.signal.aborted) void handle.update()
+  }
+
+  return () => {
+    const options = handle.props
+    if (options.value !== previousValue) {
+      previousValue = options.value
+      draft = null
+    }
+    const common = {
+      id: options.id,
+      className: options.className,
+      'aria-label': options.ariaLabel,
+      placeholder: options.placeholder,
+      value: draft ?? options.value,
+      defaultValue: options.required === true ? options.value : undefined,
+      required: options.required,
+      maxLength: options.maxLength,
+      'data-elce-profile-token-target': 'true',
+      'data-elce-allow-page-links': options.allowPageLinks === false ? 'false' : 'true',
+    }
+    const field = options.multiline === true
+      ? <textarea
+        {...common}
+        rows={3}
+        mix={[
+          on<HTMLTextAreaElement, 'input'>('input', (event) => handleInput(event.currentTarget)),
+          on<HTMLTextAreaElement, 'focus'>('focus', options.onFocus ?? (() => undefined)),
+          on<HTMLTextAreaElement, 'keydown'>('keydown', (event) => options.onKeyDown?.(event)),
+          on<HTMLTextAreaElement, 'dragover'>('dragover', (event) => {
+            if (hasInlineTextDrag(event.dataTransfer)) event.preventDefault()
+          }),
+          on<HTMLTextAreaElement, 'drop'>('drop', (event) => insertDroppedText(event.currentTarget, event)),
+          ...(options.deferPlainChanges === true || options.required === true
+            ? [on<HTMLTextAreaElement, 'blur'>('blur', (event) => handleBlur(event.currentTarget))]
+            : []),
+        ]}
+      />
+      : <input
+        {...common}
+        type="text"
+        mix={[
+          on<HTMLInputElement, 'input'>('input', (event) => handleInput(event.currentTarget)),
+          on<HTMLInputElement, 'focus'>('focus', options.onFocus ?? (() => undefined)),
+          on<HTMLInputElement, 'keydown'>('keydown', (event) => {
+            options.onKeyDown?.(event)
+            if (event.key === 'Enter') event.currentTarget.blur()
+          }),
+          on<HTMLInputElement, 'dragover'>('dragover', (event) => {
+            if (hasInlineTextDrag(event.dataTransfer)) event.preventDefault()
+          }),
+          on<HTMLInputElement, 'drop'>('drop', (event) => insertDroppedText(event.currentTarget, event)),
+          ...(options.deferPlainChanges === true || options.required === true
+            ? [on<HTMLInputElement, 'blur'>('blur', (event) => handleBlur(event.currentTarget))]
+            : []),
+        ]}
+      />
+
+    if (options.allowBoldItalic !== true) return field
+    const toolbar = <div id={`${options.id}-formatting`} className="elce-inline-text-field__toolbar" role="toolbar" aria-label="Mise en forme">
+      {renderFormatButton(options.id, 'bold', 'Gras', (input) => promotePlainField(input, options, 'bold'))}
+      {renderFormatButton(options.id, 'italic', 'Italique', (input) => promotePlainField(input, options, 'italic'))}
+    </div>
+    return <div id={`${options.id}-field`} className="elce-inline-text-field elce-inline-text-field--plain-rich-capable">
+      {toolbar}
+      {field}
+    </div>
+  }
 }
 
 /** Renders a promoted editor host and optional Message formatting controls. */
@@ -477,22 +506,6 @@ function insertDroppedText(input: HTMLInputElement | HTMLTextAreaElement, event:
   const end = input.selectionEnd ?? start
   input.setRangeText(token, start, end, 'end')
   input.dispatchEvent(new Event('input', { bubbles: true }))
-}
-
-/** Commits deferred text or normalizes a required live value when focus leaves it. */
-function handlePlainFieldBlur(
-  input: HTMLInputElement | HTMLTextAreaElement,
-  previousValue: string,
-  options: InlineTextFieldOptions,
-): void {
-  if (options.deferPlainChanges !== true && options.required !== true) return
-  if (input.value.trim().length === 0) {
-    input.value = previousValue
-    return
-  }
-  const nextValue = options.required === true ? input.value.trim() : input.value
-  input.value = nextValue
-  if (nextValue !== previousValue) options.onChange(nextValue)
 }
 
 /** Converts a native token offset to the one-character-per-atom Tiptap cursor. */

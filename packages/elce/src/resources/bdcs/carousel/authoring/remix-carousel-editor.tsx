@@ -318,15 +318,15 @@ function renderCarouselViewActions(
           id={`elce-carousel-list-add-${carouselBdcId}`}
           className="elce-carousel-editor__view-add elce-add-content-action"
           type="button"
-          aria-label="Ajouter une carte Liste"
-          title="Ajouter une carte Liste"
+          aria-label="Ajouter une carte Liste à points"
+          title="Ajouter une carte Liste à points"
           mix={on<HTMLButtonElement, 'click'>('click', () => {
             state.updateAddViewMenuOpen(false)
             actions.addList()
           })}
         >
           {renderLucideIcon(List, `elce-carousel-list-add-icon-${carouselBdcId}`)}
-          <span id={`elce-carousel-list-add-label-${carouselBdcId}`} className="elce-add-content-action__label">Liste</span>
+          <span id={`elce-carousel-list-add-label-${carouselBdcId}`} className="elce-add-content-action__label">Liste à points</span>
         </button>
         <button
           id={`elce-carousel-graph-add-${carouselBdcId}`}

@@ -6,7 +6,7 @@
 
 Créer un sous-module générique Liste, indépendant des Cartes et réutilisable
 dans d’autres parties du projet. En V1, la ressource Carte est son seul hôte :
-l’entrée d’interface « Liste » crée une Carte qui expose tous les champs texte
+l’entrée d’interface « Liste à points » crée une Carte qui expose tous les champs texte
 Carte et compose le sous-module.
 
 Le module Liste possède ses données, règles, contrôles d’édition et projection
@@ -15,8 +15,8 @@ générique. L’hôte possède son stockage, sa création, son placement et les
 
 ## Décisions fonctionnelles
 
-- Le nom visible est **Liste**.
-- « Liste » reste un BDC Carte avec une présentation `list-basic` dédiée ; ce
+- Le nom visible est **Liste à points**.
+- « Liste à points » reste un BDC Carte avec une présentation `list-basic` dédiée ; ce
   n’est pas un nouveau type de BDC.
 - Le module générique vit dans `resources/list/`, hors de
   `resources/bdcs/card/`. Ses types, règles, éditeur et constructeur de scène
@@ -26,20 +26,21 @@ générique. L’hôte possède son stockage, sa création, son placement et les
 - Chaque Carte conserve son `presetId`, ses champs, son média, sa Révélation et
   son apparence. Le sous-module n’en remplace aucun.
 - En V1, les Cartes ordinaires n’ont pas de commande pour activer la Liste.
-  L’entrée « Liste » du menu d’ajout appelle la création Carte existante avec
+  L’entrée « Liste à points » du menu d’ajout appelle la création Carte existante avec
   `list-basic` et initialise le sous-module. Elle est proposée aux emplacements
   où Learning permet déjà d’ajouter une Carte autonome ou une Carte enfant de
   Carousel.
 - En V1, l’adaptateur Carte est le seul point de composition du module. La
   présentation `list-basic` est un choix propre à cet hôte ; le module Liste ne
-  connaît pas cet identifiant. La présentation « Liste » n’est pas proposée
+  connaît pas cet identifiant. La présentation « Liste à points » n’est pas proposée
   comme conversion aux Cartes qui
   n’ont pas déjà le sous-module. Si une Carte Liste passe à un autre layout,
-  ses données de liste restent conservées et « Liste » reste sélectionnable sur
+  ses données de liste restent conservées et « Liste à points » reste sélectionnable sur
   cette même Carte. Le sélecteur ne montre cette option de retour que pour cette
   Carte.
 - L’éditeur Liste expose les six champs texte Carte : surtitre, titre,
-  description, message, note et légende. La Liste est placée après ces champs.
+  description, message, note et légende. Le contrôle Liste à points et son
+  contenu sont placés après Message et avant Note.
   Les lignes ont un identifiant stable et un texte simple, comme les réponses
   éditables d’une Question ; les champs Carte existants gardent leur format
   `ElceTextValue`.
@@ -71,6 +72,9 @@ délai de la première ligne est relatif à l’entrée de la Carte ; celui des 
 suivantes est relatif à l’apparition de la ligne précédente. Sans réglage
 particulier, la première ligne apparaît à l’entrée et les suivantes suivent
 l’intervalle commun. Les délais sont des nombres finis positifs ou nuls.
+L’interface utilise les secondes, unité temporelle par défaut d’Elcé, pour
+l’intervalle commun et les délais particuliers, avec un pas de `0,1 s`.
+L’éditeur convertit ces valeurs vers les millisecondes du modèle existant.
 
 La lecture réutilise le signal d’entrée et la transition d’introduction déjà
 résolus pour la Carte. Pour une entrée déclenchée par un événement live, un
@@ -82,13 +86,17 @@ pas par `RuntimeEventDispatcher` et ne déclenchent pas `listen`. Dans ce mode,
 le module ne déclare donc ni strap ni règle `listen` pour le signal d’entrée.
 Le délai d’une ligne est cumulé depuis l’apparition précédente, selon
 l’intervalle de la Carte ou le délai particulier de la ligne. Chaque occurrence
-révèle une ligne par une action CodPlay ; le signal de sortie la masque pour
-préparer une nouvelle lecture. Pour une entrée live, le strap conserve les
-instants de révélation attendus et programme les corrections nécessaires à la
-sortie ou à la réentrée. La feuille CSS ne porte aucun délai ni animation.
-Aucun changement du cœur CodPlay n’est prévu ; si les contrats de scènes actuels
-ne permettent pas le même comportement en Flux, Diapo et Carousel, arrêter ce
-raccord et faire valider une modification de contrat avant de poursuivre.
+révèle une ligne par une `TweenAction` CodPlay qui fait passer son opacité de
+`0` à `1` en `200 ms` linéaires ; le signal de sortie la masque pour préparer
+une nouvelle lecture. Pour une entrée live, le strap conserve les instants de
+révélation attendus et programme les corrections nécessaires à la sortie ou à
+la réentrée. La durée du fondu est indépendante du délai entre les lignes. La
+progression suit le temps de lecture CodPlay et se reconstruit par Seek. La
+feuille CSS ne porte ni délai ni animation ; aucun minuteur navigateur n’est
+ajouté. Ce raccord réutilise la `TweenAction` existante et ne demande pas de
+changement du cœur CodPlay. Si le player ne matérialise pas sa progression à
+chaque frame de lecture, arrêter ce raccord et faire accepter un plan CodPlay
+avant toute modification du cœur.
 
 ## Collage d’une liste
 
@@ -97,7 +105,14 @@ liste à un seul niveau dans le texte brut (`•`, `-`, `*`, `1.` ou `1)`). Le
 collage dans une ligne reconnue remplace cette ligne par une série de nouvelles
 lignes au même endroit. Les voisins gardent leur identifiant et leur ordre ; la
 configuration de préfixe et d’intervalle de la Carte ne change pas. Le collage
-ordinaire non reconnu suit le comportement normal du champ.
+ordinaire non reconnu suit le comportement normal du champ. Si le texte brut
+décrit davantage d’éléments reconnus que la représentation HTML du presse-papiers,
+le collage conserve la liste complète en texte brut. Les marqueurs de puce
+consécutifs et les tabulations encodées en `&#9;` restent des séparateurs, pas
+du texte de ligne. Le cas de reproduction à accepter fournit deux lignes dans
+`text/html` et trois marqueurs reconnus dans `text/plain` ; les trois lignes
+doivent être créées dans l’ordre, dont « et, donc, proposition d’une étude pour
+les autres logements ».
 
 ## Raccords et propriétaires
 
@@ -117,7 +132,7 @@ ordinaire non reconnu suit le comportement normal du champ.
 3. **Commandes et création.** L’adaptateur Carte délègue les règles à
    `ListService` et transporte le payload par la commande Carte existante
    `bdc.card.update`. Étendre les options de `bdc.create` pour que l’entrée
-   « Liste » initialise le preset et le payload en une seule création annulable.
+   « Liste à points » initialise le preset et le payload en une seule création annulable.
    Étendre les invariants Learning sans nouveau type de BDC ni commande parallèle.
 4. **Interface hôte.** Le panneau Carte compose `ListEditor` en lui passant
    les données et actions fournies par `ElceCardFacade`. Il n’ajoute pas de
@@ -134,7 +149,11 @@ ordinaire non reconnu suit le comportement normal du champ.
    les straps et règles `listen` ; les `eventimes` statiques produisent des
    occurrences qui appliquent directement les actions, sans `listen`. Une vue
    initialement visible peut commencer avec ses lignes visibles immédiatement.
-   Quiz Hunt conserve le rendu commun sans ajouter de circuit de lecture propre.
+   En Flux, une Carte Liste demande `initial: 'enter'` à l’observation de sa
+   racine afin que la première mesure dans la zone déclenche le même signal
+   d’entrée que les entrées ultérieures ; les autres layouts Carte conservent
+   leur observation initiale actuelle. Quiz Hunt conserve le rendu commun sans
+   ajouter de circuit de lecture propre.
    Ajouter les règles d’apparence neutres à la feuille du module Liste ; garder
    dans l’hôte les dimensions et l’emplacement de la zone.
 6. **Persistance et migration.** Le module ne dépend pas de SQLite ; son hôte
@@ -150,13 +169,14 @@ ordinaire non reconnu suit le comportement normal du champ.
 
 ## Acceptation
 
-- Créer depuis « Liste » produit un BDC Carte `list-basic`, avec le sous-module
+- Créer depuis « Liste à points » produit un BDC Carte `list-basic`, avec le sous-module
   initialisé et les six champs texte visibles. Le menu de conversion des Cartes
   ordinaires ne permet pas de choisir `list-basic`.
 - Les types, le service, l’éditeur et le constructeur de scène de
   `resources/list/` ne dépendent d’aucun module hôte. La Carte n’apporte que
   l’adaptateur de composition en V1.
-- Une Carte Liste peut passer à un autre layout puis revenir à « Liste » sans
+- Une Carte Liste à points peut passer à un autre layout puis revenir à
+  « Liste à points » sans
   perdre ses lignes, préfixes ou délais. Les autres Cartes ne disposent pas
   d’une commande pour activer le sous-module en V1.
 - Ajouter, éditer, supprimer et réordonner les lignes conserve leurs IDs et
@@ -167,6 +187,10 @@ ordinaire non reconnu suit le comportement normal du champ.
 - L’intervalle commun et les délais individuels donnent un ordre d’apparition
   reproductible à l’entrée de la Carte, y compris après retour, Play, seek et
   replay dans les parcours pris en charge.
+- Chaque signal de révélation anime l’opacité de sa ligne de `0` à `1` sur
+  `200 ms` via `TweenAction` CodPlay ; la progression est visible pendant Play
+  et reconstruite aux positions correspondantes par Seek et replay. Le signal
+  de sortie masque les lignes et une nouvelle entrée relance leur apparition.
 - Les eventimes compilés de Diapo et Carousel automatique déclenchent les
   actions de ligne sans ajouter de `listen` ni de strap pour ces eventimes ; les
   entrées live de Flux et Carousel manuel programment les lignes par straps et

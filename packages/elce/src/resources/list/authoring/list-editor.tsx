@@ -28,7 +28,7 @@ export interface ListEditorProps {
 export function renderListEditor(props: ListEditorProps): RemixNode {
   const service = new ListService()
   const { list } = props
-  return <section id={`${props.idPrefix}-list-editor`} className="elce-list-editor" aria-label="Liste">
+  return <section id={`${props.idPrefix}-list-editor`} className="elce-list-editor" aria-label="Liste à points">
     <div id={`${props.idPrefix}-list-settings`} className="elce-list-editor__settings">
       <label id={`${props.idPrefix}-list-prefix-label`} className="elce-list-editor__setting">
         <span id={`${props.idPrefix}-list-prefix-caption`}>Préfixe</span>
@@ -83,16 +83,16 @@ export function renderListEditor(props: ListEditorProps): RemixNode {
         </label>
         : null}
       <label id={`${props.idPrefix}-list-interval-label`} className="elce-list-editor__setting">
-        <span id={`${props.idPrefix}-list-interval-caption`}>Intervalle entre les lignes (ms)</span>
+        <span id={`${props.idPrefix}-list-interval-caption`}>Intervalle entre les lignes (s)</span>
         <input
           id={`${props.idPrefix}-list-interval`}
           type="number"
           min={0}
-          step={100}
-          value={list.intervalMs}
-          aria-label="Intervalle entre les lignes en millisecondes"
+          step={0.1}
+          value={list.intervalMs / 1000}
+          aria-label="Intervalle entre les lignes en secondes"
           mix={on<HTMLInputElement, 'input'>('input', (event) => {
-            const intervalMs = Number(event.currentTarget.value)
+            const intervalMs = Number(event.currentTarget.value) * 1000
             if (Number.isFinite(intervalMs) && intervalMs >= 0) props.onChange(service.setPresentation(list, { intervalMs }))
           })}
         />
@@ -156,7 +156,9 @@ function renderListRow(row: ListRow, index: number, props: ListEditorProps, serv
       mix={[
         on<HTMLInputElement, 'input'>('input', (event) => props.onChange(service.setRowText(props.list, row.id, event.currentTarget.value))),
         on<HTMLInputElement, 'paste'>('paste', (event) => {
-          const parsed = parseListPaste(event.clipboardData.getData('text/html'), event.clipboardData.getData('text/plain'))
+          const clipboard = event.clipboardData
+          if (clipboard === null) return
+          const parsed = parseListPaste(clipboard.getData('text/html'), clipboard.getData('text/plain'))
           if (parsed === null) return
           event.preventDefault()
           props.onChange(service.replaceRowText(props.list, row.id, parsed, props.createId))
@@ -168,13 +170,13 @@ function renderListRow(row: ListRow, index: number, props: ListEditorProps, serv
       className="elce-list-editor__delay"
       type="number"
       min={0}
-      step={100}
-      value={row.delayMs ?? ''}
-      aria-label={`Délai avant la ligne ${rowNumber} en millisecondes, vide pour le comportement par défaut`}
-      title={rowNumber === 1 ? 'Vide : la première ligne apparaît à l’entrée.' : 'Vide : utilise l’intervalle commun.'}
+      step={0.1}
+      value={row.delayMs === null ? '' : row.delayMs / 1000}
+      aria-label={`Délai avant la ligne ${rowNumber} en secondes, vide pour le comportement par défaut`}
+      title={rowNumber === 1 ? 'Délai (s). Vide : la première ligne apparaît à l’entrée.' : 'Délai (s). Vide : utilise l’intervalle commun.'}
       mix={on<HTMLInputElement, 'input'>('input', (event) => {
         const value = event.currentTarget.value
-        const delayMs = value === '' ? null : Number(value)
+        const delayMs = value === '' ? null : Number(value) * 1000
         if (delayMs === null || Number.isFinite(delayMs) && delayMs >= 0) props.onChange(service.setRowDelay(props.list, row.id, delayMs))
       })}
     />

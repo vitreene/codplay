@@ -188,6 +188,24 @@ preset ; aucun élément texte vide ne les enveloppe. Les conteneurs de cadre,
 de média et de groupe restent lorsque le CSS ou la sémantique en a besoin, et
 portent le commentaire à l’intérieur.
 
+Dans l’éditeur Liste à points, l’intervalle commun et les délais particuliers
+des lignes s’affichent et se saisissent en secondes, avec un pas de `0,1 s`.
+Un délai de ligne vide conserve le comportement par défaut. L’éditeur convertit
+ces valeurs vers les millisecondes utilisées par le modèle et le player.
+
+Le layout `list-basic` compose le sous-module Liste dans sa zone sémantique
+`list`. En Flux, la racine d’une Carte Liste demande `initial: 'enter'` à son
+observation : si la première mesure la trouve dans la zone, elle émet le même
+signal d’entrée que lors d’une entrée ultérieure et déclenche la révélation des
+lignes par le strap de Liste. Les dispositions Carte sans Liste gardent leur
+comportement d’observation initial.
+Chaque signal de révélation applique à la ligne une `TweenAction` CodPlay
+linéaire de `200 ms` qui fait évoluer son opacité de `0` à `1`. Le signal de
+sortie masque la ligne ; une nouvelle révélation repart de `0`. Cette action
+reste attachée au même événement de ligne, qu’il provienne d’un strap live ou
+d’un eventime compilé. Le player matérialise la progression au fil de ses
+frames ; la feuille CSS ne déclare aucune transition pour la révélation.
+
 Dans « Texte avec image », `card.imagePosition` règle la projection partagée.
 Gauche et Droite gardent le média dans une colonne latérale et les textes dans
 la colonne opposée. En position Centrée, tous les textes sont centrés ; le

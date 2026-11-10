@@ -250,9 +250,11 @@ export function LearningProjectApplication(handle: Handle) {
       event.stopPropagation()
       runHistoryAction(event.shiftKey ? 'redo' : 'undo')
     }
-    /** Refreshes button availability while an inline title is still dirty. */
+    /** Refreshes Undo availability for drafts owned by the inline title field. */
     const handleInput = (event: Event): void => {
-      if (event.target instanceof HTMLInputElement && isInlineTitle(event.target)) void handle.update()
+      const input = event.target
+      if (!(input instanceof HTMLInputElement) || !isInlineTitle(input)) return
+      void handle.update()
     }
     /** Tracks the text or rich-text field whose profile variable can be inserted. */
     const handleProfileTokenFocusIn = (event: FocusEvent): void => {
@@ -349,9 +351,9 @@ function preventUnclaimedFileNavigation(event: DragEvent): void {
   if (!event.defaultPrevented && (event.dataTransfer?.files.length ?? 0) > 0) event.preventDefault()
 }
 
-/** Detects the two inline titles that commit their edits on blur. */
+/** Identifies the title fields handled by the shared history controls. */
 function isInlineTitle(input: HTMLInputElement): boolean {
-  return input.id.startsWith('elce-page-title-') || input.id.startsWith('elce-chapter-title-')
+  return input.classList.contains('elce-inline-title-input')
 }
 
 /** Commits the active dirty title before Undo enters the global history. */

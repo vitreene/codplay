@@ -27,13 +27,28 @@ La validation ciblée existante est donnée dans la spécification. Compléter c
 cas par des tests du pipeline et du player avant d'étendre la portée de la
 spécification ou de marquer cette tranche `Fini`.
 
+## Usage HTML accepté pour les lignes Elcé
+
+Le sous-module Liste Elcé peut employer la `TweenAction` existante pour faire
+passer l'opacité d'une ligne HTML de `0` à `1` en `200 ms` linéaires, au signal
+de révélation de cette ligne. Cette portée ne crée pas de type public
+`Behavior` et ne modifie pas le runtime CodPlay. Le délai entre deux lignes
+reste porté par les occurrences existantes.
+
+L'acceptation doit observer la progression intermédiaire et la valeur finale
+dans le vrai parcours HTML player, puis vérifier Seek, retour, replay et
+réentrée. Si le player ne matérialise pas cette progression à chaque frame, la
+Liste ne doit pas compenser cette absence : ouvrir et faire accepter le plan
+CodPlay requis avant de modifier le runtime.
+
 ## Extensions non décidées
 
 Ces sujets ne font pas partie de l'acceptation de la tranche logique actuelle.
 Avant une intégration de rendu continu, décider explicitement :
 
-- si `TweenAction` suffit comme surface auteur ou si un type public `Behavior`
-  est nécessaire ;
+- si `TweenAction` suffit comme surface auteur générale ou si un type public
+  `Behavior` est nécessaire ; le raccord étroit des lignes Liste Elcé est décrit
+  dans la section acceptée ci-dessus ;
 - si les options temporelles ACE `loop`, `loopDelay`, `reversed` et
   `alternate` sont acceptées sur un comportement auteur, et comment vérifier
   leur reconstruction de scène aux frontières Play/Seek ;
@@ -49,7 +64,8 @@ Avant une intégration de rendu continu, décider explicitement :
   pas un contrat V2 adopté ; fixer la règle avant toute intégration qui en
   dépend ;
 - où passe la frontière entre l'évaluation logique et la matérialisation pour
-  HTML, SVG et les projections natives ;
+  SVG et les projections natives ; le style d'opacité d'un perso `tag` HTML
+  utilise le raccord commun décrit par la spécification.
 - si un scheduler, `context.live` ou des hooks d'annulation/lifecycle ont une
   place dans ce contrat V2.
 

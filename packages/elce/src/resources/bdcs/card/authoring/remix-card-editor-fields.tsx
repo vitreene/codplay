@@ -310,13 +310,12 @@ function renderCardContent(
     case CARD_PRESET_ID.LIST:
       if (card.list === null) throw new Error(`La Carte Liste ${bdcId} ne contient pas son sous-module.`)
       return <div id={`${idPrefix}-list-card-fields-${bdcId}`} className="elce-carousel-text-fields elce-card-list-editor-fields">
-        {renderCardTextFields(bdcId, card, actions, idPrefix, textFieldAttributes, textFieldFeature, true)}
-        {renderListEditor({
+        {renderCardTextFields(bdcId, card, actions, idPrefix, textFieldAttributes, textFieldFeature, true, renderListEditor({
           list: card.list,
           idPrefix: `${idPrefix}-card-list-${bdcId}`,
           createId: () => createStableId('list-row'),
           onChange: (list) => actions.setList(bdcId, list),
-        })}
+        }))}
       </div>
     case CARD_PRESET_ID.PHOTO:
       return renderCardMediaEditor(bdcId, presetId, card, mediaById, actions, idPrefix, imageAspectRatio, allowMultipleMediaFiles, importMediaFiles)
@@ -370,6 +369,7 @@ function renderCardTextFields(
   textFieldAttributes: RemixCardEditorFieldsProps['textFieldAttributes'],
   textFieldFeature: ResourceTextFieldFeature | undefined,
   includeCaption: boolean,
+  inlineListEditor?: RemixNode,
 ): RemixNode {
   const fields: readonly Readonly<{ field: CardTextField; label: string }>[] = [
     { field: 'overline', label: 'Surtitre' },
@@ -384,17 +384,20 @@ function renderCardTextFields(
     className="elce-carousel-text-fields"
   >
     {[
-      ...fields.map(({ field, label }) => renderCardTextField(
-        bdcId,
-        field,
-        label,
-        card[field],
-        actions,
-        idPrefix,
-        textFieldFeature,
-        field === 'message',
-        textFieldAttributes,
-      )),
+      ...fields.flatMap(({ field, label }) => [
+        renderCardTextField(
+          bdcId,
+          field,
+          label,
+          card[field],
+          actions,
+          idPrefix,
+          textFieldFeature,
+          field === 'message',
+          textFieldAttributes,
+        ),
+        ...(field === 'message' && inlineListEditor !== undefined ? [inlineListEditor] : []),
+      ]),
       !includeCaption ? <small
         id={`${idPrefix}-message-count-${bdcId}`}
       >

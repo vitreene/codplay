@@ -509,6 +509,7 @@ describe('Remix project application', () => {
       field.dispatchEvent(new Event('input', { bubbles: true }))
     })
     expect(controller.getSnapshot().context.document.pages[0]?.name).toBe('Titre en direct')
+    expect((rendered.$(`#elce-page-title-${page.id}`) as HTMLInputElement).value).toBe('')
     await rendered.act(() => (rendered.$(`#elce-page-title-${page.id}`) as HTMLInputElement).blur())
     expect((rendered.$(`#elce-page-title-${page.id}`) as HTMLInputElement).value).toBe('Titre en direct')
     await rendered.act(() => rendered.$('#elce-history-undo')?.click())
