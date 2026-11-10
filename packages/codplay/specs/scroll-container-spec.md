@@ -1,8 +1,8 @@
 # CodPlay V2 — scroll-container
 
-## Périmètre vérifié
+> Version de référence : CodPlay V2 — 2026-11-10.
 
-Le contrat de la capacité scroll-container a été validé le 2026-09-25.
+## Périmètre vérifié
 
 Cette spécification définit la capacité optionnelle `scroll-container` de
 CodPlay V2 : une source de progress géométrique, les observations
@@ -211,7 +211,7 @@ live pendant la présentation du seek. Les présentations normales réappliquent
 la dernière valeur reçue de la source live, sans la lire depuis le journal.
 
 La zone expose `rootMargin`, `scrollMargin`, `threshold` et `trackVisibility`.
-`delay` reste hors de cette tranche. `root` reste logique et est résolu depuis
+`delay` est exclu de ce profil. `root` reste logique et est résolu depuis
 le parentage du perso ; aucun node DOM n’est une valeur auteur. `threshold`
 accepte la forme native, un nombre ou une liste de nombres. Il contrôle les
 notifications de l’observer ; `enter` et `leave` suivent `isIntersecting` et,
@@ -240,7 +240,7 @@ Après la première matérialisation, l’adaptateur résout une fois le parenta
 logique courant. Sans `root`, il prend le premier scroll-container en remontant
 depuis le parent du perso ; avec `root`, il cherche cet ancêtre précis. La
 liaison reste attachée à ce scrollport pendant la durée de vie du player. Un
-`move` ultérieur ne relance pas la recherche dans cette première tranche.
+`move` ultérieur ne relance pas la recherche.
 L’ascendance vient du graphe de persos résolu, jamais de l’ascendance DOM. Le
 callback initial de l’observer synchronise la phase ; l’option `initial` peut
 demander l’émission déclarative de l’event correspondant.
@@ -337,30 +337,6 @@ sont refusées.
   vérifie la sélection par identité/source et le routage de l’événement
   d’ouverture selon les portées implicite, `story`, `scene` et `public`.
 - La scène réelle de validation est
-  [`main.ts`](../../demos/src/v2/demos/scroll-container/main.ts). La validation
-  navigateur de la feature a été confirmée par l’utilisateur ; ce constat ne
-  prétend pas que le test unitaire couvre à lui seul le parcours navigateur ou
-  chaque diagnostic de déclaration.
-
-## Validation d’implémentation
-
-La validation navigateur du comportement scroll a été confirmée par
-l’utilisateur le 2026-09-25. La vérification de l’attachement au node
-matérialisé et du cycle seek/teardown repose maintenant aussi sur le test
-d’intégration avec `HtmlPlayerRunner` décrit ci-dessus.
-
-Le 2026-09-26, après le déplacement de la source vers
-`ScrollContainerComponent.initialize()` et l’unification du circuit, les suites
-CodPlay (108 fichiers, 710 tests) et `component-v2` (12 fichiers, 47 tests),
-les typechecks CodPlay, `component-v2` et démos V2, ainsi que le build V2 ont
-réussi. Le test `scroll-container-player-integration.spec.ts` vérifie dans le
-vrai `HtmlPlayerRunner` les événements DOM, la session player, le journal, le
-seek et le teardown.
-
-Le 2026-09-28, `ScrollContainerComponent.onReset()` a été étendu pour remettre
-à l’origine l’axe de progression configuré. Le test de source vérifie le reset
-vertical et inline ; la suite `component-v2` (12 fichiers, 48 tests) et son
-typecheck passent. Le parcours Firefox MCP de Demo 5 a ensuite exercé le vrai
-reset Sighty : après avoir parcouru la première page, l’échec final renvoie à
-cette page avec son `scrollTop` à zéro. La vérification Safari reste suivie dans
-le [plan dédié](../plan/scroll-container-reset-plan.md).
+  [`main.ts`](../../demos/src/v2/demos/scroll-container/main.ts). Elle
+  utilise les mêmes composants, le même circuit capture et le
+  même adaptateur d'observation que les intégrations applicatives.

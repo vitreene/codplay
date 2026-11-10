@@ -1,12 +1,13 @@
 # CodPlay V2 — exécution des straps et helpers planifiés
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre vérifié
 
 Cette spécification couvre l'appel ordonné des straps, l'aplatissement de leurs
 résultats et les helpers temporels effectivement exercés. Le dispatch,
 l'inscription des sorties dans le journal et leur relecture sont décrits par la
-[spécification du pipeline événementiel](./event-pipeline-v2-spec.md). Les cas
-qui restent à valider sont au [plan d'acceptation](../plan/strap-execution-plan.md).
+[spécification du pipeline événementiel](./event-pipeline-v2-spec.md).
 
 ## Collections de straps
 
@@ -53,24 +54,10 @@ fractionnaire de répétitions. La surface exercée n'expose pas de helper `loop
 `planned-helpers.spec.ts` vérifie ces résultats ; `runtime-event-dispatcher.spec.ts`
 vérifie l'intégration d'une sortie planifiée dans le circuit commun.
 
-## Validation exécutée
-
-Le 2026-09-25, depuis `packages/codplay` :
-
-```text
-node ../../node_modules/vitest/vitest.mjs run \
-  tests/runtime/player/planned-helpers.spec.ts \
-  tests/runtime/player/strap-executor.spec.ts \
-  tests/runtime/player/strap-collections.spec.ts \
-  tests/runtime/player/runtime-event-dispatcher.spec.ts \
-  tests/runtime/player/listen.spec.ts
-5 fichiers, 24 tests réussis
-```
-
 ## Limites de certification
 
 Le comportement de `delay`, les fonctions fabriques de pas, le comptage
 personnalisé de `stagger`, les autres frontières numériques et la poursuite de
-la chaîne après l'exception d'un strap ne sont pas certifiés par ces tests. Ils
-restent au plan. L'invalidation ou l'annulation d'un résultat asynchrone arrivé
-après une opération plus récente est reportée à V3.
+la chaîne après l'exception d'un strap sont exclus de ce contrat.
+L'invalidation ou l'annulation d'un résultat asynchrone arrivé après une
+opération plus récente n'est pas garantie par cette version.

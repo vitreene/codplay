@@ -1,12 +1,14 @@
 # CodPlay V2 — canaux de transformation et projection HTML
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre vérifié
 
 Cette spécification couvre les canaux de transformation scalaires vérifiés par
 ACE et leur sérialisation par le service HTML. Les unités logiques et leur
 conversion vers `px` sont détaillées dans la [spécification des unités](./unit-values-v2-spec.md).
-Les canaux et defaults qui n'ont pas encore leur preuve restent au
-[plan de transformation](../plan/transform-properties-plan.md).
+Seuls les canaux et valeurs par défaut décrits ci-dessous sont couverts par
+ce contrat.
 
 ## Normalisation ACE
 
@@ -54,17 +56,6 @@ HTML est couverte par la spécification des unités.
   couvre la projection d'une scène par Seek, Play et `resize`.
 - [`scene-builder.spec.ts`](../tests/scene/compiled/scene-builder.spec.ts)
   vérifie que les chaînes `transform` auteur sont conservées au build.
-
-Validation ciblée exécutée le 2026-09-25 depuis `packages/codplay` :
-
-```text
-node ../../node_modules/vitest/vitest.mjs run \
-  tests/ace/transform.spec.ts \
-  tests/runtime/runner-html/component-materializer.spec.ts \
-  tests/runtime/runner-html/player-runner.spec.ts \
-  tests/scene/compiled/scene-builder.spec.ts
-4 fichiers, 69 tests réussis
-```
 
 ## Limite de certification
 

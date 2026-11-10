@@ -1,5 +1,7 @@
 # CodPlay V2 — frontière JSON de `CompiledScene`
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre vérifié
 
 Cette spécification décrit la frontière de sérialisation JSON de l'artefact
@@ -49,10 +51,3 @@ La migration entre versions de schéma ne fait pas partie du comportement testé
   le gel, les relations sérialisées, les straps locaux, l'index d'activation,
   les refus de JSON/version et les incohérences structurelles ou sémantiques
   listées ci-dessus.
-
-Validation ciblée exécutée le 2026-09-25 depuis `packages/codplay` :
-
-```text
-node ../../node_modules/vitest/vitest.mjs run tests/scene/compiled/codec.spec.ts
-1 fichier, 8 tests réussis
-```

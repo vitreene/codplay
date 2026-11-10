@@ -96,7 +96,9 @@
 - Remove preparatory notes when the plan they support is complete. Transfer verified behavior and acceptance evidence into the relevant specification; keep any open or agreed-but-unapplied decision in an active plan before removing the note.
 - Remove a completed plan when a specification covers its feature. Before removal, transfer verified behavior and acceptance evidence into the specification and update incoming links and status indexes. A plan with an agreed but unapplied decision is not complete.
 - At the end of each task, update the relevant specification and implementation tracking before closing temporary notes or provisional guardrails.
-- Before resuming CodPlay V2 work, read [`packages/codplay/plan/notes/2026-08-26-decouverte-etat-codplay-v2.md`](packages/codplay/plan/notes/2026-08-26-decouverte-etat-codplay-v2.md) after identifying the applicable detailed plan.
+- Before resuming CodPlay V2 work, use the applicable verified specification
+  and detailed plan, located through `packages/codplay/plan/codplay-v2-plan.md`.
+  Keep stabilization work distinct from the future evolution plans indexed there.
 
 ## Module status
 

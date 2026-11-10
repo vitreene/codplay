@@ -553,7 +553,7 @@ graphe, des routes ou du cycle de vie Sighty.
 
 ### Première question révélée : monter une scène dans une autre
 
-Le [mode hôte envisagé côté CodPlay](../../codplay/plan/notes/2026-07-28-decoupage-engine-instances-pilotage.md#5-le-mode-hôte--une-instance-jouée-dans-une-autre)
+Le [montage public entre instances CodPlay](../../codplay/specs/slot-component-spec.md#surface-publique-interinstances)
 prévoit une cible adressable dans le modèle : le scénario nomme un hôte, et
 l'application fournit uniquement la racine HTML du layout principal.
 

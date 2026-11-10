@@ -1,13 +1,13 @@
 # CodPlay V2 — composant de saisie `input`
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre vérifié
 
 Cette spécification couvre la structure matérialisée de `InputComponent`, ses
 deux cibles d'icône publiées et la conservation de champs d'action propres au
 composant par le résolveur. La projection scalaire non journalisée vers un
 contrôle monté relève de la [spécification de projection input](./input-projection-spec.md).
-Les validations métier encore ouvertes restent au
-[plan image/input/polygon](../plan/components-image-input-polygon-svg-plan.md).
 
 ## Markup et parts
 
@@ -35,7 +35,8 @@ dans l'état résolu par le circuit d'action V2.
 
 Cette preuve ne certifie pas à elle seule la totalité du comportement quiz V1,
 notamment la sélection et la désactivation de réponses ou la révélation de la
-correction. Ces validations sont suivies au plan.
+correction. Le parcours DOM de sélection et de validation exercé par le player
+est décrit dans la [spécification Perso.emit](./perso-emit-v2-spec.md).
 
 ## Preuves
 
@@ -44,7 +45,3 @@ correction. Ces validations sont suivies au plan.
   leur retrait et la conservation de champs d'action spécifiques.
 - [`input-projection.spec.ts`](../tests/facade/input-projection.spec.ts)
   vérifie séparément la projection scalaire publique vers un `input` déjà monté.
-
-La suite ciblée image/input/polygon exécutée le 2026-09-25 passe : 2 fichiers,
-6 tests réussis. La projection input a été testée séparément dans un contrôle
-de 4 fichiers, 12 tests réussis.

@@ -18,8 +18,8 @@ La séparation entre état logique et présentation est déjà portée par la
 [reconstruction logique](../../../../packages/codplay/specs/runtime-reconstruction-v2-spec.md).
 La [spécification des composants](../../../../packages/codplay/specs/component-materialization-v2-spec.md)
 distingue la base générique de sa spécialisation HTML. La
-[note de portabilité](../../../../packages/codplay/projet/notes/2026-07-26-portabilite-contrainte-redaction.md)
-explicite le besoin de composants propres à chaque plateforme. Cela ne certifie
+[spécification du pont de cibles](../../../../packages/codplay/specs/third-party-target-bridge-spec.md)
+décrit le raccord entre composants et capacités natives opaques. Cela ne certifie
 pas l’existence actuelle d’un runtime CodPlay autonome dans Rive.
 
 L’absence de DOM dans AnimaScript caractérise donc cette destination ; elle ne

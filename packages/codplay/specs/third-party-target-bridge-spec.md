@@ -1,13 +1,13 @@
 # CodPlay V2 — pont runtime des cibles `rel`
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre vérifié
 
 Cette spécification fixe le raccordement runtime de l'identité compilée à une
 cible opaque. Les tests du registre et du runtime de composants couvrent
 l'isolation player-local, la publication après montage, la disponibilité,
-l'invalidation et le passage de cible sans matérialisation HTML factice. Les
-critères d'acceptation de l'intégration sont décrits dans le
-[plan du pont](../plan/2026-09-18-third-party-render-target-codplay-plan.md).
+l'invalidation et le passage de cible sans matérialisation HTML factice.
 
 Cette spécification décrit le raccordement interne entre une relation compilée
 et une cible runtime opaque. Elle ne définit ni Three.js, ni Rive, ni Lottie,
@@ -116,7 +116,7 @@ La publication est protégée par un jeton interne : une ancienne instance ne
 peut pas libérer la publication plus récente qui aurait repris la même
 identité.
 
-## Décisions closes pour le core
+## Résolution et frontières du core
 
 ### Références inconnues
 
@@ -135,8 +135,8 @@ opaque appartient à l'intégration qui la publie et à celle qui la consomme.
 Le core ne construit pas de graphe récursif à partir de `rel`. Une relation est
 une identité résolue par une recherche directe dans le registre du player ; sa
 valeur opaque n'est jamais parcourue par CodPlay. Il n'existe donc pas de
-cycle `rel` à détecter dans le core, et aucune tranche ne doit ajouter un
-registre de graphe parallèle.
+cycle `rel` à détecter dans le core. La résolution ne possède pas de registre
+de graphe parallèle.
 
 Une intégration peut organiser ses propres objets internes — par exemple un
 host, un avatar et plusieurs contrôleurs — mais cette organisation reste
@@ -164,11 +164,10 @@ contrat complet est décrit dans
 
 Cette spécification ne définit pas les profils, les conventions de rendu ni le
 préchargement propres aux bibliothèques. Les sous-ensembles vérifiés Three.js,
-Rive et Avatar sont décrits dans leurs spécifications dédiées. Le périmètre
-Lottie et les composants TalkingHead restant à classer sont suivis
-respectivement dans le
-[plan des composants tiers](../plan/2026-09-18-third-party-components-v2-plan.md)
-et le [plan Avatar](../plan/2026-09-19-avatar-components-v2-plan.md).
+Rive et Avatar sont décrits dans les spécifications
+[Three.js](./third-party-threejs-spec.md), [Rive](./third-party-rive-spec.md)
+et [Avatar](./third-party-avatar-spec.md). Lottie et la transposition complète
+de TalkingHead sont exclus du périmètre certifié de ce pont.
 
 ## Preuves du contrat
 

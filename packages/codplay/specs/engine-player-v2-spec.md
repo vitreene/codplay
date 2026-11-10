@@ -1,5 +1,7 @@
 # CodPlay V2 — Engine, Player et Seek groupé
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre certifié
 
 Cette spécification décrit les comportements Engine/Player couverts par les
@@ -7,8 +9,8 @@ tests ciblés. La surface exposée à l’hôte est dans la
 [spécification de façade](./facade-v2-spec.md). La reconstruction temporelle
 est décrite par les spécifications du [pipeline événementiel](./event-pipeline-v2-spec.md)
 et de la [reconstruction logique](./runtime-reconstruction-v2-spec.md). La
-préparation et la présentation motion restent suivies par le
-[plan player](../plan/player-engine-plan.md) et les plans motion.
+préparation et la présentation motion ont leur
+[spécification dédiée](./motion-frame-v2-spec.md).
 
 ## Engine et horloge
 
@@ -35,9 +37,9 @@ place le player dans son état terminal. Un Seek qui franchit cette borne
 reconstruit la position demandée sans déclencher la fin terminale. Le test de
 cycle terminal vérifie qu'un `reset()` rétablit l'état initial puis permet de
 reprendre la lecture. L'intégration d'inactivité vérifie aussi que
-`instance.telco.play()` après une fin `sequence:end` reprend à `0 ms`. L'appel
-direct à `RuntimePlayer.play()` et son effet complet sur le journal, les modules
-et les callbacks restent au [plan Player](../plan/player-engine-plan.md).
+`instance.telco.play()` après une fin `sequence:end` reprend à `0 ms`. L'effet
+complet d'un appel direct à `RuntimePlayer.play()` sur le journal, les modules
+et les callbacks est exclu du périmètre certifié de ce document.
 
 Un `sequence:end` compilé déclaré `public` traverse le dispatcher ordinaire une
 seule fois avant le nettoyage terminal ; ses règles `listen` sont également
@@ -93,24 +95,13 @@ d’un adapter ne bloque pas les adapters suivants.
   vérifie les deltas, les baselines, l’ordre des adapters et l’isolation des
   erreurs.
 
-Validation ciblée exécutée le 2026-09-25 depuis `packages/codplay` :
-
-```text
-node ../../node_modules/vitest/vitest.mjs run \
-  tests/runtime/engine/runtime-engine.spec.ts \
-  tests/runtime/player/runtime-player.spec.ts \
-  tests/runtime/player/render-sync.spec.ts \
-  tests/scene/compiled/scene-builder.spec.ts
-4 fichiers, 70 tests réussis
-```
-
 ## Limites
 
-La validation de la préparation motion par occurrence, du reset chaud et de la
-réutilisation de l’état logique pendant Play/Seek reste dans les plans actifs.
+Ce contrat ne certifie pas la préparation motion complète par occurrence, le
+reset chaud ni la réutilisation de l’état logique pendant Play/Seek.
 Le redémarrage direct de `RuntimePlayer.play()` depuis l'état terminal, avec
-ses effets sur le journal, les modules, les captures et les callbacks, reste au
-[plan Player](../plan/player-engine-plan.md). La reprise par
+ses effets sur le journal, les modules, les captures et les callbacks, est exclu
+du périmètre certifié. La reprise par
 `instance.telco.play()` après une fin d'inactivité est couverte par sa
 spécification dédiée.
 Cette spécification n’établit pas la validation complète du runner HTML en

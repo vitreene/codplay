@@ -1,13 +1,14 @@
 # CodPlay V2 — préparation des bibliothèques tierces
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre vérifié
 
 Cette spécification fixe le contrat de préparation des bibliothèques tierces
 par l'engine. Les vérifications de dérivation, préparation, disponibilité,
 libération et ordre runner sont couvertes par les tests du builder, de
-`RuntimeEngine` et de `HtmlPlayerRunner`. L'acceptation des intégrations est
-décrite dans le
-[plan du pont tiers](../plan/2026-09-18-third-party-render-target-codplay-plan.md).
+`RuntimeEngine` et de `HtmlPlayerRunner`. Les profils propres à chaque
+intégration sont décrits dans leurs spécifications dédiées.
 
 Cette spécification décrit uniquement le chargement préalable de la
 bibliothèque qui pilote un composant tiers. Elle ne décrit ni Three.js, ni

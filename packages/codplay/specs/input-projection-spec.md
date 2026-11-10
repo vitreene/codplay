@@ -1,5 +1,7 @@
 # CodPlay V2 — projection vivante des composants `input`
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre vérifié
 
 Cette spécification décrit le contrat vérifié de projection scalaire vivante
@@ -53,10 +55,10 @@ La telco reste la source publique de lecture : `onProgress()` observe et
 `seek()` commande une nouvelle position. La projection ne remplace ni l'un ni
 l'autre et ne doit pas être envoyée par `events.emit()`.
 
-La politique `idle` est indépendante. Elle est désactivée explicitement dans
-le propriétaire CodPlay de Demo 4 (`engine.idle: false`) ; la telco ne reçoit
-donc pas l'`idle` par défaut. `pauseOnDocumentHidden` constitue une autre
-option, relative à la politique de visibilité du document.
+La politique `idle` est indépendante ; `engine.idle: false` désactive le monitor
+pour les instances qui n'en redéfinissent pas la configuration.
+`pauseOnDocumentHidden` constitue une autre option, relative à la visibilité
+du document. La projection ne configure aucune de ces politiques.
 
 ## Validation
 

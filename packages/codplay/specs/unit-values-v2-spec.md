@@ -1,11 +1,12 @@
 # CodPlay V2 — valeurs numériques et unités CSS
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre vérifié
 
 Cette spécification décrit la conservation des unités pendant la préparation
 et l'interpolation ACE, la qualification des longueurs structurées par le
-builder et leur conversion au rendu HTML. La stabilité de la forme publique
-`UnitValue` reste une décision ouverte dans le [plan associé](../plan/unit-values-plan.md).
+builder et leur conversion au rendu HTML.
 
 ## Préparation ACE
 
@@ -35,7 +36,7 @@ projetée ; `HtmlPlayerRunner.resize(scale)` met ce facteur à jour et réappliq
 la frame courante. Les chaînes CSS opaques et leurs unités explicites restent
 inchangées.
 
-## Code et acceptation
+## Références d’implémentation et de preuve
 
 - Décomposition ACE : [`values.ts`](../src/ace/values.ts).
 - Qualification au build : [`length.ts`](../src/scene/compiled/length.ts).
@@ -49,5 +50,3 @@ inchangées.
   [`component-materializer.spec.ts`](../tests/runtime/runner-html/component-materializer.spec.ts),
   [`player-runner.spec.ts`](../tests/runtime/runner-html/player-runner.spec.ts)
   et [`cqw.spec.ts`](../tests/facade/cqw.spec.ts).
-
-Le 2026-09-25, l'exécution ciblée a passé **6 fichiers et 74 tests**.

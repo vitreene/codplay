@@ -76,7 +76,7 @@ Les références canoniques relues sont :
   [convergence des circuits](../../sighty/plan/2026-09-16-sighty-circuit-unification-plan.md)
   et [reset de relecture](../../sighty/plan/2026-09-30-sighty-replay-reset-plan.md) :
   validations restantes, notamment le navigateur après le nouveau reset Demo 5.
-- [Guide de reprise V2](../../codplay/plan/notes/2026-08-26-decouverte-etat-codplay-v2.md),
+- [Index des contrats et plans V2](../../codplay/plan/codplay-v2-plan.md),
   [façade](../../codplay/specs/facade-v2-spec.md),
   [événements](../../codplay/specs/event-pipeline-v2-spec.md),
   [straps](../../codplay/specs/strap-execution-v2-spec.md),

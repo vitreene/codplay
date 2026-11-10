@@ -17,7 +17,7 @@
 | Pages et instances | [Flux](../specs/flux-scene-builder-spec.md), [Diapo](../specs/diapo-scene-builder-spec.md), [preview](../specs/player-preview-spec.md) | Respecter montage, conservation des scènes et navigation Sighty. |
 | Composition externe | [Façade CodPlay](../../codplay/specs/facade-v2-spec.md) | `register` et `override` utilisent le catalogue unique, verrouillé au premier build ou à la création d’instance. |
 
-Le [guide de reprise V2](../../codplay/plan/notes/2026-08-26-decouverte-etat-codplay-v2.md)
+Le [index des contrats et plans V2](../../codplay/plan/codplay-v2-plan.md)
 a été relu après identification des plans détaillés.
 
 ## Capacité et perso : deux niveaux à distinguer

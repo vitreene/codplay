@@ -1,5 +1,7 @@
 # Méthodes d’élément HTML demandées par une action
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Frontière
 
 `htmlElementMethod` est une donnée d’action conservée dans la scène compilée.

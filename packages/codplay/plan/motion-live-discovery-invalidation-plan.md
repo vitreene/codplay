@@ -217,6 +217,20 @@ Un Seek avant le reset reconstruit l’état logique sur la même instance et pr
 à nouveau seulement un move qui doit être présenté. Ce comportement remplace la
 conservation de graphes précédents sous `resetTimesByItem`.
 
+### Ordre avec une préparation et acceptation du reset
+
+Une préparation qui touche la story réinitialisée doit être annulée ou
+committée avant le reset ; elle ne peut publier ses captures ou son graphe
+après lui. Ses ressources provisoires sont libérées. La vérification doit
+retirer géométrie, frontières et overlays d’un groupe local comme inter-story.
+
+Le cas local reset→retrait→Seek avant/restauration→Seek frontière/retrait est
+couvert par `facade.spec.ts`. Restent le reset pendant move/reparent, les
+groupes inter-story, les resets à temps égal, Seek à froid et après capture,
+resize paresseux, persistance, lifecycle et destruction sans ghost ni capture
+tardive. Le reset seul ne doit provoquer aucune mesure. La matrice intégrée
+reste portée une seule fois par le plan runner HTML.
+
 ## Invalidation géométrique
 
 Un resize invalide les poses capturées, sans réintroduire un catalogue global ni

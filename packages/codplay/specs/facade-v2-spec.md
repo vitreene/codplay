@@ -1,12 +1,12 @@
 # CodPlay V2 — façade publique et instances
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre vérifié
 
 Cette spécification décrit la surface publique actuellement exposée par
 [`CodPlay`](../src/facade/codplay-facade.ts) et ses
-[types](../src/facade/facade-types.ts). Les décisions d'extension non prises
-restent dans le [plan façade](../plan/facade-engine-instance-plan.md). Les profils
-de scène relèvent de la
+[types](../src/facade/facade-types.ts). Les profils de scène relèvent de la
 [spécification de compilation](./scene-authoring-spec.md).
 
 ## Propriétaire, préparation et instances
@@ -57,8 +57,8 @@ et initialise une occurrence avec un `CompiledScene` validé ; en l'absence de
 `root`, elle utilise un conteneur de matérialisation interne détaché. Le
 propriétaire appelle `codplay.destroy()` à la fin de son propre cycle de vie.
 Le
-[registre d'instances](../src/facade/engine-facade/instance-registry.ts) et le
-[plan média](../plan/media-preload-plan.md) donnent les détails de ces chemins.
+[registre d'instances](../src/facade/engine-facade/instance-registry.ts) et la
+[spécification preload](./preload-v2-spec.md) décrivent ces chemins.
 Le [test de façade](../tests/facade/facade.spec.ts) et le
 [test de transfert média](../tests/facade/media-preload-handoff.spec.ts) les
 exercent.
@@ -112,25 +112,24 @@ comme `BaseHTMLComponent`, afin que sa chaîne d'héritage utilise la classe que
 le player reconnaît. `TagComponent`, `sanitizeTagInitial` et
 `validateTagInitial` sont exportés par cette entrée ; un import de
 `codplay/runtime/components` peut sinon être embarqué dans le bundle d'engine
-comme une seconde copie. La recette Safari de diffusion Sighty Demo 5 confirme
-la matérialisation du scrollport dans ce montage séparé. L'acceptance navigateur R9 du
-[plan d'export](../plan/2026-10-15-export-diffusion-plan.md#r9--composants-fournis-par-lengine)
-vérifie leur matérialisation et une seule URL player.
+comme une seconde copie.
 
 Si le manifeste déclare `scene/functions.mjs`, `load()` l'importe et crée le
 contexte de fonctions/straps vérifié avant `instances.create()`. Un même
 propriétaire et une même URL canonique de paquet partagent ce contexte entre
 leurs occurrences ; les propriétaires différents ont des closures isolées.
-Le contexte est libéré par `codplay.destroy()`. Le navigateur vérifie
-l'exécution de `scene.onStart` après `instance.telco.play()` ainsi qu'un clic
-DOM traversant un transform de story, un strap externe de story, un événement
-transformé vers la portée scène et un strap externe de scène. Les deux sorties
-publiques arrivent dans `instance.events.onEvent`. La preuve couvre cette
-verticale ; les autres callbacks, capture, Seek et replay restent au
-[plan d'export R8](../plan/2026-10-15-export-diffusion-plan.md#r8--fonctions-codplay-et-imports).
+Le contexte est libéré par `codplay.destroy()`. Les callbacks de scène
+`init`, `onStart` et `onSequenceEnd`, ainsi que les fonctions de capture
+`initCaptureState`, `trackCommand` et `endCapture`, sont restaurés depuis le
+paquet puis exécutés aux frontières runtime ordinaires. Les transforms et
+straps restaurés empruntent le même dispatcher ; leurs sorties publiques
+arrivent dans `instance.events.onEvent`. Le contrat de transport et le
+périmètre certifié sont dans la
+[spécification du paquet](./scene-package-export-v1-spec.md#transport-des-fonctions-de-scène).
 Les suites
 [`scene-package-loader.spec.ts`](../tests/facade/scene-package-loader.spec.ts)
-et [`cli.spec.mjs`](../tools/scene-export/tests/cli.spec.mjs) vérifient le
+et [`scene-package-export-acceptance.spec.mjs`](../tests/facade/scene-package-export-acceptance.spec.mjs)
+vérifient le
 transport, les références et les portées de ces contextes.
 
 `codplay.instances.get`, `destroy` et `mount` sont les opérations publiques du
@@ -138,8 +137,7 @@ registre. `mount` adresse un perso hôte `slot` dans une instance et y attache
 les racines matérialisées d'une instance enfant ; le handle retourné détache
 la relation. Cette opération ne décide pas du temps ni de la survie de
 l'enfant. Son contrat est décrit dans la
-[spécification slot](./slot-component-spec.md) et le
-[plan foreign](../plan/foreign-scene-component-plan.md), avec le
+[spécification slot](./slot-component-spec.md), avec le
 [test de montage](../tests/facade/foreign-mount.spec.ts).
 
 ## Temps, événements et observation
@@ -151,10 +149,9 @@ pourcentage est une présentation éventuelle de l'application. Le contrôle
 global de l'horloge est sur `codplay.engine` (`start`, `pause`, `stop`,
 `advance`) ; `advance` appartient au mode de frames fournies par l'hôte et ne
 doit pas être combiné au ticker autonome. La
-[spécification Engine/Player](./engine-player-v2-spec.md), le
-[plan Engine/Player](../plan/player-engine-plan.md) et les [tests telco](../tests/runtime/telco/runtime-telco.spec.ts)
-précisent les comportements vérifiés et les validations de lecture, de seek et
-de reset encore ouvertes.
+[spécification Engine/Player](./engine-player-v2-spec.md) et les
+[tests telco](../tests/runtime/telco/runtime-telco.spec.ts) précisent les
+comportements vérifiés de lecture, de Seek et de reset.
 
 `instance.events.emit(eventime, target)` et `codplay.events.emit(input)`
 rejoignent le même player et son journal. La cible est séparée de l'eventime :
@@ -205,16 +202,3 @@ Leurs preuves ciblées sont les [tests snapshot](../tests/facade/snapshot.spec.t
 
 Les suites de façade, de montage interinstances, de telco, de snapshot, de
 projection input et de dispatch couvrent les parcours cités ci-dessus.
-
-Validation exécutée le 2026-09-25 depuis `packages/codplay` :
-
-```text
-node ../../node_modules/vitest/vitest.mjs run \
-  tests/facade/facade.spec.ts \
-  tests/facade/foreign-mount.spec.ts \
-  tests/runtime/telco/runtime-telco.spec.ts \
-  tests/facade/snapshot.spec.ts \
-  tests/facade/input-projection.spec.ts \
-  tests/runtime/player/runtime-event-dispatcher.spec.ts
-6 fichiers, 56 tests réussis
-```

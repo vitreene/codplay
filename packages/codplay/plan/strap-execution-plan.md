@@ -20,10 +20,5 @@
 Compléter ces tests avant d'étendre la [spécification](../specs/strap-execution-v2-spec.md)
 ou de déclarer la tranche V2 `Fini`.
 
-## Extensions reportées
-
-- L'invalidation et l'annulation des résultats asynchrones devenus obsolètes
-  sont reportées à V3 ; le runtime V2 attend le résultat du strap appelé.
-- Une API `live`, une répétition conditionnelle ou un scheduler de frames ne
-  sont pas décidés pour cette surface. Les ouvrir nécessite une décision et un
-  plan d'acceptation dédiés.
+Les extensions sont suivies séparément en [V3](./evolutions/v3-plan.md)
+et dans les [évolutions à affecter](./evolutions/evolution-backlog.md#extensions-du-transport-et-du-journal).

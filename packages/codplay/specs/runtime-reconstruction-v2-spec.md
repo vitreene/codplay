@@ -1,5 +1,7 @@
 # CodPlay V2 — reconstruction logique d’une scène
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre vérifié
 
 Cette spécification décrit le chemin logique exécuté par le player pour une
@@ -58,8 +60,9 @@ propagent aux descendants et un cycle de parentage est rejeté.
 
 Les conflits de placement au même instant et les métadonnées d’ordre sont
 résolus dans le graphe structurel. La capacité `list` garde ses propres
-politiques d’ordre et de dimension dans ses plans. Le solveur ne projette pas
-ces résultats sur un substrat.
+politiques d’ordre dans sa
+[spécification](./list-capability-v2-spec.md). Le solveur ne projette pas ces
+résultats sur un substrat.
 
 [`diffSolvedScenes`](../src/runtime/move/move-state.ts) compare deux résultats
 résolus et produit des deltas génériques `mount`, `unmount` et `move`. Il ne
@@ -80,19 +83,9 @@ liste.
   vérifie le parcours parent-first des outlets imbriqués et le rejet d’un ordre
   de module qui déplacerait temporairement un item vers une autre cible.
 
-Validation ciblée exécutée le 2026-09-25 depuis `packages/codplay` :
-
-```text
-node ../../node_modules/vitest/vitest.mjs run \
-  tests/runtime/player/pipeline.spec.ts \
-  tests/runtime/player/move-state.spec.ts \
-  tests/runtime/player/presentation-graph.spec.ts
-3 fichiers, 35 tests réussis
-```
-
 ## Frontières
 
 Les mesures dépendantes du DOM, la présentation motion, les capacités de liste,
 la capture et le DnD ne sont pas définis par cette spécification. Leurs
-comportements certifiés et leurs acceptations restantes sont décrits dans les
-spécifications et plans spécialisés liés ci-dessus.
+comportements certifiés sont décrits dans les spécifications spécialisées
+liées ci-dessus.

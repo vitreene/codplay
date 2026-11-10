@@ -15,12 +15,12 @@
       figurent pas dans la [spécification vérifiée](../specs/transform-properties-v2-spec.md).
 - [ ] Vérifier les options `loop` et `alternate` au travers d'ACE, de la
       résolution logique et du runner HTML, y compris leurs frontières Play/Seek.
-- [ ] Décider si et comment les defaults des autres familles de propriétés sont
-      introduits ; ils ne font pas partie du contrat transform actuellement
-      certifié.
 - [ ] Compléter la validation navigateur de la présentation HTML avant de
       déclarer cette tranche entièrement `Fini`.
 
 La forme publique `UnitValue` reste suivie séparément dans le
-[plan des unités](./unit-values-plan.md). La conversion des longueurs au rendu
+[plan des unités](evolutions/unit-values-plan.md). La conversion des longueurs au rendu
 est décrite dans la [spécification des unités](../specs/unit-values-v2-spec.md).
+
+Les defaults des autres familles relèvent des
+[évolutions à affecter](./evolutions/evolution-backlog.md#autres-extensions-de-projection).

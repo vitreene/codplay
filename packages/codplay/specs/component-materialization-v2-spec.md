@@ -1,12 +1,13 @@
 # CodPlay V2 — composants et matérialisation HTML
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre certifié
 
 Cette spécification décrit les frontières composants et les comportements
 HTML/DOM couverts par les tests ciblés. Les contrats propres à un composant
 restent dans sa spécification. Les mesures et la présentation motion relèvent
-des [plans motion](../plan/runner-flip-integration-study.md) et de leurs
-spécifications dédiées.
+de la [spécification motion](./motion-frame-v2-spec.md).
 
 ## Bases de composant
 
@@ -37,6 +38,41 @@ l’update logique. Les règles de projection tierce et de résolution de cibles
 sont dans la [spécification du pont cible](./third-party-target-bridge-spec.md).
 
 ## Services et modules
+
+### Définition et enregistrement d'un composant
+
+Une `RuntimeComponentDefinition` associe un nom `type` à la classe du composant,
+aux IDs de modules requis et à `validateInitial`. La classe expose sa liste
+statique `declaredServices` et déclare les mêmes services à sa construction.
+La définition peut également fournir `validateAction`, `validatePerso`,
+`sanitizeInitial` et `sanitizeAction` pour les frontières auteur concernées.
+Le build utilise ces déclarations avant de produire les données compilées ;
+le player ne revalide pas les profils auteur à chaque update.
+
+La définition est fournie dans `engine.components.register` à la construction
+de `CodPlay`, ou à `codplay.components.register(definition)` avant le
+verrouillage du catalogue. Les services, modules et bibliothèques
+associés sont enregistrés sur le même propriétaire. La façade décrit le
+[verrouillage et l'override explicite](./facade-v2-spec.md#propriétaire-préparation-et-instances).
+
+`libraries` déclare les dépendances préparées par l'engine avant l'initialisation.
+`targetProvider` publie une cible opaque ; `runtimeProfile: 'attached'` permet
+à un composant logique de dépendre d'un host sans placement `move`. Ces deux
+champs suivent le [contrat du pont cible](./third-party-target-bridge-spec.md).
+`surfaces` expose des opérations de composant au runtime. Les champs
+`mountableParts` et `mountablePartResolver` sélectionnent les parts utilisables
+par le placement ; ils ne changent pas leur découverte dans le template.
+
+### Application de l'état
+
+`update()` reçoit un `ComponentUpdateInput` contenant l'état résolu et
+`timeMs`. Selon la capacité, le runtime lui fournit également `target`, les
+occurrences `activeActions` et `registerAnimation`. Une animation enregistrée
+par le composant est échantillonnée au temps du player ; sa phase `content`
+précède les animations de phase `commit` des hosts de rendu. Le composant
+conserve ses ressources natives et les libère à sa destruction.
+
+### Résolution des services
 
 [`RuntimeCapabilityCatalog`](../src/runtime/catalog/runtime-capability-catalog.ts)
 crée les services déclarés par la classe du composant pour le materializer
@@ -79,8 +115,8 @@ frontière est décrite dans la [spécification du pont des cibles tierces](./th
 Les composants core n'ajoutent pas de thème visuel implicite : le style de
 présentation reste dans les valeurs auteur et les feuilles de l'application.
 Les classes nécessaires à la structure ou à l'état d'un composant restent
-permises. Cette décision, confirmée pour CodPlay le 2026-09-11, n'empêche pas un
-composant auteur d'encapsuler son propre style. Les implémentations de
+permises. Un composant auteur peut encapsuler son propre style. Les
+implémentations de
 [`tag`](../src/runtime/components/tag/tag-component.ts),
 [`img`](../src/runtime/components/image/image-component.ts),
 [`input`](../src/runtime/components/input/input-component.ts) et
@@ -101,6 +137,14 @@ référence vers l’élément est conservée. Un commentaire de la forme
 Les outlets et ancres sont classés et conservés dans leur ordre de lecture.
 
 ## Services HTML et structure de scène
+
+`tag` applique `content` par le service du même nom, avec une chaîne rendue
+comme texte et une propriété de nœuds gérée par ce service. `text` est le
+composant de texte enrichi : il applique `className`, `style` et `attr` par les
+services, puis écrit son contenu HTML dans sa racine persistante. La propriété
+de contenu du service `tag` et l'écriture HTML de `text` sont deux projections
+distinctes. Les deux composants utilisent le module `replace-text` pour leurs
+transitions, selon la [spécification texte](./replace-text-v2-spec.md).
 
 Les services HTML testés appliquent les valeurs courantes de `className`,
 `style`, `attr` et `content` à leur nœud. Ils retirent les valeurs gérées qui
@@ -141,6 +185,9 @@ ensemble.
 
 ## Preuves
 
+- [`facade.spec.ts`](../tests/facade/facade.spec.ts) vérifie l'enregistrement
+  direct des définitions, leurs services et modules, l'override explicite et
+  le verrouillage du catalogue avant l'exécution.
 - [`base-component.spec.ts`](../tests/runtime/components/base-component.spec.ts)
   vérifie les deux frontières de base.
 - [`runtime-component-runtime.spec.ts`](../tests/runtime/components/runtime-component-runtime.spec.ts)
@@ -169,9 +216,7 @@ ensemble.
 - [`tag-content-ownership.spec.ts`](../tests/runtime/runner-html/tag-content-ownership.spec.ts)
   traverse `SceneBuilder`, le player et le runner HTML avec une fixture
   autonome : identité des enfants après update du parent, reparent, Seek,
-  resize, reset/replay et destruction. Ces cas passent le 29 octobre 2026.
-  La suite de composition Elcé passe également ses 49 scénarios après
-  intégration des branches, dont agrandissement des images/graphes et focus.
+  resize, reset/replay et destruction.
 - [`html-element-method.spec.ts`](../tests/runtime/runner-html/html-element-method.spec.ts)
   vérifie que les méthodes HTML restent inhibées pendant Seek même si cette
   phase est transmise séparément du contexte motion.
@@ -180,47 +225,9 @@ ensemble.
 - [`mount-targets.spec.ts`](../tests/runtime/player/mount-targets.spec.ts)
   vérifie les identifiants opaques et le refus de doublons de cibles.
 
-Validation ciblée exécutée le 2026-09-25 depuis `packages/codplay` :
-
-```text
-node ../../node_modules/vitest/vitest.mjs run \
-  tests/runtime/components/base-component.spec.ts \
-  tests/runtime/components/runtime-component-runtime.spec.ts \
-  tests/runtime/runner-html/component-materializer.spec.ts \
-  tests/runtime/runner-html/template-materializer.spec.ts \
-  tests/runtime/player/html-component-materializer-scene.spec.ts \
-  tests/runtime/player/render-sync.spec.ts \
-  tests/runtime/player/mount-targets.spec.ts
-7 fichiers, 43 tests réussis
-```
-
-Validation complémentaire exécutée le 2026-09-25 depuis `packages/codplay` :
-
-```text
-node ../../node_modules/vitest/vitest.mjs run \
-  tests/runtime/catalog/runtime-capability-catalog.spec.ts \
-  tests/runtime/engine/module-catalog.spec.ts
-2 fichiers, 7 tests réussis
-```
-
-Le contrôle des composants core et de leurs catalogues a aussi passé :
-`tests/runtime/components/`, `runtime-capability-catalog.spec.ts` et
-`module-catalog.spec.ts` — 11 fichiers, 33 tests.
-
-Validation complémentaire exécutée le 2026-09-25 depuis `packages/codplay` :
-`tests/runtime/capabilities/markup-capability.spec.ts` et
-`tests/runtime/components/image-input-polygon.spec.ts` — 2 fichiers, 11 tests
-réussis.
-
-Validation d’intégration du 30 octobre 2026 : les contrats de propriété du
-contenu et de phase Seek sont conservés ensemble ; la suite CodPlay passe
-1 032 tests (un échec attendu). Les limites navigateur restent dans le
-[suivi d’intégration](../../../docs/plans/2026-10-30-develop-update-plan.md).
-
 ## Limites
 
-Cette spécification ne fixe pas une politique de sanitation des templates :
-cette politique est en revue dans le [plan de matérialisation](../plan/component-render-representation-plan.md),
-car le chemin testé utilise directement le parseur DOM. Les autres limites,
-notamment le pont tierce, les composants spécialisés, le DnD et la présentation
-FLIP, restent décrites par leurs contrats dédiés.
+Le chemin de matérialisation utilise directement le parseur DOM ; ce contrat
+ne garantit pas une sanitation des templates. Le pont tiers, les composants
+spécialisés, le DnD et la présentation FLIP relèvent de leurs spécifications
+dédiées.

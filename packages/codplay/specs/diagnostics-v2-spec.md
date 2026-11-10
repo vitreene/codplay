@@ -1,5 +1,7 @@
 # CodPlay V2 — diagnostics structurés
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Contrat certifié
 
 Cette spécification décrit le collecteur commun des diagnostics V2. Il stocke

@@ -38,9 +38,8 @@ résultat valide ce scénario et ne clôt pas les gates restantes ci-dessous.
 
 La préparation concurrente, l'invalidation des groupes au reset et la
 libération de leurs ressources restent coordonnées par le
-[plan reset](./story-reset-plan.md) et le
-[plan motion](./motion-live-discovery-invalidation-plan.md) ; ces plans
-conservent chacun leur propre périmètre.
+[plan motion](./motion-live-discovery-invalidation-plan.md#reset-chaud),
+avec sa matrice intégrée de validation runner.
 
 ## Critère de sortie
 

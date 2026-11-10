@@ -1,5 +1,7 @@
 # CodPlay V2 — catalogue de presets `replace`
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Rôle
 
 Le catalogue JSON porte les trajectoires numériques partagées par
@@ -94,5 +96,4 @@ dans la [spécification média](./replace-media-v2-spec.md).
   et couples inconnus.
 - La démo [`replace-carousel`](../../demos/src/v2/demos/replace-carousel/main.ts)
   sélectionne ses exemples par le helper public et les joue dans le layout V2
-  partagé. La revue visuelle des familles et paramètres a été menée sur cette
-  démo ; l'utilisateur en a validé les transitions proposées.
+  partagé.

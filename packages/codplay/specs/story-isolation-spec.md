@@ -1,13 +1,13 @@
 # CodPlay V2 — isolation exclusive déclarative des stories
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre vérifié
 
 Le contrat ci-dessous couvre l'activation déclarative d'une story, la
 conservation des faits dans le journal, la clôture de période et le routage
-ciblé. Les chemins de compilation et de lecture sont couverts par les tests
-ciblés ; le parcours réel de la démo `position`, y compris Seek, a été exercé
-dans Safari. Le parcours complet d'acceptation est décrit dans le
-[plan d'isolation](../plan/story-isolation-plan.md).
+ciblé. Les garanties portent sur les cas d'activation, de clôture et de
+reconstruction décrits ci-dessous.
 
 ## Objet
 
@@ -91,9 +91,9 @@ lui est adressé :
 
 1. l'événement source est ajouté une seule fois au journal ;
 2. l'index d'activation de la story est consulté ;
-3. le test vérifie qu'un événement story ordinaire reste au journal sans
-   projeter l'action de la story inactive ; la suppression des autres effets
-   `listen` n'est pas certifiée par ce test et reste au plan ;
+3. un événement story ordinaire reste au journal sans projeter l'action de
+   la story inactive ; la suppression des autres effets `listen` est exclue
+   de ce périmètre certifié ;
 4. avec une règle `active: true`, la nouvelle période est ouverte avant les
    événements story suivants, qui peuvent alors être projetés.
 
@@ -127,7 +127,7 @@ Les autres mécanismes de `listen` restent dans le pipeline existant
 - aucune donnée n'est supprimée ou compactée lors d'une clôture ;
 - l'action ordinaire de la story inactive n'est pas projetée, comme le vérifie
   le test de routage ; la suppression des transforms/straps/emits/reset reste
-  une gate du plan ;
+  hors du périmètre certifié ;
 - `active: true` et `reset: true` forment une transition unique ;
 - une clôture par `active: false` est idempotente ;
 - les événements de portée `scene` restent indépendants de l'isolation.

@@ -1,10 +1,11 @@
 # CodPlay V2 — parts de layout et points d'ancrage
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre vérifié
 
 Le contrat ci-dessous décrit les points `anchor` et `outlet` découverts dans
-le markup d'un composant `layout`. Le parcours d'acceptation de la tranche est
-décrit dans le [plan associé](../plan/layout-part-marker-plan.md).
+le markup d'un composant `layout`, ainsi que ses réservations de flux inline.
 
 ## Rôle
 
@@ -50,17 +51,11 @@ Le test ciblé
 [`layout-flow-reservation.spec.ts`](../tests/runtime/components/layout-flow-reservation.spec.ts)
 vérifie l'attachement différé, la conservation du slot et de son enfant, le
 recalcul après un changement de largeur, l'ordre stable de plusieurs slots
-après des calculs répétés et la libération de l'écouteur. La
-prévisualisation Elcé dans Safari du 2026-10-03 exerce le vrai player : à
-`846 px` puis `670 px` de colonne, le texte reste continu, l'image est montée
-une seule fois dans le slot, et le média garde `16 px` de marge au-dessus et
-au-dessous. Avant correction, le cycle réel A → B → A dans Safari déplaçait
-les deux vidéos avant le texte. Après correction, le même parcours garde un
-`innerHTML`, un ordre des nœuds et un texte identiques sur A avant et après le
-passage par B. Le test `HtmlPlayerRunner.seek(0)` vérifie aussi que le cycle
+après des calculs répétés et la libération de l'écouteur.
+Le test `HtmlPlayerRunner.seek(0)` vérifie aussi que le cycle
 `afterSeek` appelle bien `refresh()` tout en conservant les deux slots et leurs
-persos. Les autres validations d’intégration restent ouvertes dans le
-[plan](../plan/layout-inline-flow-plan.md).
+persos. La réservation conserve le texte auteur et l'identité des enfants
+montés lors du recalcul du flux.
 
 ## Marqueurs auteur
 
@@ -68,7 +63,7 @@ Deux formes appartiennent au même espace d'identifiants de parts :
 
 ```html
 <main id="layout-root">
-  <section data-part="content"></section>
+  <section id="layout-content" data-part="content"></section>
   <!-- data-part="scene-b" -->
 </main>
 ```
@@ -88,9 +83,8 @@ Deux formes appartiennent au même espace d'identifiants de parts :
 Le parseur de template accepte un préfixe configurable avant le token `part` ;
 sa valeur par défaut est `data-`. Le test unitaire vérifie directement que le
 préfixe `__` reconnaît `<!-- __part="scene-b" -->`. Le transport de cette option
-depuis `HtmlPlayerRunner` et la façade d'instance n'a pas encore de test dédié ;
-il reste une gate du [plan](../plan/layout-part-marker-plan.md). Le marqueur
-élémentaire reste `data-part`, forme conservée dans les démos.
+depuis `HtmlPlayerRunner` et la façade d'instance est exclu du périmètre certifié
+de ce document. Le marqueur auteur de référence est `data-part`.
 
 ## Placement d'un ancrage
 
@@ -137,15 +131,3 @@ commentaire précisément parce qu'il ne doit pas introduire un conteneur anonym
 - `tests/runtime/player/html-component-materializer-scene.spec.ts` vérifie
   l'insertion des racines avant le commentaire sans enveloppe générée ;
 - `tests/facade/sighty-demo.spec.ts` couvre la fixture de démonstration.
-
-Validation ciblée exécutée le 2026-09-25 depuis `packages/codplay` :
-
-```text
-node ../../node_modules/vitest/vitest.mjs run \
-  tests/runtime/runner-html/template-materializer.spec.ts \
-  tests/runtime/capabilities/markup-capability.spec.ts \
-  tests/runtime/player/pipeline.spec.ts \
-  tests/runtime/player/html-component-materializer-scene.spec.ts \
-  tests/facade/sighty-demo.spec.ts
-5 fichiers, 49 tests réussis
-```

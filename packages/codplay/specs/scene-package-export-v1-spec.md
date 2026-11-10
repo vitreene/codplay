@@ -1,5 +1,7 @@
 # CodPlay V2 — paquet de diffusion V1
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre vérifié
 
 Cette spécification couvre le format de paquet scène v1 et les familles
@@ -8,27 +10,20 @@ style associée, faces `@font-face` locales, fonctions auteur et ressources
 tierces dont les entrées preload et occurrences exactes sont déclarées.
 Le paquet est chargé par le player CodPlay distribué séparément via
 `CodPlay.load()`. Les fonctions auteur référencées sont empaquetées avec la
-scène dans `scene/functions.mjs` ; elles ne font pas partie du player. Une
-intégration jsdom et une vérification Brave du 2026-10-19, après déplacement
-du paquet et suppression des sources, vérifient `init`, `onStart`,
-`onSequenceEnd` et les callbacks de capture. Brave a chargé les paquets médias
-et fonctions depuis une origine HTTP distincte, avec cache froid et sans accès
-aux sources auteur.
+scène dans `scene/functions.mjs` ; elles ne font pas partie du player. Le
+paquet est autonome par rapport aux sources auteur et peut être publié sur
+une origine HTTP distincte du site intégrateur.
 Le paquet porte les requirements compilés et les ressources de la scène. Il ne
 contient ni ne modifie les définitions de composants, services, modules,
 bibliothèques ou stratégies de preload : le site les fournit par son engine
-partagé avant `load()`. Une démo navigateur vérifie une scène exportée qui
-combine Rive et Three.js ainsi configurés ; les deux hosts sont matérialisés
-avec les classes de base du player importé une seule fois. Le build séparé de
-l'engine vérifie les modes `package`, `remote` et `platform`. Le parcours Avatar
-vérifie le transport de vrais GLB/FBX déclarés par le producteur ; les formats
-à dépendances binaires non déclarées restent hors de la V1.
+partagé avant `load()`. Les hosts Rive et Three.js utilisent les classes de
+base du même player. Le build séparé de l'engine prend en charge les modes
+`package`, `remote` et `platform`. Les GLB/FBX déclarés par leur producteur
+suivent la fermeture des ressources tierces ; les formats à dépendances
+binaires non déclarées sont exclus de la V1.
 
-Une acceptance composite combine dans un paquet déplacé des médias de scène,
-une feuille CSS avec une fonte locale, des fonctions de scène et des composants
-core. Le chargeur les prépare avant Play. Brave confirme cette combinaison avec
-cache froid depuis une origine distincte du player ; les sources ne sont pas
-servies à l'intégration.
+Un même paquet peut combiner médias, CSS avec fonte locale, fonctions de scène
+et composants core. Le chargeur prépare cet ensemble avant Play.
 
 ## Entrée et production du paquet
 
@@ -150,11 +145,11 @@ fonctions des `strapCollections` utilisées par une déclaration de straps
 réutilisables. Vite conserve leurs dépendances auteur transitives et élimine
 les autres exports du groupe ; le module de construction du `SceneDoc` reste
 hors de ce paquet. Chaque appel à `createScenePackageContext()` crée un groupe
-de fonctions neuf, comme dans le chemin historique. Les imports de constantes
+de fonctions neuf. Les imports de constantes
 de projet utilisées par ces fonctions restent inclus.
 
-Sans namespace `sceneFunctions`, l’export conserve le chemin historique qui
-bundle le module de scène complet pour préserver les fermetures existantes.
+Sans namespace `sceneFunctions`, l’export bundle le module de scène complet
+pour préserver les fermetures existantes.
 L’entrée namespace est donc l’opt-in au paquet compact ; elle ne change ni le
 format du manifeste, ni le player, ni le contrat de chargement.
 
@@ -188,8 +183,8 @@ relocalisés dans la copie de diffusion.
 
 ## Fermeture média par compilation
 
-`CodPlay.build(input, { export: true })` active les diagnostics stricts de cette
-tranche et retourne `resourceReferences` à côté du `CompiledScene`. Chaque
+`CodPlay.build(input, { export: true })` active les diagnostics stricts d'export
+et retourne `resourceReferences` à côté du `CompiledScene`. Chaque
 référence contient l'URL, son type et le chemin exact vers chaque occurrence
 dans le payload compilé. Ces métadonnées ne sont pas ajoutées au JSON du
 `CompiledScene`. `build(input)` sans option export conserve le parcours auteur.
@@ -242,8 +237,7 @@ le manifeste dans l'ordre source. Les classNames CSS sont recensés sans être
 renommés. Les valeurs `style` de la scène restent dans le `CompiledScene` et
 ne sont pas converties en classes CSS par l'export V1. Le paquet conserve les
 valeurs destinées au moteur ; seules les URL locales recensées par le builder
-sont relocalisées dans la copie de diffusion. Le contrat CSS est suivi dans le
-[plan d'export](../plan/2026-10-15-export-diffusion-plan.md#r5--css-associé-importé-et-incorporé).
+sont relocalisées dans la copie de diffusion.
 
 ## Ressources déclarées par une intégration
 
@@ -276,12 +270,11 @@ l'engine du site. L'intégration tierce existante reçoit ensuite les octets
 préchargés via son cache et ses composants habituels. L'export n'ajoute ni
 stratégie, ni composant, ni parseur de binaire.
 
-La démo Avatar fournit les entrées `three-glb` et `three-fbx` avec leurs champs
-`initial.src` exacts. Un test navigateur a chargé depuis le paquet les vrais
-`avatarsdk.glb` et `hero-walk.fbx` ; le GLB utilisé contient son buffer et ses
-images incorporés. L'export V1 ne découvre pas les URI secondaires cachées dans
-un GLB/FBX : un `.gltf` multi-fichiers ou des textures FBX latérales ne sont pas
-certifiés.
+Avatar utilise les types preload `three-glb` et `three-fbx`, liés aux champs
+`initial.src` exacts. Le transport certifié porte sur des fichiers autonomes,
+dont un GLB avec buffers et images incorporés. L'export V1 ne découvre pas les
+URI secondaires cachées dans un GLB/FBX : un `.gltf` multi-fichiers ou des
+textures FBX latérales sont exclus du périmètre certifié.
 
 ## Transport des fonctions de scène
 
@@ -299,31 +292,15 @@ un autre propriétaire reçoit un contexte isolé. `CodPlay.destroy()` libère l
 contextes retenus par ce propriétaire. `load()` vérifie les références et les
 collections, puis transmet les deux aux options de l'instance existante.
 
-L'acceptation navigateur confirme qu'un callback `scene.onStart` restauré par
-le paquet s'exécute après `instance.telco.play()`, avec son helper importé et
-l'asset `?url` inline disponibles. Le test
-[`scene-package-export-acceptance.spec.mjs`](../tests/facade/scene-package-export-acceptance.spec.mjs)
-exporte ensuite un paquet CLI, le déplace hors du projet source, supprime les
-sources et exécute `init`, `onStart`, `onSequenceEnd`, `initCaptureState`,
-`trackCommand` et `endCapture` via le loader et les événements DOM jsdom. Ce
-test prouve aussi que le module de fonction est importé depuis le paquet déplacé
-et ne contient pas d'import vers les sources.
+Les fonctions restaurées incluent `init`, `onStart`, `onSequenceEnd`,
+`initCaptureState`, `trackCommand` et `endCapture`. Elles s'exécutent aux
+frontières normales du player, avec leurs dépendances importées et assets
+empaquetés. Le module de fonctions est chargé depuis le paquet publié et ne
+nécessite aucun import vers le projet source.
 
-Une vérification navigateur supplémentaire charge un paquet temporaire dans
-l'onglet existant de la démo `scene-export` : un clic DOM traverse un transform
-de story, un strap externe de story, un événement transformé en portée scène et
-un strap externe de scène. Les deux sorties publiques sont reçues par
-`instance.events.onEvent`. Le 2026-10-19, Brave a chargé les paquets média/CSS
-et fonctions depuis `http://127.0.0.1:5173`, alors que le site intégrateur était
-sur `http://localhost:5173`. Le paquet fonctions avait été exporté, déplacé et
-privé de ses sources ; le serveur statique de test ne servait que les deux
-dossiers de paquets. Les requêtes du manifeste, de la scène, de la feuille CSS,
-des images, de l'audio, de la vidéo et de `scene/functions.mjs` ont réussi sans
-imports de ressources dans le site. Les images étaient décodées, audio/vidéo à
-`readyState = 4`, CSS installée ; `init`, `onStart`, `initCaptureState`,
-`trackCommand`, `endCapture` et `onSequenceEnd` se sont exécutés. Le player
-était importé séparément. Le suivi de cette preuve est dans le
-[plan R8](../plan/2026-10-15-export-diffusion-plan.md#r8--fonctions-de-scène-et-imports).
+Les transforms et straps restaurés conservent leurs portées scène/story.
+Leurs sorties traversent le dispatcher commun ; les événements publics sont
+observables par `instance.events.onEvent`.
 
 ## Chargement et démarrage
 
@@ -343,10 +320,9 @@ la page ou une URL HTTP(S) vers les fichiers du paquet hébergés à distance,
 notamment dans un dépôt ou sur son serveur de publication. `load()` lit le
 manifeste puis résout la scène, les fonctions, la CSS et les assets relativement
 à cette racine. L'hôte distant doit servir ces fichiers et autoriser CORS pour
-le site intégrateur. Le test E12 et la vérification Brave depuis une origine
-distincte couvrent ce chargement. Cela ne rend pas distantes les références de
-ressources inscrites dans la scène : leurs sources suivent la règle D6 et leur
-ouverture aux URL distantes reste une évolution R13.
+le site intégrateur. Cela ne rend pas distantes les références de
+ressources inscrites dans la scène : l'export V1 ferme uniquement leurs
+sources locales selon les règles de résolution décrites ci-dessus.
 
 `load()` lit et valide le manifeste et `scene/scene.json`, restaure sur une
 copie les URL empaquetées par leurs chemins compilés et charge la feuille CSS
@@ -414,89 +390,41 @@ ressources locales.
 ## Preuves
 
 - [`player-build/cli.mjs`](../tools/player-build/cli.mjs) produit le player
-  ESM minifié à part du paquet scène. [`cli.spec.mjs`](../tools/scene-export/tests/cli.spec.mjs)
-  vérifie que le manifeste n'a pas de champ `library` et que l'export ne publie
-  pas `codplay.js`.
-- La démo scene-export importe une fois le player séparé et charge une scène
-  Rive + Three.js. Après le build de production et reload cache froid dans Brave
-  le 2026-10-20, load() rend deux canvases dans le même root et le statut passe
-  à ready. Play fait avancer la scène ; la trace réseau contient une seule
-  requête vers /codplay-player/codplay.js, le bundle engine séparé, le fichier
-  Rive et l'audio du paquet. Le WASM Rive est demandé à l'URL configurée par
-  son package. Aucune erreur console n'est relevée. L'engine et les définitions
-  Rive/Three sont fournis par le site ; le paquet contient la scène et ses
-  ressources.
+  séparé ; [`cli.spec.mjs`](../tools/scene-export/tests/cli.spec.mjs) vérifie
+  qu'il n'entre pas dans le paquet scène. Cette suite couvre aussi les imports
+  auteur/CSS, les fonctions et closures, les ressources `?url`, la
+  reproductibilité hors `createdAt` et le nettoyage du staging.
 - [`scene-builder.spec.ts`](../tests/scene/compiled/scene-builder.spec.ts)
-  vérifie les références et chemins retenus, les diagnostics de fermeture et
-  les URLs dans les styles de scène sans changement du build auteur ; les
-  références de fonctions couvrent les callbacks de scène, transforms,
-  actions et capture. Une fixture vérifie aussi le lien exact entre une entrée
-  preload personnalisée et son chemin compilé.
+  vérifie les chemins exacts des ressources et fonctions, les diagnostics de
+  fermeture, les styles inline et les occurrences preload personnalisées.
 - [`scene-package-loader.spec.ts`](../tests/facade/scene-package-loader.spec.ts)
-  vérifie la restauration des URL, le preload strict, l'attente de `decode()` et
-  `canplay`, l'envoi des ressources image/font CSS au preload, les descripteurs
-  et l'attente de la face CSS avant la création, le rejet/cleanup en cas d'échec,
-  la fabrique de fonctions, le partage/isolation de contexte par propriétaire,
-  le passage de ses fonctions et straps à l'instance, la création d'occurrences
-  distinctes, la coexistence d'une instance auteur et l'absence d'instance/root
-  après échec de préparation d'une bibliothèque requise.
+  vérifie les URL restaurées, le preload strict, l'attente des médias et faces
+  CSS, les fonctions/straps, l'isolation des contextes par owner, les
+  occurrences distinctes et le nettoyage après échec de préparation.
 - [`engine-builder.spec.mjs`](../tools/engine-build/tests/engine-builder.spec.mjs)
-  vérifie les trois modes de livraison, leurs imports, le manifeste engine et
-  le refus atomique de métadonnées invalides.
+  vérifie les trois modes de livraison, les imports, le manifeste et le refus
+  atomique de métadonnées invalides.
 - [`resource-packager.spec.mjs`](../tools/scene-export/tests/resource-packager.spec.mjs)
-  vérifie la copie, le hash de nom, le dédoublonnage, la réécriture exacte et
-  l'absence de mutation du compilé source, ainsi que la conservation des autres
-  champs logiques du CompiledScene.
+  vérifie copie, hash de nom, dédoublonnage, réécriture exacte et absence de
+  mutation du compilé source.
 - [`stylesheet-compiler.spec.mjs`](../tools/scene-export/tests/stylesheet-compiler.spec.mjs)
-  vérifie les imports transitifs, qualificatifs, dépendances `url()` et refus
-  d'imports cycliques, distants ou incomplets, ainsi que l'ordre/descripteurs des
-  faces et le type `font` de leurs sources.
-- [`cli.spec.mjs`](../tools/scene-export/tests/cli.spec.mjs) vérifie que les
-  CSS importés et leur image locale entrent dans le paquet produit ; les tests
-  de fonctions vérifient les imports auteur statiques/différés, l'identité des
-  références aliasées, les closures et les contextes isolés de la fabrique.
-  Il vérifie aussi que le CLI refuse `AUTHOR_COMPONENT_TYPE_UNKNOWN` sans
-  publier une scène qui demande un composant externe. Deux exports du même
-  projet gardent le même manifeste, les mêmes chemins et les mêmes octets hors
-  `createdAt` ; il refuse de remplacer un dossier existant sans toucher ses
-  fichiers. L'interruption SIGINT nettoie le staging et le build temporaire,
-  puis permet une relance vers la même destination.
+  vérifie imports transitifs, qualificatifs, dépendances, descripteurs de faces
+  et refus des CSS cycliques, distants ou incomplets.
 - [`scene-package-export-acceptance.spec.mjs`](../tests/facade/scene-package-export-acceptance.spec.mjs)
-  vérifie le chargement d'un paquet CLI déplacé après suppression des sources,
-  les callbacks de scène et de capture depuis `scene/functions.mjs`, l'échec
-  puis le retry d'import, l'échec et le nettoyage d'un preload média, et le
-  réemploi des médias initiaux/futurs au seek arrière, reset, relance et
-  destruction sans nouvel appel natif `load()`. Une fixture composite détenue
-  par la suite réunit image et vidéo, CSS avec image et fonte, callbacks de scène
-  et composants core ; elle vérifie leur transport et leur préparation avant
-  Play après déplacement et suppression des sources. Cette preuve déterministe
-  complète l'essai navigateur sur les ressources réelles de la démo ci-dessous.
-- L'acceptance Brave E12 du 2026-10-19 charge un paquet composite depuis une
-  origine distincte du player avec cache froid. La fonte atteint `loaded`,
-  l'image est décodée, la vidéo atteint `readyState = 4` dans le root, la CSS
-  conserve son scope et `init`, `onStart`, `onSequenceEnd` s'exécutent. Le
-  player séparé est demandé une fois ; les fichiers du paquet viennent de son
-  origine, avec une réponse vidéo `206 Range` et aucune erreur console.
-- Les appels répétés à `load()` et la création d'occurrences distinctes sont
-  couverts par `scene-package-loader.spec.ts` et
-  `scene-package-export-acceptance.spec.mjs`; la démo conservée sert maintenant
-  à vérifier la composition réelle Rive + Three.js, pas le parcours de deux
-  occurrences média.
-- `cli.spec.mjs` vérifie aussi qu'une image locale importée par Vite `?url` est
-  ramenée à son fichier source, déclarée par le compilateur et copiée dans le
-  paquet par son occurrence exacte.
-- La scène Avatar V2 fournit des entrées preload et leurs chemins exacts. La
-  vérification navigateur avec de vrais fichiers charge le GLB et le FBX depuis
-  le paquet, pas depuis `/avatars/` ; les tests compiler/CLI vérifient le
-  diagnostic si une entrée personnalisée n'est pas reliée à sa scène.
+  charge un paquet déplacé après suppression des sources et exerce les
+  callbacks de scène/capture. Les fixtures vérifient le retry d'import, le
+  nettoyage après échec média, le réemploi des nœuds au Seek/reset/replay et
+  la préparation composite image/vidéo/CSS/fonte avant Play. La portée de ces
+  assertions ne garantit pas l'isolation DOM des vidéos futures avant leur
+  première activation.
 
 ## Limites
 
 Cette spécification couvre uniquement les familles et comportements vérifiés
 dans ses sections précédentes. Le paquet V1 copie les ressources locales dont
 les références sont émises par le compilateur ou déclarées par leur producteur.
-Les ressources d'une scène chargées depuis une origine distante restent une
-évolution ultérieure (R13) ; cela ne limite pas l'hébergement distant du paquet
+Les ressources de scène dont la source auteur est distante sont exclues de
+l'export V1 ; cela ne limite pas l'hébergement distant du paquet
 via `scenePath`. Les fichiers tiers opaques ne sont pas analysés pour
 découvrir leurs propres sous-ressources ; le producteur doit les déclarer et
 relier leurs champs au compilateur.
@@ -505,6 +433,6 @@ Deux paquets fournissant des définitions différentes sous la même clé peuven
 partager un owner, mais la première définition active est celle qui sera
 utilisée par les deux scènes ; un override explicite suit le registre existant.
 Un site qui doit isoler des versions incompatibles les charge dans des owners
-différents. Le partage coordonné avec Sighty reste hors tranche. Les valeurs de
-scène ne sont pas mutées ; le CSS, les fontes, les fonctions et les ressources
+différents. Le partage coordonné avec Sighty est exclu de ce contrat.
+Les valeurs de scène ne sont pas mutées ; le CSS, les fontes, les fonctions et les ressources
 déclarées sont transportés dans la copie exportée.

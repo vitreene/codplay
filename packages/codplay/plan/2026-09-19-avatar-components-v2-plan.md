@@ -66,11 +66,9 @@ conditions de retrait du statut `A relire` avant tout travail dépendant.
    `/assets/1_7b_e.mp3`. Suivre cette frontière dans le
    [plan média](./media-preload-plan.md) ; ne pas contourner le preload ni
    modifier la fixture pour masquer le blocage.
-4. **Classer le périmètre TalkingHead restant.** Décider d'inclure, de reporter
-   ou d'exclure explicitement les réactions pilotées par volume, Dynamic Bones
-   et rééquilibrage physique, statistiques et callbacks de diagnostic. Tout
-   comportement inclus doit être reconstructible ou posséder une décision
-   explicite de limite Play/Seek.
+4. **Maintenir le périmètre existant.** Les capacités TalkingHead
+   supplémentaires sont séparées dans les
+   [évolutions à affecter](./evolutions/evolution-backlog.md#périmètre-talkinghead-supplémentaire).
 5. **Terminer l'acceptation Avatar intégrée.** Rejouer les parcours retenus avec
    les composants, le host Three et le runner V2 réels, puis compléter les
    typechecks, tests, builds et validations navigateur applicables.
@@ -79,8 +77,8 @@ conditions de retrait du statut `A relire` avant tout travail dépendant.
 
 - Les deux décisions `A relire` sont résolues avant l'implémentation qui en
   dépend.
-- Le périmètre TalkingHead est classé et aucune responsabilité n'est seulement
-  simulée par la démo.
+- Le périmètre existant est explicite et aucune responsabilité n’est seulement
+  simulée par la démo ; les extensions TalkingHead gardent leur suivi séparé.
 - Play, pause, reprise, Seek, release, destruction et preload ont des preuves
   sur les parcours retenus.
 - La spécification ne décrit que les comportements intégrés et vérifiés ; les

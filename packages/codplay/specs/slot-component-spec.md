@@ -1,11 +1,11 @@
 # CodPlay V2 — hôte de contenu foreign (`slot`)
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre vérifié
 
-Cette spécification décrit la tranche vérifiée du profil `slot` : manifeste,
-surface HTML, profils `replace-slot`, première surface publique de montage et
-fixture Sighty A/B. Le suivi des décisions d'extension est dans le
-[plan foreign](../plan/foreign-scene-component-plan.md).
+Cette spécification décrit le profil `slot`, son manifeste, sa surface HTML,
+ses profils `replace-slot` et le montage public entre instances.
 
 ## Rôle
 
@@ -16,23 +16,11 @@ composant ne connaît ni la provenance ni la structure de ce contenu.
 
 ## Portée du contrat
 
-Cette spécification décrit le besoin générique du composant `slot`, sans le
-déduire d'un orchestrateur ni d'une démonstration particulière. Le composant
-doit fournir une boîte HTML hôte, accepter une représentation foreign opaque et
-exposer les services et la surface d'attachement définis ci-dessous. La nature
-du contenu, le nombre d'instances qui le fournissent et la politique de
+Le composant fournit une boîte HTML hôte, accepte une représentation foreign
+opaque et expose les services et la surface d'attachement définis ci-dessous.
+La nature du contenu, le nombre d'instances qui le fournissent et la politique de
 composition appartiennent au propriétaire de la représentation et à
 l'application qui l'intègrent.
-
-Le scénario A/B de la première démonstration Sighty est décrit séparément dans
-la [note du modèle déclaratif Sighty](../../sighty/notes/2026-08-17-modele-fichier-declaratif.md).
-La reconstruction actuelle de la navigation Sighty est suivie dans le
-[plan de référence Sighty](../../sighty/plan/2026-09-15-sighty-navigation-reconstruction-plan.md).
-Ce scénario constitue un parcours consommateur et une preuve d'intégration du composant,
-pas son expression de besoin. Ses deux zones, ses trois scènes, ses choix
-visuels et son orchestration ne deviennent donc pas des contraintes
-intrinsèques du profil `slot`. Le même contrat doit rester utilisable pour une
-iframe, un média, un flux ou une autre représentation foreign.
 
 Le perso porte son identité de composition dans `name`, à la racine du perso :
 
@@ -53,7 +41,7 @@ Une déclaration de `name` dans `initial` ou dans une action est rejetée (`name
 reste une propriété racine immuable).
 
 La racine est `<div>` lorsque `initial.tag` est absent. `tag`, `className`,
-`style` et `attr` sont les seules données de la première tranche. Le composant
+`style` et `attr` sont les données visuelles de la racine. Le composant
 ne déclare pas le service `content` de `TagComponent` : `initial.content` est
 une référence foreign opaque et sérialisable, validée sans interprétation.
 
@@ -113,9 +101,9 @@ Le conteneur, `hostRoot` et les racines foreign doivent coordonner leurs règles
 CSS selon les choix de l'application auteur. Le composant core n'impose aucune
 couleur, dimension, ratio, débordement, alignement ou classe de présentation.
 
-## Première surface publique interinstances
+## Surface publique interinstances
 
-La première tentative de raccord CodPlay expose une scène enfant par la
+Le montage public expose une scène enfant par la
 façade d'instances, sans publier de nœud DOM :
 
 ```ts
@@ -148,25 +136,17 @@ Le handle `detach` est idempotent. Une relation active est limitée à une
 adresse d'hôte et à une instance enfant ; une seconde relation concurrente est
 rejetée par diagnostic. La destruction de l'une des deux instances détache la
 relation avant son teardown, sans détruire l'autre instance. Les règles de
-remontage automatique et d'intégration Sighty restent hors de cette tentative.
+remontage automatique et d'orchestration Sighty ne sont pas définies par ce
+contrat de montage.
 
-## Interdiction de fabrication HTML par Sighty
+## Propriété du montage
 
-Le runtime Sighty qui décrit et orchestre une composition ne fabrique pas le
-DOM de ses scènes. Il lui est interdit de créer une racine enfant, une
-enveloppe de montage ou un wrapper avec `document.createElement`, `innerHTML`,
-`appendChild` ou une primitive équivalente, et de déplacer lui-même une racine
-dans un `slot`. Il lui est également interdit de rechercher le `slot` par
-inspection du DOM pour contourner l'adressage logique.
-
-La racine du `slot`, les racines matérialisées des scènes et leur insertion
-appartiennent au runner/materializer HTML CodPlay. `instances.mount` réaffecte
-si nécessaire les cibles racines du player enfant, puis attache directement
-ses racines matérialisées dans l'hôte. Une classe ou un élément tel que
-`sighty-child-root`, ajouté uniquement pour rendre ce raccord possible, est
-donc interdit. Le HTML statique de la page et ses contrôles de démonstration
-restent du ressort de la page de démo ; ils ne constituent pas la composition
-des scènes ni un substitut au materializer.
+Le runner et le matérialiseur CodPlay possèdent les racines rendues et leur
+insertion dans un slot. L'application adresse la relation par
+`instances.mount`, puis conserve la décision de créer, piloter ou détruire
+les occurrences. Le montage réutilise directement les racines matérialisées ;
+il n'introduit pas d'enveloppe d'application entre l'enfant et son host.
+Le HTML statique de la page et ses contrôles appartiennent à l'application.
 
 ## Limites actuelles
 
@@ -296,57 +276,28 @@ Les valeurs historiques `letter`, `word` et `line` restent acceptées sans
 diagnostic, conservées dans la déclaration compilée et sans effet sur le contenu
 opaque.
 
-## Validation effectuée
+## Preuves du contrat
 
-Le test `tests/runtime/components/slot-component.spec.ts` couvre le nom racine,
-le défaut `div`, l'absence de service textuel, l'attachement/détachement de
-plusieurs racines, l'acceptation des réglages de grille et le rejet d'une taille
-invalide. Le test
-`tests/scene/authoring/slot-manifest.spec.ts` couvre la découverte, l'absence et
-la collision de noms, ainsi que la conservation des sept profils, d'une forme de
-masque personnalisée et les réglages `cellSize`/`direction`/`stagger`/
-`staggerPattern`. Le test
-`tests/runtime/capabilities/replace-module.spec.ts` traverse le player pour le
-masque source unique, la grille responsive, le reflow pendant la transition et
-le retrait du clone et du masque. La fixture Sighty
-`packages/sighty/tests/replace-presentation.spec.ts` couvre aussi le profil de
-page entrante à travers `instances.mount({ replace })`. Les validations ciblées
-des modules, de la surface HTML, du montage public et du consommateur Sighty
-passent avec le typecheck CodPlay et celui des démos V2.
-
-Le test `tests/runtime/capabilities/replace-module.spec.ts` exerce le chemin
-réel `SceneBuilder → RuntimePlayer → hooks V2 → HtmlComponentMaterializer` :
-les vues restent séparées du contenu `foreignContent`, sont échantillonnées par
-la timeline et nettoyées à la fin ou au seek. Le test
-`tests/runtime/runner-html/replace-presentation-surface.spec.ts` couvre les
-cinq profils visuels, le masque personnalisé et le calque qui borne les vues au
-slot.
-
-Le test `tests/facade/foreign-mount.spec.ts` exerce la première surface publique
-avec deux instances CodPlay réelles : adressage du `slot`, insertion directe de
-la racine matérialisée enfant, seek indépendant, détachement idempotent et
-nettoyage lors de la destruction de l'enfant. Il vérifie aussi qu'une scène
-multi-racines créée sans `root` utilise le `hostRoot` pour ses captures motion
-compilées et live, que l'overlay est retiré au détachement et que le montage
-peut être répété. Une instance créée avec un `root` explicite retrouve cette
-racine après détachement et remontage. `tests/runtime/runner-html/motion-container.spec.ts`
-vérifie le rebinding des identités de conteneur capturées.
-Le test de montage vérifie également `mask-reveal` et `stack` avec un
-remplacement externe dont l'horloge continue pendant le seek et le reset de
-l'hôte.
-
-Le test `tests/facade/sighty-demo4.spec.ts` exerce la fixture Sighty A/B avec un
-layout et deux instances enfants réelles : résolution des noms `A` et `B` par le
-manifeste, montage des deux racines et démontage/remontage indépendant de A.
-Cette fixture est une preuve consommateur séparée du contrat générique `slot` ;
-elle ne fixe ni politique de fin de scène ni support foreign multi-racines.
-
-Une validation navigateur Brave a exercé la surface publique `instances.mount`
-avec `curtain` et rendu simultanément les cinq profils dans des slots dont les
-parents laissaient déborder leur contenu. Le calque clippe les glissements au
-slot et son rectangle suit le redimensionnement.
-
-La suite CodPlay complète reste à accepter : cinq assertions FLIP échouent dans
-`tests/facade/facade.spec.ts` et `tests/facade/flip-stress-motion.spec.ts`. Les
-mêmes assertions échouent sur l'état de référence, avant cette tranche ; elles
-restent suivies dans le plan sans être attribuées à `replace-slot`.
+- [`slot-component.spec.ts`](../tests/runtime/components/slot-component.spec.ts)
+  couvre le nom racine, le défaut `div`, l'absence de service textuel,
+  l'attachement/détachement multi-racines et les réglages de grille.
+- [`slot-manifest.spec.ts`](../tests/scene/authoring/slot-manifest.spec.ts)
+  couvre la découverte, les noms absents ou ambigus, les sept profils et la
+  conservation des options de masque, grille et propagation.
+- [`replace-module.spec.ts`](../tests/runtime/capabilities/replace-module.spec.ts)
+  traverse le builder, le player et le matérialiseur pour la grille responsive,
+  le masque source unique, le reflow et le nettoyage à la fin ou au Seek.
+- [`replace-presentation-surface.spec.ts`](../tests/runtime/runner-html/replace-presentation-surface.spec.ts)
+  couvre les profils, le masque personnalisé et le calque borné au slot.
+- [`foreign-mount.spec.ts`](../tests/facade/foreign-mount.spec.ts) vérifie le
+  montage logique, les racines directes, le Seek indépendant, le détachement
+  idempotent, le teardown, le montage répété et la restauration du root.
+  Les captures motion compilées/live utilisent le hostRoot de l'enfant
+  multi-racines. Les transitions de montage conservent leur temps d'opération
+  pendant le Seek et le reset de l'hôte.
+- [`motion-container.spec.ts`](../tests/runtime/runner-html/motion-container.spec.ts)
+  vérifie le rebinding des identités de conteneur capturées.
+- Les tests consommateurs
+  [`replace-presentation.spec.ts`](../../sighty/tests/replace-presentation.spec.ts)
+  et [`sighty-demo4.spec.ts`](../tests/facade/sighty-demo4.spec.ts) exercent la
+  sélection de profil et le montage/démontage indépendant des scènes enfants.

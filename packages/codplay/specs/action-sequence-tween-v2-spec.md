@@ -1,10 +1,12 @@
 # CodPlay V2 — ActionSequence et TweenAction
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre certifié
 
 Cette spécification décrit uniquement les comportements logiques vérifiés pour
-les séquences d'actions et les `TweenAction`. L'extension vers un rendu continu
-reste suivie dans le [plan associé](../plan/action-sequence-tween-plan.md).
+les séquences d'actions et les `TweenAction`. Le rendu propre à un composant
+relève de sa spécification de présentation.
 
 Les actions sont reconstruites par le circuit commun du player :
 
@@ -48,7 +50,7 @@ produisent le même état logique pour cette forme de `TweenAction`.
 
 Dans le cas vérifié, un événement `tween:stop` retire de la reconstruction une
 `TweenAction` directe déjà commencée à partir de la frontière d'arrêt. Le test
-ne couvre pas encore l'arrêt d'une `TweenAction` contenue dans une séquence.
+ne certifie pas l'arrêt d'une `TweenAction` contenue dans une séquence.
 
 ## Preuves
 
@@ -61,21 +63,9 @@ ne couvre pas encore l'arrêt d'une `TweenAction` contenue dans une séquence.
 - [`chrono-demo.spec.ts`](../tests/facade/chrono-demo.spec.ts) exerce l'arrêt
   d'une `TweenAction` via la façade et l'émission DOM de la fixture chrono.
 
-Validation ciblée exécutée le 2026-09-25 depuis `packages/codplay` :
-
-```text
-node ../../node_modules/vitest/vitest.mjs run \
-  tests/runtime/player/pipeline.spec.ts \
-  tests/runtime/player/runtime-player.spec.ts \
-  tests/scene/compiled/scene-builder.spec.ts \
-  tests/facade/chrono-demo.spec.ts
-4 fichiers, 85 tests réussis
-```
-
 ## Limite de certification
 
 La forme `startAt`, la durée implicite d'un `TweenAction` dans une séquence,
 `durationMs` qui remplace cette durée implicite, l'arrêt d'un pas séquencé et
 les sorties invalides ou les exceptions de fonction ne sont pas couverts par
-ces preuves. Ils restent dans le [plan d'acceptation](../plan/action-sequence-tween-plan.md)
-et ne sont pas établis ici comme contrat certifié.
+ces preuves et sont exclus du périmètre certifié de ce document.

@@ -5,7 +5,7 @@
 Cette note conserve la distinction qui a émergé de la lecture des comportements
 V1. Elle n'introduit ni API `Behavior` ni contrat auteur V2. Les comportements
 V2 vérifiés sont décrits dans les spécifications ; leur extension éventuelle
-reste au [plan ActionSequence/TweenAction](../action-sequence-tween-plan.md).
+reste au [plan ActionSequence/TweenAction](../../action-sequence-tween-plan.md).
 
 ## Distinction utile
 
@@ -23,20 +23,20 @@ Cette séparation évite de faire dépendre une valeur logique de la cadence des
 frames affichées ou de reconstruire une capture et une projection spécialisée
 comme un `Behavior` générique. Les primitives de calcul ACE ne créent pas, à
 elles seules, une syntaxe de scène : seule la surface actuellement vérifiée de
-`TweenAction` est décrite par sa [spécification](../../specs/action-sequence-tween-v2-spec.md).
+`TweenAction` est décrite par sa [spécification](../../../specs/action-sequence-tween-v2-spec.md).
 
 ## Documents de référence
 
 - Les calculs purs ACE et leurs limites d'exposition auteur :
-  [spécification ACE](../../specs/ace-calculation-v2-spec.md).
+  [spécification ACE](../../../specs/ace-calculation-v2-spec.md).
 - Les comportements `ActionSequence`/`TweenAction` et leurs décisions
-  restantes : [spécification](../../specs/action-sequence-tween-v2-spec.md) et
-  [plan d'acceptation](../action-sequence-tween-plan.md).
+  restantes : [spécification](../../../specs/action-sequence-tween-v2-spec.md) et
+  [plan d'acceptation](../../action-sequence-tween-plan.md).
 - Les occurrences planifiées, le journal et les extensions non décidées :
-  [spécification straps](../../specs/strap-execution-v2-spec.md) et
-  [plan d'acceptation](../strap-execution-plan.md).
+  [spécification straps](../../../specs/strap-execution-v2-spec.md) et
+  [plan d'acceptation](../../strap-execution-plan.md).
 - La capture à partir d'échantillons externes :
-  [spécification capture](../../specs/capture-v2-spec.md). L'acceptance
+  [spécification capture](../../../specs/capture-v2-spec.md). L'acceptance
   navigateur S5 du runtime CodPlay, exercé avec la fixture `stroke-path`, a
   été confirmé depuis ; le Seek S6 reste au
-  [plan dédié](../drag-capture-list-s6-validation-plan.md).
+  [plan dédié](../../drag-capture-list-s6-validation-plan.md).

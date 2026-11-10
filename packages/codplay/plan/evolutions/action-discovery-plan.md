@@ -1,5 +1,7 @@
 # Suppression du catalogue global et découverte des actions
 
+> Version cible : à affecter, hors stabilisation V2.
+
 > Décision de suppression : **Fixe**, confirmée par l'utilisateur le
 > 2026-10-19. Application : **non commencée**. Plan d'application : **A relire**.
 > La demande présente porte sur ce plan pour application future ; elle ne
@@ -28,17 +30,17 @@ traitement, pas une nouvelle autorité de routage.
 
 Les spécifications décrivent encore le comportement actuellement vérifié :
 
-- [Scène auteur](../specs/scene-authoring-spec.md) et
-  [codec](../specs/compiled-codec-v2-spec.md) : déclaration, normalisation,
+- [Scène auteur](../../specs/scene-authoring-spec.md) et
+  [codec](../../specs/compiled-codec-v2-spec.md) : déclaration, normalisation,
   artefact immuable et frontière JSON.
-- [Pipeline événementiel](../specs/event-pipeline-v2-spec.md),
-  [straps](../specs/strap-execution-v2-spec.md) et
-  [reconstruction](../specs/runtime-reconstruction-v2-spec.md) : journal unique,
+- [Pipeline événementiel](../../specs/event-pipeline-v2-spec.md),
+  [straps](../../specs/strap-execution-v2-spec.md) et
+  [reconstruction](../../specs/runtime-reconstruction-v2-spec.md) : journal unique,
   sélection des occurrences, résolution et Seek sans réexécution des straps.
-- [Capture](../specs/capture-v2-spec.md) et
-  [scroll](../specs/scroll-container-spec.md) : sorties live éphémères,
+- [Capture](../../specs/capture-v2-spec.md) et
+  [scroll](../../specs/scroll-container-spec.md) : sorties live éphémères,
   résolution de leurs actions et update des composants.
-- [Motion](../specs/motion-frame-v2-spec.md) : transport des occurrences
+- [Motion](../../specs/motion-frame-v2-spec.md) : transport des occurrences
   matérialisées vers le runner HTML.
 
 Le circuit à prolonger est déjà identifié :
@@ -60,18 +62,18 @@ déclarée ni la politique existante de fusion avec `data`.
 
 ## Constat causal et surfaces concernées
 
-Le [builder](../src/scene/compiled/scene-builder.ts) parcourt toutes les clés
+Le [builder](../../src/scene/compiled/scene-builder.ts) parcourt toutes les clés
 de toutes les `perso.actions` des stories conservées. Ce recensement ne dépend
 ni des straps exécutés ni des eventimes utiles et comprend les
 auto-références `null`. Le
-[contrôleur live](../src/runtime/player/live-actions/live-action-controller.ts)
+[contrôleur live](../../src/runtime/player/live-actions/live-action-controller.ts)
 le convertit en une seconde map globale, portant cette fois les valeurs
 d'actions. Le volume dépend donc du total des associations déclarées, même
 si aucun événement ne les sollicite. Aucun coût chiffré n'est établi.
 
-La [matérialisation](../src/runtime/player/pipeline/materialize.ts) utilise
+La [matérialisation](../../src/runtime/player/pipeline/materialize.ts) utilise
 déjà directement les déclarations, avec le
-[résolveur commun](../src/runtime/player/pipeline/action-resolution.ts).
+[résolveur commun](../../src/runtime/player/pipeline/action-resolution.ts).
 Le runner HTML reçoit les occurrences produites par ce circuit. La fonction
 exportée `compileMotionSchedule` utilise encore le catalogue pour les faits
 du journal ; ses seuls appels recensés dans le dépôt sont ses tests.
@@ -117,12 +119,12 @@ des références exécutables à conserver.
 
 | ID | Statut | Décision attendue et gate |
 |---|---|---|
-| F1 — format | **A relire** | Choisir la version du schéma et le traitement des paquets existants. Direction proposée : nouveau schéma et régénération des paquets, refus explicite des anciens formats, sans restauration du catalogue ni lecteur parallèle. Validation requise avant modification du codec/loader. La compatibilité player/paquet reste également ouverte au [plan export](./2026-10-15-export-diffusion-plan.md). |
+| F1 — format | **A relire** | Choisir la version du schéma et le traitement des paquets existants. Direction proposée : nouveau schéma et régénération des paquets, refus explicite des anciens formats, sans restauration du catalogue ni lecteur parallèle. Validation requise avant modification du codec/loader. La compatibilité player/paquet reste également ouverte au [plan export](scene-export-plan.md). |
 | M1 — ancien schedule | **A relire** | Vérifier les consommateurs et le statut de l'export `compileMotionSchedule`. Direction proposée : retirer ce constructeur exhaustif s'il est confirmé sans usage contractuel ; préserver `createScheduledMotionIntent` et les autres helpers du circuit d'occurrences. Si un usage est découvert, décider son raccord au circuit canonique avant toute modification ; ne pas remplacer l'index par un second scan général du journal. |
 | L1 — application live | **A relire** | Revoir les détails de la découverte dans le contrôleur existant, y compris les réapplications et le retrait d'une source. Direction fixée : aucune map globale de noms vers toutes les cibles. Aucun nouveau contrat public ni nouveau service de routage n'est nécessaire ou autorisé par ce plan. |
 
 `storyActivationIndex` concerne un autre objet. Son retrait demeure une
-proposition distincte au [plan CompiledScene](./compiled-scene-plan.md) ; cette
+proposition distincte au [plan CompiledScene](../compiled-scene-plan.md) ; cette
 demande de suppression du catalogue des actions ne tranche pas ce point.
 L'éventuelle révision de la sémantique des valeurs d'actions live reste elle
 aussi distincte de la suppression décidée ici.

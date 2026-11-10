@@ -1,10 +1,13 @@
 # Preload V2 — service de préparation des ressources
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre certifié
 
-Cette spécification ne décrit que les comportements couverts par les suites
-citées ci-dessous. Les détails publics et les validations restantes sont suivis
-dans le [plan média](../plan/media-preload-plan.md).
+Cette spécification décrit le chargement, le partage de cache, le transfert
+vidéo et le CSS en mémoire couverts par les suites citées ci-dessous. Le
+chargement intégré des paquets, dont leurs médias et fontes locales, relève
+de la [spécification du paquet de scène](./scene-package-export-v1-spec.md).
 
 ## Chargement et résultat
 
@@ -35,7 +38,9 @@ expose une lease permettant de récupérer ce même nœud ; libérer une lease n
 adoptée retire le nœud préchargé. Un handle ne transfère son nœud natif qu'une
 fois ; un second `take()` ne fournit pas de lease. Le test de façade vérifie ensuite que
 `resources.register()` permet au composant `media` d'adopter la node transférée.
-Le cycle complet de nettoyage et de seek après adoption reste au plan.
+Le réemploi des nœuds adoptés au Seek, au reset et au teardown est décrit par
+les spécifications du [média](./media-sync-v2-spec.md) et du
+[chargement de paquet](./scene-package-export-v1-spec.md).
 
 ## Canal CSS en mémoire
 
@@ -65,22 +70,12 @@ chargement d'une ressource CSS par URL.
   couvre deux composants partageant une URL : une seule adopte la node du
   handle, l'autre conserve sa propre node vidéo persistante.
 
-Validation ciblée exécutée le 2026-09-25 depuis `packages/codplay` :
-
-```text
-node ../../node_modules/vitest/vitest.mjs run \
-  tests/runtime/preload/runtime-preload.spec.ts \
-  tests/runtime/preload/preload-video-handoff.spec.ts \
-  tests/runtime/preload/preload-css-slot.spec.ts \
-  tests/facade/media-preload-handoff.spec.ts
-4 fichiers, 14 tests réussis
-```
-
 ## Limites de certification
 
 La stratégie image, le transfert vidéo et le CSS en mémoire sont les seules
 stratégies natives certifiées ici. Le timeout, `state`, `skipped`,
 `registerStrategy()`, l'annulation concurrente, le nettoyage des handles par
 `CodPlay.destroy()`, ainsi que les ressources `audio`, `font` et CSS par URL
-doivent être validés séparément avant d'être décrits comme contrats. Ces gates
-restent au plan média.
+sont exclus du contrat isolé de ce service. Le parcours intégré des médias et
+fontes de paquet possède son propre périmètre certifié dans la spécification
+du paquet de scène.

@@ -1,11 +1,13 @@
 # CodPlay V2 — capacité de placement `list`
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre vérifié
 
 Cette spécification décrit le composant core `list` et sa capacité player-scoped
 de résolution d'ordre structurel. La preview HTML de drag-and-drop est dans la
 [spécification DnD/list](./list-dnd-v2-spec.md). Les dimensions interpolées
-restent au [plan d'acceptation de `move.resize`](../plan/list-dimension-interpolation-plan.md).
+ne font pas partie de ce contrat d'ordre structurel.
 
 ## Composant auteur
 

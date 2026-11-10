@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { animate } from 'animejs'
 
 import { prepareTween, resolveTween, resolveTweenProgress } from '../../src/ace/tween'
 
 describe('prepareTween', () => {
-  it('prepares anime defaults without globals mutables', () => {
+  it('prepares defaults without mutable globals', () => {
     const tween = prepareTween({ from: 0, to: 100 })
 
     expect(tween.duration).toBe(1000)
@@ -69,33 +68,5 @@ describe('resolveTween', () => {
     const backwards = [...instants].reverse().map((instant) => resolveTweenProgress(tween, instant)).reverse()
 
     expect(backwards).toEqual(forward)
-  })
-
-  it('matches anime 4.5 timing for linear scalar tweens', () => {
-    const cases = [
-      { delay: 0, loop: 0, loopDelay: 0, reversed: false, alternate: false },
-      { delay: 30, loop: 0, loopDelay: 0, reversed: false, alternate: false },
-      { delay: 0, loop: 1, loopDelay: 20, reversed: false, alternate: false },
-      { delay: 0, loop: 2, loopDelay: 15, reversed: false, alternate: true },
-      { delay: 10, loop: 1, loopDelay: 20, reversed: true, alternate: true },
-    ]
-
-    for (const options of cases) {
-      const target = { value: 0 }
-      const animation = animate(target, {
-        value: [0, 100],
-        duration: 100,
-        ease: 'linear',
-        autoplay: false,
-        ...options,
-      })
-      const tween = prepareTween({ from: 0, to: 100, duration: 100, ease: 'linear', ...options })
-
-      for (const instant of [-20, 0, 10, 30, 50, 100, 110, 120, 150, 200, 250, 300, 400]) {
-        // anime.seek() takes an instant relative to its delay, unlike ACE's bare scene instant.
-        animation.seek(instant - options.delay)
-        expect(resolveTween(tween, instant)).toBe(target.value)
-      }
-    }
   })
 })

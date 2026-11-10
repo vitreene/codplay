@@ -231,8 +231,8 @@ et l’ordre des deux slots sur A sont identiques avant et après le passage par
    réunit les fragments de texte, mesure chaque ligne, les replace en fin de
    ligne et règle la réserve visuelle. Le
    `scroll-container` conserve son unique tag et le markup auteur ne change
-   pas. Le [plan CodPlay dédié](../../codplay/plan/layout-inline-flow-plan.md)
-   définit le contrat et les validations du cœur.
+   pas. Le [contrat layout CodPlay](../../codplay/specs/layout-component-spec.md#réservation-visuelle-après-une-ligne-de-texte)
+   décrit le mécanisme et les preuves du cœur.
 2. **Réalisé pour l’image :** la NodeView et l’export statique gardent l’ancre
    inline à largeur nulle, sans retour forcé. Safari confirme la même ligne
    naturelle de part et d’autre de l’ancre à deux largeurs, après déplacement
@@ -375,7 +375,7 @@ pas des comportements Elcé déjà implémentés et vérifiés.
 | Relecture des quiz | [Plan de reset Sighty](../../sighty/plan/2026-09-30-sighty-replay-reset-plan.md) | Le plan indique une intégration visuelle Demo 5 encore à valider dans un navigateur ; cette preuve reste distincte du parcours déjà documenté de la démo. |
 | Cadre des démos Sighty | [Layout partagé](../../demos/specs/sighty-demo-layout-spec.md) | Repère le propriétaire de la page commune et du cycle de vie si ce cadre est retenu pour une démonstration. |
 | Capsules | [Document capsule de l’éditeur](../../editor/plan/2026-07-08-capsule-spec.md) et [distribution](../../authoring/scene-factory/2026-06-12-capsule-distribution-spec.md) | Repèrent `capsule-automation` et le circuit de distribution existants. Leurs éléments historiques ou différés ne valent pas décision d’intégration Elcé. |
-| Maintenance V2 | [Guide de reprise](../../codplay/plan/notes/2026-08-26-decouverte-etat-codplay-v2.md) | Oriente vers les spécifications et les plans détaillés des capacités mobilisées. |
+| Maintenance V2 | [Index V2](../../codplay/plan/codplay-v2-plan.md) | Oriente vers les spécifications et les plans détaillés des capacités mobilisées. |
 
 Le principe retenu est une application métier Elcé avec ses propres schémas
 de données. Le builder de scènes transforme chaque page en `SceneDoc` ; la

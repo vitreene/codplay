@@ -1,13 +1,13 @@
 # CodPlay V2 — synchronisation des médias natifs
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre vérifié
 
 Cette spécification décrit les comportements de synchronisation native
 couverts par les tests ciblés. Le service de préparation des ressources et le
 transfert des nœuds média préchargés sont décrits dans la
-[spécification preload](./preload-v2-spec.md). Les validations navigateur et
-les décisions encore non appliquées restent dans le
-[plan média](../plan/media-preload-plan.md).
+[spécification preload](./preload-v2-spec.md).
 
 ## Relation d’horloges
 
@@ -74,10 +74,15 @@ sa propre commande de transport si elle souhaite arrêter son média indépendan
 
 ## Persistance de la représentation native
 
-Le composant HTML garde une node par source média déclarée. Une node détachée
-reste réutilisable lors d'un seek ; changer de source sélectionne la node de
-cette source sans recréer les autres. La destruction finale du runner retire le
-perso matérialisé et ses nodes.
+Le composant HTML garde un nœud par source média déclarée. Changer de source
+détache le nœud précédemment actif de la racine du composant et sélectionne
+celui de la nouvelle source. Un retour à une source déjà présentée réutilise
+son nœud sans réassigner `src`. La destruction finale du runner retire le
+perso matérialisé et ses nœuds.
+
+La garantie de détachement porte sur les nœuds précédemment actifs. Elle ne
+couvre pas l'isolation hors du document des sources futures adoptées depuis
+le preload avant leur première activation.
 
 Chaque node vidéo créée par le composant fixe `preload='auto'` avant sa première
 affectation de `src`. Cela inclut la node propre à un composant qui partage une
@@ -107,33 +112,3 @@ persistants et préparent chacun leurs sources statiques avant un changement.
 - [`preload-media-demo.spec.ts`](../tests/runtime/components/preload-media-demo.spec.ts)
   couvre la lecture de la scène média par le runtime V2 et l'absence d'écriture
   native redondante pendant sa présentation.
-
-Après la correction de préparation des sources vidéo, les sept suites runner,
-preload média, media-sync, replace-module, surface de présentation, handoff
-vidéo et handoff façade passent : **53 tests**. Les typechecks CodPlay et démos
-V2 passent également ; le build Vite des démos passe avec son avertissement de
-chunks supérieurs à 500 kB.
-
-Validation ciblée exécutée le 2026-09-25 depuis `packages/codplay` :
-
-```text
-node ../../node_modules/vitest/vitest.mjs run \
-  tests/runtime/capabilities/media-sync-module.spec.ts \
-  tests/runtime/runner-html/player-runner.spec.ts \
-  tests/runtime/components/preload-media-demo.spec.ts
-3 fichiers, 29 tests réussis
-```
-
-Le 14 octobre 2026, les cinq suites ci-dessus passent : **49 tests**.
-Typecheck CodPlay, Elcé, démos V2 et Sighty réussis ; build Elcé réussi.
-La suite complète CodPlay compte 729 succès et 7 échecs reproduits à `HEAD`
-avant modification : cinq assertions d’overlay motion et deux tests Sighty
-sur `localStorage`. Ils ne certifient pas une régression média.
-
-Safari MCP, le 14 octobre 2026, lit un MP4 produit pour la fixture avec
-Canvas/MediaRecorder. `START` fait progresser le temps natif de 0 à 0,266 s ;
-pause, rate ×2, Seek et reset CodPlay le laissent jouer à rate natif 1.
-`PAUSE` fige sa position native, puis `STOP` après reprise donne `paused=true`
-et `currentTime=0`, avec le même nœud. Cette preuve porte sur une vidéo
-ordinaire ; elle ne ferme pas les gates de preload, de source directe ou de
-fenêtre `endAt` du plan média.

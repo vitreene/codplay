@@ -11,85 +11,42 @@ Un domaine sans décision ni validation résiduelle est référencé par sa
 spécification seule. Une case « — » dans l'index des spécifications indique
 qu'aucun plan de partie n'est ouvert.
 
-Les règles de travail sont dans [AGENTS.md](../../../AGENTS.md). Les constats
-et preuves de l'audit documentaire du 2026-09-26 sont archivés dans le
-[registre d'audit](../projet/notes/2026-09-26-audit-contradictions-doublons-methodes.md) ;
-celui-ci ne remplace pas les spécifications ou plans actifs.
+Les règles de travail sont dans [AGENTS.md](../../../AGENTS.md).
+Cet index distingue les acceptations des circuits V2 existants et les
+évolutions futures, qui ne constituent pas des contrats certifiés.
 
 ## Index des spécifications et plans
 
 | Domaine | Spécification(s) normative(s) | Suivi actif |
 |---|---|---|
-| Scène auteur, compilation et codec | [Scène](../specs/scene-authoring-spec.md), [codec CompiledScene](../specs/compiled-codec-v2-spec.md) | [Plan CompiledScene](./compiled-scene-plan.md), [suppression du catalogue et découverte des actions](./action-discovery-plan.md) |
-| Export d'une scène CodPlay | [Paquet de diffusion](../specs/scene-package-export-v1-spec.md) | [Feuille de route V1](./2026-10-15-export-diffusion-plan.md) — V1 finie ; R10 modes d'engine et R12 ressources Avatar vérifiés ; R13 distant reste une évolution ultérieure ; Sighty et Elcé hors tranche |
-| Extension de diffusion à Sighty | [Paquet Sighty](../../sighty/specs/authoring-library-spec.md#paquet-de-diffusion), [paquet CodPlay](../specs/scene-package-export-v1-spec.md) et [façade CodPlay](../specs/facade-v2-spec.md) | [Plan de diffusion Sighty](../../sighty/plan/2026-10-20-sighty-export-diffusion-plan.md) — V1 des scènes directes vérifiée ; export et chargement lazy reportés |
+| Scène auteur, compilation et codec | [Scène](../specs/scene-authoring-spec.md), [codec CompiledScene](../specs/compiled-codec-v2-spec.md) | [Acceptation CompiledScene](./compiled-scene-plan.md) |
+| Export d’une scène CodPlay | [Paquet de diffusion](../specs/scene-package-export-v1-spec.md) | — ; le défaut vidéo relève du [plan média](./media-preload-plan.md) |
 | Reconstruction, engine et player | [Reconstruction logique](../specs/runtime-reconstruction-v2-spec.md), [Engine/Player](../specs/engine-player-v2-spec.md) | [Plan Player](./player-engine-plan.md) |
-| Façade et instances | [Façade](../specs/facade-v2-spec.md) | [Plan façade](./facade-engine-instance-plan.md) |
+| Façade et instances | [Façade](../specs/facade-v2-spec.md) | — |
 | Diagnostics structurés | [Diagnostics](../specs/diagnostics-v2-spec.md) | — |
-| Événements, straps, stories et source DOM | [Pipeline événementiel](../specs/event-pipeline-v2-spec.md), [straps](../specs/strap-execution-v2-spec.md), [isolation des stories](../specs/story-isolation-spec.md), [Perso.emit](../specs/perso-emit-v2-spec.md) | [Straps](./strap-execution-plan.md), [isolation](./story-isolation-plan.md), [reset](./story-reset-plan.md), [Perso.emit](./perso-emit-v2-portage-plan.md) |
+| Événements, straps, stories et source DOM | [Pipeline](../specs/event-pipeline-v2-spec.md), [straps](../specs/strap-execution-v2-spec.md), [isolation](../specs/story-isolation-spec.md), [Perso.emit](../specs/perso-emit-v2-spec.md) | [Straps](./strap-execution-plan.md), [isolation](./story-isolation-plan.md), [Perso.emit](./perso-emit-v2-portage-plan.md) ; reset motion dans le [plan motion](./motion-live-discovery-invalidation-plan.md#reset-chaud) |
 | Inactivité du player | [Monitor d'inactivité](../specs/idle-monitor-v2-spec.md) | — |
 | Préchargement et synchronisation média | [Preload](../specs/preload-v2-spec.md), [media-sync](../specs/media-sync-v2-spec.md) | [Plan média](./media-preload-plan.md) |
 | Composants HTML, layout et projection input | [Matérialisation](../specs/component-materialization-v2-spec.md), [layout](../specs/layout-component-spec.md), [projection input](../specs/input-projection-spec.md), [image](../specs/image-component-v2-spec.md), [input](../specs/input-component-v2-spec.md), [polygon](../specs/polygon-component-v2-spec.md) | [Représentation des composants](./component-render-representation-plan.md), [layout](./layout-part-marker-plan.md), [image/input/polygon/SVG](./components-image-input-polygon-svg-plan.md) |
 | Méthodes demandées par une action dans la projection HTML | [Matérialisation](../specs/component-materialization-v2-spec.md), [méthodes HTML](../specs/html-element-method-spec.md), [scène](../specs/scene-authoring-spec.md) | [Capacité de projection HTML `htmlElementMethod`](./node-method-capability-plan.md) |
-| Relation et cibles de bibliothèques tierces | [Relation rel](../specs/third-party-rel-spec.md), [pont de cibles](../specs/third-party-target-bridge-spec.md), [bibliothèques](../specs/third-party-library-spec.md), [Three.js](../specs/third-party-threejs-spec.md), [Rive](../specs/third-party-rive-spec.md), [Avatar](../specs/third-party-avatar-spec.md) | [Pont CodPlay](./2026-09-18-third-party-render-target-codplay-plan.md), [intégrations](./2026-09-18-third-party-components-v2-plan.md), [Avatar](./2026-09-19-avatar-components-v2-plan.md) |
+| Relation et cibles de bibliothèques tierces | [rel](../specs/third-party-rel-spec.md), [pont](../specs/third-party-target-bridge-spec.md), [bibliothèques](../specs/third-party-library-spec.md), [Three.js](../specs/third-party-threejs-spec.md), [Rive](../specs/third-party-rive-spec.md), [Avatar](../specs/third-party-avatar-spec.md) | [Intégrations et pont](./2026-09-18-third-party-components-v2-plan.md), [Avatar](./2026-09-19-avatar-components-v2-plan.md) |
 | Contenu foreign et slot | [Slot](../specs/slot-component-spec.md), [pont de cibles](../specs/third-party-target-bridge-spec.md) | [Plan foreign](./foreign-scene-component-plan.md) |
 | Remplacement texte, média et slot | [Slot](../specs/slot-component-spec.md), [texte](../specs/replace-text-v2-spec.md), [média](../specs/replace-media-v2-spec.md), [presets](../specs/replace-presets-v2-spec.md), [présentation](../specs/replace-presentation-v2-spec.md) | — |
 | Calculs ACE et actions temporelles | [Calculs ACE](../specs/ace-calculation-v2-spec.md), [ActionSequence/TweenAction](../specs/action-sequence-tween-v2-spec.md) | [Plan ActionSequence/TweenAction](./action-sequence-tween-plan.md) |
-| Valeurs couleur et unités | [Couleurs](../specs/color-values-v2-spec.md), [unités](../specs/unit-values-v2-spec.md) | [Couleurs](./color-values-plan.md), [unités](./unit-values-plan.md) |
+| Valeurs couleur et unités | [Couleurs](../specs/color-values-v2-spec.md), [unités](../specs/unit-values-v2-spec.md) | [Couleurs](./color-values-plan.md) |
 | Projection des transformations | [Canaux de transformation](../specs/transform-properties-v2-spec.md) | [Plan transform](./transform-properties-plan.md) |
 | Move, retarget et présentation motion | [Move](../specs/move-v2-spec.md), [dépendance à la cible](../specs/move-target-dependency-v2-spec.md), [frontières motion](../specs/motion-frame-v2-spec.md) | [dimensions de liste](./list-dimension-interpolation-plan.md), [retarget](./move-target-dependency-plan.md), [préparation motion](./motion-live-discovery-invalidation-plan.md), [intégration runner](./runner-flip-integration-study.md) |
 | Capacités list et glisser-déposer | [List](../specs/list-capability-v2-spec.md), [DnD/list](../specs/list-dnd-v2-spec.md) | [Validation DnD/capture S6](./drag-capture-list-s6-validation-plan.md) |
-| Capture continue | [Capture](../specs/capture-v2-spec.md) | [Découverte des actions sans catalogue global](./action-discovery-plan.md) |
-| Observation par scroll | [Scroll-container](../specs/scroll-container-spec.md) | [Enregistrement des observations](./scroll-observation-registration-plan.md), [reset de position](./scroll-container-reset-plan.md) |
+| Capture continue | [Capture](../specs/capture-v2-spec.md) | [Intégration capture/list](./drag-capture-list-s6-validation-plan.md) |
+| Observation par scroll | [Scroll-container](../specs/scroll-container-spec.md) | [Sources, observations et reset](./scroll-observation-registration-plan.md) |
 
-## Mesure du poids des builds — 2026-10-07
+## Évolutions séparées
 
-Mesure de référence réalisée et vérifiée sur les entrées publiques de CodPlay V2
-et Sighty. Les deux packages n'ayant pas de commande de build dédiée, l'audit
-utilise des builds Vite isolés : ESM, cible ES2023, sans source maps, démos ni
-ressources de scènes. Les ZIP sont des archives Deflate produites avec
-`zip -X -9`, en-têtes compris. Un Kio vaut 1 024 octets.
+Les versions des sujets non affectés restent à décider. Leur déplacement ne
+valide pas leurs propositions et ne les ajoute pas à la stabilisation V2.
 
-| Bibliothèque / périmètre | Build non minifié | ZIP du non minifié | Build minifié | ZIP du minifié |
-|---|---:|---:|---:|---:|
-| CodPlay V2 | 851,35 Kio | 188,89 Kio | 387,24 Kio | **104,00 Kio** |
-| Sighty seul, CodPlay externe | 125,81 Kio | 27,49 Kio | 62,95 Kio | **15,34 Kio** |
-| Sighty avec CodPlay inclus | 976,57 Kio | 215,32 Kio | 450,02 Kio | **118,83 Kio** |
-
-Sighty seul nécessite que l'application fournisse CodPlay. La dernière ligne
-mesure un build qui inclut cette dépendance ; elle ne s'ajoute pas aux deux
-autres lignes.
-
-Les six builds, les deux typechecks, la conservation des exports et l'intégrité
-des six ZIP ont été vérifiés. Cette mesure ne constitue pas une validation des
-parcours runtime ou navigateur ni un contrat de distribution.
-
-Le [rapport détaillé](../../../docs/projet/notes/build-size-audit/2026-10-07-poids-build-codplay-sighty.md)
-conserve le périmètre, les tailles exactes, l'environnement et les liens vers
-les archives. Les [mesures JSON](../../../docs/projet/notes/build-size-audit/2026-10-07-measurements.json)
-et le [script reproductible](../../../docs/projet/notes/build-size-audit/measure-builds.mjs)
-portent les preuves de cette référence.
-
-## Dette d'architecture différée à V2.5 — DnD et FLIP
-
-> Statut : différée à V2.5 ; aucune migration DnD/FLIP n'est ouverte dans la
-> tranche V2 actuelle.
-
-La tranche V2 conserve DnD et FLIP/motion comme sous-systèmes de présentation
-HTML. Le circuit de placement, d'ordre et de transition couple encore cette
-présentation au module métier list, ce qui limite la substituabilité des
-modules et le portage vers un materializer non HTML.
-
-Lorsqu'une tranche V2.5 sera ouverte, son plan devra décider et valider :
-
-- des modules runtime DnD et FLIP/motion enregistrés et instanciés par le
-  catalogue comme les autres capacités ;
-- des contrats de capture, placement, trajectoire et composition séparés des
-  opérations DOM ;
-- une frontière explicite entre ces modules et les runners/materializers HTML ;
-- une direction de dépendance où le runner HTML adapte les contrats sans
-  dépendre directement d'un module métier, notamment list ;
-- les dépendances déclarées, le cycle de vie par player et les ports des futurs
-  materializers non HTML ;
-- des tests d'architecture montrant qu'un changement de materializer ou de
-  module ne reconstruit pas un circuit HTML parallèle.
+| Cible | Suivi |
+|---|---|
+| V2.5 | [Modules DnD/FLIP et authoring JSX/init](./evolutions/v2.5-plan.md) |
+| V3 | [Résultats asynchrones obsolètes des straps](./evolutions/v3-plan.md) |
+| À affecter | [Décisions et extensions par domaine](./evolutions/evolution-backlog.md), [découverte des actions](./evolutions/action-discovery-plan.md), [unités](./evolutions/unit-values-plan.md), [export distant et compatibilité](./evolutions/scene-export-plan.md) |

@@ -1,7 +1,9 @@
 # Plan — unités logiques et forme publique des unités
 
+> Version cible : à affecter, hors stabilisation V2.
+
 > Statut : **En cours** — le comportement vérifié est dans la
-> [spécification des unités](../specs/unit-values-v2-spec.md). La forme
+> [spécification des unités](../../specs/unit-values-v2-spec.md). La forme
 > publique de `UnitValue` et le choix de l'unité logique à l'instanciation
 > restent à décider.
 

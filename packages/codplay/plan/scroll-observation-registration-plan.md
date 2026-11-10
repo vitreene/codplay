@@ -1,131 +1,56 @@
-# Plan — enregistrement des observations de scroll
+# Stabilisation V2 — sources et observations de scroll
 
-**Statut : En cours.** `ScrollContainerComponent` possède les observers
-`IntersectionObserver` de `emit.observe` et leur cycle de vie. Le comportement
-reste enregistré par le composant, le module et la capacité scroll-container.
+> Statut : En cours. Contrat vérifié :
+> [scroll-container](../specs/scroll-container-spec.md).
 
-## Travail déjà vérifié
+## Circuit et décisions conservés
 
-- `ScrollContainerComponent` possède la progression et la capture ; l’adaptateur
-  HTML optionnel possède la résolution et le cycle de vie des observers.
-- Le hook source HTML reste à la frontière `runner-html` et les events/actions
-  live empruntent les ports player existants.
-- Les suites de `component-v2` et les typechecks couvrent le composant, Play,
-  Seek, reset, fin de séquence, destruction et le parcours `HtmlPlayerRunner`.
-  La spécification décrit ces contrats vérifiés.
+Le composant possède progression et capture ; l’adaptateur HTML facultatif
+possède la résolution et le cycle des observers. Les événements et actions
+live passent par les ports existants du player. Les fonctions sont déjà
+exercées par les suites composant et `HtmlPlayerRunner` ; ce plan conserve
+leurs acceptations d’intégration restantes.
 
-## Décision acceptée — observation initiale déclarative
+L’observation initiale déclarative synchronise la phase par défaut. Avec
+`initial: enter/leave`, seule la phase correspondante peut émettre. Si cette
+première mesure arrive en `ready`, l’émission retenue est envoyée une fois au
+passage à `playing`, puis annulée si la phase change, au Seek/reset, à la fin
+ou à la destruction. Ne pas ajouter de dispatcher ni rejouer toutes les
+transitions reçues avant Play.
 
-Le premier callback `IntersectionObserver` continue de synchroniser la phase
-sans produire d’événement par défaut. Une déclaration peut demander une sortie
-initiale explicite avec `initial: 'enter'` ou `initial: 'leave'` : l’événement
-correspondant n’est produit que si la première mesure est dans la phase
-correspondante. Cette option reste portée par `emit.observe` et suit le même
-circuit CodPlay que les transitions ultérieures. Elle permet à une page dont le
-repère bas est déjà visible de signaler son achèvement sans lecture DOM ni
-dispatch local dans l’application Elcé.
+## Acceptation de la remise à zéro des observations
 
-L’acceptation exige la couverture du type auteur, de la compilation, de la
-validation JSON, du provider, de l’adaptateur HTML et du parcours Elcé/Sighty.
+Le reset renouvelle les observers dans leurs bindings initiaux, retire les
+phases et actions live obsolètes et invalide les callbacks en attente. Les
+règles `once` déjà consommées restent conservées.
 
-**État de cette décision :** appliquée et vérifiée par les suites
-`codplay` (711 tests), `component-v2` (50 tests) et `elce` (31 tests), avec les
-typechecks correspondants. Le parcours Safari Elcé confirme le routage du
-repère après un défilement long ; le cas initial est exercé par le test de
-composition avec le vrai adapter CodPlay et son ticker contrôlé.
+- [ ] Rejouer le parcours Sighty réel après reset : une cible visible
+      synchronise sa phase sans faux `enter`, les transitions suivantes
+      restent actives et le ratio du titre reprend sur la géométrie courante.
+- [ ] Vérifier le titre avec sa surface d’observation sticky de 50 % du
+      scrollport : progression 0→1 sur cette hauteur, cartouche et paragraphes
+      conservés. Cette déclaration de scène exerce le ratio natif existant.
 
-## Invariant de composition
+## Acceptation du reset de position
 
-Le composant scroll garde la géométrie et la capture. La résolution des cibles
-`emit.observe`, ses `IntersectionObserver` et leur cycle de vie appartiennent à
-l’adaptateur HTML facultatif, qui utilise les ports player existants pour les
-actions live et les events. Cette séparation est vérifiée dans la
-[spécification scroll](../specs/scroll-container-spec.md) ; aucun second circuit
-ni accès aux ports d’émission depuis le composant ne doit être ajouté.
+Décision acceptée et implémentée : `onReset()` remet uniquement l’axe configuré
+à l’origine (`scrollTop` pour block, `scrollLeft` pour inline), puis rattache et
+échantillonne la source. L’autre coordonnée et les règles `once` sont conservées.
+Les tests source couvrent les deux axes ; le retour réel à la page initiale
+après échec Sighty est vérifié sous Firefox pour block.
 
-## Régression des observations initiales avant `PLAYING` — 2026-10-22
+- [ ] Vérifier dans Safari le même parcours de réadmission/reset et l’origine
+      du scrollport avant de clore cette acceptation.
 
-**Décision acceptée :** si le premier callback observe la phase déclarée par
-`initial` avant que le player passe à `playing`, l’adaptateur conserve
-l’émission correspondante et la transmet par `commands.emit` lors de la
-notification `onPlaybackStateChange(playing)` déjà fournie par
-`HtmlPlayerRunner`. Il conserve la phase du provider et n’ajoute aucun circuit
-de dispatch. Les émissions en attente sont annulées au seek, au reset, à la fin
-de séquence et à la destruction.
+## Acceptation LMS restante
 
-La session LMS réelle confirme que le marqueur peut être vu `outside` puis
-`inside` par l’API native alors que `Suivant` reste désactivé et que le CMI ne
-reçoit pas `finishedPageIds`. Le runtime embarqué abandonne actuellement une
-émission si le player n’est pas `playing` après que le provider a mémorisé la
-phase. Le probe ciblé du vrai `HtmlPlayerRunner` reproduit la perte d’un
-`initial: 'enter'` reçu en état `ready`.
+- [ ] Rejouer le package SCORM reconstruit dans la LMS réelle : animation
+      d’apparition et déverrouillage CMI de la page après émission initiale.
 
-**Acceptation restante :**
+## Clôture
 
-- [x] Retenir seulement les émissions sélectionnées par la première phase
-  initiale, puis les envoyer une seule fois au passage à `playing`.
-- [x] Vérifier via `HtmlPlayerRunner` l’émission initiale différée, l’absence
-  de doublon et l’annulation lors du seek/reset/fin/destruction ou d’un
-  changement de phase avant `playing`.
-- [ ] Rejouer le package SCORM reconstruit dans la LMS réelle ; confirmer
-  l’animation d’apparition et le déverrouillage CMI de la page.
-- [x] Mettre à jour cette spécification après les validations source et joueur.
-
-## Régression de reset — 2026-09-30
-
-Le reset remet à l'origine le scrollport via `ScrollContainerComponent.onReset()`,
-mais `HtmlPlayerRunner` ne notifie pas les sources HTML et l'adaptateur conserve
-les phases IntersectionObserver de la présentation précédente. Au premier
-callback après reset, une image maintenant visible peut donc produire un faux
-`enter` au lieu de synchroniser sa phase ; les valeurs live des titres doivent
-également être rafraîchies depuis la nouvelle géométrie.
-
-**Correction acceptée pour cette régression :** ajouter une notification de
-reset au cycle existant des sources HTML. Après le reset des composants,
-l'adaptateur réutilise ses bindings et racines initiaux, renouvelle les
-observers et efface les phases ainsi que les actions live obsolètes. Il
-invalide aussi les callbacks natifs en attente, conserve les règles `once` déjà
-consommées et continue d'émettre les actions/events par les ports player
-existants.
-
-**Acceptation :** un test d'intégration avec `HtmlPlayerRunner` et des callbacks
-IntersectionObserver contrôlés vérifie qu'après un reset une cible visible
-synchronise sa phase sans event, qu'une cible quittée puis réadmise anime à la
-transition suivante, et que le ratio du titre met encore à jour son action live.
-Les suites complètes passent : 49 tests `component-v2` et 711 tests `codplay` ;
-les typechecks `codplay`, `component-v2` et `demos`, ainsi que le build V2 des
-démos, passent. Le parcours navigateur Sighty reste à valider : Firefox
-headless échoue au préchargement d'une ressource Sighty ; Safari WebDriver
-requiert un mot de passe administrateur pour `safaridriver --enable`.
-
-## Régression visuelle du titre — 2026-09-30
-
-`liveAction` reçoit le ratio natif de la cible. Le titre observé ne faisant
-qu'une ligne, ce ratio parcourt `0 → 1` sur la hauteur du titre et condense le
-changement de couleur en quelques pixels. Le comportement demandé est une
-transition de son apparition jusqu'à environ 50 % de la hauteur du scrollport.
-
-**Correction acceptée :** conserver le circuit `emit.observe`, ses seuils et
-le ratio natif, mais observer un parent sticky haut de 50 % du scrollport. Le
-texte garde son cartouche normal ; le parent sert uniquement de surface
-géométrique à l'observer. Les actions restent dans la scène Sighty, sans
-nouvelle sémantique runtime ni changement de spécification.
-
-**Acceptation :** le ratio doit évoluer de 0 à 1 pendant le déplacement du
-titre sur la moitié du scrollport ; la hauteur du cartouche, son stickiness,
-la mise en page des paragraphes et les animations d'image restent inchangés.
-Firefox, avec le CSS construit et un scrollport de 400 px, mesure la cible à
-199 px : elle passe de ratio 0 à 0,99 au `scrollTop` 200, avec le titre au
-milieu du scrollport. Le paragraphe commence juste sous le cartouche et le
-sticky reste en place au défilement suivant. Le parcours complet Sighty reste
-à valider : Firefox échoue au préchargement d'une ressource média et Safari
-WebDriver requiert un mot de passe administrateur. Le typecheck et le build V2
-des démos passent.
-
-## Acceptation
-
-- Aucun champ public `htmlHost` ni factory parallèle dans la façade ou le
-  runner.
-- Tests du composant et de l’intégration couvrant observations, Play, Seek,
-  reset et destruction.
-- Parcours navigateur des démos scroll-container et Sighty, typechecks et build.
+Conserver le composant, l’adaptateur HTML et le circuit source commun de la
+spécification. Les tests du composant et du vrai runner couvrent Play, Seek,
+reset, fin et destruction ; les parcours navigateur et LMS ci-dessus restent
+nécessaires. Mettre à jour les seuls contrats nouvellement prouvés, puis
+retirer ce plan lorsque ces validations sont closes.

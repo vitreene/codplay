@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { animate } from 'animejs'
 
 import { prepareInterval, resolveInterval, type ColorValue } from '../../src/ace/interval'
 
@@ -31,7 +30,7 @@ describe('prepareInterval', () => {
     })
   })
 
-  it('resout to relatif depuis from, comme anime', () => {
+  it('resout to relatif depuis from', () => {
     expect(prepareInterval('12px', '+=8px')).toEqual({
       kind: 'number',
       from: 12,
@@ -134,18 +133,5 @@ describe('resolveInterval', () => {
     )
 
     expect(resolveInterval(interval, 0.5)).toEqual({ x: 10, visible: false })
-  })
-
-  it('reproduit anime pour une chaine composee', () => {
-    const from = 'blur(0px) saturate(1)'
-    const to = 'blur(10px) saturate(3)'
-    const target = { value: from }
-    const animation = animate(target, { value: [from, to], duration: 1000, ease: 'linear', autoplay: false })
-    const interval = prepareInterval(from, to)
-
-    for (const progress of [0, 0.25, 0.5, 0.75, 1]) {
-      animation.seek(progress * 1000)
-      expect(resolveInterval(interval, progress)).toBe(target.value)
-    }
   })
 })

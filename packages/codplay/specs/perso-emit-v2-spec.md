@@ -1,13 +1,13 @@
 # CodPlay V2 — source HTML de `Perso.emit` ordinaire
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre vérifié
 
 Cette spécification couvre le sous-ensemble vérifié des événements DOM
 déclarés par `Perso.emit` sans `capture`, lorsqu'ils sont raccordés à un
 `HtmlPlayerRunner`. Les sorties et les entrées continues de capture relèvent de
 la [spécification capture](./capture-v2-spec.md).
-Les comportements DOM non encore validés restent au
-[plan `Perso.emit`](../plan/perso-emit-v2-portage-plan.md).
 
 ## Déclaration et compilation vérifiées
 
@@ -15,8 +15,8 @@ Une règle ordinaire peut porter un événement avec `name`, `data` et la porté
 nommée `visibility`. La règle peut aussi porter les champs `ref`, `keyCode`,
 `preventDefault` et `data` au niveau de l'action. Le compilateur préserve ces
 champs ainsi que les données et la visibilité de l'événement. La preuve de
-compilation exerce la portée `story` ; les autres portées et `mode` restent au
-plan d'acceptation.
+compilation exerce la portée `story` ; cette spécification ne certifie pas les
+autres portées ni `mode` pour cette source DOM ordinaire.
 
 Le test de `SceneBuilder` couvre `ref`, `keyCode`, `preventDefault`, les données
 de l'action et de l'événement, ainsi que `visibility: 'story'`. Cette forme
@@ -56,24 +56,10 @@ sélection, activation de Valider, validation et passage à la question suivante
 - [`quiz-series-emit.spec.ts`](../tests/runtime/runner-html/quiz-series-emit.spec.ts)
   vérifie l'entrée `change`, le payload `answerId`/`value` et son effet sur la
   scène via le runner V2.
-- Le relevé d'acceptation du portage consigne aussi un parcours manuel Safari,
-  le 2026-08-29, sur `v2.html?demo=quiz-series` : sélection, validation et
-  passage à la question suivante sans diagnostic applicatif.
 
-Validation ciblée exécutée le 2026-09-26 depuis `packages/codplay` :
-
-```text
-node ../../node_modules/vitest/vitest.mjs run \
-  tests/scene/compiled/scene-builder.spec.ts \
-  tests/runtime/runner-html/player-runner.spec.ts \
-  tests/runtime/runner-html/quiz-series-emit.spec.ts
-3 fichiers, 43 tests réussis
-```
-
-## Cas gardés au plan
+## Limites
 
 La transmission de `visibility: 'scene'` et `'public'`, le mode d'insertion,
 les règles multiples et leur ordre, le cycle Seek/reparent/reconstruction sans
 écouteurs dupliqués, ainsi que l'intégration d'une scène mêlant des règles
-ordinaires et de capture restent à valider. La vérification Safari historique
-de `quiz-series` ne couvre pas ces gates supplémentaires.
+ordinaires et de capture sont exclus du périmètre certifié de cette source.

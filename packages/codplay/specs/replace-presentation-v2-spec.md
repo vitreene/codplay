@@ -1,5 +1,7 @@
 # CodPlay V2 — présentation des transitions `replace`
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Rôle et propriétaires
 
 Les capacités `replace-slot`, `replace-text` et `replace-media` choisissent
@@ -97,44 +99,19 @@ restent définis dans [remplacement texte](./replace-text-v2-spec.md),
 Le catalogue JSON et sa sélection auteur sont définis dans
 [replace-presets](./replace-presets-v2-spec.md).
 
-## Preuves vérifiées
+## Preuves
 
 - [`foreign-mount.spec.ts`](../tests/facade/foreign-mount.spec.ts) pilote le
-  vrai `TimeTicker` avec une file de frames contrôlée. Le replace de montage
-  progresse quand le player hôte est en pause et qu'un player enfant garde le
-  ticker partagé actif ; le temps mural sans frame ne le fait pas progresser.
-  Seek et reset de l'hôte gardent la progression d'opération ; la fin retire
-  les vues temporaires.
+  `TimeTicker` avec des frames contrôlées : progression d'opération pendant
+  la pause de l'hôte, indépendance du Seek/reset, absence de progression
+  sans frame et retrait des vues à la fin.
 - [`replace-presentation.spec.ts`](../../sighty/tests/replace-presentation.spec.ts)
-  choisit le profil de la page entrante puis celui du slot par défaut. Son
-  scheduler manuel confirme que 1 200 ms sans frame gardent les deux vues ;
-  la frame effectivement distribuée termine ensuite la transition.
+  vérifie la sélection du profil entrant ou du profil du slot et la
+  progression exclusivement sur les frames distribuées.
 - [`replace-presentation-surface.spec.ts`](../tests/runtime/runner-html/replace-presentation-surface.spec.ts)
-  vérifie la décomposition des rôles texte/média, les poses texte en `rem`,
-  les transforms via ACE, le chroma, les formes SVG, le reflow et le nettoyage.
+  vérifie les poses texte en `rem`, les transforms ACE, le chroma, les formes
+  SVG, le reflow et le nettoyage.
 - [`replace-module.spec.ts`](../tests/runtime/capabilities/replace-module.spec.ts)
-  passe par `SceneBuilder` et `HtmlPlayerRunner` pour le remplacement texte,
-  les formules de contenu, les profils CSS/JSON et les masques média. Il exerce
-  le vrai `HtmlPlayerRunner.resize()` sur les cellules image et vidéo sans
-  changer le temps player, vérifie une interruption image A→B→C, une forme SVG
-  auteur et le gel de la copie vidéo à son `currentTime`. Le retry d'une frame
-  entrante garde la même position player.
-- En Brave, le parcours Sighty ouvert dans le layout partagé a exercé une
-  navigation B→C à masque étoile : la vue entrante est passée de `mask-size:
-  0% auto` à des tailles intermédiaires jusqu'à la fin ; les vues transitoires
-  ont ensuite été retirées et la scène C est devenue persistante. Aucun message
-  d'erreur console n'a été relevé.
-- En Brave, la navigation E→F de Sighty a exercé `staggerPattern: 'column-wave'`
-  avec 65 cercles et `stagger: 800`. À 100 ms, les cinq cellules de la première
-  colonne et les deux premières de la suivante avaient démarré ; à 300 ms,
-  l'onde avait atteint les premières colonnes. À 1 000 ms, les 65 cellules
-  avaient démarré. À 1 800 ms, la vue, le masque et les nœuds transitoires
-  étaient retirés, sans canvas.
-- Une recherche sur les capacités replace et les modules de présentation ne
-  trouve aucun appel à `requestAnimationFrame`, `requestFrame`, `setTimeout`,
-  `setInterval`, `performance.now` ou `Date.now`.
-
-La revue visuelle utilisateur a également validé les transitions texte, média
-et slot dans les démos CodPlay et Sighty. Les comportements et preuves
-d'acceptation de la présentation replace sont couverts par les spécifications
-liées ci-dessus ; aucun lot replace ne reste ouvert.
+  traverse `SceneBuilder` et `HtmlPlayerRunner` : formules de contenu,
+  profils CSS/JSON, masques média, resize à temps constant, interruption
+  A→B→C, gel de la copie vidéo et retry de frame à position player constante.

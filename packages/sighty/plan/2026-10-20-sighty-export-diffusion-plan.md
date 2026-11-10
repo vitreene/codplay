@@ -226,7 +226,7 @@ l'entrée racine publique `codplay`. Cette identité commune est requise parce q
 le build d'engine externalise `codplay`, mais bundle les sous-chemins ; un import
 depuis `codplay/runtime/components` recréait une classe que le player ne pouvait
 pas matérialiser. Le correctif R9 du
-[plan CodPlay](../../codplay/plan/2026-10-15-export-diffusion-plan.md#r9--composants-fournis-par-lengine)
+[plan CodPlay](../../codplay/specs/facade-v2-spec.md#identité-des-hosts-html-tiers)
 est vérifié par la recette Safari ci-dessous.
 
 La spécification de cette fixture et son acceptance visuelle sont décrites dans

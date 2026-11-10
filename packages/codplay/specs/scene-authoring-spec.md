@@ -1,11 +1,12 @@
 # CodPlay V2 — déclaration et compilation d'une scène
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre vérifié
 
 Cette spécification décrit le chemin structurel vérifié
-`SceneDoc → CodPlay.build → CompiledScene`. Le suivi des décisions d'extension
-et des critères d'acceptation est dans le [plan CompiledScene](../plan/compiled-scene-plan.md)
-et les plans des composants concernés.
+`SceneDoc → CodPlay.build → CompiledScene`. Les profils de composant et les
+comportements runtime sont définis par leurs spécifications respectives.
 
 ## Document auteur
 
@@ -38,21 +39,24 @@ const scene: SceneDoc = {
 
 L'eventime de story s'applique dans cette story. Un eventime déclaré sur la
 scène est compilé comme occurrence relative commune à ses stories ; la borne
-`sequence:end` peut y être déclarée. Le [plan de compilation](../plan/compiled-scene-plan.md)
-et la [spécification du pipeline événementiel](./event-pipeline-v2-spec.md) règlent
-leur interprétation. L'[exemple des composants](../../demos/src/v2/demos/components/components-scene.ts)
+`sequence:end` peut y être déclarée. Les spécifications du
+[pipeline événementiel](./event-pipeline-v2-spec.md) et du
+[player](./engine-player-v2-spec.md) définissent leur interprétation.
+L'[exemple des composants](../../demos/src/v2/demos/components/components-scene.ts)
 montre les deux niveaux de déclaration.
 
-Les types core actuellement enregistrés sont `tag`, `img`, `input`, `layout`,
+Les types core enregistrés sont `tag`, `text`, `img`, `input`, `layout`,
 `list`, `media`, `polygon` et `slot`. Une capacité optionnelle peut enregistrer
 son propre type par la façade avant le premier build. Les profils de
 [img](./image-component-v2-spec.md), [input](./input-component-v2-spec.md),
 [layout](./layout-component-spec.md), [polygon](./polygon-component-v2-spec.md),
 [slot](./slot-component-spec.md) et [scroll-container](./scroll-container-spec.md)
-ont leurs spécifications dédiées. Les spécifications `img`, `input` et `polygon`
-décrivent leurs comportements vérifiés ; leur acceptation restante est suivie
-dans le plan image/input/polygon.
+ont leurs spécifications dédiées et leur propre périmètre certifié.
 `scroll-container` n'est pas enregistré dans le catalogue core.
+
+`tag` projette son contenu par le service `content` ; `text` porte du contenu
+HTML enrichi. Leurs responsabilités sont décrites dans la
+[spécification de matérialisation](./component-materialization-v2-spec.md).
 
 ## Normalisation des champs auteur
 
@@ -67,8 +71,7 @@ déclaration source.
 
 Le comportement éventuel de `SceneDoc.defaults` n'est pas certifié par cette
 spécification : aucune règle d'application ou de priorité ne doit être déduite
-de ce champ. La décision reste au
-[plan CompiledScene](../plan/compiled-scene-plan.md).
+de ce champ.
 
 ## Résultat de `build`
 
@@ -111,8 +114,7 @@ relocalisation appartiennent à la
 [spécification du paquet](./scene-package-export-v1-spec.md). La conversion
 d'un style de perso en classe est hors du contrat d'export V1 : les valeurs
 restent celles consommées par le moteur, à l'exception de la relocalisation de
-leurs URL locales dans la copie de diffusion. La décision de portée est suivie
-dans le [plan CompiledScene](../plan/compiled-scene-plan.md).
+leurs URL locales dans la copie de diffusion.
 
 ### Références de fonctions exportables
 
@@ -127,11 +129,9 @@ export avec `CODPLAY_EXPORT_FUNCTION_REFERENCE_UNSUPPORTED`. Sans l'option
 
 Les tests du builder vérifient les chemins des fonctions de scène, des
 transforms, des actions et de capture. Le paquet et son chargement sont décrits
-dans la [spécification du paquet](./scene-package-export-v1-spec.md) ; les
-limites de lecture encore ouvertes restent au
-[plan d'export](../plan/2026-10-15-export-diffusion-plan.md#r8--fonctions-codplay-et-imports).
+dans la [spécification du paquet](./scene-package-export-v1-spec.md).
 
-## Frontières à préserver
+## Invariants de compilation
 
 - Le build ne crée ni player, ni composant vivant, ni nœud DOM. Il utilise les
   définitions et validateurs du catalogue, pas les ressources chargées.
@@ -140,9 +140,6 @@ limites de lecture encore ouvertes restent au
 - Le temps, les événements reçus pendant la lecture et les mesures de
   présentation restent des données runtime. Ils ne sont pas inventés par la
   compilation.
-- Un nouveau champ compilé doit rester déterministe et sérialisable depuis la
-  déclaration validée. Sa règle relève du plan et de la spécification de la
-  capacité concernée.
-
-Le [plan général](../plan/codplay-v2-plan.md) indexe les contrats et les
-suivis actifs après la compilation.
+- Les payloads compilés et leurs index dérivés proviennent de la déclaration
+  validée. Leur forme sérialisable et leurs règles de dérivation sont définies
+  par les contrats des capacités concernées.

@@ -1,13 +1,15 @@
 # CodPlay V2 — contrat auteur de `move`
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre vérifié
 
 Cette spécification fixe la forme auteur de `move`, sa compilation et les
-informations de placement ou de présentation qu’elle transmet au runtime. Les
-validations complètes des cycles Play/Seek, reset, replay, retarget et capture
-restent suivies par les [plans motion](../plan/motion-live-discovery-invalidation-plan.md),
-[move vers une cible dépendante](../plan/move-target-dependency-plan.md),
-[Seek DnD/capture S6](../plan/drag-capture-list-s6-validation-plan.md).
+informations de placement ou de présentation qu’elle transmet au runtime. La
+présentation temporelle, le retarget et le DnD ont leurs spécifications
+[motion](./motion-frame-v2-spec.md),
+[dépendance à la cible](./move-target-dependency-v2-spec.md) et
+[DnD/list](./list-dnd-v2-spec.md).
 
 ## Déclaration auteur
 
@@ -52,8 +54,8 @@ de placement résolue par le registre runtime.
 - `resize` porte une option indépendante par axe. Les valeurs acceptées sont
   conservées jusqu’au schedule motion. La réservation de dimension de
   `height: 'preserve'` est vérifiée par le host HTML ; `width: 'preserve'` et
-  les combinaisons d'axes restent à valider au plan dimensions. L’effet
-  géométrique de `container` reste également dans ce plan.
+  les combinaisons d'axes sont exclus de ce périmètre certifié. L’effet
+  géométrique de `container` n'est pas garanti par ce contrat.
 
 La structure résolue ne contient pas `transition`. Le test du pipeline vérifie
 que le solveur conserve les métadonnées structurelles sans verser la transition
@@ -92,12 +94,12 @@ fin du segment.
 - Les options `resize` validées par le compilateur sont transportées au schedule.
 - `height: 'preserve'` réserve la hauteur naturelle de destination pendant la
   période active puis retire cette réservation. La largeur et les combinaisons
-  d'axes ne sont pas encore certifiées.
+  d'axes sont exclues du périmètre certifié.
 - Le chemin SVG déclaré est transformé en `Path` préparé avant l’exécution.
 - `orientToPath` et ses décalages sont transportés avec le chemin jusqu’au
   graphe motion ; un segment sans chemin ne peut pas activer l’orientation.
 
-## Code et acceptation
+## Références d’implémentation et de preuve
 
 - Forme publique : [`scene/types.ts`](../src/scene/types.ts).
 - Compilation du chemin :
@@ -121,6 +123,3 @@ Le transport et la pose tangentielle sont également vérifiés par
 [`motion-graph.spec.ts`](../tests/runtime/motion/motion-graph.spec.ts) et le
 test d’intégration éditeur
 [`motion-path.spec.ts`](../../editor/tests/builder-v2/motion-path.spec.ts).
-
-Le 2026-09-25, l’exécution ciblée de ces frontières et des tests de placement
-et runner a passé **9 fichiers et 139 tests**.

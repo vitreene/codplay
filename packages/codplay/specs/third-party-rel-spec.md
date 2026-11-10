@@ -1,13 +1,13 @@
 # CodPlay V2 — relation immuable des composants projetés
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre vérifié
 
 Cette spécification fixe la forme auteur et compilée de `rel` ainsi que son
 immutabilité. Ces comportements sont couverts par les tests de validation,
 builder et codec. La résolution runtime relève de la
-[spécification du pont](./third-party-target-bridge-spec.md) ; son acceptation
-transverse est décrite dans le
-[plan CodPlay](../plan/2026-09-18-third-party-render-target-codplay-plan.md).
+[spécification du pont](./third-party-target-bridge-spec.md).
 
 ## Déclaration auteur
 
@@ -74,8 +74,8 @@ modifier la relation et ne donne à l'auteur aucun accès au registre interne.
 
 ## Vérification
 
-La forme `host`/`target` est implémentée. Les tests de relation couvrent
-maintenant la séparation, la résolution directe et le codec :
+Les tests de relation couvrent la séparation `host`/`target`, la résolution
+directe et le codec :
 
 - `tests/scene/validation/capability-validation.spec.ts` pour les warnings
   non bloquants et leurs chemins auteur ;

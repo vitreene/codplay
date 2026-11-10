@@ -1,10 +1,11 @@
 # CodPlay V2 — composant spécialisé `polygon`
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre vérifié
 
 Cette spécification décrit le rendu SVG réel, le morph temporel exercé et la
-projection de `diameter`. Les cas d'acceptation non encore vérifiés restent au
-[plan image/input/polygon](../plan/components-image-input-polygon-svg-plan.md).
+projection de `diameter`.
 
 ## Racine SVG et géométrie
 
@@ -26,8 +27,8 @@ intermédiaire à 500 ms et la forme finale à 1000 ms. La fixture de démo util
 le runner HTML réel : elle vérifie le changement de path pendant Play et les
 formes finales de deux morphs déclenchés par le circuit DOM emit.
 
-Le Seek vers le milieu ou la fin d'un morph n'est pas exercé par ces preuves ;
-ce cas reste dans le plan d'acceptation.
+Le Seek vers le milieu ou la fin d'un morph est exclu du périmètre certifié
+de ces preuves.
 
 ## Preuves
 
@@ -38,6 +39,3 @@ ce cas reste dans le plan d'acceptation.
   construit la scène avec le builder et l'exécute par le runner HTML ; il vérifie
   `polygon:sides`, `polygon:diameter`, le payload natif `value`, la mise à jour
   des contrôles et les deux morphs pendant Play.
-
-La suite ciblée image/input/polygon exécutée le 2026-09-25 passe : 2 fichiers,
-6 tests réussis. Les validations complètes Seek et navigateur restent ouvertes.

@@ -141,7 +141,7 @@ pas le second. ELcé utilise `media` indépendant avec STOP à la sortie ; le
 cycle d’un indice vidéo doit être choisi et validé explicitement.
 
 La découverte de `initial.attr.src` d’un `tag` est suivie dans
-[CompiledScene](../../../codplay/plan/compiled-scene-plan.md#correctif-à-prévoir--src-dun-perso-tag),
+[CompiledScene](../../../codplay/specs/scene-package-export-v1-spec.md#fermeture-média-par-compilation),
 et le reset du glyph dans le
 [suivi Input](../../../codplay/plan/components-image-input-polygon-svg-plan.md).
 Ces limites n’autorisent aucun correctif opportuniste du cœur.

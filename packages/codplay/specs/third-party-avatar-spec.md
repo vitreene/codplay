@@ -1,12 +1,12 @@
 # CodPlay V2 — intégration des composants Avatar
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre vérifié
 
 Cette spécification décrit le raccord vérifié entre les composants Avatar de
 `@codplay/component-v2` et les capacités Three.js/CodPlay. Elle ne fixe pas la
-transposition complète de TalkingHead. Les choix et validations encore ouverts
-sont suivis par le
-[plan Avatar](../plan/2026-09-19-avatar-components-v2-plan.md).
+transposition complète de TalkingHead.
 
 Les contrats de relation, de bibliothèque et d'hôte Three.js restent ceux des
 spécifications [rel](./third-party-rel-spec.md),
@@ -48,7 +48,7 @@ spécifications [rel](./third-party-rel-spec.md),
 - Le lecteur d'animation associé à un Avatar échantillonne un clip préchargé à
   un temps absolu et reconstruit son échantillon après préparation de Seek. La
   composition complète entre clip, pose sémantique et transition de release
-  reste exclue de ce contrat tant que le parcours intégré n'est pas accepté.
+  est exclue de ce contrat.
 
 ## Vocabulaire d'événements exercé
 
@@ -58,7 +58,7 @@ d'occurrence portent les valeurs qui varient, telles que `durationMs`,
 `contact`, `viseme` et `weight`. Le perso `avatar-lip-sync` reçoit l'action
 `avatar:viseme` et sa valeur de visème dans les données. `avatar-motion` choisit
 une ressource enregistrée par son nom d'action ; le résultat de
-`avatar:motion:release` sur la pose intégrée reste soumis à la gate ci-dessus.
+`avatar:motion:release` sur la pose intégrée est exclu du périmètre certifié.
 
 Les types d'initial et de payload sont déclarés dans
 [`avatar-types.ts`](../../authoring/component-v2/src/avatar/components/avatar-types.ts).
@@ -81,16 +81,6 @@ Les suites de `packages/authoring/component-v2/tests/` couvrent :
   ([`avatar-animation-player.spec.ts`](../../authoring/component-v2/tests/avatar-animation-player.spec.ts)) ;
 - la frontière de chargement binaire par Three.js
   ([`threejs-preload.spec.ts`](../../authoring/component-v2/tests/threejs-preload.spec.ts)).
-
-Ces suites ont été relancées le 2026-09-26 : **6 fichiers, 31 tests réussis**.
-Elles valident leurs fixtures isolées et ne ferment pas le parcours intégré de
-release décrit au plan.
-
-Le plan rapporte aussi des parcours Safari de l'humeur, du regard, des gestes
-et de l'idle sur la démo V2. Ces observations valident les scénarios nommés ;
-elles ne certifient pas la composition générale de la pose squelettique. Le
-parcours intégré de release/animation reste ouvert au plan Avatar, de même que
-la sémantique de `rescale` et le classement du périmètre TalkingHead restant.
 
 Cette spécification ne certifie donc ni la migration Avatar complète, ni la
 composition unique de toutes les couches, ni un comportement physique

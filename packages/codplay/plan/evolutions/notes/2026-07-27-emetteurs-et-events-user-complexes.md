@@ -40,16 +40,16 @@ d'acceptation doivent précéder toute API ou modification du core.
 ## Frontières actuelles
 
 - Le cycle source-agnostique et les sorties vérifiées de capture sont décrits
-  dans la [spécification capture](../../specs/capture-v2-spec.md), qui reprend
+  dans la [spécification capture](../../../specs/capture-v2-spec.md), qui reprend
   le routage événementiel `visibility`. L’acceptation navigateur S5 du runtime
   CodPlay, exercée avec la fixture `stroke-path`, a été confirmée par
   l’utilisateur ; le Seek navigateur S6 reste
-  au [plan dédié](../../plan/drag-capture-list-s6-validation-plan.md).
+  au [plan dédié](../../drag-capture-list-s6-validation-plan.md).
 - Le dispatch de `listen`, la journalisation et l'absence de rejeu des straps
-  sont décrits dans la [spécification événementielle](../../specs/event-pipeline-v2-spec.md).
+  sont décrits dans la [spécification événementielle](../../../specs/event-pipeline-v2-spec.md).
 - Le sous-ensemble vérifié des déclarations ordinaires `Perso.emit` est dans sa
-  [spécification](../../specs/perso-emit-v2-spec.md) ; les validations
-  restantes sont au [plan dédié](../../plan/perso-emit-v2-portage-plan.md).
+  [spécification](../../../specs/perso-emit-v2-spec.md) ; les validations
+  restantes sont au [plan dédié](../../perso-emit-v2-portage-plan.md).
 - Le mode média en direct est séparé de cette piste ; sa décision acceptée et
   les choix d'application ouverts sont consignés dans le
-  [plan média](../../plan/media-preload-plan.md).
+  [plan média](../../media-preload-plan.md).

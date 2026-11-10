@@ -1,273 +1,72 @@
-# Acceptation restante — média et preload V2
+# Stabilisation V2 — média et preload
 
-> Status: En cours — les contrats vérifiés du service preload et de la
-> synchronisation média sont dans leurs spécifications ; les gates ci-dessous
-> restent ouvertes.
-> CodPlay version: V2 foundation
+> Statut : En cours. Les contrats vérifiés sont dans les spécifications
+> [preload](../specs/preload-v2-spec.md), [média](../specs/media-sync-v2-spec.md)
+> et [paquet](../specs/scene-package-export-v1-spec.md).
 
-- Service de ressources : [spécification preload](../specs/preload-v2-spec.md).
-- Lecture et synchronisation natives : [spécification media-sync](../specs/media-sync-v2-spec.md).
+## Périmètre
 
-Ce plan garde les décisions acceptées mais non appliquées, les points à
-trancher et leurs critères d'acceptation. Il ne recopie pas les contrats déjà
-vérifiés.
+Fermer les défauts et preuves manquantes du preload, de son handoff et du
+cycle natif déjà exposés. Les sources directes, nouvelles commandes vidéo et
+relations d’horloges tierces sont séparées dans les
+[évolutions à affecter](./evolutions/evolution-backlog.md).
+Les contrats de diffusion V1 et `media.sync` déjà vérifiés ne sont pas à réimplémenter.
 
-## Diffusion d'un paquet — tranche média implémentée, gates restantes ouvertes
+## Isolation des vidéos futures avant activation
 
-Le contrat public `CodPlay.load(scenePath, { root })` et le démarrage par
-`instance.telco.play()` sont décrits par la
-[spécification du paquet média](../specs/scene-package-export-v1-spec.md).
-`load()` utilise `engine.prepareScene()`, le service `RuntimePreload` en mode
-strict `author`, `resources.register()` et le registre d'instances existants.
-Il attend les images matérialisées décodées et les médias natifs à
-`readyState >= 3`, puis retourne une occurrence prête sans lancer la lecture.
-Il n'ajoute pas un circuit de preload parallèle.
+Défaut runtime ouvert, distinct de l’export terminé. Après `load()`, une vidéo
+future préchargée peut rester visible dans `document.body`, hors du root.
+Le cas est reproduit avec deux occurrences et par l’échec attendu de
+[`scene-package-export-acceptance.spec.mjs`](../tests/facade/scene-package-export-acceptance.spec.mjs).
 
-Le parcours a été vérifié sur sortie statique de production/cache froid dans
-Brave/Chromium pour les images initiales et tardives, l'audio, la vidéo et les
-tags natifs. Audio et vidéo atteignaient `readyState=4` avant le retour de
-`load()` ; les changements tardifs ont utilisé les ressources du paquet. La
-console était vide et les ressources scène venaient du dossier exporté.
-Un second passage a coupé le réseau après que `load()` a résolu, puis lancé la
-scène et ses changements tardifs d'image, d'audio et de vidéo : les nœuds
-préparés ont joué les ressources empaquetées sans erreur média. Cela ne valide
-pas encore le cycle Seek/replay, la destruction, deux occurrences ou Safari.
-L'inspection du même parcours a aussi révélé qu'un nœud vidéo préchargé pour
-une action future reste visible dans `document.body`, hors du `root` d'instance,
-jusqu'à son activation. Deux chargements sur le même owner reproduisent ce
-placement. Cette divergence de propriété est suivie au
-[plan d'export, R3](./2026-10-15-export-diffusion-plan.md#r3--audio-et-vidéo)
-et bloque la clôture média.
-Safari, les cycles Seek/replay/destruction et la fermeture des autres familles
-restent à vérifier au
-[plan d'export](./2026-10-15-export-diffusion-plan.md).
+Cause identifiée : `MediaComponent.ensureStaticSourceNodes()` adopte chaque
+handle et efface son style de preload. Seule la source active est rattachée au
+composant ; la source future conserve son parent de preload. Le handoff et
+la propriété du nœud dans `MediaComponent` sont la frontière à examiner.
 
-## Décision acceptée, application non planifiée — source média en direct
+L’utilisateur a exclu ce correctif du chantier d’export. Sa réalisation exige
+une analyse et un plan acceptés, une autorisation explicite du cœur et un
+commit distinct. Aucun adaptateur export ni changement local de démo ne doit
+masquer le défaut.
 
-Une source déclarée comme direct reste au temps réel (`now`) ; un Seek ne la
-rembobine pas. Le `rate` logique est ignoré pour son contenu, et pause/reprise
-ne figent pas puis ne rattrapent pas la source : la reprise retrouve l'instant
-courant. Le mode doit être déclaré par l'auteur, car l'adresse d'une source ne
-permet pas de distinguer sûrement un direct d'un média enregistré.
+Acceptation à conserver pour ce correctif :
 
-La déclaration auteur, l'interaction avec le rôle de master, les effets visibles
-de pause et de masquage, ainsi que la propriété et la libération de la source
-restent à définir. Aucune API `live` n'est adoptée. Avant implémentation, arrêter
-ces choix puis valider le média, son hôte et le module de synchronisation sur
-Seek, rate, pause/reprise, reset, teardown et navigateur réel. Le comportement
-actuel de média enregistré reste celui de la
-[spécification media-sync](../specs/media-sync-v2-spec.md).
+- source initiale et future préparées, sans vidéo visible hors du root ;
+- une puis deux occurrences, montage et activation future ;
+- identité des nœuds, source et absence de nouvel appel natif `load()` ;
+- Seek avant/arrière, reset/replay, arrêt et destruction, sans fuite ;
+- parcours auteur et diffusion avec leurs vrais handoffs, puis navigateur.
 
-## Tranche `media.sync` — réalisée le 14 octobre 2026
+## Preuves de service restantes
 
-L’utilisateur a autorisé l’évolution du cœur puis son application Elcé,
-avec les composants tiers différés. Le contrat implémenté et ses preuves sont
-transférés à la [spécification media-sync](../specs/media-sync-v2-spec.md).
-Le raccord Elcé et le `STOP` de sortie de page sont décrits par la
-[spécification preview](../../elce/specs/player-preview-spec.md#lecture-des-vidéos-et-sortie-de-page).
-Cette tranche est close ; elle ne ferme pas les autres gates de ce plan.
+- [ ] État et compteurs d’une opération, résultat `skipped` sur cache prêt,
+      timeout par ressource et valeur par défaut.
+- [ ] `cancel()` pendant un chargement partagé sans interrompre l’autre
+      propriétaire, et annulation par `CodPlay.destroy()`.
+- [ ] Nettoyage des handles média adoptés ou non adoptés à la destruction.
+- [ ] Chemin public `registerStrategy()` et stratégies natives audio, font
+      et CSS par URL. Distinguer le contrat isolé du service des parcours de
+      paquet déjà certifiés par la spécification de diffusion.
+- [ ] Handoff suivi de Seek et teardown sans nouveau chargement natif.
 
-**Analyse causale conservée.** L’ancien module lisait `initial.master`,
-calculait la pause et le STOP depuis le temps de scène, puis rejouait les
-broadcasts aux reconstructions. Cela empêchait le temps natif indépendant et
-ne remettait pas à zéro après STOP. L’extension utilise le profil et le module
-existants, sans journal, horloge ou player parallèle. Elcé réutilise
-l’observation publique du slot Sighty et les événements story CodPlay pour
-commander l’occurrence sortante, même suspendue. Le graphe de placement, le
-reparent et motion ne sont pas modifiés ; leur sémantique d’agrandissement
-reste à examiner dans son plan propre.
+## Acceptation Safari du handoff
 
-**Acceptation.** Les cinq suites média/runner passent (49 tests), ainsi que
-les typechecks CodPlay, Elcé, démos V2 et Sighty et le build Elcé. Safari
-vérifie les commandes natives indépendantes et le cycle de page A → B → A.
-Les preuves et leurs limites sont dans les spécifications liées. Les sept
-échecs globaux CodPlay et les neuf échecs globaux Elcé ont tous été reproduits
-sur `HEAD` avant changement ; ils ne sont pas corrigés dans cette tranche.
-Le nouveau test de navigation utilise des timestamps de frames croissants,
-car des timestamps remis à zéro rendent l’observation des commandes instable.
+- [ ] Première frame visible avant Play après adoption de la vidéo préparée.
+- [ ] Lecture, pause, Seek puis reprise avec le même nœud, sans réassignation
+      identique de `src` ni appel natif `load()` redondant.
+- [ ] Déterminer la cause de l’échec de nouvelle initialisation Safari : la
+      sonde du 9 octobre renvoie un timeout de 10 s, malgré HTTP 200 et Range
+      206 ; le nœud reste à `readyState=0`, `networkState=3`, sans `currentSrc`
+      ni événement de disponibilité. Un onglet déjà préparé garde une vidéo
+      prête. Ne pas contourner le preload par `broadcast` ou un chemin HTML.
 
-### Décisions toujours différées
+Mesurer les dérives natives éventuelles pendant ces parcours. Une politique
+nouvelle de correction relève des évolutions séparées ; elle n’est pas un
+contrat certifié du service.
 
-- Rive, Three.js et Lottie : prévoir `sync: 'auto' | 'independent'`, `auto`
-  par défaut conservant le comportement actuel, sans mode `master`. Les
-  frontières et commandes de chaque bibliothèque restent au
-  [plan tiers](./2026-09-18-third-party-components-v2-plan.md#extension-différée--relation-dhorloges-sync).
-- L’[agrandissement Elcé](../../elce/plan/2026-10-14-elce-viewport-expansion-plan.md)
-  reste `A relire`. Il doit encore prouver la continuité du média pendant les
-  captures géométriques et les déplacements interpolés. Une vidéo liée à la
-  timeline pourrait relever plus tard d’un BDC spécifique, sans décision de
-  construction dans cette tranche.
-- La fermeture des médias de scène `tag.attr.src` fait maintenant partie de la
-  tranche d'export CodPlay et est suivie au
-  [plan CompiledScene](./compiled-scene-plan.md#références-média-du-paquet-de-diffusion).
-  Elle ne change pas le comportement du mode indépendant `media`.
+## Clôture
 
-## Commandes vidéo par broadcasts dédiés — A relire
-
-**Statut : A relire.** Le besoin Quiz Hunt est maintenant de conserver le
-broadcast `START` d'entrée, retirer l'attribut HTML `controls`, puis placer
-sous la vidéo deux petits boutons : Play/Pause et rewind. Ils doivent agir sur
-le seul perso `media` par ses broadcasts et ne doivent pas piloter le transport
-général de la timeline. Cette entrée consigne le contrat à examiner ; elle
-n'autorise pas une modification de `packages/codplay`.
-
-### Besoin et constat
-
-Le rewind est prévu comme un broadcast `START` média avec `startAt: 0`. La
-pause utilise le broadcast média `PAUSE`. Le bouton Play/Pause doit alterner
-entre ces commandes selon le comportement décidé ci-dessous ; son libellé
-n'implique pas encore une sémantique de reprise validée.
-
-Le circuit `media-sync` actuel connaît `START`, `PAUSE` et `STOP`. `START`
-remet le média à la position `startAt` donnée, ou à `0` si elle est absente.
-`PAUSE` fige la position attendue depuis la timeline de la scène. Aucune action
-`RESUME` n'est déclarée dans le type des broadcasts. Par conséquent, `START`
-après `PAUSE` ne reprend pas à lui seul la position suspendue. Il reste à
-confirmer si le parcours Quiz Hunt peut accepter le redémarrage depuis `0`, ou
-si une capacité de reprise doit être conçue dans le circuit existant.
-
-Le démarrage automatique reste lié à `START` : un essai Safari avec l'attribut
-HTML `autoplay` sur le nœud déjà préchargé n'a pas démarré la vidéo. La cause du
-saut de première image reste ouverte ; une trace doit comparer `currentTime`
-avant et après le seek de resynchronisation initial. Le `STOP` de fin de
-feedback reste en place jusqu'à ce que le cycle de vie réel prouve qu'il est
-redondant.
-
-### Invariants à préserver
-
-- Les deux boutons sont sous la vidéo, de petite taille, et remplacent les
-  contrôles natifs dans le parcours Nostromo ; le style réutilise les éléments
-  du projet et n'invente pas un nouveau traitement visuel.
-- Les actions portent sur l'occurrence du perso vidéo seulement. Elles ne
-  changent pas la position, l'état Play/Pause/Seek ni le contenu de la timeline
-  générale et ne contrôlent pas la scène panier/minuteur.
-- L'entrée en question continue d'émettre `START` à `startAt: 0`. La question
-  conserve les 5 s d'indice, son formulaire et son feedback.
-- La vidéo reste en `sync: 'auto'` (ancien `master: false`). L'identité du nœud préchargé est conservée ;
-  les boutons ne provoquent ni nouveau `load()` ni réassignation de `src`.
-- Le `STOP` à la fin du feedback est conservé jusqu'à validation du cycle de
-  sortie d'une scène question masquée.
-
-### Décision ouverte avant implémentation
-
-Choisir la sémantique de Play après Pause :
-
-1. **Reprise exacte** à la position suspendue. Il faut d'abord vérifier si un
-   chemin auteur déjà existant permet cette reprise ; sinon, concevoir une
-   extension de `media-sync` et la faire accepter. Toute modification du cœur
-   CodPlay demande une autorisation explicite distincte.
-2. **Redémarrage depuis 0**, avec `START startAt: 0`. Ce choix utilise le
-   circuit existant `PAUSE`/`START`, mais le bouton ne reprend pas la position
-   où la vidéo a été suspendue.
-
-Dans les deux cas, le bouton rewind émet `START startAt: 0`. Ne pas remplacer
-les broadcasts du perso par des accès directs au nœud DOM, par le transport de
-la timeline générale, ni par un circuit local parallèle. Si la reprise exacte
-est retenue, documenter d'abord le comportement et l'acceptation du circuit
-CodPlay dans ce plan ; ne pas déduire une nouvelle action `RESUME` de la seule
-demande de boutons.
-
-### Plan et acceptation
-
-**P0 — Valider la sémantique de reprise (`A relire`).** Confirmer reprise exacte
-ou redémarrage à 0. Si le choix est exact, préciser la capacité existante ou
-proposer une évolution `media-sync` et obtenir son acceptation et l'autorisation
-explicite requise. Aucun code dépendant ne commence avant cette validation.
-
-**P1 — Contrôles dans Quiz Hunt.** Après P0, enlever `controls`, ajouter deux
-boutons compacts sous la vidéo et faire émettre les broadcasts du seul perso
-média. Garder `START` d'entrée et le `STOP` de fin de feedback. Une modification
-de démo ne doit pas contourner le contrat `media-sync`.
-
-**P2 — Contrat et non-régression CodPlay, si P0 l'exige.** Avec des fixtures
-indépendantes de la démo, vérifier pause stable pendant la lecture de la scène,
-reprise à la position attendue, rewind à zéro, interaction avec la fin native,
-lecture/seek de scène et nettoyage. Si aucun code CodPlay n'est requis, ne pas
-ajouter de test cœur redondant ; vérifier tout de même que les broadcasts
-existants ciblent le seul média.
-
-**P3 — Parcours navigateur réel.** Avec la vidéo préchargée, vérifier Safari :
-`START` automatique à l'entrée, absence de contrôles HTML natifs, placement des
-deux boutons sous la vidéo, Play/Pause selon P0, rewind du média sans seek de
-scène, réponse et `STOP` de feedback, nouvelle entrée à zéro, identité du nœud
-et absence de rechargement. Relever `currentTime` autour du `START` initial pour
-diagnostiquer le saut de première image. Garder ouverts les gates preload et
-cycle de vie qui ne sont pas exercés.
-
-**P4 — Clôture documentaire.** Après validation runtime et navigateur,
-compléter la spécification media-sync uniquement pour tout comportement de
-cœur nouvellement implémenté et vérifié, mettre à jour les preuves de Quiz Hunt
-et fermer les entrées correspondantes. Une vérification de démo seule ne
-certifie pas une nouvelle capacité CodPlay.
-
-**Gate d'autorisation.** Cette entrée reste `A relire` jusqu'à la décision P0.
-La demande de boutons autorise leur mise en place dans la démo après clôture
-du contrat ; elle n'autorise pas, à elle seule, une évolution de
-`packages/codplay`.
-
-## Preuves de service à compléter
-
-La spec preload est limitée aux comportements déjà couverts. Les surfaces
-suivantes existent dans le code ou les types, mais aucune preuve ciblée n'a été
-trouvée pendant cette revue :
-
-- [ ] état et compteurs d'une opération, résultat `skipped` sur cache déjà
-      prêt, timeout par ressource et valeur par défaut ;
-- [ ] `cancel()` pendant un chargement partagé, sans interrompre le propriétaire
-      restant, et annulation par `CodPlay.destroy()` ;
-- [ ] nettoyage par destruction des handles média non adoptés ou déjà
-      transférés ;
-- [ ] chemin public `registerStrategy()` et stratégies natives `audio`, `font`
-      et CSS par URL ; le test CSS existant porte seulement sur le slot CSS en
-      mémoire. Le CSS du paquet de diffusion dépend aussi du
-      [plan de scène compilée](./compiled-scene-plan.md) ;
-- [ ] seek et teardown après adoption d'une node préchargée, sans relancer son
-      chargement.
-
-## Acceptance navigateur restante
-
-- [ ] Dans Safari, confirmer qu'une vidéo préchargée garde sa première frame
-      visible avant `play()` lorsqu'elle est adoptée par le composant `media`.
-- [ ] Vérifier le parcours réel lecture, pause, seek puis reprise après
-      l'adoption du nœud préchargé, sans réassignation de `src`, appel à
-      `load()` ni lecture native redondante à la matérialisation.
-- [ ] Mettre à jour la spécification media-sync uniquement si le parcours
-      navigateur confirme un comportement supplémentaire.
-
-### Observation Safari — 2026-10-09
-
-Une nouvelle navigation de Quiz Hunt Sighty a échoué avant le montage initial.
-Un appel direct au service `createRuntimePreload()` avec la stratégie native
-`video`, l'URL Nostromo et le mode `author` a renvoyé
-`RUNTIME_PRELOAD_RESOURCES_UNAVAILABLE`, détail : `Preload timeout after
-10000ms`. Sur la même origine, l'URL répond `200` avec `video/mp4` et une
-requête Range répond `206`. Une sonde native `<video>` est restée à
-`readyState=0`, `networkState=3`, `currentSrc` vide, sans événement `canplay`
-ou `error` pendant 12 s. Deux nouvelles navigations ont reproduit l'échec sur
-`127.0.0.1` et `localhost`; un onglet antérieur garde un nœud préchargé à
-`readyState=4`.
-
-Cette preuve établit une divergence entre le handoff déjà observé sur un
-parcours préparé et une nouvelle initialisation Safari ; elle ne révèle pas
-encore la cause ni ne certifie un cache froid. Garder l'acceptation navigateur
-ouverte et déterminer pourquoi la sélection native de la ressource ne démarre
-pas. Ne pas contourner le résultat avec un mode `broadcast`, un preload HTML ou
-un changement local à la démo. Toute correction du cœur exige une décision
-acceptée dans ce plan et une autorisation explicite de l'utilisateur.
-
-La correction de dérive des médias non master reste une décision distincte à
-prendre après cette acceptation : mesurer d'abord les écarts réels et décider
-si une correction est requise, avec des garde-fous autour du lancement, de la
-pause et du seek. Elle ne s'applique pas au master et n'est pas une règle
-certifiée.
-
-## Fermeture
-
-Ce plan reste `En cours` jusqu'à fermeture des preuves de service, validation
-Safari du handoff média, revue puis acceptation ou abandon des commandes vidéo
-par broadcasts dédiés après `START`, et acceptation de l'entrée publique
-de diffusion suivie au plan d'export.
-La tranche média indépendante Elcé est réalisée ; l’agrandissement reste
-au plan Elcé dédié.
-Les suites liées aux spécifications couvrent seulement leur périmètre certifié ;
-elles ne ferment pas les gates listées ici.
+Fermer les preuves de service, l’isolation des vidéos futures et le parcours
+Safari réel avant de retirer le plan. Le raccord Elcé et ses commandes de
+sortie utilisent leurs spécifications applicatives ; une difficulté locale
+ne suffit pas à autoriser une modification du cœur partagé.

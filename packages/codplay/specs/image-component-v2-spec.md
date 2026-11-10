@@ -1,10 +1,12 @@
 # CodPlay V2 — composant image `img`
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre vérifié
 
 Cette spécification décrit le cycle vérifié des nœuds image persistants et le
-retrait de `fitMode`. Les autres critères d'acceptation de la tranche sont dans
-le [plan image/input/polygon](../plan/components-image-input-polygon-svg-plan.md).
+retrait de `fitMode`. Les transitions sont décrites séparément par la
+[spécification replace-media](./replace-media-v2-spec.md).
 
 ## Nœuds par source
 
@@ -16,8 +18,8 @@ changements.
 
 La déclaration exercée permet `src`, `alt` et des services `className` et
 `style` imbriqués sous `img`. Le test vérifie le nom de classe de l'image
-interne. Cette spec ne fixe pas ici les comportements de transition `replace`
-pour une image.
+interne. Les comportements de transition `replace` pour une image relèvent de
+la spécification replace-media.
 
 ## `fitMode` retiré
 
@@ -29,7 +31,3 @@ Le validateur d'initialisation signale `AUTHOR_IMAGE_FIT_MODE_REMOVED` si
 [`image-input-polygon.spec.ts`](../tests/runtime/components/image-input-polygon.spec.ts)
 vérifie A → B → A, l'identité du premier nœud après son retour et le diagnostic
 sur `fitMode`.
-
-Validation ciblée exécutée le 2026-09-25 avec la suite image/input/polygon :
-2 fichiers, 6 tests réussis. La tranche image n'a pas encore de validation
-navigateur dédiée ; ses autres critères restent au plan.

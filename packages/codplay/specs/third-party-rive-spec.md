@@ -1,11 +1,13 @@
 # Spécification Rive V2 — host, document et state machine
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre vérifié
 
 Le contrat ci-dessous décrit le host Rive et le composant state machine
-exercés par les tests d'intégration avec un runtime synthétique. La validation
-complète de la démo et du cycle de vie est décrite dans le
-[plan des composants tiers](../plan/2026-09-18-third-party-components-v2-plan.md).
+exercés par les tests d'intégration avec un runtime synthétique. Ce périmètre
+porte sur le document, les inputs nommés, les broadcasts et la reconstruction
+de l'artboard au retour temporel.
 
 ## Rôle
 

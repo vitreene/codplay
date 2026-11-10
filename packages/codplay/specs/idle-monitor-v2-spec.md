@@ -1,5 +1,7 @@
 # CodPlay V2 — inactivité du player
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre vérifié
 
 Cette spécification couvre la configuration du monitor d'inactivité du player,
@@ -48,7 +50,7 @@ fin de séquence et appelle le hook de scène après le nettoyage. Le test
 d'intégration vérifie qu'un appel `instance.telco.play()` reprend alors la
 lecture à `0 ms` et efface `sequenceEnded`. Il ne certifie pas les effets
 complets du redémarrage direct de `RuntimePlayer.play()` sur le journal, les
-modules et les callbacks ; ces points restent au plan Player.
+modules et les callbacks.
 
 ## Preuves
 

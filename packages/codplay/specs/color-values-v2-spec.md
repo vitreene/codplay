@@ -1,12 +1,14 @@
 # CodPlay V2 — valeurs couleur
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre vérifié
 
 Cette spécification décrit la normalisation des couleurs vers `ColorValue`,
 leur préparation et leur interpolation dans ACE, la normalisation des
-propriétés `style` déclarées lors du build et leur matérialisation HTML. Le
-passage direct des chaînes couleur à `prepareTween` et sa validation sur la
-scène scroll restent suivis dans le [plan d'acceptation couleur](../plan/color-values-plan.md).
+propriétés `style` déclarées lors du build et leur matérialisation HTML.
+L'entrée directe de chaînes couleur dans `prepareTween` est exclue du
+périmètre certifié de ce contrat de valeurs structurées.
 
 ## Valeur intermédiaire
 
@@ -48,7 +50,7 @@ sRGB en `rgba(...)` et conserve OKLCH sous la forme CSS `oklch(...)`.
 Aucune couleur par défaut n'est ajoutée globalement par ACE ou le service
 `style`. Un défaut éventuel relève du profil de la propriété ou de la scène.
 
-## Code et acceptation
+## Références d’implémentation et de preuve
 
 - Représentation et interpolation : [`interval.ts`](../src/ace/interval.ts).
 - Analyse des valeurs CSS :
@@ -60,6 +62,3 @@ Aucune couleur par défaut n'est ajoutée globalement par ACE ou le service
   et [`interval.spec.ts`](../tests/ace/interval.spec.ts).
 - Matérialisation HTML :
   [`component-materializer.spec.ts`](../tests/runtime/runner-html/component-materializer.spec.ts).
-
-Le 2026-09-25, l'exécution ciblée des frontières couleur, build, service et
-runner HTML a passé **6 fichiers et 94 tests**.

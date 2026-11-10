@@ -2,8 +2,8 @@
 
 > Status: A relire — les comportements HTML/DOM vérifiés sont dans la
 > [spécification de matérialisation](../specs/component-materialization-v2-spec.md).
-> Le plan garde une frontière d'état à confirmer, une décision de sanitation et
-> deux preuves d'acceptation manquantes.
+> Le plan garde une frontière d’état à confirmer et les preuves manquantes
+> sur le cycle actuel des représentations.
 > CodPlay version: V2 foundation
 
 Ce plan ne porte plus les contrats des composants, des services HTML, des
@@ -48,24 +48,17 @@ sur l'ensemble des templates `BaseHTMLComponent.render()`.
       `emptied`/`loadstart`, puis vérifier qu'un nouveau `src` recharge bien le
       média. Cette piste reste à relire ; aucun correctif core n'est autorisé par
       ce constat seul.
-- [ ] Décider si les templates fournis par `BaseHTMLComponent.render()` doivent
-      être filtrés avant parsing. Le texte antérieur exigeait un
-      `readAndSanitize(template)` qui valide les balises et attributs. Le chemin
-      runtime examiné affecte le markup à `template.innerHTML`, consomme les
-      marqueurs `data-part` et conserve les nœuds. Le test
-      [`template-materializer.spec.ts`](../tests/runtime/runner-html/template-materializer.spec.ts)
-      couvre le parsing et les parts, pas une politique de sanitation. Ne pas
-      certifier cette politique ni modifier le cœur avant décision.
 - [ ] Vérifier si le contrat voulu est que `render()` ne soit appelé qu'une
       fois par instance pendant toute sa durée de vie. La spécification vérifie
       l'identité des instances et leur teardown, mais pas le nombre d'appels à
       `render()`.
 
-## Décisions différées
+## Évolutions séparées
 
-- Le runtime JSX autonome et une méthode `init()` d'authoring sont hors du
-  contrat V2 foundation ; la note antérieure les reportait à V2.5. Les reprendre
-  dans un plan dédié avant toute conception ou implémentation.
+Le runtime JSX et `init()` d’authoring sont suivis dans le
+[plan V2.5](./evolutions/v2.5-plan.md#authoring-jsx-et-init).
+La décision de sanitation des templates est séparée dans les
+[évolutions de projection](./evolutions/evolution-backlog.md#autres-extensions-de-projection).
 
 ## Contrats suivis ailleurs
 
@@ -81,7 +74,7 @@ sur l'ensemble des templates `BaseHTMLComponent.render()`.
   [plan média](./media-preload-plan.md) et spécifications associées.
 - Contenu foreign et projections tierces :
   [plan foreign](./foreign-scene-component-plan.md) et
-  [plan de cibles tierces](./2026-09-18-third-party-render-target-codplay-plan.md).
+  [plan de cibles tierces](2026-09-18-third-party-components-v2-plan.md#acceptation-commune-du-pont).
 - Move, FLIP, reparent et Seek : plans
   [`runner-flip-integration-study.md`](./runner-flip-integration-study.md) et
   [`motion-live-discovery-invalidation-plan.md`](./motion-live-discovery-invalidation-plan.md).

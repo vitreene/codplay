@@ -1,5 +1,7 @@
 # CodPlay V2 — préparation et capture des bornes motion
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre vérifié
 
 Cette spécification décrit les comportements vérifiés de préparation et de
@@ -22,8 +24,7 @@ Les tests de pipeline vérifient la production de l’occurrence et son transpor
 à travers résolution et solve. Les tests du système motion vérifient la
 présentation à partir des frontières fournies sans capture naturelle par frame.
 Ils ne certifient pas l’acceptation complète des sources compilées, live et
-Seek, ni la partition des groupes au reset et au resize ; ces gates restent au
-[plan de préparation motion](../plan/motion-live-discovery-invalidation-plan.md).
+Seek, ni la partition des groupes au reset et au resize.
 
 Une présentation runner sans occurrence `move` ne capture pas de snapshot
 géométrique et ne construit pas le système ni le graphe motion. Le test runner
@@ -40,14 +41,10 @@ La présentation finale d’un Seek conserve aussi les occurrences `move` active
 le player transmet la scène précédente et `componentPhase: 'seek'` sans reclasser
 la matérialisation entière en `geometry-capture`. Les étapes intermédiaires de
 reconstruction restent des captures géométriques explicites et ne collectent
-pas d’occurrences. Cette séparation rétablit la préparation du chemin avant un
+pas d’occurrences. Cette séparation assure la préparation du chemin avant un
 Play lancé après Seek, tout en laissant aux projections le filtrage de leurs
 effets propres. Le test de facade vérifie l’overlay après Seek ; le test éditeur
-vérifie le segment et sa progression après Seek puis Play. Dans Safari, le Seek
-à 2,2 s donne une pose différente de la corde linéaire, le détour `2,2 → 4,2 →
-2,2 s` restitue la même matrice et Stop retourne à 0. Les détails de la cause
-historique et les limites sont consignés dans la
-[note d’analyse éditeur](../../editor/plan/notes/2026-10-29-editor-path-playback-analysis.md).
+vérifie le segment et sa progression après Seek puis Play.
 
 ## Frame au temps absolu
 
@@ -69,9 +66,6 @@ conserve son interpolation précédente.
 
 Les tests couvrent la pose au point cible, le transport de l’option à travers
 la capture HTML et le cas d’un enfant réparenté entre parents transformés.
-L’éditeur vérifie en Safari Play du début à la fin, Seek à mi-parcours, Stop,
-rechargement depuis SQLite et resize ; au même temps Seek et Play diffèrent de
-moins d’un degré dans la scène testée.
 
 ## Snapshots d'une frontière
 
@@ -96,10 +90,7 @@ les ancêtres au-dessus d’une racine explicite ne sont pas parcourus.
 
 Les tests `html-pose`, `layout-snapshot`, `motion-presentation-host` et
 `list-dnd-preview` vérifient ce circuit et interdisent la lecture de rectangles
-d’items. Le 28 octobre 2026, Safari MCP a rejoué la scène Editor persistée avec
-bordure et rotation de `41°` : l’écart entre les matrices avant/après la fin
-passe d’environ `24 px` à `0,0015 px`. Play après resize, Seek, Stop et
-restauration du document local ont également été exercés sans erreur console.
+d’items.
 
 ## Preuves
 
@@ -137,13 +128,9 @@ restauration du document local ont également été exercés sans erreur console
   couvrent bordures, padding, pivot, échelle, parent/enfant, scroll et ancrage
   décalé sans mesure de rectangle des items.
 
-Le 2026-09-26, les suites ciblées ont passé cinq fichiers et 50 tests. Le même
-groupe de validation comprend les tests de dépendance à la target suivis dans
-la [spécification dédiée](./move-target-dependency-v2-spec.md).
-
 ## Limites
 
 La matrice complète des transitions locales et reparent, du reset, du resize,
-de la persistance, du lifecycle et de la destruction reste au
-[plan motion](../plan/motion-live-discovery-invalidation-plan.md) et au
-[plan runner HTML](../plan/runner-flip-integration-study.md).
+de la persistance, du lifecycle et de la destruction est exclue du périmètre
+certifié de ce document. Les garanties portent sur les frontières et cas
+décrits ci-dessus.

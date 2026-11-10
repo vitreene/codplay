@@ -1,11 +1,13 @@
 # CodPlay V2 — capture continue
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre vérifié
 
 Cette spécification décrit le cycle source-agnostique, le tracking live, les
-sorties de fin et le routage par visibilité implémentés et vérifiés. La
-validation navigateur Seek S6 qui reste ouverte est suivie dans le
-[plan S6](../plan/drag-capture-list-s6-validation-plan.md).
+sorties de fin et le routage par visibilité. Le parcours DnD HTML et les limites
+de son intégration sont décrits dans la
+[spécification DnD/list](./list-dnd-v2-spec.md).
 
 Cette spécification définit le cycle de capture V2 indépendant de sa source.
 Elle distingue les samples éphémères, les actions live et les événements de
@@ -170,12 +172,3 @@ source-agnostiques et leurs portées. Le test d’intégration scroll avec le vr
 [`HtmlPlayerRunner`](../../authoring/component-v2/tests/scroll-container-player-integration.spec.ts)
 vérifie le passage du node matérialisé au circuit, au contrôleur et au journal,
 y compris seek et teardown.
-
-Le 2026-09-26, la suite CodPlay (108 fichiers, 710 tests) et la suite
-`component-v2` (12 fichiers, 47 tests), les typechecks CodPlay,
-`component-v2` et démos V2, ainsi que le build des démos V2 ont réussi. Les
-validations source-agnostiques et l’intégration du circuit source sont
-couvertes par ces tests. L’utilisateur a confirmé le 2026-09-26 le parcours
-navigateur du runtime de capture CodPlay exercé avec la fixture `stroke-path`,
-ce qui clôt S5. Seule l’acceptance Seek navigateur S6 reste ouverte dans son
-plan dédié.

@@ -225,7 +225,7 @@ Les vidéos Elcé utilisent actuellement le
 Leur temps n’est donc pas la durée de la scène. Le démarrage autonome,
 l’interruption et les répétitions DGS demanderaient leur propre acceptation
 sur le circuit média existant. Si « flux vidéo » désigne un direct, la
-[décision média correspondante](../../../codplay/plan/media-preload-plan.md#décision-acceptée-application-non-planifiée--source-média-en-direct)
+[décision média correspondante](../../../codplay/plan/evolutions/evolution-backlog.md#sources-média-en-direct)
 reste acceptée mais non appliquée. Une vidéo enregistrée ne certifie pas ce cas.
 De même, le callback `schedule` du
 [plan Player](../../../codplay/plan/player-engine-plan.md) ne constitue pas un

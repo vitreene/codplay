@@ -1,5 +1,7 @@
 # CodPlay V2 — pipeline événementiel
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre vérifié
 
 Cette spécification décrit le dispatch runtime des événements, le pipeline
@@ -80,9 +82,8 @@ exécutés dans l’ordre déclaré. Leurs événements immédiats, mises à jou
 et avertissements restent séparés dans le résultat du strap ; une référence
 manquante ou une exception produit une issue associée au strap.
 
-La poursuite des straps suivants après une exception n'est pas certifiée par les
-tests actuels ; cette frontière reste au
-[plan d'exécution des straps](../plan/strap-execution-plan.md).
+La poursuite des straps suivants après une exception est exclue du périmètre
+certifié de ce document.
 
 L’événement source est ajouté une fois au journal avant l’exécution des règles.
 Les événements immédiats d’un strap sont ajoutés une fois à leur track, puis
@@ -133,10 +134,3 @@ son adresse à l’injection ; elle ne l’encode pas dans `data`.
   [`position-demo.spec.ts`](../tests/facade/position-demo.spec.ts) et
   [`sighty-demo4.spec.ts`](../tests/facade/sighty-demo4.spec.ts) couvrent les
   règles de portée et d’observation employées par leurs parcours respectifs.
-
-Validation ciblée exécutée le 2026-09-26 depuis `packages/codplay` :
-
-```text
-node ../../node_modules/vitest/vitest.mjs run tests/runtime/player/pipeline.spec.ts
-1 fichier, 31 tests réussis
-```

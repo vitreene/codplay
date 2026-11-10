@@ -1,5 +1,7 @@
 # CodPlay V2 — remplacement média
 
+> Version de référence : CodPlay V2 — 2026-11-10.
+
 ## Périmètre vérifié
 
 Cette spécification fixe la présentation transitoire des images et vidéos par
@@ -110,10 +112,6 @@ précédent.
   attentes ; une frame libérée ensuite ne recrée pas la présentation.
 - Les tests runtime exercent les profils slot et JSON sur les images et vidéos,
   notamment le masque par défaut cercle, l'étoile et un chemin auteur libre.
-- La revue visuelle a confirmé que les images conservent leur géométrie pendant
-  `cells`, que la première transition reprend après la disponibilité de la
-  nouvelle frame, et que les transitions vidéo sont fluides après le preload.
-  L'utilisateur a validé ces parcours dans les démos CodPlay et Sighty.
 
 ## Preuves
 
@@ -125,7 +123,3 @@ précédent.
   `star` et auteur, l'absence de canvas par cellule, le resize des grilles image
   et vidéo à `150 ms`, l'interruption A→B→C, le retry asynchrone à position
   player constante et le `currentTime` de la copie vidéo sortante.
-- La suite CodPlay complète compte **913 tests réussis** et cinq échecs FLIP
-  connus, consignés hors du périmètre replace. Le typecheck CodPlay, le
-  typecheck V2 et le build des démos passent. La page F Sighty valide aussi la
-  réutilisation de la même grille par `replace-slot`.
