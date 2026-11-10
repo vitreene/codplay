@@ -1,7 +1,7 @@
 import { assertAvatarContent } from '../../../../resources/bdcs/avatar/domain/avatar-service'
 import { AVATAR_PRESET_ID } from '../../../../resources/bdcs/avatar/avatar-config'
 import { BDC_TYPE, DEFAULT_PRESET_ID, PAGE_TYPE } from '../../learning-definition'
-import { CARD_LAYOUT_IDS } from '../../../../resources/bdcs/card/card-config'
+import { CARD_LAYOUT_IDS, CARD_PRESET_ID } from '../../../../resources/bdcs/card/card-config'
 import { CHAPTER_TYPE, MAX_SCENARIO_CHAPTER_DEPTH, SCENARIO_ENTRY_KIND } from '../../organization/learning-organization-config'
 import { STATISTICAL_GRAPH_LAYOUT_IDS } from '../../../../resources/bdcs/statistical-graph/statistical-graph-config'
 import type { CardLayoutId } from '../../../../resources/bdcs/card/card-config'
@@ -238,6 +238,7 @@ export function assertDocumentInvariants(document: LearningDocument, resources: 
           fail(`La page de la Carte ${bdc.id} est absente.`)
         }
         if (!CARD_LAYOUT_IDS.includes(bdc.presetId as CardLayoutId)) fail(`Layout de carte inconnu : ${bdc.presetId}`)
+        if (bdc.presetId === CARD_PRESET_ID.LIST && bdc.card.list === null) fail(`La Carte Liste ${bdc.id} ne contient pas son sous-module.`)
         resources.cardService.assertValid(bdc.card)
         if (bdc.card.mediaId !== null) assertCardMediaAllowed(document, bdc.card.mediaId)
         break

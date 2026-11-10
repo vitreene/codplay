@@ -1,4 +1,4 @@
-import { Activity, ChevronDown, ChevronUp, GripVertical, Library, Plus, RectangleHorizontal, Trash2 } from 'lucide-static'
+import { Activity, ChevronDown, ChevronUp, GripVertical, Library, List, Plus, RectangleHorizontal, Trash2 } from 'lucide-static'
 import {
   CAROUSEL_ASPECT_RATIO_OPTIONS,
   CAROUSEL_CONFIG,
@@ -313,6 +313,20 @@ function renderCarouselViewActions(
           >
             Carte
           </span>
+        </button>
+        <button
+          id={`elce-carousel-list-add-${carouselBdcId}`}
+          className="elce-carousel-editor__view-add elce-add-content-action"
+          type="button"
+          aria-label="Ajouter une carte Liste"
+          title="Ajouter une carte Liste"
+          mix={on<HTMLButtonElement, 'click'>('click', () => {
+            state.updateAddViewMenuOpen(false)
+            actions.addList()
+          })}
+        >
+          {renderLucideIcon(List, `elce-carousel-list-add-icon-${carouselBdcId}`)}
+          <span id={`elce-carousel-list-add-label-${carouselBdcId}`} className="elce-add-content-action__label">Liste</span>
         </button>
         <button
           id={`elce-carousel-graph-add-${carouselBdcId}`}

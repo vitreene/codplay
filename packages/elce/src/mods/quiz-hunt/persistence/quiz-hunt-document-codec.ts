@@ -4,6 +4,8 @@ import { normalizeQuizHuntExtraTrigger } from '../document/quiz-hunt-extra-trigg
 import { normalizeQuizHuntFinalColors } from '../document/quiz-hunt-final-color.ts'
 import { ElceQuestionService } from '../../../resources/bdcs/question/domain/question-service'
 import { assertContentPlacementInvariants } from '../../../core/document/content-placement-service'
+import { CARD_PRESET_ID } from '../../../resources/bdcs/card/card-config'
+import { ListService } from '../../../resources/list/domain/list-service'
 
 type RecordValue = Record<string, unknown>
 
@@ -63,7 +65,15 @@ export function readQuizHuntDocument(value: unknown): QuizHuntDocument {
   })
   const questions = new ElceQuestionService()
   const bdcs = data.bdcs as unknown[]
-  bdcs.forEach((value) => {
+  data.bdcs = bdcs.map((value) => {
+    const bdc = record(value)
+    if (bdc.type !== 'card' || typeof bdc.card !== 'object' || bdc.card === null || Array.isArray(bdc.card)) return bdc
+    const card = record(bdc.card)
+    return card.list === undefined ? { ...bdc, card: { ...card, list: null } } : bdc
+  })
+  const normalizedBdcs = data.bdcs as unknown[]
+  const lists = new ListService()
+  normalizedBdcs.forEach((value) => {
     const bdc = record(value)
     requireStrings(bdc, ['id', 'type', 'presetId'])
     if (bdc.question !== null) {
@@ -81,6 +91,11 @@ export function readQuizHuntDocument(value: unknown): QuizHuntDocument {
       const section = record(bdc.section)
       requireStrings(section, ['markup'])
       if (record(section.content).type !== 'doc') throw new Error('Texte Section invalide.')
+    }
+    if (bdc.type === 'card' && typeof bdc.card === 'object' && bdc.card !== null && !Array.isArray(bdc.card)) {
+      const card = record(bdc.card)
+      if (bdc.presetId === CARD_PRESET_ID.LIST && card.list === null) throw new Error('Une Carte Liste doit contenir son sous-module.')
+      if (card.list !== null) lists.assertValid(card.list)
     }
   })
   const document = normalizeQuizHuntResultMessages(

@@ -1,4 +1,6 @@
-/** Player style rules owned by this reading resource. */
+import { LIST_PLAYER_STYLE_RULES } from '../../../list/reading/list-player-style'
+
+/** Player style rules composed by the shared Card reading resource. */
 export const CARD_PLAYER_STYLE_RULES = [
   [53, `
 
@@ -150,4 +152,41 @@ export const CARD_PLAYER_STYLE_RULES = [
   text-align: center;
   text-wrap: balance;
 }`],
+  ...LIST_PLAYER_STYLE_RULES,
+  [161, `
+
+.elce-card--list {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.elce-card-list__content {
+  display: flex;
+  min-width: 0;
+  min-height: 100%;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.4em;
+}
+
+.elce-card--list .elce-card__title,
+.elce-card--list .elce-card__description,
+.elce-card--list .elce-card__message,
+.elce-card--list .elce-card__caption,
+.elce-card--list footer {
+  margin: 0;
+}
+
+.elce-card--list .elce-card__title {
+  font-size: max(1.5rem, 4cqi);
+}
+
+.elce-card--list .elce-list-module {
+  font-size: max(1rem, var(--elce-reading-font-size-cqi));
+}
+`],
 ] as const

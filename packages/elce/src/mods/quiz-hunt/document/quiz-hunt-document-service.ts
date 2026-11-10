@@ -302,6 +302,8 @@ export class QuizHuntDocumentService {
 
   /** Changes one shared Card layout without replacing its authored fields. */
   public setCardLayout(document: QuizHuntDocument, bdcId: string, layoutId: CardLayoutId): QuizHuntDocument {
+    const target = document.bdcs.find((bdc) => bdc.id === bdcId && bdc.type === CARD_BDC_TYPE)
+    if (layoutId === CARD_PRESET_ID.LIST && target?.card?.list == null) return document
     return {
       ...document,
       bdcs: document.bdcs.map((bdc) => bdc.id === bdcId && bdc.type === CARD_BDC_TYPE

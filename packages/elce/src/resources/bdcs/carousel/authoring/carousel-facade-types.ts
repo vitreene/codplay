@@ -24,6 +24,7 @@ export interface ElceCarouselFacadeOptions {
 export interface ElceCarouselEditorActions extends ElceCardEditorActions {
   readonly selectCard: (bdcId: string) => void
   readonly addCard: () => void
+  readonly addList: () => void
   readonly addStatisticalGraph: () => void
   readonly removeCard: (bdcId: string, selectedBdcId: string | null) => void
   readonly removeStatisticalGraph: (bdcId: string, selectedBdcId: string | null) => void

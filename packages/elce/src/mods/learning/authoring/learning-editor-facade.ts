@@ -18,6 +18,8 @@ import {
 import { createCarouselBdcCommand } from '../../../resources/bdcs/carousel/authoring/carousel-command-factory'
 import { createSectionBdcCommand } from '../../../resources/bdcs/section/authoring/section-command-factory'
 import { createStandaloneCardBdcCommand } from '../../../resources/bdcs/card/authoring/card-command-factory'
+import { CARD_PRESET_ID } from '../../../resources/bdcs/card/card-config'
+import { ListService } from '../../../resources/list/domain/list-service'
 import {
   createStatisticalGraphBdcCommand,
   createStatisticalGraphCarouselBdcCommand,
@@ -266,6 +268,12 @@ export class LearningEditorFacade {
   /** Creates a standalone Card BDC on the requested page. */
   public createStandaloneCard(pageId: PageId): void {
     this.apply(createStandaloneCardBdcCommand(createStableId('bdc-card'), pageId))
+  }
+
+  /** Creates a standalone Card that hosts a new reusable List module. */
+  public createStandaloneListCard(pageId: PageId): void {
+    const list = new ListService().createDefault(createStableId('list-row'))
+    this.apply(createStandaloneCardBdcCommand(createStableId('bdc-card'), pageId, CARD_PRESET_ID.LIST, undefined, list))
   }
 
   /** Creates a Statistical Graph BDC at its ordered page position. */

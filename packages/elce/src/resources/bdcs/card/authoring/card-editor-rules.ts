@@ -11,6 +11,8 @@ export function cardToolbarClassName(presetId: string): string {
   switch (presetId) {
     case CARD_PRESET_ID.TEXT_SHORT:
       return `${baseClassName} ${baseClassName}--text-only`
+    case CARD_PRESET_ID.LIST:
+      return `${baseClassName} ${baseClassName}--text-only`
     case CARD_PRESET_ID.TEXT_IMAGE:
       return `${baseClassName} ${baseClassName}--image-position`
     default:
@@ -49,6 +51,7 @@ export function cardLayoutAcceptsMedia(layoutId: CardLayoutId, mediaType: MediaT
     case CARD_PRESET_ID.TEXT_IMAGE:
       return mediaType === MEDIA_TYPE.IMAGE
     case CARD_PRESET_ID.TEXT_SHORT:
+    case CARD_PRESET_ID.LIST:
       return false
   }
 }
