@@ -107,14 +107,17 @@ Les écritures d’un projet existant (`PATCH`, `DELETE`, `PUT document`, `PUT
 media`) et la libération du droit présentent la paire
 `X-Elce-Page-Id`/`X-Elce-Edit-Grant`. SQLite garde une seule paire par projet.
 L’acquisition d’une autre page renvoie `409 edit_access_occupied` tant que le
-bail est actif ; un ancien droit ne peut plus écrire après libération,
-expiration ou réacquisition. Le contrôle du droit et la mutation documentaire
-se font dans la même transaction. Le `PUT` média revérifie la paire dans la
+bail est actif. Après expiration, une autre page peut le reprendre ; jusque-là,
+la paire actuelle reste valide et peut renouveler le bail ou effectuer une
+écriture. L’expiration seule ne révoque pas le détenteur. La libération, une
+reprise par une autre page ou `force: true` remplace le droit ; l’ancien droit
+ne peut alors plus écrire. Le contrôle du droit et la mutation documentaire se
+font dans la même transaction. Le `PUT` média revérifie la paire dans la
 transaction qui publie sa clé de fichier ; un fichier refusé est retiré. La
 création d’un nouveau projet reste libre, pour permettre une copie indépendante.
-Une acquisition après expiration ou avec `force: true` retourne un droit neuf
-et `recovered: true`; l’éditeur relit alors la dernière révision confirmée
-avant d’activer ses commandes.
+Une reprise après expiration ou avec `force: true` retourne un droit neuf et
+`recovered: true`; l’éditeur relit alors la dernière révision confirmée avant
+d’activer ses commandes.
 
 ## Erreurs
 
@@ -208,9 +211,12 @@ La migration `20261011180000_add_project_edit_access` conserve le détenteur et
 l’identifiant du droit dans `projects`, y compris après réouverture de SQLite.
 La migration `20261012120000_add_project_edit_lease` ajoute son échéance. Le
 serveur accorde un bail de 12 secondes ; la page détentrice le renouvelle toutes
-les 3 secondes. Après expiration, toute autre page peut acquérir un droit neuf.
-`force: true` remplace aussi immédiatement un bail encore actif. Les requêtes
-présentant l’ancien droit restent refusées.
+les 3 secondes. Après expiration, une autre page peut acquérir un droit neuf ;
+tant qu’elle ne l’a pas fait, le titulaire courant peut encore renouveler et
+écrire. La reprise et le renouvellement sont sérialisés par les transactions
+SQLite : le premier validé décide si l’ancien droit reste courant. `force: true`
+remplace aussi immédiatement un bail encore actif. Les requêtes présentant
+l’ancien droit sont refusées après son remplacement.
 
 La migration `20261013120000_store_statistical_graph_json` convertit les lignes
 relationnelles des Graphes existants en `StatisticalGraphContent` JSON puis
@@ -219,12 +225,25 @@ relationnelles. Les lignes Question/Réponses ne sont pas touchées.
 
 ### Base commune aux mods Learning et Quiz Hunt
 
-`openElceProjectDatabase()` charge les migrations SQLite des deux mods, les
-ordonne par identifiant puis les applique à une seule base. `projects.mod_key`
-sépare les catalogues (`learning` par défaut, `quiz-hunt` pour Quiz Hunt) sans
-ajouter d’identité de mod au document. Chaque adaptateur de persistance filtre
-ses lectures et écritures par cette clé et garde ses propres transactions,
+[`openElceProjectDatabase()`](../src/server/elce-project-database.ts) charge
+l’historique SQL partagé conservé sous
+[`src/server/sqlite/migrations/legacy-learning/`](../src/server/sqlite/migrations/legacy-learning/)
+et les migrations propres aux mods (actuellement Quiz Hunt), les ordonne par
+identifiant puis les applique à une seule base. Les migrations historiques
+gardent leurs identifiants et leur contenu SQL. `projects.mod_key` sépare les
+catalogues (`learning` par défaut, `quiz-hunt` pour Quiz Hunt) sans ajouter
+d’identité de mod au document. Chaque adaptateur de persistance filtre ses
+lectures et écritures par cette clé et garde ses propres transactions,
 organisation et réglages.
+
+Les opérations SQLite d’acquisition, de renouvellement, de vérification et de
+libération du droit sont partagées dans
+[`sqlite-project-edit-access.ts`](../src/core/server/projects/sqlite-project-edit-access.ts).
+Chaque dépôt fournit explicitement son mod et conserve la transaction qui
+encadre les mutations. La publication transactionnelle de la référence média
+est partagée dans
+[`sqlite-media-publication.ts`](../src/core/server/media/sqlite-media-publication.ts) ;
+elle revérifie le droit courant avant de publier la clé de fichier.
 
 Learning et Quiz Hunt enregistrent les identités, placements et contenus des
 BDC communs dans les mêmes tables relationnelles. Les requêtes d’écriture et

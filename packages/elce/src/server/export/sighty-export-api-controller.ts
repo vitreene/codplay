@@ -1,7 +1,7 @@
 import { LearningDocument } from '../../mods/learning/document/learning-document'
 import type { LearningDocumentData } from '../../mods/learning/document/learning-document-types'
 import type { MediaId } from '../../core/document/content-document-types'
-import { exportElceSightyPackage } from '../../export/elce-scenario-exporter'
+import { exportLearningSightyPackage } from '../../mods/learning/persistence/server/learning-scenario-exporter'
 
 const DOCUMENT_FIELD = 'document'
 const MEDIA_FIELD_PREFIX = 'media:'
@@ -16,7 +16,7 @@ export class SightyExportApiController {
   private readonly exportPackage: ElceSightyPackageExporter
 
   /** Creates the endpoint over the existing Elcé-to-Sighty package adapter. */
-  public constructor(exportPackage: ElceSightyPackageExporter = exportElceSightyPackage) {
+  public constructor(exportPackage: ElceSightyPackageExporter = exportLearningSightyPackage) {
     this.exportPackage = exportPackage
   }
 

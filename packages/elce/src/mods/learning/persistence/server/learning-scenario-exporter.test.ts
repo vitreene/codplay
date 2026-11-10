@@ -3,18 +3,18 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { strFromU8, unzipSync } from 'fflate'
 import { describe, expect, it, vi } from 'vitest'
-import { BDC_TYPE, DEFAULT_PRESET_ID } from '../mods/learning/learning-definition'
-import { ELCE_SCENARIO, ELCE_SCENARIO_HANDLERS } from '../mods/learning/reading/learning-reading-events'
-import { PAGE_LOCATION } from '../mods/learning/organization/learning-page-placement'
+import { BDC_TYPE, DEFAULT_PRESET_ID } from '../../../../mods/learning/learning-definition'
+import { ELCE_SCENARIO, ELCE_SCENARIO_HANDLERS } from '../../../../mods/learning/reading/learning-reading-events'
+import { PAGE_LOCATION } from '../../../../mods/learning/organization/learning-page-placement'
 import {
   applyDocumentCommand,
   createCarouselBdcCommand,
   createPageCommand,
   createQuestionBdcCommand,
-} from '../domain/commands/document-commands'
-import { learningDocumentService } from '../mods/learning/document/learning-document-service'
-import { createElcePlayerScenario } from '../mods/learning/reading/learning-player'
-import { exportElceSightyPackage } from './elce-scenario-exporter'
+} from '../../../../domain/commands/document-commands'
+import { learningDocumentService } from '../../document/learning-document-service'
+import { createElcePlayerScenario } from '../../reading/learning-player'
+import { exportLearningSightyPackage } from './learning-scenario-exporter'
 
 describe('Elcé Sighty package export', () => {
   it('exports the preview scenario as an autonomous ZIP with intact scene packages and media', async () => {
@@ -85,7 +85,7 @@ describe('Elcé Sighty package export', () => {
     let zipBytes: Uint8Array
     try {
       vi.stubEnv('INIT_CWD', externalWorkingDirectory)
-      zipBytes = await exportElceSightyPackage(document.toJSON(), new Map([
+      zipBytes = await exportLearningSightyPackage(document.toJSON(), new Map([
         ['media-export-fixture', imageBytes],
       ]))
     } finally {
@@ -253,7 +253,7 @@ describe('Elcé Sighty package export', () => {
       mediaId: 'media-required',
     })
 
-    await expect(exportElceSightyPackage(document.toJSON(), new Map()))
+    await expect(exportLearningSightyPackage(document.toJSON(), new Map()))
       .rejects.toThrow('Le média « required.svg » est absent de l’export.')
   })
 })

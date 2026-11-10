@@ -20,10 +20,10 @@ import type {
   ElceAnchorExtensionOptions,
   ElceAnchorTransaction,
 } from './anchor-types'
-import { anchorEditorBlockPositionFor, anchorEditorReservationFor, anchorNameFor, statisticalGraphAnchorPaddingBottom } from '../../../domain/anchor/anchor-position'
+import { anchorEditorBlockPositionFor, anchorEditorReservationFor, anchorNameFor, statisticalGraphAnchorPaddingBottom } from '../domain/anchor-position'
 import { ElceAnchorRatioService } from '../domain/anchor-ratio-service'
 import { ElceStatisticalGraphSceneBuilder } from '../../bdcs/statistical-graph/reading/statistical-graph-scene-builder'
-import { plainTextFromValue } from '../../../mods/learning/inline-text/learning-inline-text-value'
+import { authoredTextToPlainText } from '../../../core/document/rich-text-utils'
 
 export const ELCE_ANCHOR_TRANSACTION_META = 'elceAnchorAction'
 
@@ -50,6 +50,7 @@ function renderAnchorCardPreview(
   preview: ElceAnchorCardPreview,
   bdcId: string,
   presetBuilder: ElceAnchorExtensionOptions['presetBuilder'],
+  toPlainText: NonNullable<ElceAnchorExtensionOptions['toPlainText']>,
   onPhotoImage: (image: HTMLImageElement) => void,
 ): void {
   if (preview.kind === 'statistical-graph') {
@@ -66,12 +67,12 @@ function renderAnchorCardPreview(
   const layout = presetBuilder.build(preview.layoutId, rootId, partPrefix)
   let markup = layout.markup
   const textFields: Readonly<Record<string, string>> = {
-    overline: plainTextFromValue(preview.content.overline),
-    title: plainTextFromValue(preview.content.title),
-    description: plainTextFromValue(preview.content.description),
-    message: plainTextFromValue(preview.content.message),
-    note: plainTextFromValue(preview.content.note),
-    caption: plainTextFromValue(preview.content.caption),
+    overline: toPlainText(preview.content.overline),
+    title: toPlainText(preview.content.title),
+    description: toPlainText(preview.content.description),
+    message: toPlainText(preview.content.message),
+    note: toPlainText(preview.content.note),
+    caption: toPlainText(preview.content.caption),
   }
   for (const zone of preset.zones) {
     const target = layout.zonePartIds[zone.id]
@@ -289,7 +290,7 @@ const ElceAnchorNode = Node.create<ElceAnchorExtensionRuntimeOptions>({
         if (card === null) return
         const presetBuilder = this.options.presetBuilder
         if (presetBuilder === undefined) throw new Error('Le constructeur de presets doit être fourni à l’éditeur d’ancre.')
-        renderAnchorCardPreview(bdc, card, currentBdcId, presetBuilder, (image) => {
+        renderAnchorCardPreview(bdc, card, currentBdcId, presetBuilder, this.options.toPlainText ?? authoredTextToPlainText, (image) => {
           image.addEventListener('load', () => {
             const latestCard = this.options.resolveCard?.(String(currentNode.attrs.bdcId ?? ''))
             if (latestCard?.layoutId === CARD_PRESET_ID.PHOTO) {

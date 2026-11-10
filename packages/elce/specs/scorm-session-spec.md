@@ -274,7 +274,7 @@ résultats dans un LMS réel qui persiste les valeurs CMI.
   `ITEM-*` dans `adl.nav.request`. Il relance enfin un SCO déjà complété,
   vérifie le retour à sa page suspendue et s’assure que le warning
   `SIGHTY_ACCESS_REDIRECT_LOOP` ne réapparaît pas.
-- [`elce-scenario-exporter.test.ts`](../src/export/elce-scenario-exporter.test.ts)
+- [`learning-scenario-exporter.test.ts`](../src/mods/learning/persistence/server/learning-scenario-exporter.test.ts)
   exporte un scénario à plusieurs chapitres par le CLI Sighty et vérifie que
   `scenario.mjs` contient le handler de navigation inter-SCO dans
   `scenario.actions`.

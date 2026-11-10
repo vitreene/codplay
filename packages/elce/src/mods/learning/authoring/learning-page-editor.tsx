@@ -32,6 +32,7 @@ import { mediaTypeFromMimeType } from '../../../domain/media/media-resource-serv
 import { renderRemixStatisticalGraphEditor } from '../../../resources/bdcs/statistical-graph/authoring/remix-statistical-graph-editor'
 import { renderAppearanceTrigger } from '../../../core/authoring/appearance-trigger'
 import { renderPageEditorView } from '../../../core/authoring/page/page-editor-view'
+import { installOutsideMenuDismissal } from '../../../core/authoring/menus/outside-menu-dismissal'
 import { createLearningTextFieldFeature } from '../inline-text/learning-inline-text-field'
 
 interface LearningPageEditorProps {
@@ -67,15 +68,6 @@ export function LearningPageEditor(handle: Handle<LearningPageEditorProps>) {
     if (!handle.signal.aborted) void handle.update()
   }
 
-  /** Closes the page's add-content menu when a pointer press lands outside it. */
-  const dismissAddContentMenuOnOutsidePointerDown = (event: PointerEvent): void => {
-    if (!isAddContentMenuOpen) return
-    const pageId = current.view.selectedPage?.id
-    const addContainer = pageId === undefined ? null : document.getElementById(`elce-page-bdc-add-${pageId}`)
-    if (event.target instanceof Node && addContainer?.contains(event.target)) return
-    updateAddContentMenuOpen(false)
-  }
-
   const updateDropTarget = (targetId: string | null): void => {
     if (dropTargetId === targetId) return
     dropTargetId = targetId
@@ -101,7 +93,14 @@ export function LearningPageEditor(handle: Handle<LearningPageEditorProps>) {
   }
 
   handle.queueTask(() => {
-    document.addEventListener('pointerdown', dismissAddContentMenuOnOutsidePointerDown, true)
+    const removeAddContentMenuDismissal = installOutsideMenuDismissal({
+      getRoot: () => {
+        const pageId = current.view.selectedPage?.id
+        return pageId === undefined ? null : document.getElementById(`elce-page-bdc-add-${pageId}`)
+      },
+      isOpen: () => isAddContentMenuOpen,
+      onDismiss: () => updateAddContentMenuOpen(false),
+    })
     const subscription = controller.subscribe((snapshot) => {
       const nextView = actions.authoring.selectEditorViewModel(snapshot)
       if (editorViewModelEqual(current.view, nextView)) return
@@ -124,7 +123,7 @@ export function LearningPageEditor(handle: Handle<LearningPageEditorProps>) {
     })
     handle.signal.addEventListener('abort', () => {
       subscription.unsubscribe()
-      document.removeEventListener('pointerdown', dismissAddContentMenuOnOutsidePointerDown, true)
+      removeAddContentMenuDismissal()
       sectionSession.destroy()
       if (trashAnimationTimer !== undefined) clearTimeout(trashAnimationTimer)
     }, { once: true })
@@ -432,7 +431,7 @@ function renderBdcEditor(
         media,
         mediaType: media === null ? null : mediaTypeFromMimeType(media.mimeType),
         mediaSource: mediaId === null ? null : view.mediaSources[mediaId] ?? null,
-        actions: actions.createQuestionEditorActions(bdc.id, bdc.question),
+        actions: actions.createQuestionEditorActions(bdc.id),
         canDelete: false,
         textFieldAttributes: LEARNING_PROFILE_TEXT_FIELD_ATTRIBUTES,
         textFieldFeature,
@@ -480,7 +479,7 @@ function renderBdcEditor(
       return renderRemixCardEditor(
         bdc,
         view.mediaById,
-        actions.createCardEditorActions(view.documentModel.bdcs),
+        actions.createCardEditorActions(),
         undefined,
         state.onOpenAppearanceTarget,
         LEARNING_PROFILE_TEXT_FIELD_ATTRIBUTES,
@@ -641,7 +640,7 @@ function deletePageBdc(bdc: LearningBdc, state: PageEditorRenderState): boolean 
       return true
     case BDC_TYPE.QUESTION:
       if (bdc.question == null) return false
-      state.actions.createQuestionEditorActions(bdc.id, bdc.question).deleteQuestion()
+      state.actions.createQuestionEditorActions(bdc.id).deleteQuestion()
       return true
     case BDC_TYPE.EVALUATION_RESULT:
       if (bdc.evaluationResult == null) return false

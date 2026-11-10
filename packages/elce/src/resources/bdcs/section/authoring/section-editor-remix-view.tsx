@@ -30,7 +30,7 @@ import type { SectionEditorSession } from './section-editor-session'
 import type { SectionSelection } from './section-selection-types'
 import type { SectionTextFeature } from './section-editor-tiptap-adapter'
 import { renderRemixStatisticalGraphEditor } from '../../statistical-graph/authoring/remix-statistical-graph-editor'
-import { anchorNameFor } from '../../../../domain/anchor/anchor-position'
+import { anchorNameFor } from '../../../anchoring/domain/anchor-position'
 import { renderAppearanceTrigger } from '../../../../core/authoring/appearance-trigger'
 import { authoredTextToPlainText } from '../../../../core/document/rich-text-utils'
 import { DOT_LEADER_STYLE_SHEET } from '../dot-leader/dot-leader-style'
@@ -46,7 +46,7 @@ export interface SectionEditorData {
 }
 
 export interface SectionEditorActions {
-  readonly createCardEditorActions: (bdcs: readonly ResourceBdc[]) => ElceCardEditorActions
+  readonly createCardEditorActions: () => ElceCardEditorActions
   readonly createStatisticalGraphEditorActions: (
     bdcId: string,
     content: NonNullable<ResourceBdc['statisticalGraph']>,
@@ -100,7 +100,7 @@ export function renderRemixSectionEditor(
   const editingAnchorPartId = editingAnchorBdc === undefined
     ? null
     : findAnchorPartId(section.content.content, editingAnchorBdc.id)
-  const cardActions = actions.createCardEditorActions(data.document.bdcs)
+  const cardActions = actions.createCardEditorActions()
   const toolbarState = state.session.toolbarStates.get(bdc.id) ?? EMPTY_SECTION_TOOLBAR_STATE
   const handle = state.handle
   const current = state.current
@@ -153,6 +153,7 @@ export function renderRemixSectionEditor(
           textFeature: state.textFeature,
           anchorOptions: {
             presetBuilder: state.presetBuilder,
+            toPlainText: state.textFieldFeature.toPlainText,
             createFileDropTarget: (file) => actions.createSectionFileDropTarget(file, current.data.selectedPageId ?? page.id),
             onCardMediaFileDrop: (targetBdcId, file) => cardActions.importMediaFile(targetBdcId, file),
             createCatalogDropTarget: (reference) => actions.createSectionCatalogDropTarget(

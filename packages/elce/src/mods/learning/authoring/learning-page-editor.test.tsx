@@ -92,6 +92,18 @@ describe('Remix production page editor', () => {
     expect(rendered.$(`#elce-page-bdc-add-menu-${firstPage.id}`)?.hidden).toBe(true)
     await actOnRemix(rendered, () => rendered.$(`#elce-page-bdc-add-toggle-${firstPage.id}`)?.click())
     expect(rendered.$(`#elce-page-bdc-add-menu-${firstPage.id}`)?.hidden).toBe(false)
+    await actOnRemix(rendered, () => {
+      rendered.$(`#elce-carousel-view-add-toggle-${carouselId}`)?.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+      rendered.$(`#elce-carousel-view-add-toggle-${carouselId}`)?.click()
+    })
+    expect(rendered.$(`#elce-page-bdc-add-menu-${firstPage.id}`)?.hidden).toBe(true)
+    expect(rendered.$(`#elce-carousel-view-add-menu-${carouselId}`)?.hidden).toBe(false)
+    await actOnRemix(rendered, () => {
+      titleRow?.dispatchEvent(new Event('click', { bubbles: true, cancelable: true }))
+    })
+    expect(rendered.$(`#elce-carousel-view-add-menu-${carouselId}`)?.hidden).toBe(true)
+    await actOnRemix(rendered, () => rendered.$(`#elce-page-bdc-add-toggle-${firstPage.id}`)?.click())
+    expect(rendered.$(`#elce-page-bdc-add-menu-${firstPage.id}`)?.hidden).toBe(false)
     expect(rendered.$('#elce-carousel-create')).not.toBeNull()
     expect(pageBdcOrder(rendered)).toEqual(initialBdcOrder)
     await actOnRemix(rendered, () => rendered.$('#elce-card-create')?.click())

@@ -10,3 +10,5 @@ export type QuestionCommand =
   | Readonly<{ type: 'bdc.question.media.set'; bdcId: BdcId; mediaId: MediaId | null }>
   | Readonly<{ type: 'bdc.question.media.attach'; bdcId: BdcId; media: MediaMetadata }>
   | Readonly<{ type: 'bdc.question.delete'; bdcId: BdcId }>
+
+export type QuestionEditCommand = Exclude<QuestionCommand, Extract<QuestionCommand, { type: 'bdc.create' }>>

@@ -38,6 +38,8 @@ import type { SqliteDatabase } from 'remix/data-table/sqlite'
 import type { RichTextDocument } from '../../../../../resources/document/rich-text-types'
 import { createAvatarDocumentFixture } from '../../../integration/fixtures/avatar-document-fixture'
 
+const LEGACY_MIGRATIONS_DIRECTORY = fileURLToPath(new URL('../../../../../server/sqlite/migrations/legacy-learning/', import.meta.url))
+
 describe('SQLite project persistence through the Remix API', () => {
   let database: SqliteDatabase | undefined
   let temporaryDirectory: string | undefined
@@ -224,7 +226,7 @@ describe('SQLite project persistence through the Remix API', () => {
 
   it('migrates existing v8 projects and preserves automatic page settings as unset', async () => {
     database = createSqliteDatabase({ filename: ':memory:', foreignKeys: true })
-    const migrations = await loadMigrations(fileURLToPath(new URL('./migrations/', import.meta.url)))
+    const migrations = await loadMigrations(LEGACY_MIGRATIONS_DIRECTORY)
     await database.migrate(migrations, { to: '20261025120000_rebuild_appearance_class_system' })
     const initial = learningDocumentService.createInitialDocument()
     await database.exec(rawSql(`
@@ -255,7 +257,7 @@ describe('SQLite project persistence through the Remix API', () => {
 
   it('adds the default page continuation mode without overwriting an existing choice', async () => {
     database = createSqliteDatabase({ filename: ':memory:', foreignKeys: true })
-    const migrations = await loadMigrations(fileURLToPath(new URL('./migrations/', import.meta.url)))
+    const migrations = await loadMigrations(LEGACY_MIGRATIONS_DIRECTORY)
     await database.migrate(migrations, { to: '20261014100000_add_summary_profile_test_state' })
 
     await database.exec(rawSql(
@@ -304,7 +306,7 @@ describe('SQLite project persistence through the Remix API', () => {
 
   it('migrates relational Graph rows to JSON and back without changing Question/Réponses', async () => {
     database = createSqliteDatabase({ filename: ':memory:', foreignKeys: true })
-    const migrations = await loadMigrations(fileURLToPath(new URL('./migrations/', import.meta.url)))
+    const migrations = await loadMigrations(LEGACY_MIGRATIONS_DIRECTORY)
     await database.migrate(migrations, { to: '20261013110000_add-statistical-graph-transposition' })
     const projectId = 'project-graph-json-migration'
     await database.exec(rawSql(
@@ -421,7 +423,7 @@ describe('SQLite project persistence through the Remix API', () => {
 
   it('flattens only Demo5 local appearance presets and restores canonical presets on rollback', async () => {
     database = createSqliteDatabase({ filename: ':memory:', foreignKeys: true })
-    const migrations = await loadMigrations(fileURLToPath(new URL('./migrations/', import.meta.url)))
+    const migrations = await loadMigrations(LEGACY_MIGRATIONS_DIRECTORY)
     await database.migrate(migrations, { to: '20261024120000_add_appearance_settings' })
 
     const projectRows = [
@@ -497,7 +499,7 @@ describe('SQLite project persistence through the Remix API', () => {
 
   it('converts only Demo5 to v7 appearance references and represents Transparent as density none', async () => {
     database = createSqliteDatabase({ filename: ':memory:', foreignKeys: true })
-    const migrations = await loadMigrations(fileURLToPath(new URL('./migrations/', import.meta.url)))
+    const migrations = await loadMigrations(LEGACY_MIGRATIONS_DIRECTORY)
     await database.migrate(migrations, { to: '20261024190000_flatten_demo5_local_appearance_presets' })
     await database.exec(rawSql(
       `INSERT INTO projects (

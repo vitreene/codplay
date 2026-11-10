@@ -7,6 +7,7 @@ import { componentHmr } from 'remix/component-hmr/assets'
 import { createRouter } from 'remix/router'
 import { createRequestListener } from 'remix/node-fetch-server'
 import { DEFAULT_ELCE_API_ORIGIN, ELCE_API_PORT } from '../config/api-config'
+import { resolveElceAuthoringLocation } from '../app/remix/elce-authoring-routes'
 import { createElceHttpServer } from './elce-http-server'
 import { createJsonModuleLoader } from './json-assets/json-module-loader'
 
@@ -16,23 +17,61 @@ const ASSET_BASE_PATH = '/assets'
 const FONT_BASE_PATH = '/fonts'
 const LOCAL_API_PROBE_ORIGIN = 'http://localhost:5175'
 const BROWSER_ENTRY = 'packages/elce/src/app/remix/browser-entry.tsx'
-const STYLE_FILES = [
+const SHARED_STYLE_FILES = [
   'packages/elce/src/core/authoring/layout/project-application.css',
   'packages/elce/src/core/authoring/layout/editor-frame.css',
   'packages/elce/src/app/layout/app-layout.css',
-  'packages/elce/src/mods/learning/authoring/learning-workspace.css',
-  'packages/elce/src/mods/quiz-hunt/authoring/quiz-hunt-authoring.css',
+  'packages/elce/src/core/authoring/layout/scenario-tree.css',
+  'packages/elce/src/core/authoring/page/page-editor-view.css',
+] as const
+
+const MOD_STYLE_FILES = {
+  learning: ['packages/elce/src/mods/learning/authoring/learning-workspace.css'],
+  'quiz-hunt': ['packages/elce/src/mods/quiz-hunt/authoring/quiz-hunt-authoring.css'],
+} as const
+
+const SHARED_RESOURCE_STYLE_FILES = [
   'packages/elce/src/resources/bdcs/question/authoring/question-editor.css',
   'packages/elce/src/core/authoring/media/media-picker.css',
   'packages/elce/src/resources/bdcs/section/authoring/section-editor.css',
   'packages/elce/src/core/authoring/appearance-trigger.css',
-  'packages/elce/src/mods/learning/authoring/learning-appearance-panel.css',
+] as const
+
+const LEARNING_STYLE_FILES = ['packages/elce/src/mods/learning/authoring/learning-appearance-panel.css'] as const
+
+const RESOURCE_STYLE_FILES = [
   'packages/elce/src/resources/bdcs/card/authoring/card-editor.css',
   'packages/elce/src/resources/bdcs/avatar/authoring/avatar-editor.css',
   'packages/elce/src/resources/bdcs/carousel/authoring/carousel-editor.css',
   'packages/elce/src/resources/bdcs/statistical-graph/authoring/statistical-graph.css',
   'packages/elce/src/core/preview/popup-player.css',
 ] as const
+
+const STYLE_FILES = [
+  ...SHARED_STYLE_FILES,
+  ...MOD_STYLE_FILES.learning,
+  ...MOD_STYLE_FILES['quiz-hunt'],
+  ...SHARED_RESOURCE_STYLE_FILES,
+  ...LEARNING_STYLE_FILES,
+  ...RESOURCE_STYLE_FILES,
+] as const
+
+/** Selects shared and mod-specific stylesheets for the requested authoring route. */
+export function authoringStyleFiles(pathname: string): readonly string[] {
+  const location = resolveElceAuthoringLocation(pathname)
+  const selectedMod = location.kind === 'document' ? location.mod : null
+  const modStyleFiles = selectedMod === null
+    ? [...MOD_STYLE_FILES.learning, ...MOD_STYLE_FILES['quiz-hunt']]
+    : MOD_STYLE_FILES[selectedMod]
+  const learningStyleFiles = selectedMod === null || selectedMod === 'learning' ? LEARNING_STYLE_FILES : []
+  return [
+    ...SHARED_STYLE_FILES,
+    ...modStyleFiles,
+    ...SHARED_RESOURCE_STYLE_FILES,
+    ...learningStyleFiles,
+    ...RESOURCE_STYLE_FILES,
+  ]
+}
 
 const BROWSER_PACKAGES = [
   'remix',
@@ -145,7 +184,10 @@ export async function startElceLocalServer(): Promise<ElceLocalServer> {
   let webServer: Server | null = null
   try {
     const entry = await assets.getScriptEntry(BROWSER_ENTRY)
-    const styles = await Promise.all(STYLE_FILES.map((styleFile) => assets.getHref(styleFile)))
+    const styleHrefs = new Map<string, string>(await Promise.all(STYLE_FILES.map(async (styleFile) => [
+      styleFile,
+      await assets.getHref(styleFile),
+    ] as const)))
     const apiStart = await startOrReuseApi(preferredApiPort, dataDirectory, apiHost, networkPreviewOrigin)
     api = apiStart.server
     const apiPort = apiStart.port
@@ -162,6 +204,11 @@ export async function startElceLocalServer(): Promise<ElceLocalServer> {
           return new Response(null, { status: 405, headers: { Allow: 'GET, HEAD' } })
         }
         const apiOrigin = apiOriginForRequest(request, apiPort, networkPreviewOrigin)
+        const styles = authoringStyleFiles(path).map((styleFile) => {
+          const href = styleHrefs.get(styleFile)
+          if (href === undefined) throw new Error(`La feuille de style Elcé « ${styleFile} » n’a pas été compilée.`)
+          return href
+        })
         const documentHtml = renderDocumentHtml(entry, styles, apiOrigin, networkPreviewOrigin ?? null, isDevelopment)
         return new Response(request.method === 'HEAD' ? null : documentHtml, {
           headers: {

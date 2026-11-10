@@ -35,7 +35,6 @@ import type { BdcId, ChapterId, PageId } from '../../../core/document/content-do
 import type { RevelationTransitionDefaults } from '../../../resources/revelation/revelation-types'
 import type { ElceSectionChange, ElceAnchorDropTarget } from '../../../resources/anchoring/domain/anchor-types'
 import type { ElceCatalogDropTarget, ElceCatalogReference } from '../../../core/catalog/catalog-types'
-import type { QuestionContent } from '../../../resources/bdcs/question/domain/question-types'
 import type { StatisticalGraphContent } from '../../../resources/bdcs/statistical-graph/domain/statistical-graph-types'
 import type { ProfileDefinition, SummarySettings } from '../profile/domain/learning-profile-types'
 import type { AppearanceSettings } from '../../../config/appearance/appearance-types'
@@ -51,6 +50,9 @@ import { ElceCarouselFacade, createCarouselBdcId } from '../../../resources/bdcs
 import type { ElceCarouselEditorActions } from '../../../resources/bdcs/carousel/authoring/carousel-facade-types'
 import { ElceQuestionFacade } from '../../../resources/bdcs/question/authoring/question-facade'
 import type { ElceQuestionEditorActions } from '../../../resources/bdcs/question/authoring/question-facade-types'
+import { createQuestionBdcCommand } from '../../../resources/bdcs/question/authoring/question-command-factory'
+import { QUESTION_BDC_TYPE } from '../../../resources/bdcs/question/question-config'
+import { CARD_BDC_TYPE } from '../../../resources/bdcs/card/card-config'
 import { StatisticalGraphFacade } from '../../../resources/bdcs/statistical-graph/authoring/statistical-graph-facade'
 import { ElceStatisticalGraphService } from '../../../resources/bdcs/statistical-graph/domain/statistical-graph-service'
 import type { StatisticalGraphEditorActions } from '../../../resources/bdcs/statistical-graph/authoring/statistical-graph-facade-types'
@@ -87,6 +89,11 @@ export class LearningEditorFacade {
     const importCardMedia = (bdcId: BdcId, mediaImport: ElceMediaImport): void => {
       this.controller.send({ type: 'card.media.file.import', bdcId, file: mediaImport.file, media: mediaImport.media })
     }
+    /** Reads one Card from the controller's latest document snapshot. */
+    const getCard = (bdcId: BdcId) => {
+      const bdc = this.controller.getSnapshot().context.document.bdcs.find((candidate) => candidate.id === bdcId)
+      return bdc?.type === CARD_BDC_TYPE ? bdc.card ?? null : null
+    }
 
     this.anchorFacade = new ElceAnchorDropFacade({
       targetService: createLearningAnchorDropService(),
@@ -97,14 +104,23 @@ export class LearningEditorFacade {
         selectionAfter: selection?.after,
       }) },
     })
-    this.cardFacade = new ElceCardFacade({ dispatch, importMedia: importCardMedia })
+    this.cardFacade = new ElceCardFacade({
+      dispatch,
+      getCard,
+      importMedia: importCardMedia,
+    })
     this.carouselFacade = new ElceCarouselFacade({
       dispatch,
+      getCard,
       selectCard: (bdcId) => this.selectCard(bdcId),
       importMedia: importCardMedia,
     })
     this.questionFacade = new ElceQuestionFacade({
       dispatch,
+      getQuestion: (bdcId) => {
+        const bdc = this.controller.getSnapshot().context.document.bdcs.find((candidate) => candidate.id === bdcId)
+        return bdc?.type === QUESTION_BDC_TYPE ? bdc.question : null
+      },
       importMedia: (bdcId, mediaImport) => this.controller.send({
         type: 'question.media.file.import',
         bdcId,
@@ -230,9 +246,11 @@ export class LearningEditorFacade {
     this.apply(createSectionBdcCommand(createStableId('bdc-section'), pageId, index))
   }
 
-  /** Creates the unique Question BDC through its existing application facade. */
+  /** Creates the unique Question BDC under Learning's per-page rule. */
   public createQuestion(document: LearningDocument, pageId: PageId, index: number): void {
-    this.questionFacade.create(document.data, pageId, index)
+    const page = document.pages.find((candidate) => candidate.id === pageId)
+    if (page === undefined || page.bdcIds.some((bdcId) => document.bdcs.find((bdc) => bdc.id === bdcId)?.type === QUESTION_BDC_TYPE)) return
+    this.apply(createQuestionBdcCommand(createStableId('bdc-question'), pageId, index))
   }
 
   /** Creates a Result BDC at the requested page position. */
@@ -404,28 +422,14 @@ export class LearningEditorFacade {
     this.anchorFacade.submitSectionChange(sectionBdcId, change, selection)
   }
 
-  /** Creates Question editor callbacks for one current BDC. */
-  public createQuestionEditorActions(bdcId: BdcId, question: QuestionContent): ElceQuestionEditorActions {
-    return {
-      setType: (type) => this.questionFacade.setType(bdcId, question, type),
-      setTitle: (title) => this.questionFacade.setTitle(bdcId, question, title),
-      setPrompt: (prompt) => this.questionFacade.setPrompt(bdcId, question, prompt),
-      setValidationLabel: (label) => this.questionFacade.setValidationLabel(bdcId, question, label),
-      setAnswerLabel: (answerId, label) => this.questionFacade.setAnswerLabel(bdcId, question, answerId, label),
-      setAnswerCorrect: (answerId, correct) => this.questionFacade.setAnswerCorrect(bdcId, question, answerId, correct),
-      addAnswer: () => this.questionFacade.addAnswer(bdcId, question),
-      removeAnswer: (answerId) => this.questionFacade.removeAnswer(bdcId, question, answerId),
-      canRemoveAnswer: (answerId) => this.questionFacade.canRemoveAnswer(question, answerId),
-      moveAnswer: (answerId, index) => this.questionFacade.moveAnswer(bdcId, question, answerId, index),
-      importMedia: (file) => this.questionFacade.importMediaFile(bdcId, file),
-      clearMedia: () => this.questionFacade.clearMedia(bdcId),
-      deleteQuestion: () => this.questionFacade.delete(bdcId),
-    }
+  /** Creates Question editor callbacks backed by the current document getter. */
+  public createQuestionEditorActions(bdcId: BdcId): ElceQuestionEditorActions {
+    return this.questionFacade.createEditorActions(bdcId)
   }
 
-  /** Creates Card editor callbacks from the current document BDCs. */
-  public createCardEditorActions(bdcs: readonly ResourceBdc[]): ElceCardEditorActions {
-    return this.cardFacade.createEditorActions(bdcs)
+  /** Creates Card editor callbacks backed by the current document getter. */
+  public createCardEditorActions(): ElceCardEditorActions {
+    return this.cardFacade.createEditorActions()
   }
 
   /** Creates Carousel editor callbacks from its current content and Cards. */

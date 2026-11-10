@@ -23,14 +23,14 @@ const exportClientMocks = vi.hoisted(() => ({
   downloadScorm: vi.fn(),
 }))
 
-vi.mock('../../../export/elce-sighty-export-client', () => ({
-  requestElceSightyPackage: exportClientMocks.request,
-  downloadElceSightyPackage: exportClientMocks.download,
+vi.mock('../persistence/learning-sighty-export-client', () => ({
+  requestLearningSightyPackage: exportClientMocks.request,
+  downloadLearningSightyPackage: exportClientMocks.download,
 }))
 
-vi.mock('../../../export/elce-scorm-export-client', () => ({
-  requestElceScormPackage: exportClientMocks.requestScorm,
-  downloadElceScormPackage: exportClientMocks.downloadScorm,
+vi.mock('../persistence/learning-scorm-export-client', () => ({
+  requestLearningScormPackage: exportClientMocks.requestScorm,
+  downloadLearningScormPackage: exportClientMocks.downloadScorm,
 }))
 
 describe('Remix project application', () => {

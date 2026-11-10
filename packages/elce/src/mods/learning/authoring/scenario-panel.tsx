@@ -13,7 +13,7 @@ import type { ScenarioPanelProps } from './scenario-panel-types'
 import { renderAppearanceTrigger } from '../../../core/authoring/appearance-trigger'
 import { plainTextFromValue } from '../inline-text/learning-inline-text-value'
 import { renderWorkspacePanelReduceButton } from './workspace-panel-controls'
-import { workspacePanelVisibilityFromResponsiveState } from './workspace-panel-state'
+import { editorPanelVisibilityFromResponsiveState } from '../../../core/authoring/layout/editor-panel-state'
 import { MAX_SCENARIO_CHAPTER_DEPTH } from '../organization/learning-organization-config'
 import { scenarioChapterDepth } from '../organization/learning-scenario-tree'
 
@@ -25,7 +25,7 @@ export function renderScenarioPanel(props: ScenarioPanelProps): RemixNode {
   const { workspace } = props
   const { view, responsivePanel } = workspace
   const panelVisibility = workspace.panelVisibility
-    ?? workspacePanelVisibilityFromResponsiveState(responsivePanel, typeof window === 'undefined' ? 1280 : window.innerWidth)
+    ?? editorPanelVisibilityFromResponsiveState(responsivePanel, typeof window === 'undefined' ? 1280 : window.innerWidth)
   return <section
     id="elce-outline"
     className="elce-panel elce-outline"

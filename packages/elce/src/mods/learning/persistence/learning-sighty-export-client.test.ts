@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import { BDC_TYPE } from '../mods/learning/learning-definition'
-import { applyDocumentCommand } from '../domain/commands/document-commands'
-import { learningDocumentService } from '../mods/learning/document/learning-document-service'
-import { LearningDocument } from '../mods/learning/document/learning-document'
-import { requestElceSightyPackage } from './elce-sighty-export-client'
+import { BDC_TYPE } from '../learning-definition'
+import { applyDocumentCommand } from '../../../domain/commands/document-commands'
+import { learningDocumentService } from '../document/learning-document-service'
+import { LearningDocument } from '../document/learning-document'
+import { requestLearningSightyPackage } from './learning-sighty-export-client'
 
-describe('Elcé Sighty export client', () => {
+describe('Learning Sighty export client', () => {
   it('sends the current document and its media bytes and returns the ZIP response', async () => {
     const imageText = '<svg/>'
     const imageBytes = new TextEncoder().encode(imageText)
@@ -16,7 +16,7 @@ describe('Elcé Sighty export client', () => {
         headers: { 'Content-Type': 'application/zip' },
       }))
 
-    const result = await requestElceSightyPackage(model, { 'media-client': 'https://elce.test/media/client' }, request)
+    const result = await requestLearningSightyPackage(model, { 'media-client': 'https://elce.test/media/client' }, request)
 
     expect(request).toHaveBeenCalledTimes(2)
     expect(request.mock.calls[0]?.[0]).toBe('https://elce.test/media/client')
@@ -35,8 +35,8 @@ describe('Elcé Sighty export client', () => {
   it('fails when a document media source is missing or cannot be read', async () => {
     const model = documentWithReferencedMedia(1)
 
-    await expect(requestElceSightyPackage(model, {})).rejects.toThrow('n’est pas disponible')
-    await expect(requestElceSightyPackage(model, { 'media-client': 'https://elce.test/media/client' }, vi.fn<typeof fetch>().mockResolvedValue(
+    await expect(requestLearningSightyPackage(model, {})).rejects.toThrow('n’est pas disponible')
+    await expect(requestLearningSightyPackage(model, { 'media-client': 'https://elce.test/media/client' }, vi.fn<typeof fetch>().mockResolvedValue(
       new Response('absent', { status: 404 }),
     ))).rejects.toThrow('n’a pas pu être lu')
   })

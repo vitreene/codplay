@@ -91,7 +91,12 @@ Cette façade orchestre le Carousel et délègue les champs à `ElceCardFacade`
 dans [`resources/bdcs/card/authoring/`](../src/resources/bdcs/card/authoring/).
 Les mêmes actions ressource Carte servent aux BDC directs de Flux ou Diapo et
 aux Cartes enfants du Carousel ; Learning reste propriétaire de la création,
-du placement documentaire et de l’accès au contrôleur.
+du placement documentaire et de l’accès au contrôleur. Quiz Hunt compose aussi
+les actions de `ElceCardFacade` pour ses Cartes de résultat, avec son propre
+dispatch et son import média. La façade Carte reçoit un getter du contenu
+courant : deux éditions successives partent ainsi du dernier état du document,
+qu’il s’agisse d’une Carte directe, enfant du Carousel ou de résultat. Les
+commandes de création et de placement restent propres au mod.
 Le champ Message de la Carte affiche les commandes Gras et Italique sous forme
 d’icônes uniquement ; leurs noms accessibles restent « Gras » et « Italique ».
 Le rendu est fourni par le champ texte partagé dans
@@ -116,12 +121,14 @@ Le menu d’ajout est un panneau compact ancré immédiatement à droite du bout
 « + » ; il reste hors du flux horizontal et ne repousse pas les cibles Corbeille
 et Catalogue. Ce comportement est porté par
 [`renderCarouselViewActions`](../src/resources/bdcs/carousel/authoring/remix-carousel-editor.tsx)
-et [`carousel-editor.css`](../src/resources/bdcs/carousel/authoring/carousel-editor.css) ;
-le rendu Safari MCP du Projet 3 confirme le menu flottant de 118,75 × 44,375 px
+et [`carousel-editor.css`](../src/resources/bdcs/carousel/authoring/carousel-editor.css).
+`RemixCarouselEditor` garde l’état du menu et les commandes Carte/Graphe ; le
+clic extérieur est géré par
+[`installOutsideMenuDismissal`](../src/core/authoring/menus/outside-menu-dismissal.ts).
+Le rendu Safari MCP du Projet 3 confirme le menu flottant de 118,75 × 44,375 px
 et la rangée inchangée de 111,17 px. Un clic hors du menu le ferme, y compris
-sur une autre commande flottante ; Safari MCP sur Projet 3 confirme cette
-fermeture. Le comportement est porté par
-[`remix-carousel-editor.tsx`](../src/resources/bdcs/carousel/authoring/remix-carousel-editor.tsx).
+sur une autre commande flottante ; choisir Carte exécute l’ajout et ferme le
+menu.
 
 Dans une Diapo narrée, l’association de transcript est éditée dans chaque BDC
 Carte enfant, avec un bouton radio caché par occurrence. Elle n’apparaît pas

@@ -21,7 +21,7 @@ import type { ElceAnchorDropTarget, ElceSectionChange } from './anchor-types'
 import type { ResourceBdc, ResourceDocumentData } from '../../document/resource-document-types'
 import type { MediaMetadata, PageId } from '../../../core/document/content-document-types'
 import { authoredTextToPlainText } from '../../../core/document/rich-text-utils'
-import { statisticalGraphAnchorPaddingBottom } from '../../../domain/anchor/anchor-position'
+import { statisticalGraphAnchorPaddingBottom } from './anchor-position'
 
 const mediaResourceService = new ElceMediaResourceService()
 

@@ -2,6 +2,7 @@ import type { BdcId } from '../../../core/document/content-document-types'
 import type { ElceCardPresetBuilder } from '../../../core/presets/card-preset-builder'
 import type { ElceAnchorDropTarget, ElceAnchorCardPreview, ElceCatalogDropTarget } from '../domain/anchor-types'
 import type { ElceCatalogReference } from '../../../core/catalog/catalog-types'
+import type { AuthoredTextValue } from '../../../core/document/rich-text-types'
 
 export type { ElceAnchorCardPreview, ElceAnchorDropTarget, ElceCatalogDropTarget } from '../domain/anchor-types'
 
@@ -21,6 +22,7 @@ export type ElceAnchorTransaction =
 
 export interface ElceAnchorExtensionOptions {
   readonly presetBuilder: ElceCardPresetBuilder
+  readonly toPlainText?: (value: AuthoredTextValue) => string
   readonly createFileDropTarget?: (file: File) => ElceAnchorDropTarget | null
   readonly onCardMediaFileDrop?: (bdcId: BdcId, file: File) => void
   readonly createCatalogDropTarget?: (reference: ElceCatalogReference) => ElceCatalogDropTarget | null

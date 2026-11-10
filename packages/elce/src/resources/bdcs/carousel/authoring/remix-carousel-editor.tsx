@@ -14,6 +14,7 @@ import { on, type Handle, type RemixNode } from 'remix/component'
 import type { ElceCarouselEditorProps } from './carousel-facade-types'
 import { renderLucideIcon } from '../../../../core/authoring/lucide-static-icon'
 import { renderAppearanceTrigger } from '../../../../core/authoring/appearance-trigger'
+import { installOutsideMenuDismissal } from '../../../../core/authoring/menus/outside-menu-dismissal'
 import { RemixCardEditorFields } from '../../card/authoring/remix-card-editor-fields'
 import { renderRemixStatisticalGraphEditor } from '../../statistical-graph/authoring/remix-statistical-graph-editor'
 import { authoredTextToPlainText } from '../../../../core/document/rich-text-utils'
@@ -34,17 +35,13 @@ export function RemixCarouselEditor(handle: Handle<ElceCarouselEditorProps>) {
     if (!handle.signal.aborted) void handle.update()
   }
 
-  /** Closes this Carousel's add-view menu when a pointer press lands outside it. */
-  const dismissAddViewMenuOnOutsidePointerDown = (event: PointerEvent): void => {
-    if (!isAddViewMenuOpen) return
-    const addContainer = document.getElementById(`elce-carousel-view-add-${handle.props.bdcId}`)
-    if (event.target instanceof Node && addContainer?.contains(event.target)) return
-    updateAddViewMenuOpen(false)
-  }
-
-  document.addEventListener('pointerdown', dismissAddViewMenuOnOutsidePointerDown, true)
+  const removeAddViewMenuDismissal = installOutsideMenuDismissal({
+    getRoot: () => document.getElementById(`elce-carousel-view-add-${handle.props.bdcId}`),
+    isOpen: () => isAddViewMenuOpen,
+    onDismiss: () => updateAddViewMenuOpen(false),
+  })
   handle.signal.addEventListener('abort', () => {
-    document.removeEventListener('pointerdown', dismissAddViewMenuOnOutsidePointerDown, true)
+    removeAddViewMenuDismissal()
   }, { once: true })
 
   /** Updates the highlighted state of the view-strip trash target. */

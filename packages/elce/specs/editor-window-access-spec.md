@@ -58,9 +58,10 @@ Des fenêtres sur des projets différents gardent des caches indépendantes.
   elle possède effectivement le focus.
 - Le droit serveur porte un bail de 12 secondes, renouvelé toutes les
   3 secondes par la page détentrice. Si un renouvellement échoue, la page se
-  suspend immédiatement ; après expiration, une page lectrice peut obtenir un
-  nouveau droit et relire la dernière révision confirmée. Les anciennes paires
-  restent refusées.
+  suspend immédiatement. L’expiration permet à une page lectrice de reprendre
+  le projet et relire la dernière révision confirmée ; elle ne révoque pas le
+  détenteur courant avant cette reprise. Les anciennes paires restent refusées
+  après leur remplacement.
 - Le bouton temporaire « Forcer l’accès » permet à une page lectrice de
   remplacer immédiatement le droit serveur, même si son bail est encore actif.
   Dans le même profil, `BroadcastChannel` suspend l’ancien détenteur ; dans un
@@ -210,6 +211,10 @@ Des fenêtres sur des projets différents gardent des caches indépendantes.
   écriture du droit remplacé a reçu `409 edit_access_lost`. Le projet temporaire
   a ensuite été supprimé. Cette vérification n’établit pas le transfert de
   focus entre deux navigateurs réels ; cette preuve reste au plan.
+- Le test SQLite Learning de renouvellement après expiration vérifie que le
+  titulaire récupère son bail si aucune autre page ne l’a repris.
+  [`learning-sqlite-project-persistence.test.ts`](../src/mods/learning/persistence/server/sqlite/learning-sqlite-project-persistence.test.ts)
+  porte ce parcours.
 - Safari Technology Preview a exercé directement `IndexedDbDocumentStore` sur
   deux entrées projet dans une base temporaire : sauvegarder ou supprimer l’une
   a préservé le document, le checkpoint et les médias de l’autre. Le rejet

@@ -351,6 +351,10 @@ de reprise, d’interruption et de concurrence envisagées pour DGS.
 
 ## Démarrage d’un mod
 
+Le [plan de consolidation des mods](2026-11-09-elce-mods-consolidation-plan.md)
+est `En cours` depuis `891aefce`. Il précise les interventions communes
+révélées par Learning et Quiz Hunt, leurs propriétaires et leur acceptation.
+
 Le [plan Quiz Hunt](2026-11-04-quiz-hunt-editable-mod-plan.md) est accepté pour
 le second mod. L’utilisateur retient des entrées et catalogues séparés pour
 le moment ; Learning reste le défaut. Le routage auteur est fixé par mod :

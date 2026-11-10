@@ -1,6 +1,6 @@
 import { navigate, on, type RemixNode } from 'remix/component'
 import { Trash2, X } from 'lucide-static'
-import type { ScormVersion } from '../../../scorm/scorm-types'
+import type { ScormVersion } from '@codplay/sighty-scorm'
 import type { ElceProjectSummary } from '../../../infrastructure/project-api/project-api-types'
 import type { DocumentSyncStatus, ProjectControllerStatus } from '../../controller/controller-types'
 import { CoreEditorFacade } from '../core-editor-facade'

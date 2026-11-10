@@ -17,7 +17,7 @@ import { renderProfileTokenInsertion } from '../profile/authoring/profile-token-
 import { LearningPageEditor } from '../authoring/learning-page-editor'
 import { buildFluxScene } from '../../../resources/pages/flux/flux-scene-builder'
 import { createLearningSceneBuilders } from '../reading/learning-scene-builders'
-import { anchorNameFor } from '../../../domain/anchor/anchor-position'
+import { anchorNameFor } from '../../../resources/anchoring/domain/anchor-position'
 import { applyDocumentCommand } from '../../../domain/commands/document-commands'
 import { learningDocumentService } from '../document/learning-document-service'
 import { learningPreviewService } from '../preview/learning-preview-service'

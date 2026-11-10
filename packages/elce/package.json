@@ -15,6 +15,7 @@
     "package-scorm": "node scripts/package-scorm.mjs",
     "prepackage-scorm": "npm run generate:appearance",
     "build": "vite build",
+    "check:architecture": "node scripts/check-mod-boundaries.mjs",
     "prebuild": "npm run generate:appearance",
     "preview": "vite preview",
     "prepreview": "npm run generate:appearance",

@@ -1,15 +1,16 @@
-import type { CardCommand } from './card-command-types'
+import type { CardEditCommand } from './card-command-types'
 import type { CardImageFit, CardLayoutId } from '../card-config'
 import type { CarouselImagePosition } from '../../carousel/carousel-config'
 import type { BdcId } from '../../../../core/document/content-document-types'
-import type { CardTextField } from '../domain/card-types'
+import type { CardContent, CardTextField } from '../domain/card-types'
 import type { ElceCatalogReference } from '../../../../core/catalog/catalog-types'
 import type { ElceMediaImport } from '../../../../domain/media/media-resource-types'
 import type { ElceTextValue } from '../../../document/rich-text-types'
 import type { RevelationTransitionOverrides } from '../../../revelation/revelation-types'
 
 export interface ElceCardFacadeOptions {
-  readonly dispatch: (command: CardCommand) => void
+  readonly dispatch: (command: CardEditCommand) => void
+  readonly getCard: (bdcId: BdcId) => CardContent | null
   readonly importMedia: (bdcId: BdcId, mediaImport: ElceMediaImport) => void
 }
 

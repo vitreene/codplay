@@ -11,21 +11,24 @@ import { learningDocumentService } from '../document/learning-document-service'
 import type { LearningDocument } from '../document/learning-document'
 import type { LearningDocumentData } from '../document/learning-document-types'
 import { renderCoreProjectApplication } from '../../../core/authoring/layout/project-application'
-import { downloadElceSightyPackage, requestElceSightyPackage } from '../../../export/elce-sighty-export-client'
-import { downloadElceScormPackage, requestElceScormPackage } from '../../../export/elce-scorm-export-client'
+import { createEditorPanelController } from '../../../core/authoring/layout/editor-panel-controller'
+import { installOutsideMenuDismissal } from '../../../core/authoring/menus/outside-menu-dismissal'
+import {
+  downloadLearningSightyPackage,
+  requestLearningSightyPackage,
+} from '../persistence/learning-sighty-export-client'
+import {
+  downloadLearningScormPackage,
+  requestLearningScormPackage,
+} from '../persistence/learning-scorm-export-client'
 import type { ScormVersion } from '../../../scorm/scorm-types'
 import { LearningWorkspaceState, renderEditorWorkspace } from './learning-workspace'
 import { LearningPageEditor } from './learning-page-editor'
-import type { DraggedScenarioEntry, ResponsivePanel, SidePanelTab, WorkspacePanelName, WorkspacePanelVisibility } from './learning-workspace-types'
+import type { DraggedScenarioEntry, SidePanelTab } from './learning-workspace-types'
 import type { ProjectApplicationView, ProjectApplicationWorkspaceState } from './learning-project-application-types'
 import type { AppearanceTarget } from '../commands/learning-document-command-types'
 import { INLINE_TEXT_LABEL_SELECTION_EVENT, type InlineTextLabelSelectionEventDetail } from '../profile/authoring/profile-token-events'
 import type { ProfileDefinition } from '../profile/domain/learning-profile-types'
-import {
-  initialWorkspacePanelVisibility,
-  resizedWorkspacePanelVisibility,
-  workspacePanelVisibilityFromResponsiveState,
-} from './workspace-panel-state'
 
 const learningPreviewDocumentCodec = {
   encode: (document: LearningDocument) => document.toJSON(),
@@ -43,9 +46,13 @@ export function LearningProjectApplication(handle: Handle) {
 
   let view = selectProjectView(controller.getSnapshot(), actions.authoring)
   const learningWorkspaceState = new LearningWorkspaceState()
-  let responsivePanel: ResponsivePanel = null
-  let panelVisibility: WorkspacePanelVisibility = initialWorkspacePanelVisibility(window.innerWidth)
-  let previousWindowWidth = window.innerWidth
+  const panelController = createEditorPanelController({
+    initialWidth: window.innerWidth,
+    getWidth: () => window.innerWidth,
+    update: () => handle.update(),
+  })
+  const setResponsivePanel = panelController.setResponsivePanel
+  const setPanelVisibility = panelController.setPanelVisibility
   let sidePanelTab: SidePanelTab = 'clipboard'
   let appearanceTarget: AppearanceTarget = { kind: 'document' }
   let appearanceProjectId = view.activeProject?.id ?? null
@@ -56,32 +63,7 @@ export function LearningProjectApplication(handle: Handle) {
   let exportKind: 'sighty' | 'scorm' | null = null
   let exportError: string | null = null
   let exportNotice: string | null = null
-  let returnFocusId: string | null = null
   let popupPreviewHost: PopupPreviewHost<LearningDocument, LearningDocumentData> | null = null
-
-  const setResponsivePanel = (panel: ResponsivePanel, triggerId?: string): void => {
-    if (panel !== null) returnFocusId = triggerId ?? returnFocusId
-    const focusId = panel === null ? returnFocusId : null
-    responsivePanel = panel
-    panelVisibility = workspacePanelVisibilityFromResponsiveState(panel, window.innerWidth)
-    if (panel === null) returnFocusId = null
-    void handle.update().then(() => {
-      if (panel === null && focusId !== null) document.getElementById(focusId)?.focus()
-    })
-  }
-  const setPanelVisibility = (panel: WorkspacePanelName, open: boolean, triggerId?: string): void => {
-    if (open) returnFocusId = triggerId ?? returnFocusId
-    const focusId = open ? null : returnFocusId
-    const next: WorkspacePanelVisibility = open && window.innerWidth <= 800
-      ? { outline: panel === 'outline', properties: panel === 'properties' }
-      : { ...panelVisibility, [panel]: open }
-    panelVisibility = next
-    if (window.innerWidth <= 800) responsivePanel = open ? panel : null
-    if (!open) returnFocusId = null
-    void handle.update().then(() => {
-      if (!open && focusId !== null) document.getElementById(focusId)?.focus()
-    })
-  }
   const setSidePanelTab = (tab: SidePanelTab): void => {
     if (tab === 'variables') actions.selectCatalogTab(CATALOG_TAB.PROFILE)
     if (sidePanelTab === tab) return
@@ -141,7 +123,7 @@ export function LearningProjectApplication(handle: Handle) {
       : { targetId: detail.targetId, ...detail.selection }
     if (detail.selection !== null) {
       setProfileTokenTarget(detail.targetId)
-      if (!panelVisibility.properties) setPanelVisibility('properties', true)
+      if (!panelController.visibility.properties) setPanelVisibility('properties', true)
     }
     void handle.update()
   }
@@ -193,8 +175,8 @@ export function LearningProjectApplication(handle: Handle) {
     void handle.update()
     void (async () => {
       try {
-        const packageBlob = await requestElceSightyPackage(documentSnapshot, mediaSources)
-        const filename = downloadElceSightyPackage(packageBlob, documentSnapshot.data.name)
+        const packageBlob = await requestLearningSightyPackage(documentSnapshot, mediaSources)
+        const filename = downloadLearningSightyPackage(packageBlob, documentSnapshot.data.name)
         exportNotice = `Téléchargement de « ${filename} » démarré.`
       } catch (error) {
         exportError = error instanceof Error ? error.message : 'L’export du scénario Elcé a échoué.'
@@ -219,9 +201,9 @@ export function LearningProjectApplication(handle: Handle) {
     void handle.update()
     void (async () => {
       try {
-        const sightyPackage = await requestElceSightyPackage(documentSnapshot, mediaSources)
-        const scormPackage = await requestElceScormPackage(sightyPackage, documentSnapshot.data.name, version, monoSco)
-        const filename = downloadElceScormPackage(scormPackage.archive, scormPackage.filename)
+        const sightyPackage = await requestLearningSightyPackage(documentSnapshot, mediaSources)
+        const scormPackage = await requestLearningScormPackage(sightyPackage, documentSnapshot.data.name, version, monoSco)
+        const filename = downloadLearningScormPackage(scormPackage.archive, scormPackage.filename)
         exportNotice = monoSco
           ? `Téléchargement de « ${filename} » démarré. Extrayez cette archive pour importer séparément les packages SCORM qu’elle contient.`
           : `Téléchargement de « ${filename} » démarré.`
@@ -254,8 +236,14 @@ export function LearningProjectApplication(handle: Handle) {
       view = nextView
       void handle.update()
     })
+    const removeProjectMenuDismissal = installOutsideMenuDismissal({
+      getRoot: () => document.getElementById('elce-project-menu'),
+    })
+    const removeScenarioMenuDismissal = installOutsideMenuDismissal({
+      getRoot: () => document.getElementById('elce-scenario-add'),
+    })
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape' && responsivePanel !== null) setResponsivePanel(null)
+      if (event.key === 'Escape' && panelController.responsivePanel !== null) setResponsivePanel(null)
       if (!(event.metaKey || event.ctrlKey) || event.altKey || event.key.toLowerCase() !== 'z') return
       if (view.activeProject === null || view.projectStatus !== 'active' || view.editAccess !== 'active') return
       event.preventDefault()
@@ -289,12 +277,9 @@ export function LearningProjectApplication(handle: Handle) {
       setProfileTokenTarget(null)
     }
     document.addEventListener('drop', preventUnclaimedFileNavigation)
-    document.addEventListener('click', closeAuthoringMenusOnOutsideClick, true)
     const handleResize = (): void => {
       const nextWidth = window.innerWidth
-      panelVisibility = resizedWorkspacePanelVisibility(panelVisibility, previousWindowWidth, nextWidth)
-      previousWindowWidth = nextWidth
-      if (nextWidth > 1200 || nextWidth > 800) responsivePanel = null
+      panelController.resize(nextWidth)
       void handle.update()
     }
     document.addEventListener('keydown', handleKeyDown, true)
@@ -311,7 +296,8 @@ export function LearningProjectApplication(handle: Handle) {
       document.removeEventListener('pointerdown', handleProfileTokenPointerDown, true)
       document.removeEventListener(INLINE_TEXT_LABEL_SELECTION_EVENT, handleInlineTextLabelSelection)
       document.removeEventListener('drop', preventUnclaimedFileNavigation)
-      document.removeEventListener('click', closeAuthoringMenusOnOutsideClick, true)
+      removeProjectMenuDismissal()
+      removeScenarioMenuDismissal()
       window.removeEventListener('resize', handleResize)
       popupPreviewHost?.destroy()
     }
@@ -319,8 +305,8 @@ export function LearningProjectApplication(handle: Handle) {
   })
 
   return () => renderApplication(view, actions, {
-    responsivePanel,
-    panelVisibility,
+    responsivePanel: panelController.responsivePanel,
+    panelVisibility: panelController.visibility,
     sidePanelTab,
     appearanceTarget,
     summarySettingsOpen: learningWorkspaceState.summarySettingsOpen,
@@ -356,15 +342,6 @@ export function LearningProjectApplication(handle: Handle) {
     movePage: (pageId, placement) => actions.movePage(pageId, placement),
     moveChapter: (chapterId, index, parentChapterId) => actions.moveChapter(chapterId, index, parentChapterId ?? null),
   }, runHistoryAction)
-}
-
-/** Closes native project and Scenario disclosures when a click lands outside. */
-function closeAuthoringMenusOnOutsideClick(event: MouseEvent): void {
-  const target = event.target
-  if (!(target instanceof Node)) return
-  document.querySelectorAll<HTMLDetailsElement>('#elce-project-menu, #elce-scenario-add').forEach((menu) => {
-    if (menu.open && !menu.contains(target)) menu.open = false
-  })
 }
 
 /** Prevents the browser from navigating when no authoring target accepts a file drop. */

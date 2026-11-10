@@ -3,7 +3,6 @@ import type { CardLayoutId } from '../card-config'
 import type { ElceCardEditorActions, ElceCardFacadeOptions } from './card-facade-types'
 import type { CardContent, CardTextField } from '../domain/card-types'
 import type { ElceCatalogReference } from '../../../../core/catalog/catalog-types'
-import type { ResourceBdc } from '../../../document/resource-document-types'
 import type { BdcId } from '../../../../core/document/content-document-types'
 import { ElceMediaResourceService } from '../../../../domain/media/media-resource-service'
 import { ElceCardService } from '../domain/card-service'
@@ -13,19 +12,22 @@ import type { RevelationTransitionOverrides } from '../../../revelation/revelati
 /** Routes shared standalone and Carousel Card edits through document commands. */
 export class ElceCardFacade {
   private readonly dispatch: ElceCardFacadeOptions['dispatch']
+  private readonly getCard: ElceCardFacadeOptions['getCard']
   private readonly importMedia: ElceCardFacadeOptions['importMedia']
   private readonly mediaService = new ElceMediaResourceService()
   private readonly cardService = new ElceCardService()
 
   public constructor(options: ElceCardFacadeOptions) {
     this.dispatch = options.dispatch
+    this.getCard = options.getCard
     this.importMedia = options.importMedia
   }
 
-  /** Creates editing actions for the Card BDCs in the supplied current document. */
-  public createEditorActions(cards: readonly ResourceBdc[]): ElceCardEditorActions {
+  /** Creates editing actions that read each Card from the current document. */
+  public createEditorActions(): ElceCardEditorActions {
+    /** Applies one Card field transformation to the latest stored content. */
     const updateCard = (bdcId: BdcId, transform: (current: CardContent) => CardContent): void => {
-      const card = cards.find((candidate) => candidate.id === bdcId)?.card
+      const card = this.getCard(bdcId)
       if (card == null) return
       this.dispatch({ type: 'bdc.card.update', bdcId, card: transform(card) })
     }

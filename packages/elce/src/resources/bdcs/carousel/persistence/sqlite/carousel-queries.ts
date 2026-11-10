@@ -1,6 +1,6 @@
 import type { CarouselContent } from '../../domain/carousel-types'
-import { sqliteNullableNumber, sqliteNullableText, sqliteNumberValue, sqliteQuery, sqliteStringValue } from '../../../../document/persistence/sqlite/sqlite-query-types'
-import type { SqliteQuery, SqliteRow } from '../../../../document/persistence/sqlite/sqlite-query-types'
+import { sqliteNullableNumber, sqliteNullableText, sqliteNumberValue, sqliteQuery, sqliteStringValue } from '../../../../../core/persistence/sqlite/sqlite-query-types'
+import type { SqliteQuery, SqliteRow } from '../../../../../core/persistence/sqlite/sqlite-query-types'
 
 export const CAROUSEL_SQLITE_SELECT = 'SELECT * FROM carousels WHERE project_id = ?'
 

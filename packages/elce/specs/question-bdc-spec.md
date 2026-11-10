@@ -66,13 +66,17 @@ la ressource existante après vérification SHA-256, même si le nom diffère.
 
 ## Commandes et projection
 
-La vue auteur Learning passe ses intentions à `LearningEditorFacade`, qui
-délègue l’édition de Question à `ElceQuestionFacade` dans
+Les vues auteur Learning et Quiz Hunt délèguent l’édition de Question à
+`ElceQuestionFacade` dans
 [`resources/bdcs/question/authoring/`](../src/resources/bdcs/question/authoring/)
-avant d’envoyer les commandes au contrôleur XState unique. La façade ressource
-construit les commandes à partir de `QuestionContent` ; la politique Learning
-garde une Question au plus par page et l’insère dans l’ordre demandé. La vue
-Remix affiche le modèle et ne porte pas une copie de son état métier.
+avant d’envoyer les commandes au contrôleur XState du mod courant. La façade
+reçoit un getter du contenu actuel, des callbacks typés de dispatch et
+d’import, et construit les commandes d’édition à partir de `QuestionContent` ;
+elle ne crée ni ne place le BDC. Learning conserve la limite d’une Question par
+page et son ordre d’insertion ; Quiz Hunt conserve la Question requise dans les
+pages des banques. Les règles de type et de réponse passent dans la ressource
+Question. La vue Remix affiche le modèle et ne porte pas une copie de son état
+métier.
 
 Le builder instancie le markup fixe du preset Question. Sa story autonome
 contient les persos CodPlay nécessaires : des `input` natifs, le bouton de

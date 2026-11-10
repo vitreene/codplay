@@ -1,6 +1,7 @@
 import type { PageId } from '../document/content-document-types'
 import {
   POPUP_PREVIEW_PAGE_PARAM,
+  POPUP_PREVIEW_MOD_PARAM,
   POPUP_PREVIEW_PROJECT_PARAM,
   POPUP_PREVIEW_SESSION_PARAM,
   isPopupPreviewRequest,
@@ -36,13 +37,15 @@ export class PopupPreviewHost<Document, DocumentPayload = unknown> {
   }
 
   /** Opens the independent reader from the page visible in the owner at this click. */
-  public open(): boolean {
+  public open(previewModKey: string | null = null): boolean {
     this.destroy()
     const snapshot = this.readSnapshot()
     if (snapshot === null) return false
 
     if (window.__ELCE_PREVIEW_ORIGIN__ !== undefined && window.__ELCE_PREVIEW_ORIGIN__ !== null) {
       const url = new URL(window.__ELCE_PREVIEW_ORIGIN__)
+      if (previewModKey === null) url.searchParams.delete(POPUP_PREVIEW_MOD_PARAM)
+      else url.searchParams.set(POPUP_PREVIEW_MOD_PARAM, previewModKey)
       url.searchParams.set(POPUP_PREVIEW_PROJECT_PARAM, snapshot.projectId)
       if (snapshot.selectedPageId === null) url.searchParams.delete(POPUP_PREVIEW_PAGE_PARAM)
       else url.searchParams.set(POPUP_PREVIEW_PAGE_PARAM, snapshot.selectedPageId)
@@ -55,6 +58,8 @@ export class PopupPreviewHost<Document, DocumentPayload = unknown> {
 
     const sessionId = crypto.randomUUID()
     const url = new URL(window.location.href)
+    if (previewModKey === null) url.searchParams.delete(POPUP_PREVIEW_MOD_PARAM)
+    else url.searchParams.set(POPUP_PREVIEW_MOD_PARAM, previewModKey)
     url.searchParams.set(POPUP_PREVIEW_SESSION_PARAM, sessionId)
     if (snapshot.selectedPageId !== null) url.searchParams.set(POPUP_PREVIEW_PAGE_PARAM, snapshot.selectedPageId)
     window.addEventListener('message', this.receiveMessage)

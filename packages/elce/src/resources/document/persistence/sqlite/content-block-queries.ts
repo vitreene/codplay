@@ -1,7 +1,7 @@
 import type { ContentBdc } from '../../../../core/document/content-document-types'
 import type { AppearanceSettings } from '../../../../config/appearance/appearance-types'
-import type { SqliteQuery, SqliteRow } from './sqlite-query-types'
-import { sqliteNullableText, sqliteQuery, sqliteStringValue } from './sqlite-query-types'
+import type { SqliteQuery, SqliteRow } from '../../../../core/persistence/sqlite/sqlite-query-types'
+import { sqliteNullableText, sqliteQuery, sqliteStringValue } from '../../../../core/persistence/sqlite/sqlite-query-types'
 
 export interface SqliteContentBlockPlacement {
   readonly pageId: string | null

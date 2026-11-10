@@ -17,6 +17,8 @@ export interface ProjectEditGrant {
   readonly grantId: string
 }
 
+export type ProjectModKey = 'learning' | 'quiz-hunt'
+
 export type AcquireProjectEditResult =
   | Readonly<{ kind: 'granted'; grantId: string; recovered: boolean }>
   | Readonly<{ kind: 'occupied' }>
@@ -46,7 +48,7 @@ export interface ProjectPersistence<Document> {
   /** Reserves one project for a page, or returns its existing live reservation. */
   acquireEditAccess(projectId: string, pageId: string, force?: boolean): Promise<AcquireProjectEditResult>
 
-  /** Renews a live page grant for the configured lease period. */
+  /** Renews the current grant, including after expiry until another page takes it. */
   renewEditAccess(projectId: string, grant: ProjectEditGrant): Promise<boolean>
 
   /** Checks whether one grant still owns editing, without acquiring it. */

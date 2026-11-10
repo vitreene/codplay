@@ -3,9 +3,8 @@ import type { ControllerMachineServices } from '../../../core/controller/control
 import type { ElceProjectSummary } from '../../../core/persistence/project-api/project-api-types'
 import type { DocumentStore } from '../../../core/persistence/indexed-db/document-store-types'
 import type { ProjectSessionOperation, ProjectSessionPort } from '../../../core/projects/project-session-types'
-import type { QuestionContent } from '../../../resources/bdcs/question/domain/question-types'
-import type { CardContent } from '../../../resources/bdcs/card/domain/card-types'
-import type { CardLayoutId } from '../../../resources/bdcs/card/card-config'
+import type { QuestionEditCommand } from '../../../resources/bdcs/question/authoring/question-command-types'
+import type { CardEditCommand } from '../../../resources/bdcs/card/authoring/card-command-types'
 import type { SectionContent } from '../../../resources/bdcs/section/domain/section-types'
 import type { ElceSectionChange } from '../../../resources/anchoring/domain/anchor-types'
 import type { SectionSelection } from '../../../resources/bdcs/section/authoring/section-selection-types'
@@ -30,14 +29,8 @@ export type QuizHuntCommand =
   | Readonly<{ type: 'section.delete'; bdcId: string }>
   | Readonly<{ type: 'section.update'; bdcId: string; section: SectionContent }>
   | Readonly<{ type: 'bdc.move'; bdcId: string; pageId: string; index: number }>
-  | Readonly<{ type: 'question.update'; bdcId: string; question: QuestionContent }>
-  | Readonly<{ type: 'question.media.set'; bdcId: string; mediaId: string | null }>
-  | Readonly<{ type: 'question.media.attach'; bdcId: string; media: MediaMetadata }>
-  | Readonly<{ type: 'question.delete'; bdcId: string }>
-  | Readonly<{ type: 'card.update'; bdcId: string; card: CardContent }>
-  | Readonly<{ type: 'card.layout.set'; bdcId: string; layoutId: CardLayoutId }>
-  | Readonly<{ type: 'card.media.set'; bdcId: string; mediaId: string | null }>
-  | Readonly<{ type: 'card.media.attach'; bdcId: string; media: MediaMetadata }>
+  | QuestionEditCommand
+  | CardEditCommand
 
 export type QuizHuntCompositionEvent =
   | Readonly<{ type: 'question.media.file.import'; bdcId: string; file: File; media: MediaMetadata }>
@@ -96,14 +89,14 @@ function applyCommand(documents: QuizHuntDocumentService, document: QuizHuntDocu
     case 'section.delete': return documents.deleteSection(document, command.bdcId)
     case 'section.update': return documents.updateSection(document, command.bdcId, command.section)
     case 'bdc.move': return documents.moveBdc(document, command.bdcId, command.pageId, command.index)
-    case 'question.update': return documents.updateQuestion(document, command.bdcId, command.question)
-    case 'question.media.set': return documents.setQuestionMedia(document, command.bdcId, command.mediaId)
-    case 'question.media.attach': return documents.attachQuestionMedia(document, command.bdcId, command.media)
-    case 'question.delete': return documents.deleteQuestion(document, command.bdcId)
-    case 'card.update': return documents.updateCard(document, command.bdcId, command.card)
-    case 'card.layout.set': return documents.setCardLayout(document, command.bdcId, command.layoutId)
-    case 'card.media.set': return documents.setCardMedia(document, command.bdcId, command.mediaId)
-    case 'card.media.attach': return documents.attachCardMedia(document, command.bdcId, command.media)
+    case 'bdc.question.update': return documents.updateQuestion(document, command.bdcId, command.question)
+    case 'bdc.question.media.set': return documents.setQuestionMedia(document, command.bdcId, command.mediaId)
+    case 'bdc.question.media.attach': return documents.attachQuestionMedia(document, command.bdcId, command.media)
+    case 'bdc.question.delete': return documents.deleteQuestion(document, command.bdcId)
+    case 'bdc.card.update': return documents.updateCard(document, command.bdcId, command.card)
+    case 'bdc.card.layout.set': return documents.setCardLayout(document, command.bdcId, command.layoutId)
+    case 'bdc.card.media.set': return documents.setCardMedia(document, command.bdcId, command.mediaId)
+    case 'bdc.card.media.attach': return documents.attachCardMedia(document, command.bdcId, command.media)
   }
 }
 
@@ -173,11 +166,11 @@ export function createQuizHuntControllerMachine(documents = new QuizHuntDocument
           }
         }
         if (change.kind === 'question-media-import') return mediaCreated
-          ? { type: 'question.media.attach', bdcId: change.bdcId, media: change.media }
-          : { type: 'question.media.set', bdcId: change.bdcId, mediaId: change.media.id }
+          ? { type: 'bdc.question.media.attach', bdcId: change.bdcId, media: change.media }
+          : { type: 'bdc.question.media.set', bdcId: change.bdcId, mediaId: change.media.id }
         return mediaCreated
-          ? { type: 'card.media.attach', bdcId: change.bdcId, media: change.media }
-          : { type: 'card.media.set', bdcId: change.bdcId, mediaId: change.media.id }
+          ? { type: 'bdc.card.media.attach', bdcId: change.bdcId, media: change.media }
+          : { type: 'bdc.card.media.set', bdcId: change.bdcId, mediaId: change.media.id }
       },
       isImportChange: (change) => change?.kind === 'question-media-import' || change?.kind === 'card-media-import',
       historyMetadata: (change, selection) => {

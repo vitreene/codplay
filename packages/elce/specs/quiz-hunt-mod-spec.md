@@ -34,6 +34,15 @@ délègue le contenu des Questions et des Cartes à leurs services de ressource.
 Le contrôleur auteur conserve le document et l’historique dans son acteur
 XState ; Annuler et Rétablir restaurent aussi la page sélectionnée.
 
+Pour l’édition de contenu, `QuizHuntEditorFacade` compose les façades ressource
+`ElceQuestionFacade` et `ElceCardFacade`. Elles lisent le contenu actuel dans
+l’acteur, appliquent les mêmes règles de type, réponses, champs Carte,
+transitions et références média que Learning, puis envoient les commandes
+`QuestionEditCommand` et `CardEditCommand`. L’import de fichier reste branché
+sur la file média existante de Quiz Hunt. Les commandes de création et de
+placement restent propres au mod ; le service Quiz Hunt maintient notamment
+la Question requise des pages de banque.
+
 ## Interface auteur
 
 L’édition d’un document Quiz Hunt est accessible sur `/hunt/:documentId` ; le
@@ -85,6 +94,17 @@ Learning : au-dessus de 1200 px les deux panneaux sont ouverts par défaut ; de
 801 à 1200 px, seul Scénario l’est ; à 800 px et moins, les deux sont fermés et
 un seul peut être ouvert à la fois. Échap referme le panneau mobile et restitue
 le focus à sa commande de réouverture.
+
+Le Scénario partagé et le cadre/rail de page utilisent les feuilles core
+[`scenario-tree.css`](../src/core/authoring/layout/scenario-tree.css) et
+[`page-editor-view.css`](../src/core/authoring/page/page-editor-view.css).
+[`quiz-hunt-authoring.css`](../src/mods/quiz-hunt/authoring/quiz-hunt-authoring.css)
+conserve les espacements et marqueurs propres aux banques Quiz Hunt. Une
+réponse HTML directe à `/hunt/:documentId` ne charge ni
+`learning-workspace.css` ni `learning-appearance-panel.css` ; elle garde la
+présentation des pages, du panneau central et du rail BDC via les feuilles core.
+Le test de sélection des feuilles se trouve dans
+[`elce-local-server.test.ts`](../src/server/elce-local-server.test.ts).
 
 La Configuration du jeu affiche et saisit la durée de partie, le délai avant
 indice et la durée du retour en secondes. Le document conserve ces valeurs en

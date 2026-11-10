@@ -1,86 +1,54 @@
-import { QUESTION_BDC_TYPE, QUESTION_TYPE } from '../question-config'
 import { CATALOG_REFERENCE } from '../../../../core/catalog/catalog-config'
-import { createQuestionBdcCommand } from './question-command-factory'
-import { createStableId } from '../../../../core/document/stable-id'
-import type { ResourceDocumentData } from '../../../document/resource-document-types'
+import type { ElceCatalogReference } from '../../../../core/catalog/catalog-types'
+import type { BdcId } from '../../../../core/document/content-document-types'
 import { ElceMediaResourceService } from '../../../../domain/media/media-resource-service'
-import type { ElceQuestionFacadeOptions } from './question-facade-types'
+import type { ElceQuestionEditorActions, ElceQuestionFacadeOptions } from './question-facade-types'
+import { QUESTION_TYPE_CONFIG } from '../question-config'
 import { ElceQuestionService } from '../domain/question-service'
-import type { BdcId, PageId } from '../../../../core/document/content-document-types'
 import type { QuestionContent, QuestionType } from '../domain/question-types'
 import type { ElceTextValue } from '../../../document/rich-text-types'
 
-/** Routes Question authoring intents to immutable document commands and XState. */
+/** Routes Question editing through shared rules and the mod's document commands. */
 export class ElceQuestionFacade {
   private readonly dispatch: ElceQuestionFacadeOptions['dispatch']
+  private readonly getCurrentQuestion: ElceQuestionFacadeOptions['getQuestion']
   private readonly importMedia: ElceQuestionFacadeOptions['importMedia']
   private readonly mediaResourceService = new ElceMediaResourceService()
   private readonly questionService = new ElceQuestionService()
 
   public constructor(options: ElceQuestionFacadeOptions) {
     this.dispatch = options.dispatch
+    this.getCurrentQuestion = options.getQuestion
     this.importMedia = options.importMedia
   }
 
-  /** Creates the page's unique Question BDC at its requested flow position. */
-  public create(document: ResourceDocumentData, pageId: PageId, index: number): void {
-    const page = document.pages.find((candidate) => candidate.id === pageId)
-    if (page === undefined || page.bdcIds.some((bdcId) => document.bdcs.find((bdc) => bdc.id === bdcId)?.type === QUESTION_BDC_TYPE)) return
-    this.dispatch(createQuestionBdcCommand(createStableId('bdc-question'), pageId, index))
-  }
-
-  /** Changes the selected question type while retaining its other authored content. */
-  public setType(bdcId: BdcId, question: QuestionContent, type: QuestionType): void {
-    this.update(bdcId, this.questionService.changeType(question, type))
-  }
-
-  /** Updates the optional title. */
-  public setTitle(bdcId: BdcId, question: QuestionContent, title: ElceTextValue): void {
-    this.update(bdcId, this.questionService.setTitle(question, title))
-  }
-
-  /** Updates the question prompt. */
-  public setPrompt(bdcId: BdcId, question: QuestionContent, prompt: ElceTextValue): void {
-    this.update(bdcId, this.questionService.setPrompt(question, prompt))
-  }
-
-  /** Updates the reader-facing validation button label. */
-  public setValidationLabel(
-    bdcId: BdcId,
-    question: QuestionContent,
-    label: ElceTextValue,
-  ): void {
-    this.update(bdcId, this.questionService.setValidationLabel(question, label))
-  }
-
-  /** Updates one response label. */
-  public setAnswerLabel(bdcId: BdcId, question: QuestionContent, answerId: string, label: string): void {
-    this.update(bdcId, this.questionService.setAnswerLabel(question, answerId, label))
-  }
-
-  /** Changes which response or responses are correct. */
-  public setAnswerCorrect(bdcId: BdcId, question: QuestionContent, answerId: string, correct: boolean): void {
-    this.update(bdcId, this.questionService.setAnswerCorrect(question, answerId, correct))
-  }
-
-  /** Adds an editable answer where the selected type allows it. */
-  public addAnswer(bdcId: BdcId, question: QuestionContent): void {
-    this.update(bdcId, this.questionService.addAnswer(question))
-  }
-
-  /** Removes one answer and keeps a valid correct-answer set. */
-  public removeAnswer(bdcId: BdcId, question: QuestionContent, answerId: string): void {
-    this.update(bdcId, this.questionService.removeAnswer(question, answerId))
-  }
-
-  /** Reports whether one answer can be removed without leaving an empty question. */
-  public canRemoveAnswer(question: QuestionContent, answerId: string): boolean {
-    return question.type !== QUESTION_TYPE.TRUE_FALSE && question.answers.length > 1 && question.answers.some((answer) => answer.id === answerId)
-  }
-
-  /** Reorders the authored answers. */
-  public moveAnswer(bdcId: BdcId, question: QuestionContent, answerId: string, index: number): void {
-    this.update(bdcId, this.questionService.moveAnswer(question, answerId, index))
+  /** Creates editor callbacks that read the latest Question before each edit. */
+  public createEditorActions(bdcId: BdcId): ElceQuestionEditorActions {
+    /** Applies one Question transformation to the latest stored content. */
+    const update = (transform: (question: QuestionContent) => QuestionContent): void => {
+      const question = this.getCurrentQuestion(bdcId)
+      if (question === null) return
+      this.dispatch({ type: 'bdc.question.update', bdcId, question: transform(question) })
+    }
+    return {
+      setType: (type: QuestionType) => update((question) => this.questionService.changeType(question, type)),
+      setTitle: (title: ElceTextValue) => update((question) => this.questionService.setTitle(question, title)),
+      setPrompt: (prompt: ElceTextValue) => update((question) => this.questionService.setPrompt(question, prompt)),
+      setValidationLabel: (label: ElceTextValue) => update((question) => this.questionService.setValidationLabel(question, label)),
+      setAnswerLabel: (answerId, label) => update((question) => this.questionService.setAnswerLabel(question, answerId, label)),
+      setAnswerCorrect: (answerId, correct) => update((question) => this.questionService.setAnswerCorrect(question, answerId, correct)),
+      addAnswer: () => update((question) => this.questionService.addAnswer(question)),
+      removeAnswer: (answerId) => update((question) => this.questionService.removeAnswer(question, answerId)),
+      canRemoveAnswer: (answerId) => {
+        const question = this.getCurrentQuestion(bdcId)
+        return question !== null && QUESTION_TYPE_CONFIG[question.type].editableAnswers
+          && question.answers.length > 1 && question.answers.some((answer) => answer.id === answerId)
+      },
+      moveAnswer: (answerId, index) => update((question) => this.questionService.moveAnswer(question, answerId, index)),
+      importMedia: (file) => this.importMediaFile(bdcId, file),
+      clearMedia: () => this.clearMedia(bdcId),
+      deleteQuestion: () => this.delete(bdcId),
+    }
   }
 
   /** Attaches a reusable image or video already stored in the media catalogue. */
@@ -91,15 +59,11 @@ export class ElceQuestionFacade {
   /** Accepts only a media resource reference from the shared catalogue payload. */
   public attachMediaReference(bdcId: BdcId, serializedReference: string): void {
     const reference = readMediaReference(serializedReference)
-    switch (reference) {
-      case null:
-        return
-      default:
-        this.attachMedia(bdcId, reference.mediaId)
-    }
+    if (reference === null) return
+    this.attachMedia(bdcId, reference.mediaId)
   }
 
-  /** Imports one desktop image or video through the controller's media path. */
+  /** Imports one desktop image or video through the mod's media path. */
   public importMediaFile(bdcId: BdcId, file: File): void {
     const mediaImport = this.mediaResourceService.createImport(file)
     if (mediaImport !== null) this.importMedia(bdcId, mediaImport)
@@ -110,18 +74,14 @@ export class ElceQuestionFacade {
     this.dispatch({ type: 'bdc.question.media.set', bdcId, mediaId: null })
   }
 
-  /** Permanently removes the Question BDC and keeps its media in the catalogue. */
+  /** Requests removal through the owning mod's required-Question policy. */
   public delete(bdcId: BdcId): void {
     this.dispatch({ type: 'bdc.question.delete', bdcId })
-  }
-
-  private update(bdcId: BdcId, question: QuestionContent): void {
-    this.dispatch({ type: 'bdc.question.update', bdcId, question })
   }
 }
 
 /** Parses the catalogue drag payload without accepting a unique BDC as reusable media. */
-function readMediaReference(value: string): Extract<import('../../../../core/catalog/catalog-types').ElceCatalogReference, { kind: typeof CATALOG_REFERENCE.MEDIA }> | null {
+function readMediaReference(value: string): Extract<ElceCatalogReference, { kind: typeof CATALOG_REFERENCE.MEDIA }> | null {
   try {
     const parsed = JSON.parse(value) as { kind?: unknown; mediaId?: unknown }
     if (parsed.kind !== CATALOG_REFERENCE.MEDIA || typeof parsed.mediaId !== 'string') return null

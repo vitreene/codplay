@@ -3,6 +3,7 @@ import type { PageId } from '../document/content-document-types'
 export const POPUP_PREVIEW_SESSION_PARAM = 'elce-preview-session'
 export const POPUP_PREVIEW_PROJECT_PARAM = 'elce-preview-project'
 export const POPUP_PREVIEW_PAGE_PARAM = 'elce-preview-page'
+export const POPUP_PREVIEW_MOD_PARAM = 'mod'
 
 export type PopupPreviewRequest = Readonly<{
   type: 'ready' | 'synchronize'

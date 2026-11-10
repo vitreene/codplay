@@ -11,6 +11,7 @@ import {
   countTextValueCharacters,
   createRichTextDocumentFromPlainText,
   parseInlineTextTokens,
+  plainTextFromValue,
   type InlineTextSelection,
 } from './learning-inline-text-value'
 import { createLocalDateLabelExtension, createPageLinkLabelExtension } from './learning-inline-label-extensions'
@@ -62,6 +63,7 @@ export function createLearningTextFieldFeature(
   pages: readonly LearningPage[] = currentScenarioPages,
 ): ResourceTextFieldFeature {
   return {
+    toPlainText: plainTextFromValue,
     render: (options) => renderInlineTextField({ ...options, profileProperties, pages }),
   }
 }

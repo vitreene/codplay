@@ -2,8 +2,8 @@ import { authoredTextToPlainText } from '../../../../../core/document/rich-text-
 import { QUESTION_DEFAULTS } from '../../question-config'
 import type { QuestionContent } from '../../domain/question-types'
 import { decodeSqliteText, encodeNullableSqliteText, encodeSqliteText } from '../../../../document/persistence/sqlite/sqlite-text-values'
-import { sqliteNullableText, sqliteNumberValue, sqliteQuery, sqliteStringValue } from '../../../../document/persistence/sqlite/sqlite-query-types'
-import type { SqliteQuery, SqliteRow } from '../../../../document/persistence/sqlite/sqlite-query-types'
+import { sqliteNullableText, sqliteNumberValue, sqliteQuery, sqliteStringValue } from '../../../../../core/persistence/sqlite/sqlite-query-types'
+import type { SqliteQuery, SqliteRow } from '../../../../../core/persistence/sqlite/sqlite-query-types'
 
 export const QUESTION_SQLITE_SELECT = 'SELECT * FROM questions WHERE project_id = ?'
 export const QUESTION_ANSWERS_SQLITE_SELECT = 'SELECT * FROM question_answers WHERE project_id = ?'

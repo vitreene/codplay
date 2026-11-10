@@ -201,7 +201,7 @@ describe('appearance panel targets', () => {
     const textCardPageId = textCard?.pageId ?? textCardParent?.pageId
     if (textCard === undefined || textCardPageId == null) throw new Error('The appearance panel fixture has no text Card on a page.')
     const cardTarget = { kind: 'bdc', bdcId: textCard.id } as const
-    actions.createCardEditorActions(controller.getSnapshot().context.document.bdcs)
+    actions.createCardEditorActions()
       .setCardLayout(textCard.id, DEFAULT_PRESET_ID.IMAGE_TITLE)
     const imageTitlePanel = render(<div id="appearance-image-title-test-root">
       {renderAppearancePanel({
@@ -222,7 +222,7 @@ describe('appearance panel targets', () => {
       .toEqual({ kind: 'gradient', id: 'background-surface' })
     imageTitlePanel.cleanup()
     actions.resetAppearanceProperty(cardTarget, 'background')
-    actions.createCardEditorActions(controller.getSnapshot().context.document.bdcs)
+    actions.createCardEditorActions()
       .setCardLayout(textCard.id, DEFAULT_PRESET_ID.TEXT_SHORT)
 
     const densityPanel = render(<div id="appearance-density-test-root">

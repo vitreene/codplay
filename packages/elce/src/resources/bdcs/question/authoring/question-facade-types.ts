@@ -1,17 +1,13 @@
-import type { QuestionCommand } from './question-command-types'
+import type { QuestionEditCommand } from './question-command-types'
 import type { ElceMediaImport } from '../../../../domain/media/media-resource-types'
-import type { BdcId, PageId } from '../../../../core/document/content-document-types'
+import type { BdcId } from '../../../../core/document/content-document-types'
 import type { QuestionContent, QuestionType } from '../domain/question-types'
 import type { ElceTextValue } from '../../../document/rich-text-types'
 
 export interface ElceQuestionFacadeOptions {
-  readonly dispatch: (command: QuestionCommand) => void
+  readonly dispatch: (command: QuestionEditCommand) => void
+  readonly getQuestion: (bdcId: BdcId) => QuestionContent | null
   readonly importMedia: (bdcId: BdcId, mediaImport: ElceMediaImport) => void
-}
-
-export interface ElceQuestionCreateOptions {
-  readonly pageId: PageId
-  readonly index: number
 }
 
 export interface ElceQuestionEditorActions {

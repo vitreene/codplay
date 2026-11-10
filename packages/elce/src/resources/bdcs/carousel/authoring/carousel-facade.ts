@@ -39,7 +39,7 @@ export class ElceCarouselFacade {
   ): ElceCarouselEditorActions {
     const updateCarousel = (carousel: CarouselContent, movedBdcId?: BdcId): void => this.dispatch({ type: 'bdc.carousel.update', bdcId, carousel, movedBdcId })
     const updateCarouselFrom = (transform: (current: CarouselContent) => CarouselContent): void => updateCarousel(transform(content))
-    const cardActions = this.cardFacade.createEditorActions(cards)
+    const cardActions = this.cardFacade.createEditorActions()
     /** Imports one supported file through the controller's serialized media queue. */
     const importMediaFile = (cardBdcId: BdcId, file: File): void => {
       const mediaImport = this.mediaService.createImport(file)

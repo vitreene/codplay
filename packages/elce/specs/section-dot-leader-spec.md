@@ -60,7 +60,7 @@ sans ajout de comportement au runtime CodPlay.
   vrai bouton Remix → contrôleur XState → Undo/Redo → sérialisation et
   réouverture → player Sighty/CodPlay, puis Seek et Play. Le style de lecture
   est vérifié après destruction des éditeurs pour exclure leur feuille CSS.
-- [`elce-scenario-exporter.test.ts`](../src/export/elce-scenario-exporter.test.ts) :
+- [`learning-scenario-exporter.test.ts`](../src/mods/learning/persistence/server/learning-scenario-exporter.test.ts) :
   présence des règles communes dans la feuille du package de page exporté.
 
 L’acceptation visuelle dans le navigateur et le suivi des vérifications

@@ -1,5 +1,4 @@
 import { rawSql } from 'remix/data-table'
-import { randomUUID } from 'node:crypto'
 import type { Database, DataManipulationResult } from 'remix/data-table'
 import type { SqliteDatabase } from 'remix/data-table/sqlite'
 import { PROJECT_EDIT_LEASE_MS } from '../../../../../config/api-config'
@@ -16,13 +15,12 @@ import {
   prepareContentBlockInsert,
   prepareContentBlockPlacementInsert,
 } from '../../../../../resources/document/persistence/sqlite/content-block-queries'
-import type { SqliteQuery, SqliteRow } from '../../../../../resources/document/persistence/sqlite/sqlite-query-types'
+import type { SqliteQuery, SqliteRow } from '../../../../../core/persistence/sqlite/sqlite-query-types'
 import {
-  sqliteNullableNumber,
   sqliteNullableText,
   sqliteNumberValue,
   sqliteStringValue,
-} from '../../../../../resources/document/persistence/sqlite/sqlite-query-types'
+} from '../../../../../core/persistence/sqlite/sqlite-query-types'
 import { CARD_SQLITE_SELECT, cardContentFromSqliteRow, prepareCardInsert } from '../../../../../resources/bdcs/card/persistence/sqlite/card-queries'
 import { CAROUSEL_SQLITE_SELECT, carouselContentFromSqliteRows, prepareCarouselInsert } from '../../../../../resources/bdcs/carousel/persistence/sqlite/carousel-queries'
 import { QUESTION_ANSWERS_SQLITE_SELECT, QUESTION_SQLITE_SELECT, prepareQuestionInsert, questionContentFromSqliteRows } from '../../../../../resources/bdcs/question/persistence/sqlite/question-queries'
@@ -42,6 +40,15 @@ import type {
   StoredProject,
 } from '../../../../../core/server/projects/project-persistence'
 import type { MediaPersistence, StoreMediaFileResult, StoredMediaResource } from '../../../../../core/server/media/media-persistence'
+import { findSqliteMediaFile, listSqliteMediaStorageKeys } from '../../../../../core/server/media/sqlite-media-queries'
+import { publishSqliteMediaFile } from '../../../../../core/server/media/sqlite-media-publication'
+import {
+  acquireSqliteProjectEditAccess,
+  getSqliteProjectEditGrantState,
+  hasSqliteProjectEditAccess,
+  releaseSqliteProjectEditAccess,
+  renewSqliteProjectEditAccess,
+} from '../../../../../core/server/projects/sqlite-project-edit-access'
 import { QuizHuntProjectDocument, readQuizHuntDocument } from '../../quiz-hunt-document-codec'
 import type { QuizHuntDocument } from '../../../document/quiz-hunt-document-types'
 import type { QuizHuntGameStatePersistence, QuizHuntSavedGameState } from '../../quiz-hunt-game-state-persistence'
@@ -62,62 +69,26 @@ export class QuizHuntSqliteProjectPersistence implements ProjectPersistence<Quiz
 
   /** Reserves one Quiz Hunt project atomically for an authoring page. */
   public async acquireEditAccess(projectId: string, pageId: string, force = false): Promise<AcquireProjectEditResult> {
-    return this.database.transaction(async (transaction) => {
-      const rows = await queryRows(transaction, `
-        SELECT edit_page_id, edit_grant_id, edit_lease_expires_at
-        FROM projects WHERE project_id = ? AND mod_key = 'quiz-hunt'
-      `, [projectId])
-      const row = rows[0]
-      if (row === undefined) return { kind: 'not-found' }
-      const owner = sqliteNullableText(row, 'edit_page_id')
-      const grantId = sqliteNullableText(row, 'edit_grant_id')
-      const expiresAt = sqliteNullableNumber(row, 'edit_lease_expires_at')
-      const now = Date.now()
-      const live = owner !== null && grantId !== null && expiresAt !== null && expiresAt > now
-      if (!force && live && owner === pageId) {
-        await queryRows(transaction, `
-          UPDATE projects SET edit_lease_expires_at = ?
-          WHERE project_id = ? AND mod_key = 'quiz-hunt'
-        `, [now + PROJECT_EDIT_LEASE_MS, projectId])
-        return { kind: 'granted', grantId, recovered: false }
-      }
-      if (!force && live) return { kind: 'occupied' }
-      const nextGrantId = randomUUID()
-      await queryRows(transaction, `
-        UPDATE projects SET edit_page_id = ?, edit_grant_id = ?, edit_lease_expires_at = ?
-        WHERE project_id = ? AND mod_key = 'quiz-hunt'
-      `, [pageId, nextGrantId, now + PROJECT_EDIT_LEASE_MS, projectId])
-      return { kind: 'granted', grantId: nextGrantId, recovered: force || owner !== null }
-    })
+    return this.database.transaction((transaction) =>
+      acquireSqliteProjectEditAccess(transaction, 'quiz-hunt', projectId, pageId, force))
   }
 
   /** Checks whether the exact edit grant still belongs to this Quiz Hunt project. */
   public async hasEditAccess(projectId: string, grant: ProjectEditGrant): Promise<boolean> {
-    const rows = await queryRows(this.database, `
-      SELECT project_id FROM projects
-      WHERE project_id = ? AND edit_page_id = ? AND edit_grant_id = ? AND mod_key = 'quiz-hunt'
-    `, [projectId, grant.pageId, grant.grantId])
-    return rows.length > 0
+    return this.database.transaction((transaction) =>
+      hasSqliteProjectEditAccess(transaction, 'quiz-hunt', projectId, grant))
   }
 
   /** Renews the exact active grant while keeping the project in the Quiz Hunt catalog. */
   public async renewEditAccess(projectId: string, grant: ProjectEditGrant): Promise<boolean> {
-    const rows = await queryRows(this.database, `
-      UPDATE projects SET edit_lease_expires_at = ?
-      WHERE project_id = ? AND edit_page_id = ? AND edit_grant_id = ? AND mod_key = 'quiz-hunt'
-      RETURNING project_id
-    `, [Date.now() + PROJECT_EDIT_LEASE_MS, projectId, grant.pageId, grant.grantId])
-    return rows.length > 0
+    return this.database.transaction((transaction) =>
+      renewSqliteProjectEditAccess(transaction, 'quiz-hunt', projectId, grant))
   }
 
   /** Releases only the matching grant for a Quiz Hunt project. */
   public async releaseEditAccess(projectId: string, grant: ProjectEditGrant): Promise<boolean> {
-    const rows = await queryRows(this.database, `
-      UPDATE projects SET edit_page_id = NULL, edit_grant_id = NULL, edit_lease_expires_at = NULL
-      WHERE project_id = ? AND edit_page_id = ? AND edit_grant_id = ? AND mod_key = 'quiz-hunt'
-      RETURNING project_id
-    `, [projectId, grant.pageId, grant.grantId])
-    return rows.length > 0
+    return this.database.transaction((transaction) =>
+      releaseSqliteProjectEditAccess(transaction, 'quiz-hunt', projectId, grant))
   }
 
   /** Lists only Quiz Hunt projects in the shared project table. */
@@ -201,7 +172,7 @@ export class QuizHuntSqliteProjectPersistence implements ProjectPersistence<Quiz
   /** Renames one Quiz Hunt project and advances its shared project revision. */
   public async renameProject(projectId: string, name: string, grant: ProjectEditGrant): Promise<EditProjectResult> {
     return this.database.transaction(async (transaction) => {
-      const access = await editGrantState(transaction, projectId, grant)
+      const access = await getSqliteProjectEditGrantState(transaction, 'quiz-hunt', projectId, grant)
       if (access === 'not-found') return { kind: 'not-found' }
       if (access === 'lost') return { kind: 'edit-access-lost' }
       const now = Date.now()
@@ -217,7 +188,7 @@ export class QuizHuntSqliteProjectPersistence implements ProjectPersistence<Quiz
   /** Deletes one Quiz Hunt project; shared and mod-owned rows follow its foreign keys. */
   public async deleteProject(projectId: string, grant: ProjectEditGrant): Promise<DeleteProjectResult> {
     return this.database.transaction(async (transaction) => {
-      const access = await editGrantState(transaction, projectId, grant)
+      const access = await getSqliteProjectEditGrantState(transaction, 'quiz-hunt', projectId, grant)
       if (access === 'not-found') return 'not-found'
       if (access === 'lost') return 'edit-access-lost'
       await queryRows(transaction, "DELETE FROM projects WHERE project_id = ? AND mod_key = 'quiz-hunt'", [projectId])
@@ -233,7 +204,7 @@ export class QuizHuntSqliteProjectPersistence implements ProjectPersistence<Quiz
     grant: ProjectEditGrant,
   ): Promise<SaveProjectDocumentResult> {
     return this.database.transaction(async (transaction) => {
-      const access = await editGrantState(transaction, projectId, grant)
+      const access = await getSqliteProjectEditGrantState(transaction, 'quiz-hunt', projectId, grant)
       if (access === 'not-found') return { kind: 'not-found' }
       if (access === 'lost') return { kind: 'edit-access-lost' }
       const now = Date.now()
@@ -256,28 +227,12 @@ export class QuizHuntSqliteProjectPersistence implements ProjectPersistence<Quiz
 
   /** Loads an uploaded media resource only when its project belongs to Quiz Hunt. */
   public async findMediaFile(projectId: string, mediaId: string): Promise<StoredMediaResource | null> {
-    const rows = await queryRows(this.database, `
-      SELECT media_resources.media_id, media_resources.name, media_resources.mime_type,
-        media_resources.size_bytes, media_resources.storage_key, media_resources.content_sha256
-      FROM media_resources JOIN projects USING (project_id)
-      WHERE media_resources.project_id = ? AND media_resources.media_id = ? AND projects.mod_key = 'quiz-hunt'
-    `, [projectId, mediaId])
-    const row = rows[0]
-    if (row === undefined) return null
-    return {
-      id: sqliteStringValue(row, 'media_id'),
-      name: sqliteStringValue(row, 'name'),
-      mimeType: sqliteStringValue(row, 'mime_type'),
-      size: sqliteNumberValue(row, 'size_bytes'),
-      storageKey: sqliteNullableText(row, 'storage_key'),
-      contentSha256: sqliteNullableText(row, 'content_sha256'),
-    }
+    return findSqliteMediaFile(this.database, 'quiz-hunt', projectId, mediaId)
   }
 
   /** Returns media files referenced by either mod so shared cleanup retains them. */
   public async listMediaStorageKeys(): Promise<readonly string[]> {
-    const rows = await queryRows(this.database, 'SELECT storage_key FROM media_resources WHERE storage_key IS NOT NULL')
-    return rows.map((row) => sqliteStringValue(row, 'storage_key'))
+    return listSqliteMediaStorageKeys(this.database)
   }
 
   /** Publishes an uploaded file key after validating its project grant and media metadata. */
@@ -289,37 +244,9 @@ export class QuizHuntSqliteProjectPersistence implements ProjectPersistence<Quiz
     contentSha256: string,
     grant: ProjectEditGrant,
   ): Promise<StoreMediaFileResult> {
-    return this.database.transaction(async (transaction) => {
-      if (await editGrantState(transaction, projectId, grant) !== 'held') return { kind: 'edit-access-lost' }
-      const rows = await queryRows(transaction, `
-        SELECT size_bytes, storage_key, content_sha256 FROM media_resources
-        WHERE project_id = ? AND media_id = ?
-      `, [projectId, mediaId])
-      const row = rows[0]
-      if (row === undefined) return { kind: 'media-not-found' }
-      if (sqliteNumberValue(row, 'size_bytes') !== expectedSize) return { kind: 'media-changed' }
-      const existingKey = sqliteNullableText(row, 'storage_key')
-      const existingHash = sqliteNullableText(row, 'content_sha256')
-      if (existingKey !== null) return existingHash === contentSha256
-        ? { kind: 'already-stored' } : { kind: 'media-already-has-file' }
-      const duplicates = await queryRows(transaction, `
-        SELECT media_id FROM media_resources
-        WHERE project_id = ? AND size_bytes = ? AND content_sha256 = ? AND media_id <> ?
-      `, [projectId, expectedSize, contentSha256, mediaId])
-      if (duplicates[0] !== undefined) {
-        return { kind: 'duplicate-content', existingMediaId: sqliteStringValue(duplicates[0], 'media_id') }
-      }
-      const updated = await queryRows(transaction, `
-        UPDATE media_resources SET storage_key = ?, content_sha256 = ?
-        WHERE project_id = ? AND media_id = ? AND storage_key IS NULL RETURNING media_id
-      `, [storageKey, contentSha256, projectId, mediaId])
-      if (updated.length === 0) return { kind: 'media-changed' }
-      await queryRows(transaction, `
-        UPDATE projects SET edit_lease_expires_at = ?
-        WHERE project_id = ? AND edit_page_id = ? AND edit_grant_id = ? AND mod_key = 'quiz-hunt'
-      `, [Date.now() + PROJECT_EDIT_LEASE_MS, projectId, grant.pageId, grant.grantId])
-      return { kind: 'stored' }
-    })
+    return this.database.transaction((transaction) => publishSqliteMediaFile(
+      transaction, 'quiz-hunt', projectId, mediaId, expectedSize, storageKey, contentSha256, grant,
+    ))
   }
 }
 
@@ -637,18 +564,6 @@ async function clearDocumentRows(database: ProjectDatabase, projectId: string): 
   await queryRows(database, 'DELETE FROM catalog_pages WHERE project_id = ?', [projectId])
   await queryRows(database, 'DELETE FROM pages WHERE project_id = ?', [projectId])
   await queryRows(database, 'DELETE FROM chapters WHERE project_id = ?', [projectId])
-}
-
-/** Reads the exact current Quiz Hunt edit grant. */
-async function editGrantState(database: ProjectDatabase, projectId: string, grant: ProjectEditGrant): Promise<'held' | 'lost' | 'not-found'> {
-  const rows = await queryRows(database, `
-    SELECT edit_page_id, edit_grant_id FROM projects
-    WHERE project_id = ? AND mod_key = 'quiz-hunt'
-  `, [projectId])
-  const row = rows[0]
-  if (row === undefined) return 'not-found'
-  return sqliteNullableText(row, 'edit_page_id') === grant.pageId
-    && sqliteNullableText(row, 'edit_grant_id') === grant.grantId ? 'held' : 'lost'
 }
 
 /** Converts a scenario database row to its authored page or chapter reference. */

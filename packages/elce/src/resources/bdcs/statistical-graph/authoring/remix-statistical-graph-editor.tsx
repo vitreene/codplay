@@ -12,8 +12,8 @@ import type { StatisticalGraphContent } from '../domain/statistical-graph-types'
 import type { StatisticalGraphEditorActions } from './statistical-graph-facade-types'
 import { renderLucideIcon } from '../../../../core/authoring/lucide-static-icon'
 import type { ElceTextValue } from '../../../document/rich-text-types'
-import { plainTextFromValue } from '../../../../mods/learning/inline-text/learning-inline-text-value'
 import type { ResourceTextFieldFeature } from '../../../../core/authoring/resource-text-field-feature'
+import { authoredTextToPlainText } from '../../../../core/document/rich-text-utils'
 
 const renderingOptions = [
   { value: STATISTICAL_GRAPH_RENDERING.BAR, label: 'Barres' },
@@ -46,6 +46,7 @@ export function renderRemixStatisticalGraphEditor(
 ): RemixNode {
   if (bdc.type !== STATISTICAL_GRAPH_BDC_TYPE || bdc.statisticalGraph == null) return null
   const content = bdc.statisticalGraph
+  const toPlainText = textFieldFeature?.toPlainText ?? authoredTextToPlainText
   const deleteButton = onDelete === undefined ? null : <button
     id={`elce-statistical-graph-delete-${bdc.id}`}
     className="elce-bdc-icon-button elce-bdc-icon-button--danger"
@@ -203,8 +204,8 @@ export function renderRemixStatisticalGraphEditor(
         </label>
         {content.rendering === STATISTICAL_GRAPH_RENDERING.PIE
           ? content.transposeEnabled !== false
-            ? renderPieCategorySelect(bdc.id, content, actions)
-            : renderPieSeriesSelect(bdc.id, content, actions)
+            ? renderPieCategorySelect(bdc.id, content, actions, toPlainText)
+            : renderPieSeriesSelect(bdc.id, content, actions, toPlainText)
           : null}
         {toolbarContent}
       </div>
@@ -216,7 +217,7 @@ export function renderRemixStatisticalGraphEditor(
         {renderTextField(bdc.id, 'Libellé des séries', 'seriesAxisLabel', content.seriesAxisLabel, actions, false, textFieldAttributes, textFieldFeature)}
       </div>
     </fieldset>
-    {renderGridEditor(bdc.id, content, actions, textFieldAttributes, textFieldFeature)}
+    {renderGridEditor(bdc.id, content, actions, textFieldAttributes, textFieldFeature, toPlainText)}
     <dialog
       id={`elce-statistical-graph-preview-dialog-${bdc.id}`}
       className="elce-statistical-graph-preview-dialog"
@@ -260,6 +261,7 @@ function renderTextField(
   textFieldAttributes: Readonly<Record<string, string>> = {},
   textFieldFeature?: ResourceTextFieldFeature,
 ): RemixNode {
+  const toPlainText = textFieldFeature?.toPlainText ?? authoredTextToPlainText
   const id = `elce-statistical-graph-${field}-${bdcId}`
   return <div
     id={`${id}-label`}
@@ -281,7 +283,7 @@ function renderTextField(
         ? <textarea
           id={id}
           aria-label={label}
-          value={plainTextFromValue(value)}
+          value={toPlainText(value)}
           {...textFieldAttributes}
           mix={on<HTMLTextAreaElement, 'input'>('input', (event) => actions.setText(field, event.currentTarget.value))}
         />
@@ -289,7 +291,7 @@ function renderTextField(
           id={id}
           type="text"
           aria-label={label}
-          value={plainTextFromValue(value)}
+          value={toPlainText(value)}
           {...textFieldAttributes}
           mix={on<HTMLInputElement, 'input'>('input', (event) => actions.setText(field, event.currentTarget.value))}
         />}
@@ -297,7 +299,12 @@ function renderTextField(
 }
 
 /** Selects the one data series used by a sector chart. */
-function renderPieSeriesSelect(bdcId: string, content: StatisticalGraphContent, actions: StatisticalGraphEditorActions): RemixNode {
+function renderPieSeriesSelect(
+  bdcId: string,
+  content: StatisticalGraphContent,
+  actions: StatisticalGraphEditorActions,
+  toPlainText: (value: ElceTextValue) => string,
+): RemixNode {
   return <label
     id={`elce-statistical-graph-pie-series-label-${bdcId}`}
     className="elce-statistical-graph-editor__field"
@@ -314,14 +321,19 @@ function renderPieSeriesSelect(bdcId: string, content: StatisticalGraphContent, 
         value={series.id}
         selected={series.id === content.pieSeriesId}
       >
-        {plainTextFromValue(series.label) || seriesFallbackLabel(index)}
+        {toPlainText(series.label) || seriesFallbackLabel(index)}
       </option>)}
     </select>
   </label>
 }
 
 /** Selects the one category used by a transposed sector chart. */
-function renderPieCategorySelect(bdcId: string, content: StatisticalGraphContent, actions: StatisticalGraphEditorActions): RemixNode {
+function renderPieCategorySelect(
+  bdcId: string,
+  content: StatisticalGraphContent,
+  actions: StatisticalGraphEditorActions,
+  toPlainText: (value: ElceTextValue) => string,
+): RemixNode {
   return <label
     id={`elce-statistical-graph-pie-category-label-${bdcId}`}
     className="elce-statistical-graph-editor__field"
@@ -338,7 +350,7 @@ function renderPieCategorySelect(bdcId: string, content: StatisticalGraphContent
         value={category.id}
         selected={category.id === (content.pieCategoryId ?? content.categories[0]?.id)}
       >
-        {plainTextFromValue(category.label) || categoryFallbackLabel(index)}
+        {toPlainText(category.label) || categoryFallbackLabel(index)}
       </option>)}
     </select>
   </label>
@@ -351,6 +363,7 @@ function renderGridEditor(
   actions: StatisticalGraphEditorActions,
   textFieldAttributes: Readonly<Record<string, string>> = {},
   textFieldFeature?: ResourceTextFieldFeature,
+  toPlainText: (value: ElceTextValue) => string = textFieldFeature?.toPlainText ?? authoredTextToPlainText,
 ): RemixNode {
   const cellValueByKey = new Map(content.values.map((entry) => [`${entry.categoryId}\u0000${entry.seriesId}`, entry.value]))
   const hasColumnLabels = content.columnLabelsEnabled ?? true
@@ -372,7 +385,7 @@ function renderGridEditor(
   selectedGridPositionByBdcId.set(bdcId, selected)
   const rowCount = content.categories.length + headerRowOffset + 1
   const columnCount = content.series.length + headerColumnOffset + 1
-  const selectedValue = gridCellValue(content, cellValueByKey, selected.rowIndex, selected.columnIndex)
+  const selectedValue = gridCellValue(content, cellValueByKey, selected.rowIndex, selected.columnIndex, toPlainText)
 
   /** Updates the current cell and its visible highlight without a document command. */
   const selectPosition = (position: GridPosition, value: string): void => {
@@ -405,7 +418,7 @@ function renderGridEditor(
     if (rowIndex < 0 || columnIndex < 0
       || (hasColumnLabels && hasRowLabels && rowIndex === 0 && columnIndex === 0)) return
     const nextPosition = { rowIndex, columnIndex }
-    const value = gridCellValue(content, cellValueByKey, rowIndex, columnIndex)
+    const value = gridCellValue(content, cellValueByKey, rowIndex, columnIndex, toPlainText)
     selectPosition(nextPosition, value)
     const nextCell = document.getElementById(gridCellId(bdcId, rowIndex, columnIndex))
     const nextInput = nextCell?.querySelector<HTMLElement>('input, [contenteditable="true"]')
@@ -428,7 +441,7 @@ function renderGridEditor(
   const updateHeading = (heading: 'columnLabelsEnabled' | 'rowLabelsEnabled', enabled: boolean): void => {
     const position = selectedGridPositionByBdcId.get(bdcId) ?? selected
     const field = document.getElementById(`elce-statistical-graph-selected-cell-${bdcId}`) as HTMLInputElement | null
-    const value = field?.value ?? gridCellValue(content, cellValueByKey, position.rowIndex, position.columnIndex)
+    const value = field?.value ?? gridCellValue(content, cellValueByKey, position.rowIndex, position.columnIndex, toPlainText)
     const nextPosition = { ...position }
     if (heading === 'columnLabelsEnabled') {
       if (enabled && !hasColumnLabels) nextPosition.rowIndex += 1
@@ -578,7 +591,7 @@ function renderGridEditor(
                     textFieldFeature,
                     textFieldAttributes,
                     onChange: (next) => actions.setGridCell(position.rowIndex, position.columnIndex, next),
-                    onFocus: () => selectPosition(position, plainTextFromValue(value)),
+                    onFocus: () => selectPosition(position, toPlainText(value)),
                     onKeyDown: (event) => moveSelection(event, position),
                   })}
                 </th>
@@ -608,7 +621,7 @@ function renderGridEditor(
                     textFieldFeature,
                     textFieldAttributes,
                     onChange: (next) => actions.setGridCell(rowIndex, 0, next),
-                    onFocus: () => selectPosition({ rowIndex, columnIndex: 0 }, plainTextFromValue(category?.label ?? '')),
+                    onFocus: () => selectPosition({ rowIndex, columnIndex: 0 }, toPlainText(category?.label ?? '')),
                     onKeyDown: (event) => moveSelection(event, { rowIndex, columnIndex: 0 }),
                   })}
                 </th> : null}
@@ -684,7 +697,7 @@ function renderGridLabelField(options: GraphGridLabelFieldOptions): RemixNode {
     type="text"
     aria-label={options.label}
     placeholder={options.placeholder}
-    value={plainTextFromValue(options.value)}
+    value={authoredTextToPlainText(options.value)}
     {...options.textFieldAttributes}
     mix={on<HTMLInputElement, 'keydown'>('keydown', options.onKeyDown)}
   />
@@ -718,6 +731,7 @@ function gridCellValue(
   valuesByKey: ReadonlyMap<string, number>,
   rowIndex: number,
   columnIndex: number,
+  toPlainText: (value: ElceTextValue) => string,
 ): string {
   const hasColumnLabels = content.columnLabelsEnabled ?? true
   const hasRowLabels = content.rowLabelsEnabled ?? true
@@ -725,9 +739,9 @@ function gridCellValue(
   const headerColumnOffset = Number(hasRowLabels)
   if (hasColumnLabels && rowIndex === 0) {
     if (hasRowLabels && columnIndex === 0) return ''
-    return plainTextFromValue(content.series[columnIndex - headerColumnOffset]?.label ?? '')
+    return toPlainText(content.series[columnIndex - headerColumnOffset]?.label ?? '')
   }
-  if (hasRowLabels && columnIndex === 0) return plainTextFromValue(content.categories[rowIndex - headerRowOffset]?.label ?? '')
+  if (hasRowLabels && columnIndex === 0) return toPlainText(content.categories[rowIndex - headerRowOffset]?.label ?? '')
   const category = content.categories[rowIndex - headerRowOffset]
   const series = content.series[columnIndex - headerColumnOffset]
   if (category === undefined || series === undefined) return ''

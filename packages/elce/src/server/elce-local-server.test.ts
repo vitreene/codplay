@@ -4,7 +4,7 @@ import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { appearanceFontAssetPath, renderDocumentHtml, startElceLocalServer } from './elce-local-server'
+import { appearanceFontAssetPath, authoringStyleFiles, renderDocumentHtml, startElceLocalServer } from './elce-local-server'
 
 describe('Elcé local appearance font assets', () => {
   it('maps local font URLs to the existing Remix source mount', () => {
@@ -41,6 +41,32 @@ describe('Elcé local server document preloads', () => {
 
     expect(html).toContain('id="elce-module-preload-1" rel="modulepreload" href="/assets/lazy-editor.tsx"')
     expect(html).toContain('id="elce-module-preload-2" rel="modulepreload" href="/assets/scroll-container.ts"')
+  })
+})
+
+describe('Elcé local server authoring styles', () => {
+  it('loads shared styles and only the active mod styles for document routes', () => {
+    const learningStyles = authoringStyleFiles('/learning/project-a')
+    const quizHuntStyles = authoringStyleFiles('/hunt/project-a')
+
+    expect(learningStyles).toContain('packages/elce/src/core/authoring/layout/scenario-tree.css')
+    expect(learningStyles).toContain('packages/elce/src/core/authoring/page/page-editor-view.css')
+    expect(learningStyles).toContain('packages/elce/src/mods/learning/authoring/learning-workspace.css')
+    expect(learningStyles).toContain('packages/elce/src/mods/learning/authoring/learning-appearance-panel.css')
+    expect(learningStyles).not.toContain('packages/elce/src/mods/quiz-hunt/authoring/quiz-hunt-authoring.css')
+    expect(quizHuntStyles).toContain('packages/elce/src/core/authoring/layout/scenario-tree.css')
+    expect(quizHuntStyles).toContain('packages/elce/src/core/authoring/page/page-editor-view.css')
+    expect(quizHuntStyles).toContain('packages/elce/src/mods/quiz-hunt/authoring/quiz-hunt-authoring.css')
+    expect(quizHuntStyles).not.toContain('packages/elce/src/mods/learning/authoring/learning-workspace.css')
+    expect(quizHuntStyles).not.toContain('packages/elce/src/mods/learning/authoring/learning-appearance-panel.css')
+  })
+
+  it('keeps both mod styles available on chooser routes', () => {
+    const styles = authoringStyleFiles('/')
+
+    expect(styles).toContain('packages/elce/src/mods/learning/authoring/learning-workspace.css')
+    expect(styles).toContain('packages/elce/src/mods/learning/authoring/learning-appearance-panel.css')
+    expect(styles).toContain('packages/elce/src/mods/quiz-hunt/authoring/quiz-hunt-authoring.css')
   })
 })
 

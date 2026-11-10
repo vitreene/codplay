@@ -18,3 +18,7 @@ export type CardCommand =
   | Readonly<{ type: 'bdc.card.media.set'; bdcId: BdcId; mediaId: MediaId | null }>
   | Readonly<{ type: 'bdc.card.media.attach'; bdcId: BdcId; media: MediaMetadata }>
   | Readonly<{ type: 'bdc.card.delete'; bdcId: BdcId }>
+
+export type CardEditCommand = Extract<CardCommand, {
+  type: 'bdc.card.update' | 'bdc.card.layout.set' | 'bdc.card.media.set' | 'bdc.card.media.attach'
+}>

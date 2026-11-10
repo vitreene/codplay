@@ -391,7 +391,7 @@ nécessaires et leurs licences dans le package ; la feuille exportée utilise
 - [`elce-local-server.test.ts`](../src/server/elce-local-server.test.ts)
   vérifie le routage des `.ttf` et le rejet des chemins invalides ; le test de
   l’exporteur vérifie l’inclusion des fontes et licences utilisées.
-- [`elce-scenario-exporter.test.ts`](../src/export/elce-scenario-exporter.test.ts)
+- [`learning-scenario-exporter.test.ts`](../src/mods/learning/persistence/server/learning-scenario-exporter.test.ts)
   vérifie que les feuilles CSS de thème utilisées sont présentes dans le CSS
   scoped du layout exporté et que les feuilles inutilisées en sont absentes. Le
   scénario Carte exporté vérifie aussi le titre, l’image, le dégradé généré et

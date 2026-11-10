@@ -796,7 +796,10 @@ function canDeletePageBdc(page: QuizHuntPage, bdcs: readonly ResourceBdc[], bdc:
     || bdcs.filter((candidate) => candidate.type === QUESTION_BDC_TYPE).length > 1)
 }
 
-const quizHuntTextFieldFeature: ResourceTextFieldFeature = { render: renderQuizHuntTextField }
+const quizHuntTextFieldFeature: ResourceTextFieldFeature = {
+  toPlainText: authoredTextToPlainText,
+  render: renderQuizHuntTextField,
+}
 
 /** Renders the shared Section editor with only its text extension and actor path. */
 function renderQuizHuntSection(

@@ -1,7 +1,7 @@
 import type { SectionContent } from '../../domain/section-types'
 import { decodeSqliteText, encodeNullableSqliteText } from '../../../../document/persistence/sqlite/sqlite-text-values'
-import { sqliteNullableText, sqliteStringValue, sqliteQuery } from '../../../../document/persistence/sqlite/sqlite-query-types'
-import type { SqliteQuery, SqliteRow } from '../../../../document/persistence/sqlite/sqlite-query-types'
+import { sqliteNullableText, sqliteStringValue, sqliteQuery } from '../../../../../core/persistence/sqlite/sqlite-query-types'
+import type { SqliteQuery, SqliteRow } from '../../../../../core/persistence/sqlite/sqlite-query-types'
 
 export const SECTION_SQLITE_SELECT = 'SELECT * FROM sections WHERE project_id = ?'
 

@@ -20,5 +20,7 @@ export interface ResourceTextFieldOptions {
 
 /** Lets a mod provide rich text editing while resources retain native fields by default. */
 export interface ResourceTextFieldFeature {
+  /** Projects a value to the plain text shown by resource-owned controls. */
+  readonly toPlainText: (value: AuthoredTextValue) => string
   render(options: ResourceTextFieldOptions): RemixNode
 }

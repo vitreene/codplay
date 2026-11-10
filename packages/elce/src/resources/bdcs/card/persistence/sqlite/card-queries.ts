@@ -1,7 +1,7 @@
 import type { CardContent } from '../../domain/card-types'
 import { decodeSqliteText, encodeNullableSqliteText } from '../../../../document/persistence/sqlite/sqlite-text-values'
-import { sqliteNullableText, sqliteQuery, sqliteStringValue } from '../../../../document/persistence/sqlite/sqlite-query-types'
-import type { SqliteQuery, SqliteRow } from '../../../../document/persistence/sqlite/sqlite-query-types'
+import { sqliteNullableText, sqliteQuery, sqliteStringValue } from '../../../../../core/persistence/sqlite/sqlite-query-types'
+import type { SqliteQuery, SqliteRow } from '../../../../../core/persistence/sqlite/sqlite-query-types'
 
 export const CARD_SQLITE_SELECT = 'SELECT * FROM cards WHERE project_id = ?'
 

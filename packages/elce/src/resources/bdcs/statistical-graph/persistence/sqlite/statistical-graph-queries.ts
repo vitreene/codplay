@@ -1,6 +1,6 @@
 import type { StatisticalGraphContent } from '../../domain/statistical-graph-types'
-import { sqliteQuery, sqliteStringValue } from '../../../../document/persistence/sqlite/sqlite-query-types'
-import type { SqliteQuery, SqliteRow } from '../../../../document/persistence/sqlite/sqlite-query-types'
+import { sqliteQuery, sqliteStringValue } from '../../../../../core/persistence/sqlite/sqlite-query-types'
+import type { SqliteQuery, SqliteRow } from '../../../../../core/persistence/sqlite/sqlite-query-types'
 
 export const STATISTICAL_GRAPH_SQLITE_SELECT = 'SELECT * FROM statistical_graphs WHERE project_id = ?'
 

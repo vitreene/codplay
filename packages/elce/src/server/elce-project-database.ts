@@ -4,11 +4,11 @@ import type { SqliteDatabase } from 'remix/data-table/sqlite'
 import { loadMigrations } from 'remix/data-table/migrations/node'
 
 const MIGRATION_DIRECTORIES = [
-  fileURLToPath(new URL('../mods/learning/persistence/server/sqlite/migrations/', import.meta.url)),
+  fileURLToPath(new URL('./sqlite/migrations/legacy-learning/', import.meta.url)),
   fileURLToPath(new URL('../mods/quiz-hunt/persistence/server/sqlite/migrations/', import.meta.url)),
 ]
 
-/** Opens the shared Elcé SQLite database and applies migrations from both mods. */
+/** Opens the shared Elcé SQLite database and applies its legacy and mod migrations. */
 export async function openElceProjectDatabase(filename: string): Promise<SqliteDatabase> {
   const database = createSqliteDatabase({ filename, foreignKeys: true })
   try {

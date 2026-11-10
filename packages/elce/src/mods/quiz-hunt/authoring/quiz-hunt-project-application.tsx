@@ -1,14 +1,18 @@
 import type { Handle } from 'remix/component'
 import type { SnapshotFrom } from 'xstate'
 import { renderCoreProjectApplication } from '../../../core/authoring/layout/project-application'
+import { createEditorPanelController } from '../../../core/authoring/layout/editor-panel-controller'
+import { installOutsideMenuDismissal } from '../../../core/authoring/menus/outside-menu-dismissal'
 import type { CoreProjectApplicationView } from '../../../core/authoring/layout/project-application'
-import type { EditorPanelName, EditorPanelVisibility } from '../../../core/authoring/layout/editor-frame'
-import { initialEditorPanelVisibility, resizedEditorPanelVisibility } from '../../../core/authoring/layout/editor-panel-state.ts'
 import { SectionEditorSession } from '../../../resources/bdcs/section/authoring/section-editor-session'
-import type { ScormVersion } from '../../../scorm/scorm-types'
+import type { ScormVersion } from '@codplay/sighty-scorm'
 import { PopupPreviewHost } from '../../../core/preview/popup-preview-host'
-import { POPUP_PREVIEW_PAGE_PARAM, POPUP_PREVIEW_PROJECT_PARAM } from '../../../core/preview/popup-preview-messages'
-import { downloadElceScormPackage } from '../../../export/elce-scorm-export-client'
+import {
+  POPUP_PREVIEW_MOD_PARAM,
+  POPUP_PREVIEW_PAGE_PARAM,
+  POPUP_PREVIEW_PROJECT_PARAM,
+} from '../../../core/preview/popup-preview-messages'
+import { downloadExportBlob } from '../../../core/export/browser-download'
 import { downloadQuizHuntSightyPackage, requestQuizHuntSightyPackage } from '../persistence/quiz-hunt-sighty-export-client'
 import { requestQuizHuntScormPackage } from '../persistence/quiz-hunt-scorm-export-client.ts'
 import { readQuizHuntDocument, writeQuizHuntDocument } from '../persistence/quiz-hunt-document-codec'
@@ -43,9 +47,12 @@ export function QuizHuntProjectApplication(handle: Handle) {
   let exportNotice: string | null = null
   let previewError: string | null = null
   let popupPreviewHost: PopupPreviewHost<QuizHuntDocument> | null = null
-  let panelVisibility: EditorPanelVisibility = initialEditorPanelVisibility(window.innerWidth)
-  let previousWindowWidth = window.innerWidth
-  let returnFocusId: string | null = null
+  const panelController = createEditorPanelController({
+    initialWidth: window.innerWidth,
+    getWidth: () => window.innerWidth,
+    update: () => handle.update(),
+  })
+  const setPanelVisibility = panelController.setPanelVisibility
   let draggedBdcId: string | null = null
   let dropTarget: string | null = null
   let isAddContentMenuOpen = false
@@ -80,19 +87,6 @@ export function QuizHuntProjectApplication(handle: Handle) {
       trashAnimationToken = 0
       if (!handle.signal.aborted) void handle.update()
     }, 420)
-  }
-
-  /** Updates the shared responsive panels and restores focus after a close. */
-  const setPanelVisibility = (panel: EditorPanelName, open: boolean, triggerId?: string): void => {
-    if (open) returnFocusId = triggerId ?? returnFocusId
-    const focusId = open ? null : returnFocusId
-    panelVisibility = open && window.innerWidth <= 800
-      ? { outline: panel === 'outline', properties: panel === 'properties' }
-      : { ...panelVisibility, [panel]: open }
-    if (!open) returnFocusId = null
-    void handle.update().then(() => {
-      if (!open && focusId !== null) document.getElementById(focusId)?.focus()
-    })
   }
 
   /** Opens or closes the fixed Sommaire workspace in the central area. */
@@ -152,7 +146,7 @@ export function QuizHuntProjectApplication(handle: Handle) {
     if (window.__ELCE_PREVIEW_ORIGIN__ !== undefined && window.__ELCE_PREVIEW_ORIGIN__ !== null) {
       const context = controller.getSnapshot().context
       const url = new URL(window.__ELCE_PREVIEW_ORIGIN__)
-      url.searchParams.set('mod', 'quiz-hunt')
+      url.searchParams.set(POPUP_PREVIEW_MOD_PARAM, 'quiz-hunt')
       url.searchParams.set(POPUP_PREVIEW_PROJECT_PARAM, activeProject.id)
       const selectedPageId = context.selection.pageId ?? context.document.pages[0]?.id
       if (selectedPageId === undefined) url.searchParams.delete(POPUP_PREVIEW_PAGE_PARAM)
@@ -175,7 +169,7 @@ export function QuizHuntProjectApplication(handle: Handle) {
       const subscription = controller.subscribe(() => listener())
       return () => subscription.unsubscribe()
     })
-    if (!popupPreviewHost.open()) previewError = 'Le navigateur a bloqué la fenêtre de lecture.'
+    if (!popupPreviewHost.open('quiz-hunt')) previewError = 'Le navigateur a bloqué la fenêtre de lecture.'
     void handle.update()
   }
 
@@ -222,7 +216,7 @@ export function QuizHuntProjectApplication(handle: Handle) {
       try {
         const sightyPackage = await requestQuizHuntSightyPackage(documentSnapshot, mediaSources)
         const scormPackage = await requestQuizHuntScormPackage(sightyPackage, documentSnapshot.name, version)
-        const filename = downloadElceScormPackage(scormPackage.archive, scormPackage.filename)
+        const filename = downloadExportBlob(scormPackage.archive, scormPackage.filename, 'elce-scorm-export-download')
         exportNotice = `Téléchargement du package monoSCO « ${filename} » démarré.`
       } catch (error) {
         exportError = error instanceof Error ? error.message : 'L’export SCORM Quiz Hunt a échoué.'
@@ -263,10 +257,20 @@ export function QuizHuntProjectApplication(handle: Handle) {
         sectionSession.restoreSelection(restore.sectionSelection)
       })
     })
+    const removeProjectMenuDismissal = installOutsideMenuDismissal({
+      getRoot: () => document.getElementById('elce-project-menu'),
+    })
+    const removeAddContentMenuDismissal = installOutsideMenuDismissal({
+      getRoot: () => {
+        const pageId = view.workspace.selection.pageId
+        return pageId === null ? null : document.getElementById(`elce-page-bdc-add-${pageId}`)
+      },
+      isOpen: () => isAddContentMenuOpen,
+      onDismiss: () => setAddContentMenuOpen(false),
+    })
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape' && window.innerWidth <= 800) {
-        const openPanel = panelVisibility.outline ? 'outline' : panelVisibility.properties ? 'properties' : null
-        if (openPanel !== null) setPanelVisibility(openPanel, false)
+      if (event.key === 'Escape' && window.innerWidth <= 800 && panelController.responsivePanel !== null) {
+        panelController.setResponsivePanel(null)
       }
       if (!(event.metaKey || event.ctrlKey) || event.altKey || event.key.toLowerCase() !== 'z') return
       if (view.project.activeProject === null || view.project.projectStatus !== 'active' || view.project.editAccess !== 'active') return
@@ -276,14 +280,15 @@ export function QuizHuntProjectApplication(handle: Handle) {
     }
     const handleResize = (): void => {
       const nextWidth = window.innerWidth
-      panelVisibility = resizedEditorPanelVisibility(panelVisibility, previousWindowWidth, nextWidth)
-      previousWindowWidth = nextWidth
+      panelController.resize(nextWidth)
       void handle.update()
     }
     window.addEventListener('keydown', handleKeyDown)
     window.addEventListener('resize', handleResize)
     handle.signal.addEventListener('abort', () => {
       subscription.unsubscribe()
+      removeProjectMenuDismissal()
+      removeAddContentMenuDismissal()
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('resize', handleResize)
       popupPreviewHost?.destroy()
@@ -306,7 +311,7 @@ export function QuizHuntProjectApplication(handle: Handle) {
       previewError,
       onPreview: openPreview,
     }, actions, sectionSession, handle, {
-      panelVisibility,
+      panelVisibility: panelController.visibility,
       summarySettingsOpen,
       introductionFolderOpen,
       resultPage,

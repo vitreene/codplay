@@ -7,6 +7,7 @@ import type { CarouselTransition } from '../../../revelation/revelation-types'
 import type { MediaType } from '../../../../core/media/media-config'
 import type { CarouselAspectRatio, CarouselContent } from '../domain/carousel-types'
 import type { ResourceBdc } from '../../../document/resource-document-types'
+import type { CardContent } from '../../card/domain/card-types'
 import type { ElceCardEditorActions } from '../../card/authoring/card-facade-types'
 import type { ElceMediaImport } from '../../../../domain/media/media-resource-types'
 import type { StatisticalGraphContent } from '../../statistical-graph/domain/statistical-graph-types'
@@ -15,6 +16,7 @@ import type { ResourceTextFieldFeature } from '../../../../core/authoring/resour
 
 export interface ElceCarouselFacadeOptions {
   readonly dispatch: (command: CardCommand | CarouselCommand | StatisticalGraphCommand) => void
+  readonly getCard: (bdcId: string) => CardContent | null
   readonly selectCard: (bdcId: string | null) => void
   readonly importMedia: (bdcId: string, mediaImport: ElceMediaImport) => void
 }

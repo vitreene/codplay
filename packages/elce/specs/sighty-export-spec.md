@@ -90,7 +90,7 @@ téléchargement partiel.
 
 ## Preuves
 
-- [`elce-scenario-exporter.test.ts`](../src/export/elce-scenario-exporter.test.ts)
+- [`learning-scenario-exporter.test.ts`](../src/mods/learning/persistence/server/learning-scenario-exporter.test.ts)
   vérifie le manifeste Sighty, toutes les scènes directes, un paquet CodPlay
   intact, la CSS du Carousel de page, la CSS du layout, les octets du média,
   l’absence de chemins temporaires, le loader, le manifeste de distribution,
@@ -106,7 +106,7 @@ téléchargement partiel.
 - [`scene-functions.test.ts`](../src/builders/scene-functions/scene-functions.test.ts)
   vérifie les straps Question, formulaire, Carousel et agrandissement avec des
   paramètres de scène fournis par l’état et les événements.
-- [`elce-sighty-export-client.test.ts`](../src/export/elce-sighty-export-client.test.ts)
+- [`learning-sighty-export-client.test.ts`](../src/mods/learning/persistence/learning-sighty-export-client.test.ts)
   vérifie l’envoi du document et des médias référencés ainsi que le traitement
   des erreurs.
 - [`sighty-export-api-controller.test.ts`](../src/server/export/sighty-export-api-controller.test.ts)

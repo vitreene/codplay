@@ -4,17 +4,17 @@ import { dirname, extname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { zipSync } from 'fflate'
 import type { Zippable } from 'fflate'
-import { LearningDocument } from '../mods/learning/document/learning-document'
-import type { LearningDocumentData } from '../mods/learning/document/learning-document-types'
-import type { MediaId, MediaMetadata } from '../core/document/content-document-types'
-import { scenarioExportMediaIds } from './scenario-export-media'
+import { LearningDocument } from '../../document/learning-document'
+import type { LearningDocumentData } from '../../document/learning-document-types'
+import type { MediaId, MediaMetadata } from '../../../../core/document/content-document-types'
+import { learningScenarioExportMediaIds } from '../learning-scenario-export-media'
 import {
   appearanceFontAssetsForDocument,
   appearanceThemeCssAssetPathsForDocument,
-} from '../player/appearance-scene-style-sheet'
-import type { AppearanceFontAsset } from '../player/appearance-font-assets'
+} from '../../../../player/appearance-scene-style-sheet'
+import type { AppearanceFontAsset } from '../../../../player/appearance-font-assets'
 
-const ELCE_PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
+const ELCE_PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../../')
 const EXPORT_WORK_DIRECTORY = resolve(ELCE_PACKAGE_ROOT, '.elce-export')
 const SIGHTY_EXPORT_CLI = fileURLToPath(import.meta.resolve('@codplay/sighty/tools/scenario-export/cli.mjs'))
 const PLAYER_SCENARIO_MODULE = resolve(ELCE_PACKAGE_ROOT, 'src/mods/learning/reading/learning-player.ts')
@@ -24,7 +24,7 @@ const SCENE_FUNCTIONS_MODULE = resolve(ELCE_PACKAGE_ROOT, 'src/builders/scene-fu
 const ENGINE_CONFIG_MODULE = resolve(ELCE_PACKAGE_ROOT, 'src/player/elce-player-engine.ts')
 
 /** Converts one current Elcé document and its media bytes into a Sighty package ZIP. */
-export async function exportElceSightyPackage(
+export async function exportLearningSightyPackage(
   documentData: LearningDocumentData,
   mediaBytesById: ReadonlyMap<MediaId, Uint8Array>,
 ): Promise<Uint8Array> {
@@ -41,7 +41,7 @@ export async function exportElceSightyPackage(
   }
 
   const scenarioMediaSources = Object.fromEntries([...mediaPathsById].map(([mediaId, source]) => [mediaId, source.relativePath]))
-  const requiredMediaIds = scenarioExportMediaIds(document, scenarioMediaSources)
+  const requiredMediaIds = learningScenarioExportMediaIds(document, scenarioMediaSources)
   const mediaSources = new Map<MediaId, Readonly<{ media: MediaMetadata; bytes: Uint8Array; relativePath: string }>>()
   for (const mediaId of requiredMediaIds) {
     const source = mediaPathsById.get(mediaId)

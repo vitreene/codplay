@@ -15,7 +15,7 @@ import { CLIPBOARD_TAB } from './learning-authoring-config'
 import type { ClipboardTab } from './learning-authoring-config'
 import { renderEditorFrame } from '../../../core/authoring/layout/editor-frame'
 import type { DraggedScenarioEntry } from './learning-workspace-types'
-import { workspacePanelVisibilityFromResponsiveState } from './workspace-panel-state'
+import { editorPanelVisibilityFromResponsiveState } from '../../../core/authoring/layout/editor-panel-state'
 import { createLearningTextFieldFeature } from '../inline-text/learning-inline-text-field'
 import type { ProfileDefinition } from '../profile/domain/learning-profile-types'
 
@@ -34,7 +34,7 @@ export function renderEditorWorkspace(props: EditorWorkspaceViewProps): RemixNod
   const clipboardTab = props.clipboardTab ?? CLIPBOARD_TAB.PAGES
   const setClipboardTab = props.onSetClipboardTab ?? (() => {})
   const panelVisibility = props.panelVisibility
-    ?? workspacePanelVisibilityFromResponsiveState(props.responsivePanel, typeof window === 'undefined' ? 1280 : window.innerWidth)
+    ?? editorPanelVisibilityFromResponsiveState(props.responsivePanel, typeof window === 'undefined' ? 1280 : window.innerWidth)
   const scenarioPageIds = new Set(props.view.documentModel.scenarioPageIds)
   const textFieldFeature = createLearningTextFieldFeature(
     props.view.documentModel.data.profile.properties,

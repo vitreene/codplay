@@ -1,23 +1,17 @@
 import type { Actor } from 'xstate'
 import { CoreEditorFacade, runProjectOperationAndWait } from '../../../core/authoring/core-editor-facade'
-import type { QuestionContent, QuestionType } from '../../../resources/bdcs/question/domain/question-types'
-import { QUESTION_TYPE } from '../../../resources/bdcs/question/question-config'
-import { ElceQuestionService } from '../../../resources/bdcs/question/domain/question-service'
+import type { QuestionContent } from '../../../resources/bdcs/question/domain/question-types'
+import { QUESTION_BDC_TYPE } from '../../../resources/bdcs/question/question-config'
+import { ElceQuestionFacade } from '../../../resources/bdcs/question/authoring/question-facade'
 import type { ElceQuestionEditorActions } from '../../../resources/bdcs/question/authoring/question-facade-types'
-import { ElceMediaResourceService } from '../../../domain/media/media-resource-service'
-import { ElceCardService } from '../../../resources/bdcs/card/domain/card-service'
-import type { CardContent, CardTextField } from '../../../resources/bdcs/card/domain/card-types'
-import type { CardImageFit, CardLayoutId } from '../../../resources/bdcs/card/card-config'
-import type { CarouselImagePosition } from '../../../resources/bdcs/carousel/carousel-config'
+import { CARD_BDC_TYPE } from '../../../resources/bdcs/card/card-config'
+import { ElceCardFacade } from '../../../resources/bdcs/card/authoring/card-facade'
 import type { ElceCardEditorActions } from '../../../resources/bdcs/card/authoring/card-facade-types'
-import type { ElceCatalogReference } from '../../../core/catalog/catalog-types'
-import { CATALOG_REFERENCE } from '../../../core/catalog/catalog-config'
-import type { RevelationTransitionOverrides } from '../../../resources/revelation/revelation-types'
-import type { ElceTextValue } from '../../../resources/document/rich-text-types'
+import type { ElceMediaImport } from '../../../domain/media/media-resource-types'
+import type { CardContent } from '../../../resources/bdcs/card/domain/card-types'
 import type { SectionContent } from '../../../resources/bdcs/section/domain/section-types'
 import type { ElceSectionChange } from '../../../resources/anchoring/domain/anchor-types'
 import type { SectionChangeSelection } from '../../../resources/anchoring/authoring/anchor-drop-facade'
-import { QUESTION_BDC_TYPE } from '../../../resources/bdcs/question/question-config'
 import type { QuizHuntCommand } from './quiz-hunt-controller'
 import { createQuizHuntControllerMachine } from './quiz-hunt-controller'
 import type { QuizHuntGroup, QuizHuntSettings } from '../document/quiz-hunt-document-types'
@@ -26,9 +20,8 @@ import type { QuizHuntGroup, QuizHuntSettings } from '../document/quiz-hunt-docu
 export class QuizHuntEditorFacade {
   public readonly core: CoreEditorFacade
   private readonly controller: Actor<ReturnType<typeof createQuizHuntControllerMachine>>
-  private readonly questions = new ElceQuestionService()
-  private readonly cards = new ElceCardService()
-  private readonly mediaResources = new ElceMediaResourceService()
+  private readonly questionFacade: ElceQuestionFacade
+  private readonly cardFacade: ElceCardFacade
 
   /** Binds core project actions and the Quiz Hunt document actor. */
   public constructor(controller: Actor<ReturnType<typeof createQuizHuntControllerMachine>>) {
@@ -38,6 +31,26 @@ export class QuizHuntEditorFacade {
       (name) => this.apply({ type: 'document.rename', name }),
       (operation) => runProjectOperationAndWait(controller, operation),
     )
+    this.questionFacade = new ElceQuestionFacade({
+      dispatch: (command) => this.apply(command),
+      getQuestion: (bdcId) => this.currentQuestion(bdcId),
+      importMedia: (bdcId, mediaImport: ElceMediaImport) => controller.send({
+        type: 'question.media.file.import',
+        bdcId,
+        file: mediaImport.file,
+        media: mediaImport.media,
+      }),
+    })
+    this.cardFacade = new ElceCardFacade({
+      dispatch: (command) => this.apply(command),
+      getCard: (bdcId) => this.currentCard(bdcId),
+      importMedia: (bdcId, mediaImport: ElceMediaImport) => controller.send({
+        type: 'card.media.file.import',
+        bdcId,
+        file: mediaImport.file,
+        media: mediaImport.media,
+      }),
+    })
   }
 
   /** Creates a page inside a game bank or the optional Introduction chapter. */
@@ -132,69 +145,19 @@ export class QuizHuntEditorFacade {
     })
   }
 
-  /** Creates the shared Question editor actions against the latest controller value. */
+  /** Creates shared Question editor actions against the latest document content. */
   public createQuestionEditorActions(bdcId: string): ElceQuestionEditorActions {
-    const update = (change: (question: QuestionContent) => QuestionContent): void => {
-      const question = this.currentQuestion(bdcId)
-      if (question !== null) this.apply({ type: 'question.update', bdcId, question: change(question) })
-    }
-    return {
-      setType: (type: QuestionType) => update((question) => this.questions.changeType(question, type)),
-      setTitle: (title: ElceTextValue) => update((question) => this.questions.setTitle(question, title)),
-      setPrompt: (prompt: ElceTextValue) => update((question) => this.questions.setPrompt(question, prompt)),
-      setValidationLabel: (label: ElceTextValue) => update((question) => this.questions.setValidationLabel(question, label)),
-      setAnswerLabel: (answerId, label) => update((question) => this.questions.setAnswerLabel(question, answerId, label)),
-      setAnswerCorrect: (answerId, correct) => update((question) => this.questions.setAnswerCorrect(question, answerId, correct)),
-      addAnswer: () => update((question) => this.questions.addAnswer(question)),
-      removeAnswer: (answerId) => update((question) => this.questions.removeAnswer(question, answerId)),
-      canRemoveAnswer: (answerId) => {
-        const question = this.currentQuestion(bdcId)
-        return question !== null && question.type !== QUESTION_TYPE.TRUE_FALSE
-          && question.answers.length > 1 && question.answers.some((answer) => answer.id === answerId)
-      },
-      deleteQuestion: () => this.apply({ type: 'question.delete', bdcId }),
-      moveAnswer: (answerId, index) => update((question) => this.questions.moveAnswer(question, answerId, index)),
-      importMedia: (file) => {
-        const mediaImport = this.mediaResources.createImport(file)
-        if (mediaImport !== null) this.controller.send({ type: 'question.media.file.import', bdcId, file, media: mediaImport.media })
-      },
-      clearMedia: () => this.apply({ type: 'question.media.set', bdcId, mediaId: null }),
-    }
+    return this.questionFacade.createEditorActions(bdcId)
   }
 
   /** Creates the shared Card editor actions for Quiz Hunt's configured result Cards. */
   public createCardEditorActions(): ElceCardEditorActions {
-    const update = (bdcId: string, change: (card: CardContent) => CardContent): void => {
-      const card = this.currentCard(bdcId)
-      if (card !== null) this.apply({ type: 'card.update', bdcId, card: change(card) })
-    }
-    return {
-      setCardLayout: (bdcId: string, layoutId: CardLayoutId) => this.apply({ type: 'card.layout.set', bdcId, layoutId }),
-      setCardText: (bdcId: string, field: CardTextField, value: ElceTextValue) => update(bdcId, (card) => this.cards.setTextField(card, field, value)),
-      setCaption: (bdcId: string, value: ElceTextValue) => update(bdcId, (card) => ({ ...card, caption: value })),
-      setImagePosition: (bdcId: string, imagePosition: CarouselImagePosition) => update(bdcId, (card) => this.cards.setImagePosition(card, imagePosition)),
-      setImageFit: (bdcId: string, imageFit: CardImageFit) => update(bdcId, (card) => this.cards.setImageFit(card, imageFit)),
-      setRevelation: (bdcId: string, revelation: RevelationTransitionOverrides) => update(bdcId, (card) => this.cards.setRevelation(card, revelation)),
-      attachCatalogReference: (bdcId: string, reference: ElceCatalogReference) => {
-        if (reference.kind === CATALOG_REFERENCE.MEDIA) this.apply({ type: 'card.media.set', bdcId, mediaId: reference.mediaId })
-      },
-      importMediaFile: (bdcId: string, file: File) => {
-        const mediaImport = this.mediaResources.createImport(file)
-        if (mediaImport !== null) this.controller.send({ type: 'card.media.file.import', bdcId, file, media: mediaImport.media })
-      },
-      clearMedia: (bdcId: string) => this.apply({ type: 'card.media.set', bdcId, mediaId: null }),
-    }
+    return this.cardFacade.createEditorActions()
   }
 
   /** Resolves a shared media drag payload and attaches it to this Question. */
   public attachQuestionMediaReference(bdcId: string, value: string): void {
-    try {
-      const reference = JSON.parse(value) as { kind?: unknown; mediaId?: unknown }
-      if (reference.kind !== CATALOG_REFERENCE.MEDIA || typeof reference.mediaId !== 'string') return
-      this.apply({ type: 'question.media.set', bdcId, mediaId: reference.mediaId })
-    } catch {
-      return
-    }
+    this.questionFacade.attachMediaReference(bdcId, value)
   }
 
   /** Dispatches one accepted Quiz Hunt command to the shared controller machine. */
@@ -211,7 +174,7 @@ export class QuizHuntEditorFacade {
   /** Reads the current Card without retaining authoring state in the view. */
   private currentCard(bdcId: string): CardContent | null {
     const bdc = this.controller.getSnapshot().context.document.bdcs.find((candidate) => candidate.id === bdcId)
-    return bdc?.type === 'card' ? bdc.card ?? null : null
+    return bdc?.type === CARD_BDC_TYPE ? bdc.card ?? null : null
   }
 
 }

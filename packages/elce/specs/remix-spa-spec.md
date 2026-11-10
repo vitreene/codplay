@@ -45,6 +45,23 @@ de celui du paquet `remix`. La branche RC4 et ses anciens runtimes `ui` et
   charge le catalogue de l’autre mod. Un clic ouvre la route du document ; la
   corbeille lance sa suppression confirmée. `/new` demande un nom avant
   d’envoyer la création au coordinateur et d’ouvrir la route obtenue.
+- Les menus Projet, Scénario, ajout de contenu de page et ajout de vue Carousel
+  utilisent [`installOutsideMenuDismissal`](../src/core/authoring/menus/outside-menu-dismissal.ts).
+  Le propriétaire fournit la racine courante et, pour un menu contrôlé, son
+  état et son callback de fermeture. Un clic dedans reste disponible pour la
+  commande ; `pointerdown` ou `click` à l’extérieur ferme le menu. Le
+  propriétaire retire les listeners au démontage. L’état des menus et les
+  commandes restent dans leur application ou ressource ; le helper ne déplace
+  ni l’état du document ni la logique de création.
+- Les deux applications utilisent
+  [`createEditorPanelController`](../src/core/authoring/layout/editor-panel-controller.ts)
+  avec les calculs de [`editor-panel-state.ts`](../src/core/authoring/layout/editor-panel-state.ts).
+  À 800 px ou moins, les panneaux sont fermés au démarrage et un seul peut être
+  ouvert ; Échap le ferme et rend le focus au bouton qui l’a ouvert. De 801 à
+  1200 px, le Scénario est ouvert et le panneau droit fermé ; au-delà de
+  1200 px, les deux sont ouverts. Le passage d’une bande de largeur à une autre
+  applique ces valeurs partagées. Chaque mod garde son contenu de panneau et
+  son état local.
 - [`LearningProjectApplication`](../src/mods/learning/authoring/learning-project-application.tsx)
   assemble le workspace Learning avec
   [`renderCoreProjectApplication`](../src/core/authoring/layout/project-application.tsx),
@@ -56,7 +73,12 @@ de celui du paquet `remix`. La branche RC4 et ses anciens runtimes `ui` et
 - [`LearningPageEditor`](../src/mods/learning/authoring/learning-page-editor.tsx)
   assemble les éditeurs de ressources et les contributions propres au mod ;
   [`renderPageEditorView`](../src/core/authoring/page/page-editor-view.tsx)
-  possède la présentation commune du titre, des lignes BDC et des séparateurs.
+  possède la présentation commune du titre, du rail et des cadres BDC. Ses
+  règles CSS résident dans
+  [`page-editor-view.css`](../src/core/authoring/page/page-editor-view.css) ;
+  `scenario-tree.css` possède la présentation partagée de l’arborescence.
+  `learning-workspace.css` et `quiz-hunt-authoring.css` restent propres à leur
+  mod et fournissent leurs adaptations de contenu.
   Les sessions Section/ancres gardent leurs callbacks de montage, d’actualisation
   et de destruction.
 - `LearningPageEditor` conserve l’ordre `page.bdcIds`, les séparateurs de
@@ -88,6 +110,13 @@ de celui du paquet `remix`. La branche RC4 et ses anciens runtimes `ui` et
 - [`elce-local-server.ts`](../src/server/elce-local-server.ts) sert le document
   Remix et ses assets, puis réutilise ou lance le serveur projet API sur
   `127.0.0.1:5181`. La réponse HTML fournit l’import map Remix et les styles.
+  Une requête HTML directe pour `/learning/:documentId` charge les feuilles
+  partagées, Learning et les ressources ; `/hunt/:documentId` charge les feuilles
+  partagées, Quiz Hunt et les ressources, sans les feuilles Learning. `/` et
+  `/new` conservent les deux feuilles de mod pendant que le sélecteur choisit
+  la composition côté navigateur. Les styles de l’éditeur appartiennent à
+  `core/authoring/layout/scenario-tree.css` et
+  `core/authoring/page/page-editor-view.css`.
   Le module partagé `packages/authoring/audio-capture/src` est autorisé par
   `allowFiles` et servi depuis son mount `audioCapture`, afin que l’éditeur
   puisse importer `@codplay/audio-capture` sans déplacer son code dans Elcé.
@@ -190,7 +219,11 @@ HMR, la récupération après erreur et le mode production.
   la session et la route courantes restent actives. Deux sessions documentaires
   ne coexistent pas dans l’onglet.
 - `?mod=quiz-hunt` ne choisit plus la composition auteur. Ce paramètre reste
-  réservé à la sélection de la composition de preview.
+  réservé à la sélection de la composition de preview ; son absence sélectionne
+  Learning. Le `PopupPreviewHost` partagé reçoit le `previewModKey` de
+  l'application propriétaire et le transmet à la popup, aussi bien pour une
+  session locale que pour une lecture réseau. Quiz Hunt passe `quiz-hunt` ;
+  l'ouverture Learning retire ce paramètre et garde le lecteur par défaut.
 - Aucun code de production ou test du workspace Elcé n’importe React,
   ReactDOM, `@xstate/react`, `@tiptap/react` ou `lucide-react`. Vite reste un
   outil de build, de tests et de chargement SSR du point d’entrée local ; il ne
@@ -205,6 +238,26 @@ HMR, la récupération après erreur et le mode production.
   Preview.
 - [`learning-project-application.test.tsx`](../src/mods/learning/authoring/learning-project-application.test.tsx)
   couvre le sélecteur superposé et le formulaire de nommage.
+- [`outside-menu-dismissal.test.ts`](../src/core/authoring/menus/outside-menu-dismissal.test.ts)
+  vérifie les clics intérieurs et extérieurs pour les menus natifs et contrôlés,
+  ainsi que le retrait des listeners.
+- [`editor-panel-controller.test.ts`](../src/core/authoring/layout/editor-panel-controller.test.ts)
+  vérifie l’exclusivité étroite, le retour du focus et les limites 800/801 et
+  1200/1201 px.
+- [`learning-page-editor.test.tsx`](../src/mods/learning/authoring/learning-page-editor.test.tsx)
+  vérifie la fermeture du menu Page quand une autre commande de menu s’ouvre.
+- Le 9 novembre 2026, Safari Technology Preview valide les menus et panneaux
+  dans Learning et Quiz Hunt. Il exerce l’ajout d’une Carte par le Carousel,
+  l’ajout d’un bloc Texte dans Quiz Hunt, les clics extérieurs, le sélecteur
+  Projet, le changement de page et le rechargement. Aux largeurs 800, 801, 1200
+  et 1201 px, les deux mods conservent les états de panneau prévus ; Échap
+  referme le panneau étroit et rend le focus à son bouton.
+- Le 9 novembre 2026, Safari Technology Preview ouvre en lecture seule le
+  document Quiz Hunt existant depuis son éditeur : l'URL locale porte
+  `mod=quiz-hunt`, le lecteur affiche le scénario et sa console ne contient
+  aucune erreur ni aucun avertissement. Le document Learning existant ouvre
+  une URL sans `mod` et affiche sa Section, ses Cartes ancrées et son Graphe ;
+  sa console ne contient aucune erreur ni aucun avertissement.
 - [`project-session-coordinator.test.ts`](../src/mods/learning/integration/project-session-coordinator.test.ts)
   et [`project-operations.test.ts`](../src/mods/learning/integration/project-operations.test.ts)
   couvrent la création nommée, l’ouverture demandée, la conservation de la

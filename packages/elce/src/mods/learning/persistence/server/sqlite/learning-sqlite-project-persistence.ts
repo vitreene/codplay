@@ -1,5 +1,4 @@
 import { rawSql } from 'remix/data-table'
-import { randomUUID } from 'node:crypto'
 import type { Database, DataManipulationResult } from 'remix/data-table'
 import type { SqliteDatabase } from 'remix/data-table/sqlite'
 import { PROJECT_EDIT_LEASE_MS } from '../../../../../config/api-config'
@@ -13,13 +12,13 @@ import type { LearningBdc, LearningChapter, LearningDocumentData, LearningPage }
 import type { MediaMetadata } from '../../../../../core/document/content-document-types'
 import { CONTENT_BLOCKS_SQLITE_SELECT, CONTENT_BLOCK_PLACEMENTS_SQLITE_SELECT, contentBlockFromSqliteRows, prepareContentBlockInsert, prepareContentBlockPlacementInsert } from '../../../../../resources/document/persistence/sqlite/content-block-queries'
 import { decodeSqliteText as decodeSqlText, encodeNullableSqliteText as nullableSerializedText } from '../../../../../resources/document/persistence/sqlite/sqlite-text-values'
-import type { SqliteQuery, SqliteRow } from '../../../../../resources/document/persistence/sqlite/sqlite-query-types'
+import type { SqliteQuery, SqliteRow } from '../../../../../core/persistence/sqlite/sqlite-query-types'
 import {
   sqliteNullableNumber as nullableNumber,
   sqliteNullableText as nullableText,
   sqliteNumberValue as numberValue,
   sqliteStringValue as stringValue,
-} from '../../../../../resources/document/persistence/sqlite/sqlite-query-types'
+} from '../../../../../core/persistence/sqlite/sqlite-query-types'
 import { CARD_SQLITE_SELECT, cardContentFromSqliteRow, prepareCardInsert } from '../../../../../resources/bdcs/card/persistence/sqlite/card-queries'
 import { CAROUSEL_SQLITE_SELECT, carouselContentFromSqliteRows, prepareCarouselInsert } from '../../../../../resources/bdcs/carousel/persistence/sqlite/carousel-queries'
 import { QUESTION_ANSWERS_SQLITE_SELECT, QUESTION_SQLITE_SELECT, prepareQuestionInsert, questionContentFromSqliteRows } from '../../../../../resources/bdcs/question/persistence/sqlite/question-queries'
@@ -37,6 +36,15 @@ import type {
 } from '../../../../../core/server/projects/project-persistence'
 import type { SaveLearningTestStateResult, LearningTestStatePersistence } from '../learning-test-state-persistence'
 import type { MediaPersistence, StoreMediaFileResult, StoredMediaResource } from '../../../../../core/server/media/media-persistence'
+import { findSqliteMediaFile, listSqliteMediaStorageKeys } from '../../../../../core/server/media/sqlite-media-queries'
+import { publishSqliteMediaFile } from '../../../../../core/server/media/sqlite-media-publication'
+import {
+  acquireSqliteProjectEditAccess,
+  getSqliteProjectEditGrantState,
+  hasSqliteProjectEditAccess,
+  releaseSqliteProjectEditAccess,
+  renewSqliteProjectEditAccess,
+} from '../../../../../core/server/projects/sqlite-project-edit-access'
 
 type ProjectDatabase = Pick<Database<'sqlite'>, 'exec'>
 type SqlRow = SqliteRow
@@ -64,61 +72,26 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
 
   /** Reserves one project atomically and reuses a live grant for the same page. */
   public async acquireEditAccess(projectId: string, pageId: string, force = false): Promise<AcquireProjectEditResult> {
-    return this.database.transaction(async (transaction) => {
-      const rows = await queryRows(transaction,
-        "SELECT edit_page_id, edit_grant_id, edit_lease_expires_at FROM projects WHERE project_id = ? AND mod_key = 'learning'", [projectId])
-      const row = rows[0]
-      if (row === undefined) return { kind: 'not-found' }
-      const owner = nullableText(row, 'edit_page_id')
-      const currentGrant = nullableText(row, 'edit_grant_id')
-      const expiresAt = nullableNumber(row, 'edit_lease_expires_at')
-      const now = Date.now()
-      const live = owner !== null && currentGrant !== null && expiresAt !== null && expiresAt > now
-      if (!force && live && owner === pageId) {
-        await queryRows(transaction,
-          "UPDATE projects SET edit_lease_expires_at = ? WHERE project_id = ? AND mod_key = 'learning'", [now + PROJECT_EDIT_LEASE_MS, projectId])
-        return { kind: 'granted', grantId: currentGrant, recovered: false }
-      }
-      if (!force && live) return { kind: 'occupied' }
-      const grantId = randomUUID()
-      await queryRows(transaction,
-        "UPDATE projects SET edit_page_id = ?, edit_grant_id = ?, edit_lease_expires_at = ? WHERE project_id = ? AND mod_key = 'learning'",
-        [pageId, grantId, now + PROJECT_EDIT_LEASE_MS, projectId])
-      return { kind: 'granted', grantId, recovered: force || owner !== null }
-    })
+    return this.database.transaction((transaction) =>
+      acquireSqliteProjectEditAccess(transaction, 'learning', projectId, pageId, force))
   }
 
   /** Reports whether the exact page grant still owns a project. */
   public async hasEditAccess(projectId: string, grant: ProjectEditGrant): Promise<boolean> {
-    const rows = await queryRows(this.database,
-      "SELECT project_id FROM projects WHERE project_id = ? AND edit_page_id = ? AND edit_grant_id = ? AND mod_key = 'learning'",
-      [projectId, grant.pageId, grant.grantId])
-    return rows.length > 0
+    return this.database.transaction((transaction) =>
+      hasSqliteProjectEditAccess(transaction, 'learning', projectId, grant))
   }
 
   /** Renews the exact current grant, including an expired grant not yet replaced. */
   public async renewEditAccess(projectId: string, grant: ProjectEditGrant): Promise<boolean> {
-    const now = Date.now()
-    return this.database.transaction(async (transaction) => {
-      const rows = await queryRows(transaction, `
-        UPDATE projects SET edit_lease_expires_at = ?
-        WHERE project_id = ? AND edit_page_id = ? AND edit_grant_id = ? AND mod_key = 'learning'
-        RETURNING project_id
-      `, [now + PROJECT_EDIT_LEASE_MS, projectId, grant.pageId, grant.grantId])
-      return rows.length > 0
-    })
+    return this.database.transaction((transaction) =>
+      renewSqliteProjectEditAccess(transaction, 'learning', projectId, grant))
   }
 
   /** Releases only the exact current grant, preserving a later owner's right. */
   public async releaseEditAccess(projectId: string, grant: ProjectEditGrant): Promise<boolean> {
-    return this.database.transaction(async (transaction) => {
-      const rows = await queryRows(transaction, `
-        UPDATE projects SET edit_page_id = NULL, edit_grant_id = NULL, edit_lease_expires_at = NULL
-        WHERE project_id = ? AND edit_page_id = ? AND edit_grant_id = ? AND mod_key = 'learning'
-        RETURNING project_id
-      `, [projectId, grant.pageId, grant.grantId])
-      return rows.length > 0
-    })
+    return this.database.transaction((transaction) =>
+      releaseSqliteProjectEditAccess(transaction, 'learning', projectId, grant))
   }
 
   /** Lists project summaries without loading their content tables. */
@@ -136,33 +109,12 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
 
   /** Loads one media row for its upload or file-read route. */
   public async findMediaFile(projectId: string, mediaId: string): Promise<StoredMediaResource | null> {
-    const rows = await queryRows(this.database, `
-      SELECT media_resources.media_id, media_resources.name, media_resources.mime_type,
-        media_resources.size_bytes, media_resources.storage_key, media_resources.content_sha256
-      FROM media_resources
-      JOIN projects USING (project_id)
-      WHERE media_resources.project_id = ? AND media_resources.media_id = ? AND projects.mod_key = 'learning'
-    `, [projectId, mediaId])
-    const row = rows[0]
-    if (row === undefined) return null
-    return {
-      id: stringValue(row, 'media_id'),
-      name: stringValue(row, 'name'),
-      mimeType: stringValue(row, 'mime_type'),
-      size: numberValue(row, 'size_bytes'),
-      storageKey: nullableText(row, 'storage_key'),
-      contentSha256: nullableText(row, 'content_sha256'),
-    }
+    return findSqliteMediaFile(this.database, 'learning', projectId, mediaId)
   }
 
   /** Lists media file keys that remain referenced by the relational document. */
   public async listMediaStorageKeys(): Promise<readonly string[]> {
-    const rows = await queryRows(this.database, `
-      SELECT storage_key
-      FROM media_resources
-      WHERE storage_key IS NOT NULL
-    `)
-    return rows.map((row) => stringValue(row, 'storage_key'))
+    return listSqliteMediaStorageKeys(this.database)
   }
 
   /** Stores the file reference only after checking the target row and content identity. */
@@ -174,48 +126,9 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
     contentSha256: string,
     grant: ProjectEditGrant,
   ): Promise<StoreMediaFileResult> {
-    return this.database.transaction(async (transaction) => {
-      if (await editGrantState(transaction, projectId, grant) !== 'held') return { kind: 'edit-access-lost' }
-      const rows = await queryRows(transaction, `
-        SELECT size_bytes, storage_key, content_sha256
-        FROM media_resources
-        WHERE project_id = ? AND media_id = ?
-      `, [projectId, mediaId])
-      const row = rows[0]
-      if (row === undefined) return { kind: 'media-not-found' }
-      if (numberValue(row, 'size_bytes') !== expectedSize) return { kind: 'media-changed' }
-
-      const existingHash = nullableText(row, 'content_sha256')
-      const existingKey = nullableText(row, 'storage_key')
-      if (existingKey !== null) {
-        return existingHash === contentSha256
-          ? { kind: 'already-stored' }
-          : { kind: 'media-already-has-file' }
-      }
-
-      const duplicateRows = await queryRows(transaction, `
-        SELECT media_id
-        FROM media_resources
-        WHERE project_id = ? AND size_bytes = ? AND content_sha256 = ? AND media_id <> ?
-      `, [projectId, expectedSize, contentSha256, mediaId])
-      if (duplicateRows[0] !== undefined) {
-        return { kind: 'duplicate-content', existingMediaId: stringValue(duplicateRows[0], 'media_id') }
-      }
-
-      const updated = await queryRows(transaction, `
-        UPDATE media_resources
-        SET storage_key = ?, content_sha256 = ?
-        WHERE project_id = ? AND media_id = ? AND storage_key IS NULL
-        RETURNING media_id
-      `, [storageKey, contentSha256, projectId, mediaId])
-      if (updated.length > 0) {
-        await queryRows(transaction, `
-          UPDATE projects SET edit_lease_expires_at = ?
-          WHERE project_id = ? AND edit_page_id = ? AND edit_grant_id = ? AND mod_key = 'learning'
-        `, [Date.now() + PROJECT_EDIT_LEASE_MS, projectId, grant.pageId, grant.grantId])
-      }
-      return updated.length === 0 ? { kind: 'media-changed' } : { kind: 'stored' }
-    })
+    return this.database.transaction((transaction) => publishSqliteMediaFile(
+      transaction, 'learning', projectId, mediaId, expectedSize, storageKey, contentSha256, grant,
+    ))
   }
 
   /** Creates a project from its browser-owned Learning document unless its id already exists. */
@@ -260,7 +173,7 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
   /** Renames a document through its existing domain command and increments its revision. */
   public async renameProject(projectId: string, name: string, grant: ProjectEditGrant): Promise<EditProjectResult> {
     return this.database.transaction(async (transaction) => {
-      const access = await editGrantState(transaction, projectId, grant)
+      const access = await getSqliteProjectEditGrantState(transaction, 'learning', projectId, grant)
       if (access === 'not-found') return { kind: 'not-found' }
       if (access === 'lost') return { kind: 'edit-access-lost' }
       const stored = await readStoredProject(transaction, projectId)
@@ -282,7 +195,7 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
   /** Deletes one project and its relational document rows. */
   public async deleteProject(projectId: string, grant: ProjectEditGrant): Promise<DeleteProjectResult> {
     return this.database.transaction(async (transaction) => {
-      const access = await editGrantState(transaction, projectId, grant)
+      const access = await getSqliteProjectEditGrantState(transaction, 'learning', projectId, grant)
       if (access === 'not-found') return 'not-found'
       if (access === 'lost') return 'edit-access-lost'
 
@@ -301,7 +214,7 @@ export class LearningSqliteProjectPersistence implements ProjectPersistence<Lear
     grant: ProjectEditGrant,
   ): Promise<SaveProjectDocumentResult> {
     return this.database.transaction(async (transaction) => {
-      const access = await editGrantState(transaction, projectId, grant)
+      const access = await getSqliteProjectEditGrantState(transaction, 'learning', projectId, grant)
       if (access === 'not-found') return { kind: 'not-found' }
       if (access === 'lost') return { kind: 'edit-access-lost' }
       const now = Date.now()
@@ -852,21 +765,6 @@ async function clearDocumentRows(database: ProjectDatabase, projectId: string): 
   await queryRows(database, 'DELETE FROM catalog_pages WHERE project_id = ?', [projectId])
   await queryRows(database, 'DELETE FROM pages WHERE project_id = ?', [projectId])
   await queryRows(database, 'DELETE FROM chapters WHERE project_id = ?', [projectId])
-}
-
-/** Reads the exact current grant; expiry permits takeover but not stale writes after replacement. */
-async function editGrantState(
-  database: ProjectDatabase,
-  projectId: string,
-  grant: ProjectEditGrant,
-): Promise<'held' | 'lost' | 'not-found'> {
-  const rows = await queryRows(database,
-    "SELECT edit_page_id, edit_grant_id FROM projects WHERE project_id = ? AND mod_key = 'learning'", [projectId])
-  const row = rows[0]
-  if (row === undefined) return 'not-found'
-  return nullableText(row, 'edit_page_id') === grant.pageId
-    && nullableText(row, 'edit_grant_id') === grant.grantId
-    ? 'held' : 'lost'
 }
 
 /** Returns all rows from a parameterized Remix SQL statement. */

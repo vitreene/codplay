@@ -102,13 +102,22 @@ d’utiliser le circuit d’ancre.
 
 Le rail de navigation des BDC directs de la page se termine par « Ajouter un
 contenu ». Son menu réutilise les créations disponibles et se ferme au clic
-extérieur, y compris si le clic ouvre une autre commande flottante. Safari MCP
-sur Projet 3 confirme l’ouverture puis la fermeture du menu par clic dans le
-contenu de la page et dans une autre commande ; le comportement est porté par
-[`learning-page-editor.tsx`](../src/mods/learning/authoring/learning-page-editor.tsx).
-Quand il est ouvert, le menu reste au premier plan au-dessus des en-têtes et
-barres d’outils collants des BDC, y compris la barre de mise en forme d’une
-Section.
+extérieur, y compris si le clic ouvre une autre commande flottante. Les deux
+mods installent le comportement commun de
+[`installOutsideMenuDismissal`](../src/core/authoring/menus/outside-menu-dismissal.ts)
+sur la racine dynamique de la page ; le listener est retiré au démontage et
+le menu de l’ancienne page disparaît lors d’un changement de page. Un clic
+dans le menu exécute toujours sa commande. La fermeture après création reste
+propre au mod : Learning ferme après la création ; Quiz Hunt laisse le menu
+ouvert après l’ajout d’un bloc Texte.
+
+Le 9 novembre 2026, Safari Technology Preview vérifie dans Learning l’ajout
+d’une vue Carte depuis le Carousel, les clics extérieur et concurrent, ainsi
+que les menus Projet et Scénario. Dans Quiz Hunt, il vérifie l’ajout d’un bloc
+Texte, le clic extérieur, l’ouverture du sélecteur Projet, le changement de
+page puis le rechargement avec le menu fermé. Quand il est ouvert, le menu reste
+au premier plan au-dessus des en-têtes et barres d’outils collants des BDC, y
+compris la barre de mise en forme d’une Section.
 
 ### Cadres des BDC directs
 
@@ -128,6 +137,29 @@ et 1139 px, les cadres gardent leur largeur disponible et le document ne
 déborde pas horizontalement. L’outil de capture Safari MCP a renvoyé une image
 entièrement vide ; la vérification porte donc sur le DOM et les styles
 calculés, pas sur une inspection visuelle de la capture.
+
+Les règles de l’arborescence Scénario partagée appartiennent à
+[`scenario-tree.css`](../src/core/authoring/layout/scenario-tree.css) ; le
+titre, le rail, les cadres et le menu d’ajout de BDC appartiennent à
+[`page-editor-view.css`](../src/core/authoring/page/page-editor-view.css).
+`learning-workspace.css` garde les adaptations Learning et
+`quiz-hunt-authoring.css` garde les espacements propres à Quiz Hunt. Un document
+chargé directement ne reçoit que la feuille de son mod, les feuilles core et
+les feuilles de ressources ; le sélecteur `/` ou `/new` reçoit les deux feuilles
+de mod car le choix se fait dans le navigateur.
+
+Le 9 novembre 2026, Safari Technology Preview vérifie l’interface des deux
+mods sur des documents temporaires isolés. La page Quiz Hunt garde ses commandes
+de scénario et le même cadre central et rail BDC que Learning. Le calcul des
+styles confirme à 1201 px le cadre central de `561 × 544 px`, l’écart intérieur
+de `16 px`, la grille BDC de `519 px` avec un écart de `3.2 × 20 px`, et le rail
+de `32 px`. Quiz Hunt garde ses écarts propres pour les lignes de page. À 800,
+801, 1200 et 1201 px, son arborescence et la grille centrale suivent les seuils
+établis. Une requête HTML directe finale sur la route Quiz Hunt, après le
+retrait des feuilles d’apparence Learning, confirme qu’elles ne sont pas
+chargées ; la sélection de ces feuilles est aussi couverte par
+[`elce-local-server.test.ts`](../src/server/elce-local-server.test.ts). Les
+documents temporaires et le serveur isolé ont été supprimés après le contrôle.
 
 L’onglet « Profil » apparaît quand un champ textuel compatible a le focus et que
 le document contient des propriétés de profil. Il contient l’unique contrôle

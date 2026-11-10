@@ -45,7 +45,7 @@ ces en-têtes aux origines locales de l’éditeur.
   vérifie la normalisation, l’édition, le suffixe monoSCO et la date.
 - [`scorm-export-api-controller.test.ts`](../src/server/export/scorm-export-api-controller.test.ts)
   vérifie les en-têtes HTTP et l’absence de persistance.
-- [`elce-scorm-export-client.test.ts`](../src/export/elce-scorm-export-client.test.ts)
+- [`learning-scorm-export-client.test.ts`](../src/mods/learning/persistence/learning-scorm-export-client.test.ts)
   vérifie le nom transmis à l’API et repris par le client.
 - [`project-application.test.tsx`](../src/app/remix/project-application.test.tsx)
   vérifie que le nom fourni par l’API est celui remis au téléchargement.
