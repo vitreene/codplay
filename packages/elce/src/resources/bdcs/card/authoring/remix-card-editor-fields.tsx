@@ -395,7 +395,7 @@ function renderCardTextFields(
         field === 'message',
         textFieldAttributes,
       )),
-      {!includeCaption ? <small
+      !includeCaption ? <small
         id={`${idPrefix}-message-count-${bdcId}`}
       >
         {`${countAuthoredTextCharacters(card.message)} / ${CAROUSEL_CONFIG.textShortMessageMaxLength}`}
