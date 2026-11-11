@@ -10,7 +10,7 @@ import {
 import { TRACK_GLOBAL_ID } from '../../../src/runtime/config/track'
 import type { RuntimeComponentRuntime } from '../../../src/runtime/components'
 import type { CompiledScene } from '../../../src/scene/compiled'
-import type { RuntimeTrackEvent } from '../../../src/runtime/player'
+import type { RuntimeTraceEvent } from '../../../src/runtime/player/pipeline'
 
 const scene: CompiledScene = {
   schemaVersion: 'codplay.v2.scene.v1',
@@ -120,7 +120,7 @@ describe('RuntimePlayer capture facade', () => {
   })
 
   it('publishes a public capture end event through the player observer on playback', async () => {
-    const publicEvents: RuntimeTrackEvent[] = []
+    const publicEvents: RuntimeTraceEvent[] = []
     const player = createPlayer(undefined, (event) => publicEvents.push(event))
     expect(player.init().ok).toBe(true)
     expect(player.beginCapture({
@@ -417,7 +417,7 @@ describe('RuntimePlayer capture facade', () => {
 /** Creates one player with the single story strap used by the capture tests. */
 function createPlayer(
   listenOn?: string,
-  publicEventListener?: (event: RuntimeTrackEvent) => void,
+  publicEventListener?: (event: RuntimeTraceEvent) => void,
 ): RuntimePlayer {
   const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
   const playerScene = listenOn === undefined

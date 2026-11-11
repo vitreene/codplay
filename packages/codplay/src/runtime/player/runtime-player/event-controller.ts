@@ -78,7 +78,7 @@ export type RuntimePlayerEventControllerContext = Readonly<{
   captureController: RuntimePlayerCaptureController
   idleMonitor: RuntimeIdleMonitor
   diagnosticOutput: DiagnosticOutput | undefined
-  publicEventListener: ((event: RuntimeTrackEvent) => void) | undefined
+  publicEventListener: ((event: RuntimeTraceEvent) => void) | undefined
   traceEventListener: ((event: RuntimeTraceEvent) => void) | undefined
   journalChangeListener: (() => void) | undefined
   notifyTransportObservers: () => void
@@ -724,7 +724,12 @@ export class RuntimePlayerEventController {
     if (listener === undefined) {
       return
     }
-    for (const event of this.context.trackJournal.getAllEvents()) {
+    const compiledEvents = this.compiledTraceEvents.filter((event) => (
+      event.visibility === 'public'
+      && event.name !== RUNTIME_SEQUENCE_END_EVENT_NAME
+      && this.context.trackJournal.isTrackActive(event.trackId)
+    ))
+    for (const event of [...compiledEvents, ...this.context.trackJournal.getAllEvents()]) {
       if (event.visibility !== 'public'
         || event.applyAtMs > currentTimeMs
         || event.applyAtMs < previousTimeMs

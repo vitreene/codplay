@@ -1,8 +1,8 @@
 import type { CodPlayPublicEvent } from './facade-types'
-import type { RuntimeTrackEvent } from '../runtime/player/pipeline'
+import type { RuntimeTraceEvent } from '../runtime/player/pipeline'
 
-/** Adapts one journal event to the public event contract. */
-export function toPublicEvent(instanceId: string, event: RuntimeTrackEvent): CodPlayPublicEvent {
+/** Adapts one reached compiled or journaled occurrence to the public event contract. */
+export function toPublicEvent(instanceId: string, event: RuntimeTraceEvent): CodPlayPublicEvent {
   return {
     instanceId,
     eventId: event.eventId,

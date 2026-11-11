@@ -1,6 +1,6 @@
 # CodPlay V2 — façade publique et instances
 
-> Version de référence : CodPlay V2 — 2026-11-10.
+> Version de référence : CodPlay V2 — 2026-11-11.
 
 ## Périmètre vérifié
 
@@ -8,6 +8,15 @@ Cette spécification décrit la surface publique actuellement exposée par
 [`CodPlay`](../src/facade/codplay-facade.ts) et ses
 [types](../src/facade/facade-types.ts). Les profils de scène relèvent de la
 [spécification de compilation](./scene-authoring-spec.md).
+
+La lecture d'un seul paquet possède le chemin court `load()` puis
+`instance.telco.play()`, sans orchestration explicite d'engine. La lecture
+d'un `SceneDoc` ne possède pas d'entrée publique qui regroupe compilation,
+préparation et création. `HtmlPlayerRunner.run()` appartient à l'assemblage
+runtime interne décrit par la
+[spécification Engine/Player](./engine-player-v2-spec.md). La composition de
+plusieurs occurrences utilise le propriétaire et l'engine partagés décrits
+ci-dessous ; chaque occurrence garde son propre contrôle de lecture.
 
 ## Propriétaire, préparation et instances
 
@@ -153,6 +162,15 @@ doit pas être combiné au ticker autonome. La
 [tests telco](../tests/runtime/telco/runtime-telco.spec.ts) précisent les
 comportements vérifiés de lecture, de Seek et de reset.
 
+Le telco met l'occurrence en pause avant `seek(timeMs)` ; `rewind()` suit le
+même circuit vers zéro. `reset()` appelle la frontière de reset du player.
+`getProgress()` retourne seulement `timelineMs` et `durationMs`, tandis que
+`getState()`, `onChange` et `onProgress` exposent le `CodPlayTelcoState` complet.
+Les abonnements retournent leur fonction de désinscription. Les commandes
+asynchrones de cette façade retournent `Promise<void>` et publient leurs
+échecs par le canal de diagnostics de l'instance ; elles n'exposent pas le
+résultat structuré du telco interne.
+
 `instance.events.emit(eventime, target)` et `codplay.events.emit(input)`
 rejoignent le même player et son journal. La cible est séparée de l'eventime :
 elle désigne une portée `scene` ou `story`, et éventuellement une track.
@@ -161,6 +179,29 @@ trace diagnostique est une autre sortie. La [spécification événementielle](./
 le [contrôleur d'événements](../src/runtime/player/runtime-player/event-controller.ts)
 et le [test du dispatcher](../tests/runtime/player/runtime-event-dispatcher.spec.ts)
 documentent le circuit unique.
+
+`instance.events.onEvent` reçoit aussi les eventimes publics auteur atteints
+pendant la lecture, après présentation. Leur `eventId` conserve l'identité de
+déclaration et `timeMs` leur date absolue, sans insertion artificielle au
+journal. `eventSeq` est optionnel : présent pour les faits du journal, absent
+pour ces occurrences compilées. Pause et Seek ne produisent pas cette
+notification ; chaque occurrence est publiée une seule fois par cycle,
+réinitialisé au reset. Le
+[test d'observation publique](../tests/facade/public-compiled-eventimes.spec.ts)
+exerce ce chemin avec le runner réel, ses actions et sa fin de séquence.
+
+L'injection publique porte un eventime. Pour une commande adressée à une story
+dont un `listen` correspond au nom, sans eventimes enfants, avec `startAt` omis
+ou nul et une visibilité `story` ou omise, le contrôleur rejoint le dispatcher
+live. Une injection ordinaire de portée scène passe par
+l'insertion d'eventimes ancrés dans le journal : elle ne déclenche pas
+directement `scene.listen` et ses effets publics sont présentés au tick de
+lecture suivant. Le test de façade « normal next-tick path » couvre cette
+observation différée. Cette méthode ne constitue donc pas une entrée live
+uniforme pour toutes les portées. Le
+[routage des eventimes](../src/runtime/player/runtime-player/eventime-routing.ts)
+et le [contrôleur](../src/runtime/player/runtime-player/event-controller.ts)
+portent cette distinction.
 
 ## Lecture et projection d'état
 

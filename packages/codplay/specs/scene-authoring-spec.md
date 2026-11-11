@@ -1,6 +1,6 @@
 # CodPlay V2 — déclaration et compilation d'une scène
 
-> Version de référence : CodPlay V2 — 2026-11-10.
+> Version de référence : CodPlay V2 — 2026-11-11.
 
 ## Périmètre vérifié
 
@@ -16,6 +16,38 @@ un état `initial` facultatif et des `actions` nommées facultatives. Un perso
 peut également déclarer des sources `emit`. Les [types auteur](../src/scene/types.ts)
 fixent les autres champs acceptés par cette fondation ; les profils de
 composants et leurs validateurs décident des champs propres à chaque type.
+
+## Noms, références et conventions
+
+Dans la conception de CodPlay, le nom identifie une déclaration ou une
+référence ; sa formulation ne décrit pas une instruction à exécuter. Les noms
+de scène, story, perso, événement ou strap ne déterminent pas une action par
+leur vocabulaire, leur préfixe, leur suffixe ou leur séparateur. Des conventions
+de nommage différentes sont admissibles dans les formats acceptés, avec des
+références cohérentes.
+
+Le comportement est porté par les déclarations et associations explicites :
+une action est sélectionnée par sa clé, `listen.on` compare le nom exactement,
+les straps sont résolus dans leur collection et `type` sélectionne une
+définition enregistrée. Une chaîne telle que `question:next` ne programme
+aucune navigation sans cette association. La portée vient de l'adresse et de
+`visibility`, pas d'un préfixe `scene:` ou `story:` dans le nom.
+
+Les conventions libres ne remplacent pas les clés de l'API ni les symboles
+explicitement reconnus par un contrat. Les tokens de montage et de format sont
+définis dans [`scene-build.ts`](../src/scene/config/scene-build.ts), les
+identifiants de tracks dans [`track.ts`](../src/runtime/config/track.ts), les
+événements de contrôle dans
+[`track-events.ts`](../src/runtime/config/track-events.ts). Le nom terminal
+reconnu par le player est défini par
+[`sequence-end.ts`](../src/runtime/player/runtime-player/sequence-end.ts).
+Ces identités sont opérantes parce qu'une configuration ou une branche
+explicite les consomme, sans interprétation linguistique de leur nom.
+Changer ces valeurs suppose de maintenir leurs producteurs et consommateurs
+cohérents ; leur présence dans un fichier de configuration n'établit pas une
+API publique de renommage à chaud.
+
+## Exemple de document auteur
 
 ```ts
 import type { SceneDoc } from 'codplay'
@@ -112,7 +144,7 @@ d'export, car leurs chemins d'origine appartiennent aux fichiers CSS et ne sont
 pas des champs de `SceneDoc`. Les règles vérifiées de capture, résolution et
 relocalisation appartiennent à la
 [spécification du paquet](./scene-package-export-v1-spec.md). La conversion
-d'un style de perso en classe est hors du contrat d'export V1 : les valeurs
+d'un style de perso en classe est hors du contrat d'export de paquet : les valeurs
 restent celles consommées par le moteur, à l'exception de la relocalisation de
 leurs URL locales dans la copie de diffusion.
 

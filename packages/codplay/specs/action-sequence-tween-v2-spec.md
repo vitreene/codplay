@@ -1,11 +1,11 @@
-# CodPlay V2 — ActionSequence et TweenAction
+# CodPlay V2 — actions de perso, ActionSequence et TweenAction
 
-> Version de référence : CodPlay V2 — 2026-11-10.
+> Version de référence : CodPlay V2 — 2026-11-11.
 
 ## Périmètre certifié
 
-Cette spécification décrit uniquement les comportements logiques vérifiés pour
-les séquences d'actions et les `TweenAction`. Le rendu propre à un composant
+Cette spécification décrit les formes d'actions de perso, leur résolution
+logique, les séquences d'actions et les `TweenAction`. Le rendu propre à un composant
 relève de sa spécification de présentation.
 
 Les actions sont reconstruites par le circuit commun du player :
@@ -22,6 +22,36 @@ le transfert des fonctions ; la présente spécification porte sur leur
 interprétation logique.
 
 ## Comportements vérifiés
+
+### Profil du composant et destinataires
+
+Le `type` du perso désigne la définition enregistrée de son composant. Les
+profils `initial` et `action`, les validateurs et les normalisateurs de cette
+définition portent les données auteur ; `update()` projette ensuite l'état
+résolu, selon la [spécification des composants](./component-materialization-v2-spec.md).
+Une action n'est pas un appel de méthode du composant.
+
+La clé d'action est confrontée au nom de l'occurrence, dans la portée de sa
+track. Plusieurs persos peuvent déclarer la même clé. Dans le circuit live,
+l'index compilé associe le nom aux persos destinataires, indépendamment du perso
+qui porte la source. La sélection n'est pas un sélecteur DOM ; `move.target`
+et `initial.rel` conservent leurs responsabilités de placement et de liaison
+native.
+
+### Patches et données d'occurrence
+
+Le [résolveur de définition](../src/runtime/player/pipeline/action-resolution.ts)
+accepte un objet de patch, `true`, `null` ou une séquence. Pour un objet,
+`data` surcharge l'objet auteur au premier niveau. Une propriété `data.style`
+remplace donc le groupe `style` auteur de cette occurrence, avant l'application
+des règles de patch à l'état résolu ; cette surcharge n'est pas une fusion
+profonde des deux déclarations.
+
+`true` et `null` utilisent `data` comme patch complet et ne contribuent aucun
+patch sans données. `null` ne désigne ni reset ni suppression. L'entrée
+`actions[perso.id] = null` réservée par la normalisation suit ce même circuit.
+Les séquences conservent les données déclarées dans leurs pas sans appliquer
+cette surcharge à partir de `data`.
 
 ### Séquence d'actions
 
@@ -41,6 +71,14 @@ La forme compilée exercée est `{ duration, fn: { ref } }`. Pour une durée de
 avec une progression temporelle bornée : à 50 ms écoulées, la progression vaut
 `0.5`, puis elle vaut `1` à l'échéance. Le payload retourné est appliqué à
 l'état par le même résolveur d'action que les autres actions.
+
+Le document auteur contient `{ duration, ease?, fn: fonction }`, non une
+fonction seule ; la compilation extrait la fonction. Son argument complet est
+`{ progress, data }`. `progress` est le ratio temporel borné, après application
+de l'easing ; `data` est l'objet d'action complet après surcharge par les
+données d'occurrence, avec sa durée et sa référence compilée de fonction.
+La fonction retourne un patch de composant ou `undefined`. Le runtime ne lui
+fournit pas séparément le nœud, l'état courant ou la session de capture.
 
 Une référence de fonction absente de la collection provoque une erreur explicite.
 Le test player confirme que la reconstruction par Seek et celle de Play

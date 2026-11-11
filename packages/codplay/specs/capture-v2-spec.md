@@ -1,6 +1,6 @@
 # CodPlay V2 — capture continue
 
-> Version de référence : CodPlay V2 — 2026-11-10.
+> Version de référence : CodPlay V2 — 2026-11-11.
 
 ## Périmètre vérifié
 
@@ -14,6 +14,20 @@ Elle distingue les samples éphémères, les actions live et les événements de
 fin journalisés. Une source navigateur ou matérielle ne crée pas de circuit
 player, de journal ou de seek parallèle.
 
+## Frontière obligatoire pour les sources continues
+
+La capture est le circuit des entrées continues : déplacements de pointeur,
+progression de scroll ou mesures successives d'une source. Les représenter
+par un flux d'événements journalisés, notamment un événement à chaque frame
+ou 60 émissions par seconde, est interdit. Cette règle ne définit pas un
+quota d'événements ; elle sépare un signal continu des faits discrets.
+
+Les données successives passent par les samples de session et `trackCommand`.
+Les sorties de fin déclarées sont les faits persistants de cette capture.
+L'interface exclut délibérément un émetteur `loop` afin de ne pas convertir une
+boucle de présentation ou une horloge en source d'événements continus. Le suivi
+live n'ajoute pas un événement pour chaque sample.
+
 ## Session et état
 
 Une capture est ouverte par l’événement discret déclaré sur un perso. Le player
@@ -24,7 +38,7 @@ il n’est ni l’état applicatif, ni une entrée du journal, ni une valeur
 reconstruite au seek.
 
 `stateScope` choisit le scope (`story` ou `scene`) lu par
-`initCaptureState`, `trackCommand` et `endCapture`. Il ne choisit pas le scope
+`initCaptureState` et `endCapture`. Il ne choisit pas le scope
 d’écriture des événements et ne change pas pendant une session.
 
 Les samples sont bruts, ordonnés et accumulés pour la session. Leur forme
@@ -37,6 +51,58 @@ dépend de la source. Les samples et les valeurs intermédiaires de
 le dernier `captureState`. Il peut retourner une collection ordonnée
 d’actions live, remplacer `captureState` et/ou proposer une mise à jour partielle
 `updateState` du scope lu par la capture.
+
+L'appel reçoit un seul objet `{ sample, samples, captureState }`.
+Sa forme complète, définie par les types auteur et transmise par la session,
+est :
+
+```ts
+type CaptureTrackInput = Readonly<{
+  sample: Readonly<Record<string, unknown>>
+  samples: readonly Readonly<Record<string, unknown>>[]
+  captureState: Readonly<Record<string, unknown>>
+}>
+```
+
+Le sous-objet `sample` n'est donc pas à lui seul l'argument du callback.
+Le runtime ajoute le sample courant à la collection avant cet appel :
+`samples` contient donc aussi ce dernier sample, et sa longueur vaut `1` au
+premier appel. `captureState` est le résultat de l'initialisation au premier
+appel, puis le dernier état retourné. Un `captureState` retourné remplace
+l'état précédent ; son absence le conserve. Les entrées sont en lecture seule.
+Le callback est synchrone et ne reçoit pas de propriété `state`, `meta`,
+`timeMs` ou de nœud de présentation. Les valeurs d'état nécessaires au tracking
+peuvent être copiées à l'ouverture par `initCaptureState({ state })`.
+
+### Samples de la source pointeur HTML
+
+L'adaptateur pointeur copie les quatre champs numériques finis `clientX`,
+`clientY`, `movementX` et `movementY` de l'événement natif. Les deux premiers
+sont les coordonnées natives dans le viewport en pixels CSS ; les deux autres
+sont les mouvements natifs de l'événement, sans cumul calculé par l'adaptateur.
+Ce record n'est pas un événement DOM : il ne contient ni cible DOM,
+`pointerId`, horodatage, ni méthode native. L'identité du pointeur reste gérée
+par l'adaptateur pour isoler les sessions.
+
+Avec `trackOn: ['pointermove']` et `endOn: ['pointerup']`, le premier move
+suivant l'ouverture est le premier sample. Le `pointerdown` d'ouverture et le
+`pointerup` de fermeture ne sont pas ajoutés à cette collection.
+### Valeur des autres sources
+
+La source scroll transmet `{ progress }`, une progression normalisée entre
+`0` et `1` pour l'axe configuré, selon la
+[spécification scroll-container](./scroll-container-spec.md). Les notifications
+natives peuvent être coalescées avant ce transfert ; `samples` conserve les
+valeurs effectivement transmises à la session.
+
+Le producteur d'une autre source définit le record envoyé au port de capture.
+La session commune le transmet comme `sample`, l'accumule dans `samples` et
+fournit séparément `captureState`. Elle ne lui applique pas le profil pointeur
+et ne complète pas automatiquement des coordonnées, un horodatage, des données
+de périphérique ou l'événement natif entier. Les champs de `captureState`
+restent définis par les callbacks auteur, indépendamment des champs du sample.
+
+### Sortie de tracking
 
 ```ts
 type CaptureTrackOutput = Readonly<{
@@ -55,6 +121,16 @@ applique les actions dans l’ordre déclaré, à travers
 `component.update() → services → materializer`. Une collection absente ou vide
 retire les actions live précédentes de cette session. Aucun sample ne produit
 un événement par lui-même.
+
+L'index par nom peut désigner plusieurs persos ; le perso propriétaire de la
+capture ne borne pas implicitement ces destinataires. Les données de l'action
+live surchargent au premier niveau l'objet d'action déclaré. Une `TweenAction`
+peut ainsi lire les paramètres capturés dans `input.data` ; son argument complet
+reste `{ progress, data }`. Sur ce circuit live, le résolveur utilise un temps
+écoulé nul : `progress` suit l'easing appliqué à zéro et ne représente pas le
+sample. Une fonction qui suit la mesure lit donc les paramètres de `data`,
+sans démarrer d'horloge supplémentaire. Une `ActionSequence` est refusée comme
+cible live par le [résolveur](../src/runtime/player/pipeline/resolve.ts).
 
 `updateState` est une mise à jour éphémère : elle n’est pas journalisée et ne
 reconstruit pas l’état au seek. Une modification durable de l’état passe par un

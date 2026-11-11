@@ -624,13 +624,14 @@ export class HtmlPlayerRunner {
 
   /** Lets sources cancel transient work before the player finalizes sequence:end. */
   private forwardPublicEvent(
-    event: import('../../player/pipeline').RuntimeTrackEvent,
+    event: import('../../player/pipeline').RuntimeTraceEvent,
     onPublicEvent: HtmlPlayerRunnerOptions['onPublicEvent'],
   ): void {
-    if (event.name === 'sequence:end') {
+    if (event.name === 'sequence:end' && event.eventSeq !== undefined) {
+      const terminalEvent = { ...event, eventSeq: event.eventSeq }
       this.player.componentRuntime?.onSequenceEnd()
       this.captureSourceCircuit.suspend()
-      this.notifySourceAdapters('sequence-end', (adapter) => adapter.onSequenceEnd?.(event))
+      this.notifySourceAdapters('sequence-end', (adapter) => adapter.onSequenceEnd?.(terminalEvent))
     }
     onPublicEvent?.(event)
   }

@@ -1,6 +1,6 @@
 # CodPlay V2 — Engine, Player et Seek groupé
 
-> Version de référence : CodPlay V2 — 2026-11-10.
+> Version de référence : CodPlay V2 — 2026-11-11.
 
 ## Périmètre certifié
 
@@ -11,6 +11,39 @@ est décrite par les spécifications du [pipeline événementiel](./event-pipeli
 et de la [reconstruction logique](./runtime-reconstruction-v2-spec.md). La
 préparation et la présentation motion ont leur
 [spécification dédiée](./motion-frame-v2-spec.md).
+
+## Runner autonome interne
+
+Le runner n'est pas une façade utilisateur de chargement de `SceneDoc`. Il
+reçoit un artefact déjà compilé et des dépendances d'intégration explicites.
+[`HtmlPlayerRunner`](../src/runtime/runner-html/player-runner/runtime-runner.ts)
+possède son engine lorsqu'aucune option `engine` ne lui est fournie. Le même
+catalogue sert à compiler la scène avec `SceneBuilder` et à construire le
+runner ; le résultat compilé et les fonctions de ce build sont transmis
+ensemble. Le catalogue est verrouillé à la construction du runner.
+
+`runner.run({ preload, manifest?, preloadOptions?, ticker? })` enchaîne la
+préparation des bibliothèques requises, le preload du manifeste (celui du
+compilé par défaut), le transfert des métadonnées et handles média,
+l'enregistrement des ressources, l'initialisation puis Play. Le résultat
+distingue le succès `phase: 'run'` et les échecs de bibliothèque, preload ou
+initialisation. `run()` démarre la lecture ; le chargement public d'un paquet
+par `CodPlay.load()` retourne au contraire une occurrence encore en pause.
+
+Pour cette lecture autonome, `play()` démarre le ticker possédé par le runner,
+`pause()` suspend son engine et `destroy()` arrête cet engine puis détruit le
+player et ses ressources de présentation.
+Le service de preload fourni garde son cycle de vie distinct. Le contrôle
+direct de la scène passe par les opérations du runner, notamment `play`,
+`pause`, `seek`, `reset`, `setRate` et `emit`.
+
+La composition multi-instance est le circuit à engine partagé : la façade
+`CodPlay` prépare les capacités et ressources communes, crée les occurrences
+et expose leur pilotage individuel par `instance.telco`. Un runner auquel un
+engine est fourni ne possède ni son ticker ni sa destruction. La présence d'un
+engine interne à une lecture autonome n'impose donc pas son orchestration
+explicite de l'horloge, mais la construction du runner reste un assemblage
+interne ; elle ne constitue pas une entrée publique simplifiée pour l'auteur.
 
 ## Engine et horloge
 
@@ -48,8 +81,10 @@ exécutées une seule fois. Un `sequence:end` injecté à l'avance devient termi
 
 Les callbacks de cycle de vie `init`, `onStart` et `onSequenceEnd` sont extraits
 par le builder dans la collection de fonctions puis invoqués par le player à
-leurs frontières respectives. Ils reçoivent les options de cycle prévues, dont
-un `schedule` appelable.
+leurs frontières respectives. Le second argument fourni par le contrôleur
+est actuellement `{ schedule: () => undefined }` : `schedule` n'effectue
+aucune programmation de story ni insertion d'événement. La vérification de sa
+présence comme fonction ne constitue pas une capacité de planification.
 
 Le player publie un résultat structuré de Seek contenant `ok`, `timeMs` et les
 diagnostics. Si la matérialisation échoue pendant le commit, le Seek échoue et
@@ -79,6 +114,9 @@ d’un adapter ne bloque pas les adapters suivants.
 
 ## Preuves
 
+- [`player-runner.spec.ts`](../tests/runtime/runner-html/player-runner.spec.ts)
+  vérifie notamment que `run()` prépare la bibliothèque avant de lancer le
+  preload, ainsi que la matérialisation, Seek et le teardown du runner.
 - [`runtime-engine.spec.ts`](../tests/runtime/engine/runtime-engine.spec.ts)
   vérifie l’ordre des instances, le ticker, l’arrêt, les requirements et les
   phases de Seek groupé, dont validation et rollback.

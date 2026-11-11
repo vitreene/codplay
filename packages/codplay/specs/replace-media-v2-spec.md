@@ -1,6 +1,6 @@
 # CodPlay V2 — remplacement média
 
-> Version de référence : CodPlay V2 — 2026-11-10.
+> Version de référence : CodPlay V2 — 2026-11-11.
 
 ## Périmètre vérifié
 
@@ -49,8 +49,7 @@ la grille masque la cible. Le nombre de cellules ne multiplie pas les nœuds
 image ou vidéo et ce chemin ne crée pas de canvas.
 
 `stagger` est l'enveloppe totale des départs. `staggerPattern` nomme trois
-parcours : `manhattan` conserve la propagation par distance et `direction`
-compatible V1 ; `row-wave` lance les cellules successivement de gauche à droite
+parcours : `manhattan` propage les départs par distance selon `direction` ; `row-wave` lance les cellules successivement de gauche à droite
 sur chaque rangée, puis passe à la suivante ; `column-wave` les lance de haut
 en bas dans chaque colonne, puis passe à la suivante. Les cellules démarrent
 individuellement, sans synchroniser toute une rangée ou colonne. Omettre

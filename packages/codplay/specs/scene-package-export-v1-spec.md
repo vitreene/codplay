@@ -1,10 +1,10 @@
-# CodPlay V2 — paquet de diffusion V1
+# CodPlay V2 — paquet de diffusion
 
-> Version de référence : CodPlay V2 — 2026-11-10.
+> Version de référence : CodPlay V2 — 2026-11-11.
 
 ## Périmètre vérifié
 
-Cette spécification couvre le format de paquet scène v1 et les familles
+Cette spécification couvre le format de paquet scène `codplay.scene-package.v1` et les familles
 vérifiées : scène compilée, ressources locales image/audio/vidéo, feuille de
 style associée, faces `@font-face` locales, fonctions auteur et ressources
 tierces dont les entrées preload et occurrences exactes sont déclarées.
@@ -20,7 +20,7 @@ partagé avant `load()`. Les hosts Rive et Three.js utilisent les classes de
 base du même player. Le build séparé de l'engine prend en charge les modes
 `package`, `remote` et `platform`. Les GLB/FBX déclarés par leur producteur
 suivent la fermeture des ressources tierces ; les formats à dépendances
-binaires non déclarées sont exclus de la V1.
+binaires non déclarées sont exclus de ce format.
 
 Un même paquet peut combiner médias, CSS avec fonte locale, fonctions de scène
 et composants core. Le chargeur prépare cet ensemble avant Play.
@@ -49,7 +49,7 @@ Le producteur `exportScenePackage()` accepte aussi une entrée-adaptateur, le
 nom de son export `scene` et le fichier source qui porte les chemins relatifs
 des ressources. L’export Sighty l’appelle une fois par scène directe dans un
 sous-répertoire dédié. Cette adaptation conserve le format et le contenu du
-paquet CodPlay V1 ; elle ne crée pas de second paquetage de scène.
+paquet de scène ; elle ne crée pas de second paquetage de scène.
 
 Le CLI construit dans un répertoire temporaire voisin de la destination, puis
 publie par renommage. Il refuse une destination déjà présente et retire son
@@ -235,7 +235,7 @@ une valeur vide. Les URL de `@font-face src` gardent le type `font` dans le
 manifeste, sont envoyées au preload existant et leurs faces sont déclarées dans
 le manifeste dans l'ordre source. Les classNames CSS sont recensés sans être
 renommés. Les valeurs `style` de la scène restent dans le `CompiledScene` et
-ne sont pas converties en classes CSS par l'export V1. Le paquet conserve les
+ne sont pas converties en classes CSS par l'export de paquet. Le paquet conserve les
 valeurs destinées au moteur ; seules les URL locales recensées par le builder
 sont relocalisées dans la copie de diffusion.
 
@@ -272,7 +272,7 @@ stratégie, ni composant, ni parseur de binaire.
 
 Avatar utilise les types preload `three-glb` et `three-fbx`, liés aux champs
 `initial.src` exacts. Le transport certifié porte sur des fichiers autonomes,
-dont un GLB avec buffers et images incorporés. L'export V1 ne découvre pas les
+dont un GLB avec buffers et images incorporés. L'export de paquet ne découvre pas les
 URI secondaires cachées dans un GLB/FBX : un `.gltf` multi-fichiers ou des
 textures FBX latérales sont exclus du périmètre certifié.
 
@@ -321,7 +321,7 @@ notamment dans un dépôt ou sur son serveur de publication. `load()` lit le
 manifeste puis résout la scène, les fonctions, la CSS et les assets relativement
 à cette racine. L'hôte distant doit servir ces fichiers et autoriser CORS pour
 le site intégrateur. Cela ne rend pas distantes les références de
-ressources inscrites dans la scène : l'export V1 ferme uniquement leurs
+ressources inscrites dans la scène : l'export de paquet ferme uniquement leurs
 sources locales selon les règles de résolution décrites ci-dessus.
 
 `load()` lit et valide le manifeste et `scene/scene.json`, restaure sur une
@@ -421,10 +421,10 @@ ressources locales.
 ## Limites
 
 Cette spécification couvre uniquement les familles et comportements vérifiés
-dans ses sections précédentes. Le paquet V1 copie les ressources locales dont
+dans ses sections précédentes. Le paquet de scène copie les ressources locales dont
 les références sont émises par le compilateur ou déclarées par leur producteur.
 Les ressources de scène dont la source auteur est distante sont exclues de
-l'export V1 ; cela ne limite pas l'hébergement distant du paquet
+l'export de paquet ; cela ne limite pas l'hébergement distant du paquet
 via `scenePath`. Les fichiers tiers opaques ne sont pas analysés pour
 découvrir leurs propres sous-ressources ; le producteur doit les déclarer et
 relier leurs champs au compilateur.

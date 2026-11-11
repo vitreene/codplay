@@ -1,6 +1,6 @@
 # CodPlay V2 — première unité Three.js
 
-> Version de référence : CodPlay V2 — 2026-11-10.
+> Version de référence : CodPlay V2 — 2026-11-11.
 
 ## Périmètre vérifié
 
@@ -8,8 +8,8 @@ Cette spécification décrit la première unité Three.js exercée par les tests
 d'intégration du package et par la démo V2 `threejs-grid` : hôte de rendu,
 caméra, lumières, grille instanciée et preload binaire.
 
-Cette spécification décrit la première unité Three.js externe. Elle ne change
-pas le core en matérialiseur Three.js et ne réutilise pas le runtime V1.
+L'unité Three.js est une intégration externe ; le core conserve sa frontière
+de cibles opaques et ne devient pas un matérialiseur Three.js.
 
 ## Composition
 

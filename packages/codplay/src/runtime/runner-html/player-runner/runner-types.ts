@@ -121,7 +121,7 @@ export type HtmlPlayerRunnerOptions = Readonly<{
     completed: boolean
   }>) => void
   /** Forwards public eventimes to the enclosing facade without another journal. */
-  onPublicEvent?: (event: import('../../player/pipeline').RuntimeTrackEvent) => void
+  onPublicEvent?: (event: import('../../player/pipeline').RuntimeTraceEvent) => void
   /** Forwards live events and compiled eventimes reached during playback. */
   onTrace?: (event: import('../../player/pipeline').RuntimeTraceEvent) => void
 }>

@@ -1,6 +1,6 @@
 # CodPlay V2 — composant de saisie `input`
 
-> Version de référence : CodPlay V2 — 2026-11-10.
+> Version de référence : CodPlay V2 — 2026-11-11.
 
 ## Périmètre vérifié
 
@@ -33,7 +33,7 @@ Le test builder/résolveur fournit une action qui remplace `inputType` et met à
 `selectedAnswerIds` et `selectionIcon`. Ces champs spécifiques sont conservés
 dans l'état résolu par le circuit d'action V2.
 
-Cette preuve ne certifie pas à elle seule la totalité du comportement quiz V1,
+Cette preuve ne certifie pas à elle seule le comportement complet du quiz,
 notamment la sélection et la désactivation de réponses ou la révélation de la
 correction. Le parcours DOM de sélection et de validation exercé par le player
 est décrit dans la [spécification Perso.emit](./perso-emit-v2-spec.md).

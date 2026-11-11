@@ -1,6 +1,6 @@
 # CodPlay V2 — exécution des straps et helpers planifiés
 
-> Version de référence : CodPlay V2 — 2026-11-10.
+> Version de référence : CodPlay V2 — 2026-11-11.
 
 ## Périmètre vérifié
 
@@ -50,9 +50,19 @@ Les helpers testés retournent des occurrences portant un `offsetMs` et un pas :
   trois formes.
 
 Les paramètres testés rejettent un offset négatif pour `wait` et un nombre
-fractionnaire de répétitions. La surface exercée n'expose pas de helper `loop`.
+fractionnaire de répétitions. L'interface exclut délibérément un helper `loop`
+pour ne pas exposer une source continue d'événements.
 `planned-helpers.spec.ts` vérifie ces résultats ; `runtime-event-dispatcher.spec.ts`
 vérifie l'intégration d'une sortie planifiée dans le circuit commun.
+
+`repeat` décrit un nombre fini d'occurrences discrètes. Les helpers planifiés
+ne constituent pas un mécanisme d'échantillonnage continu : leur utilisation
+pour produire un événement par frame ou transmettre un signal continu est
+interdite. Il n'existe pas d'émetteur d'événements `loop` ni de
+`context.planned.loop`. Les entrées continues relèvent du
+[circuit de capture](./capture-v2-spec.md) ; les animations sont échantillonnées
+sur le temps du player sans émission d'événement à chaque frame. Les options
+de répétition d'un calcul de tween ne sont pas des émetteurs d'événements.
 
 ## Limites de certification
 

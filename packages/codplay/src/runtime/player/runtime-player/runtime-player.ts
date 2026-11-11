@@ -40,7 +40,6 @@ import {
   type RuntimeSnapshotSetResult,
   type RuntimeStateStore,
   type RuntimeTraceEvent,
-  type RuntimeTrackEvent,
   type SolvedScene,
   type StrapCollections,
 } from '../pipeline'
@@ -115,7 +114,7 @@ export class RuntimePlayer {
     componentRuntime?: RuntimeComponentRuntime,
     functions: CompiledFunctionCollection = {},
     diagnosticOutput?: DiagnosticOutput,
-    publicEventListener?: (event: RuntimeTrackEvent) => void,
+    publicEventListener?: (event: RuntimeTraceEvent) => void,
     idle?: RuntimeIdleOptions,
     traceEventListener?: (event: RuntimeTraceEvent) => void,
     journalChangeListener?: () => void,

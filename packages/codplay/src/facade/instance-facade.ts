@@ -9,7 +9,7 @@ import type { RuntimeExternalPresentationHandle } from '../runtime/engine'
 import type {
   RuntimeSnapshotPatch,
   RuntimeSnapshotSetResult,
-  RuntimeTrackEvent,
+  RuntimeTraceEvent,
 } from '../runtime/player/pipeline'
 import type { HtmlPlayerRunner } from '../runtime/runner-html'
 import type { ForeignContentSurface } from '../runtime/components'
@@ -143,7 +143,7 @@ export class InstanceFacadeImpl implements CodPlayInstance {
   }
 
   /** Receives one internal public event and isolates listener failures. */
-  handlePublicEvent(event: RuntimeTrackEvent): void {
+  handlePublicEvent(event: RuntimeTraceEvent): void {
     if (this.destroyed) return
     const publicEvent = toPublicEvent(this.instanceId, event)
     for (const listener of this.eventListeners) {

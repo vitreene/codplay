@@ -204,7 +204,8 @@ export type CodPlayEventInput = Readonly<{
 export type CodPlayPublicEvent = Readonly<{
   instanceId: string
   eventId: string
-  eventSeq: number
+  /** Journal sequence for live events; compiled eventimes have no journal sequence. */
+  eventSeq?: number
   name: string
   timeMs: number
   visibility: 'public'
