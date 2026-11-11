@@ -70,7 +70,7 @@ export function buildDiapoScene(
   let pageBottomMarker: PersoDoc<string> | undefined
   let childStories: Readonly<Record<string, StoryDoc<string>>> = {}
   let pagePersos: readonly PersoDoc<string>[] = []
-  let cardRuntime: Pick<CardBdcSceneBuild, 'straps' | 'listen'> | undefined
+  let cardRuntime: Pick<CardBdcSceneBuild, 'straps' | 'listen' | 'revealEventimes'> | undefined
   let styleSheets: readonly string[] = []
   let questionReset: DiapoSceneBuild['questionReset']
 

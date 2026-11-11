@@ -22,7 +22,7 @@ Le `STOP` de sortie de page appartient à la composition du lecteur, décrit
 dans la [spécification preview](./player-preview-spec.md#lecture-des-vidéos-et-sortie-de-page).
 
 `buildFluxScene(page, bdcs, options)` accepte une page Elcé de type `flux` et sa séquence
-ordonnée de BDC Section, Question, Résultat, Carte, Graphe ou
+ordonnée de BDC Section, Question, Résultat, Sommaire, Carte, Graphe ou
 Carousel, selon les contextes autorisés. Une Carte porte sa référence média dans `card.mediaId` ;
 son rendu image ou vidéo vient du MIME de cette ressource. Les Cartes peuvent
 être des BDC directs de la page ou des enfants d’une Section ou d’un Carousel.
@@ -37,6 +37,10 @@ document, vérifie le chapitre lorsque nécessaire et retourne son markup, son
 slot et ses stories additionnelles. Le builder ajoute ces stories à la scène
 sans changer leur ordre ; un type inconnu sans contribution reçoit un refus
 explicite.
+La même contribution compose le BDC Sommaire Learning dans son ordre de page.
+Il produit une liste sans titre propre et utilise le réglage partagé ainsi que
+la portée calculée depuis sa page hôte ; le contrat est décrit dans la
+[spécification Sommaire](./summary-profile-spec.md#bdc-sommaire).
 Une source média optionnelle peut être fournie séparément par `mediaSources` ;
 le builder projette la Carte par son preset et monte son perso média dans la
 cible correspondante. Dans le markup de layout, les points d’insertion CodPlay

@@ -12,9 +12,10 @@ import { PAGE_LOCATION } from '../../mods/learning/organization/learning-page-pl
 import { QUESTION_TYPE } from '../../resources/bdcs/question/question-config'
 import { BDC_LOCATION } from '../../core/document/content-location'
 import { learningDocumentService } from '../../mods/learning/document/learning-document-service'
-import { LearningDocument } from '../../mods/learning/document/learning-document'
+import { ELCE_DOCUMENT_VERSION, LearningDocument } from '../../mods/learning/document/learning-document'
 import type { BdcPlacement } from '../../core/document/content-location'
 import { ElceQuestionService } from '../../resources/bdcs/question/domain/question-service'
+import { ListService } from '../../resources/list/domain/list-service'
 import {
   applyDocumentCommand,
   assertDocumentInvariants,
@@ -413,6 +414,7 @@ describe('Elcé document commands', () => {
       mediaId: 'media-video-carousel',
     })
     const authoredCard = withMedia.bdcs.find((bdc) => bdc.id === cardBdcId)!.card!
+    const list = new ListService().createDefault('card-list-row')
     const authoredDocument = applyDocumentCommand(withMedia, {
       type: 'bdc.card.update',
       bdcId: cardBdcId,
@@ -425,6 +427,7 @@ describe('Elcé document commands', () => {
         note: 'Note conservée',
         caption: 'Légende conservée',
         imagePosition: 'right',
+        list,
       },
     })
     let current = authoredDocument
@@ -442,6 +445,7 @@ describe('Elcé document commands', () => {
           note: 'Note conservée',
           caption: 'Légende conservée',
           imagePosition: 'right',
+          list,
         },
       })
     }
@@ -662,7 +666,7 @@ describe('Elcé document commands', () => {
     const current = learningDocumentService.createInitialDocument()
     const restored = LearningDocument.fromJSON({ ...current.toJSON(), version: 8 })
 
-    expect(restored.data.version).toBe(14)
+    expect(restored.data.version).toBe(ELCE_DOCUMENT_VERSION)
     expect(restored.pages[0]?.allowEarlyExit).toBeUndefined()
   })
 

@@ -568,6 +568,33 @@ export class LearningScenarioActions {
         }
       }
     }
+    const activeContentSceneKey = context.scenarioState.current
+      .find((selection) => selection.slotName === ELCE_SCENARIO.CONTENT_SLOT)?.sceneKey
+    const activeContentPageId = pageIdFromSceneKey(activeContentSceneKey)
+    const activePage = activeContentPageId === undefined ? undefined : runtime.pages[activeContentPageId]
+    const activeSummaryBdcIds = activePage?.bdcIds.filter((bdcId) => runtime.bdcTypes[bdcId] === BDC_TYPE.SUMMARY) ?? []
+    if (activeContentSceneKey !== undefined && activeContentPageId !== undefined) {
+      for (const bdcId of activeSummaryBdcIds) {
+        const storyId = `${activeContentPageId}-${bdcId}-summary`
+        for (const page of presentation.menuPageStates) {
+          await context.send(activeContentSceneKey, {
+            name: menuPresentationEvent(page.id),
+            data: { attr: {
+              'data-page-id': page.id,
+              'data-active': String(page.active),
+              'data-locked': String(!page.allowed),
+              'aria-label': page.allowed ? page.title : `${page.title}, verrouillé`,
+              'aria-disabled': String(!page.allowed),
+            } },
+          }, { scope: 'story', storyId })
+        }
+        for (const chapter of presentation.chapterReadingStatuses) {
+          await context.send(activeContentSceneKey, {
+            name: summaryChapterStatusEvent(chapter.chapterId, chapter.status),
+          }, { scope: 'story', storyId })
+        }
+      }
+    }
     await context.send(ELCE_SCENARIO.NAVIGATION_SCENE, {
       name: ELCE_EVENTS.PRESENTATION_NAVIGATION_PREVIOUS,
       data: { attr: presentation.previousAttributes },

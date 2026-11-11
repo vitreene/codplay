@@ -1,7 +1,7 @@
 import { createActor } from 'xstate'
 import type { Actor } from 'xstate'
 import { describe, expect, it } from 'vitest'
-import { applyDocumentCommand, assertDocumentInvariants } from '../../../domain/commands/document-commands'
+import { applyDocumentCommand, assertDocumentInvariants, createSummaryBdcCommand } from '../../../domain/commands/document-commands'
 import { learningDocumentService } from '../document/learning-document-service'
 import { BDC_TYPE, DEFAULT_PRESET_ID } from '../learning-definition'
 import { CATALOG_TAB } from '../authoring/learning-authoring-config'
@@ -125,6 +125,27 @@ describe('Elcé controller', () => {
     expect(actor.getSnapshot().context.document.medias).toHaveLength(0)
     expect(actor.getSnapshot().context.history.past).toHaveLength(0)
     expect(store.media.size).toBe(0)
+    actor.stop()
+  })
+
+  it('keeps Summary BDC creation and deletion in the existing Undo/Redo history', async () => {
+    const actor = createActor(controllerMachine, { input: {} })
+    startActiveActor(actor)
+    actor.send({ type: 'document.apply', command: createSummaryBdcCommand('bdc-summary', 'page-a', 1) })
+    await flush()
+    expect(actor.getSnapshot().context.document.bdcs.some((bdc) => bdc.id === 'bdc-summary')).toBe(true)
+
+    actor.send({ type: 'history.undo' })
+    expect(actor.getSnapshot().context.document.bdcs.some((bdc) => bdc.id === 'bdc-summary')).toBe(false)
+    actor.send({ type: 'history.redo' })
+    expect(actor.getSnapshot().context.document.bdcs.some((bdc) => bdc.id === 'bdc-summary')).toBe(true)
+
+    actor.send({ type: 'document.apply', command: { type: 'bdc.summary.delete', bdcId: 'bdc-summary' } })
+    await flush()
+    expect(actor.getSnapshot().context.document.pages[0]?.bdcIds).toEqual(['bdc-section-1'])
+    actor.send({ type: 'history.undo' })
+    expect(actor.getSnapshot().context.document.pages[0]?.bdcIds).toEqual(['bdc-section-1', 'bdc-summary'])
+    assertDocumentInvariants(actor.getSnapshot().context.document)
     actor.stop()
   })
 

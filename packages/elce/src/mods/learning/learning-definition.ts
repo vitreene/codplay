@@ -3,6 +3,7 @@ import { CAROUSEL_BDC_TYPE, CAROUSEL_PRESET_ID } from '../../resources/bdcs/caro
 import { QUESTION_BDC_TYPE, QUESTION_PRESET_ID } from '../../resources/bdcs/question/question-config'
 import { SECTION_BDC_TYPE, SECTION_PRESET_ID } from '../../resources/bdcs/section/section-config'
 import { STATISTICAL_GRAPH_BDC_TYPE, STATISTICAL_GRAPH_PRESET_ID } from '../../resources/bdcs/statistical-graph/statistical-graph-config'
+import { SUMMARY_BDC_TYPE, SUMMARY_PRESET_ID } from '../../resources/bdcs/summary/summary-config'
 import { DIAPO_PAGE_TYPE } from '../../resources/pages/diapo/diapo-config'
 import { FLUX_PAGE_TYPE } from '../../resources/pages/flux/flux-config'
 import { EVALUATION_RESULT_BDC_TYPE, EVALUATION_RESULT_PRESET_ID } from './evaluation/learning-evaluation-config'
@@ -17,6 +18,7 @@ export const BDC_TYPE = {
   CAROUSEL: CAROUSEL_BDC_TYPE,
   CARD: CARD_BDC_TYPE,
   STATISTICAL_GRAPH: STATISTICAL_GRAPH_BDC_TYPE,
+  SUMMARY: SUMMARY_BDC_TYPE,
 } as const
 
 export const PAGE_TYPE = {
@@ -37,6 +39,7 @@ export const DEFAULT_PRESET_ID = {
   IMAGE_TITLE: CARD_PRESET_ID.IMAGE_TITLE,
   STATISTICAL_GRAPH_ABOVE_TEXT: STATISTICAL_GRAPH_PRESET_ID.ABOVE_TEXT,
   STATISTICAL_GRAPH_SIDE_BY_SIDE: STATISTICAL_GRAPH_PRESET_ID.SIDE_BY_SIDE,
+  SUMMARY: SUMMARY_PRESET_ID,
 } as const
 
 export const LEARNING_DEFINITION = {

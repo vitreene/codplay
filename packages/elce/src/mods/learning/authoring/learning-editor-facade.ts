@@ -17,6 +17,7 @@ import {
 } from '../../../domain/commands/document-commands'
 import { createCarouselBdcCommand } from '../../../resources/bdcs/carousel/authoring/carousel-command-factory'
 import { createSectionBdcCommand } from '../../../resources/bdcs/section/authoring/section-command-factory'
+import { createSummaryBdcCommand } from '../../../resources/bdcs/summary/authoring/summary-bdc-command-factory'
 import { createStandaloneCardBdcCommand } from '../../../resources/bdcs/card/authoring/card-command-factory'
 import { CARD_PRESET_ID } from '../../../resources/bdcs/card/card-config'
 import { ListService } from '../../../resources/list/domain/list-service'
@@ -183,6 +184,11 @@ export class LearningEditorFacade {
     this.apply({ type: 'bdc.delete', bdcId })
   }
 
+  /** Permanently deletes a Summary BDC from its page or the reusable catalogue. */
+  public deleteSummaryBdc(bdcId: BdcId): void {
+    this.apply({ type: 'bdc.summary.delete', bdcId })
+  }
+
   /** Creates the page's one sibling Avatar through the existing command queue. */
   public createAvatar(pageId: PageId, index: number): void {
     this.apply({ type: 'bdc.create', bdcId: createStableId('bdc-avatar'), bdcType: AVATAR_BDC_TYPE, presetId: AVATAR_PRESET_ID, placement: { kind: BDC_LOCATION.PAGE, pageId, index } })
@@ -246,6 +252,11 @@ export class LearningEditorFacade {
   /** Creates a Section BDC at the requested page position. */
   public createSection(pageId: PageId, index: number): void {
     this.apply(createSectionBdcCommand(createStableId('bdc-section'), pageId, index))
+  }
+
+  /** Creates a page-level Summary BDC through the existing document command queue. */
+  public createSummary(pageId: PageId, index: number): void {
+    this.apply(createSummaryBdcCommand(createStableId('bdc-summary'), pageId, index))
   }
 
   /** Creates the unique Question BDC under Learning's per-page rule. */

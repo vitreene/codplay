@@ -8,8 +8,11 @@ import { createInlineTextSceneParts, wrapInlineTextSceneParts } from '../../inli
 import { SCENARIO_ENTRY_KIND } from '../learning-organization-config'
 import { scenarioChapterPageIds } from '../learning-scenario-tree'
 import type { ScenarioEntry } from '../learning-scenario-entry-types'
+import type { LearningPage } from '../../document/learning-document-types'
+import type { AdditionalBdcBuild } from '../../../../resources/pages/additional-bdc-types'
 
 export type SummaryPresentation = 'menu' | 'root'
+export type SummaryScope = Readonly<{ kind: 'root' }> | Readonly<{ kind: 'chapter'; chapterId: string }>
 export type SummaryChapterReadingStatus = 'locked' | 'read' | 'partial' | 'unread'
 
 interface InlineMarkupProjection {
@@ -30,8 +33,9 @@ export function buildSummaryScene(
 ): SceneDoc<string> {
   const summary = document.data.summary
   const prefix = `${document.id}:summary:${presentation}`
-  const entries = buildSummaryEntries(document)
-  const summaryTree = createSummaryTree(document, entries)
+  const scope: SummaryScope = { kind: 'root' }
+  const entries = buildSummaryEntries(document, scope)
+  const summaryTree = createSummaryTree(document, entries, scope)
   const entryProjection = presentation === 'root'
     ? createRootEntryListMarkup(prefix, summaryTree)
     : createEntryListMarkup(prefix, summaryTree)
@@ -96,6 +100,54 @@ export function buildSummaryScene(
   return { id: `${document.id}-${presentation}-summary-scene`, stories: { main: story } }
 }
 
+/** Builds the embedded, list-only Summary BDC through the page's existing additional-BDC slot. */
+export function buildSummaryBdcScene(
+  document: LearningDocument,
+  page: LearningPage,
+  bdcId: string,
+  appearanceClassName: string,
+): AdditionalBdcBuild {
+  const scope: SummaryScope = page.chapterId === null
+    ? { kind: 'root' }
+    : { kind: 'chapter', chapterId: page.chapterId }
+  const prefix = `${document.id}:summary:${page.id}:${bdcId}`
+  const mountPartId = `${page.id}:${bdcId}:summary:mount`
+  const storyId = `${page.id}-${bdcId}-summary`
+  const entries = buildSummaryEntries(document, scope)
+  const tree = createSummaryTree(document, entries, scope)
+  const projection = createRootEntryListMarkup(prefix, tree, { showChapterStatus: true, groupTopLevelPages: false })
+  const returnTarget = `${prefix}:return-to-main`
+  const markup = `<section id="${prefix}-root" class="elce-summary elce-summary--embedded ${appearanceClassName}" aria-label="Sommaire">
+    <ol id="${prefix}-entries" class="elce-summary__entries">${projection.markup}</ol>
+    ${document.data.summary.showAtRoot ? `<!-- data-part="${returnTarget}" -->` : ''}
+  </section>`
+  const entryPersos = entries.map((entry) => createEntryPerso(prefix, entry, 'root'))
+  const chapterStatusPersos = summaryChapterIds(tree)
+    .filter((chapterId) => !entries.some((entry) => entry.kind === 'chapter' && entry.id === chapterId))
+    .map((chapterId) => createChapterStatusPerso(prefix, chapterId))
+  const story: StoryDoc<string> = {
+    id: storyId,
+    listen: [...new Set([
+      ...entries.map((entry) => `${ELCE_EVENTS.PRESENTATION_MENU_PAGE_PREFIX}${entry.pageId}`),
+      ...entries.map((entry) => menuEvent(entry.pageId)),
+      ...summaryChapterIds(tree).flatMap((chapterId) => chapterStatusEventsFor(chapterId)),
+      ...(document.data.summary.showAtRoot ? [ELCE_EVENTS.MENU_SUMMARY] : []),
+    ])].map((eventName) => ({ on: eventName })),
+    persos: [
+      {
+        id: `${storyId}-root`,
+        type: 'layout',
+        initial: { move: { target: mountPartId }, className: `elce-summary elce-summary--embedded ${appearanceClassName}`, markup },
+      },
+      ...projection.persos,
+      ...chapterStatusPersos,
+      ...entryPersos,
+      ...(document.data.summary.showAtRoot ? [createReturnToMainSummaryPerso(prefix, returnTarget)] : []),
+    ],
+  }
+  return { mountPartId, mountMarkup: `<!-- data-part="${mountPartId}" -->`, stories: [story] }
+}
+
 export type SummaryEntry = Readonly<{
   readonly id: string
   readonly title: ElceTextValue
@@ -105,11 +157,11 @@ export type SummaryEntry = Readonly<{
 }>
 
 /** Builds flat click targets while preserving depth-first scenario order. */
-export function buildSummaryEntries(document: LearningDocument): readonly SummaryEntry[] {
+export function buildSummaryEntries(document: LearningDocument, scope: SummaryScope = { kind: 'root' }): readonly SummaryEntry[] {
   const pages = new Map(document.pages.map((page) => [page.id, page]))
   const entries: SummaryEntry[] = []
   const chapters = new Map(document.chapters.map((chapter) => [chapter.id, chapter]))
-  const visit = (scenarioEntries: readonly ScenarioEntry[], parentChapterId: string | null): void => {
+  const visit = (scenarioEntries: readonly ScenarioEntry[], parentChapterId: string | null, depth: number): void => {
     for (const scenarioEntry of scenarioEntries) {
       switch (scenarioEntry.kind) {
         case SCENARIO_ENTRY_KIND.PAGE: {
@@ -122,17 +174,17 @@ export function buildSummaryEntries(document: LearningDocument): readonly Summar
         case SCENARIO_ENTRY_KIND.CHAPTER: {
           const chapter = chapters.get(scenarioEntry.chapterId)
           if (chapter === undefined) break
-          if (document.data.summary.displayMode === 'chapters') {
+          if (document.data.summary.displayMode === 'chapters' && depth === 0) {
             const pageId = scenarioChapterPageIds(document.data, chapter.id)[0]
             if (pageId !== undefined) entries.push({ id: chapter.id, title: chapter.name, pageId, kind: 'chapter', parentChapterId })
           }
-          visit(chapter.entries, chapter.id)
+          visit(chapter.entries, chapter.id, depth + 1)
           break
         }
       }
     }
   }
-  visit(document.data.scenarioEntries, null)
+  visit(scenarioEntriesForScope(document, scope), scope.kind === 'root' ? null : scope.chapterId, 0)
   return entries
 }
 
@@ -140,6 +192,7 @@ export function buildSummaryEntries(document: LearningDocument): readonly Summar
 function createSummaryTree(
   document: LearningDocument,
   entries: readonly SummaryEntry[],
+  scope: SummaryScope,
 ): readonly SummaryTreeEntry[] {
   const chapters = new Map(document.chapters.map((chapter) => [chapter.id, chapter]))
   const pages = new Map(entries.filter((entry) => entry.kind === 'page').map((entry) => [entry.pageId, entry]))
@@ -160,7 +213,15 @@ function createSummaryTree(
       }
     }
   })
-  return visit(document.data.scenarioEntries)
+  return visit(scenarioEntriesForScope(document, scope))
+}
+
+/** Starts summary projection at the root or the host chapter, without including ancestors. */
+function scenarioEntriesForScope(document: LearningDocument, scope: SummaryScope): readonly ScenarioEntry[] {
+  if (scope.kind === 'root') return document.data.scenarioEntries
+  const chapter = document.chapters.find((candidate) => candidate.id === scope.chapterId)
+  if (chapter === undefined) throw new Error(`Le chapitre de portée du Sommaire est absent : ${scope.chapterId}`)
+  return chapter.entries
 }
 
 /** Returns all retained chapter identifiers in their visible tree order. */
@@ -330,12 +391,16 @@ function createEntryMarkup(prefix: string, entry: SummaryEntry, presentation: Su
 function createRootEntryListMarkup(
   prefix: string,
   entries: readonly SummaryTreeEntry[],
+  options: Readonly<{ showChapterStatus: boolean; groupTopLevelPages: boolean }> = {
+    showChapterStatus: true,
+    groupTopLevelPages: true,
+  },
 ): InlineMarkupProjection {
   const persos: PersoDoc<string>[] = []
   const renderEntry = (entry: SummaryTreeEntry, depth: number): string => {
     if (entry.kind === 'page') {
       const pageMarkup = createEntryMarkup(prefix, entry.entry, 'root')
-      if (depth > 0) return pageMarkup
+      if (depth > 0 || !options.groupTopLevelPages) return pageMarkup
       return `<li id="${prefix}-chapter-row-${entry.entry.id}" class="elce-summary__chapter-row elce-summary__chapter-row--standalone"><span id="${prefix}-chapter-spacer-${entry.entry.id}" class="elce-summary__chapter-spacer" aria-hidden="true"></span><ol id="${prefix}-chapter-pages-${entry.entry.id}" class="elce-summary__chapter-pages">${pageMarkup}</ol></li>`
     }
     const title = entry.entry === undefined
@@ -343,7 +408,7 @@ function createRootEntryListMarkup(
       : undefined
     if (title !== undefined) persos.push(...title.persos)
     const heading = entry.entry === undefined
-      ? `<h2 id="${prefix}-chapter-heading-${entry.id}" class="elce-summary__chapter-title elce-summary__chapter-title--with-status">${createChapterStatusHostMarkup(prefix, entry.id)}${title?.markup ?? ''}</h2>`
+      ? `<h2 id="${prefix}-chapter-heading-${entry.id}" class="elce-summary__chapter-title${options.showChapterStatus ? ' elce-summary__chapter-title--with-status' : ''}">${options.showChapterStatus ? createChapterStatusHostMarkup(prefix, entry.id) : ''}${title?.markup ?? ''}</h2>`
       : `<h2 id="${prefix}-chapter-heading-${entry.id}" class="elce-summary__chapter-title"><!-- data-part="${prefix}:entry:${entry.entry.id}" --></h2>`
     const childMarkup = entry.children.map((child) => renderEntry(child, depth + 1)).join('')
     const children = childMarkup.length === 0 ? '' : `<ol id="${prefix}-chapter-pages-${entry.id}" class="elce-summary__chapter-pages">${childMarkup}</ol>`
@@ -352,6 +417,22 @@ function createRootEntryListMarkup(
   }
   const markup = entries.map((entry) => renderEntry(entry, 0)).join('')
   return { markup, persos }
+}
+
+/** Creates the optional action that opens the configured main summary route. */
+function createReturnToMainSummaryPerso(prefix: string, target: string): PersoDoc<string> {
+  return {
+    id: `${prefix}-return-to-main-summary`,
+    type: 'tag',
+    initial: {
+      tag: 'button',
+      content: 'Retour au Sommaire principal',
+      className: 'elce-summary__return-to-main',
+      attr: { type: 'button' },
+      move: { target },
+    },
+    emit: { click: { event: { name: ELCE_EVENTS.MENU_SUMMARY, visibility: 'public' } } },
+  }
 }
 
 /** Creates the status icon mount point beside a static chapter heading. */

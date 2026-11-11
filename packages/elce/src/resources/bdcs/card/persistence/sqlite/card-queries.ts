@@ -45,6 +45,7 @@ export function cardContentFromSqliteRow(row: SqliteRow): CardContent {
 function parseList(value: string | null): ListContent | null {
   if (value === null) return null
   const list = JSON.parse(value) as unknown
-  new ListService().assertValid(list)
+  const listService: ListService = new ListService()
+  listService.assertValid(list)
   return list
 }

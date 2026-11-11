@@ -197,7 +197,9 @@ export class LearningScenarioBuilder {
         ...(chapter.evaluationRetryScope === undefined ? {} : { evaluationRetryScope: chapter.evaluationRetryScope }),
       }])),
       bdcTypes: Object.fromEntries(document.bdcs
-        .filter((bdc) => bdc.type === BDC_TYPE.QUESTION || bdc.type === BDC_TYPE.EVALUATION_RESULT)
+        .filter((bdc) => bdc.type === BDC_TYPE.QUESTION
+          || bdc.type === BDC_TYPE.EVALUATION_RESULT
+          || bdc.type === BDC_TYPE.SUMMARY)
         .map((bdc) => [bdc.id, bdc.type])),
       summary: {
         title: document.data.summary.title,

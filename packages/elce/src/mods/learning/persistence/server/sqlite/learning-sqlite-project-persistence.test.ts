@@ -19,7 +19,7 @@ import { STATISTICAL_GRAPH_RENDERING } from '../../../../../resources/bdcs/stati
 import {
   BDC_LOCATION,
 } from '../../../../../core/document/content-location'
-import { applyDocumentCommand, assertDocumentInvariants, createStatisticalGraphCarouselBdcCommand } from '../../../../../domain/commands/document-commands'
+import { applyDocumentCommand, assertDocumentInvariants, createStatisticalGraphCarouselBdcCommand, createSummaryBdcCommand } from '../../../../../domain/commands/document-commands'
 import { learningDocumentService } from '../../../document/learning-document-service'
 import { ELCE_DOCUMENT_VERSION, LearningDocument } from '../../../document/learning-document'
 import { learningControllerMachine } from '../../../authoring/learning-controller-machine'
@@ -89,7 +89,10 @@ describe('SQLite project persistence through the Remix API', () => {
     database = await openProjectDatabase(':memory:')
     const persistence = new LearningSqliteProjectPersistence(database)
     const router = createLearningApiRouter(persistence)
-    const document = createRelationalFixture()
+    const document = applyDocumentCommand(
+      createRelationalFixture(),
+      createSummaryBdcCommand('bdc-summary', 'page-a', 1),
+    )
 
     const created = await router.fetch(jsonRequest('POST', '/api/projects', document.toJSON()))
     expect(created.status).toBe(201)
@@ -107,6 +110,14 @@ describe('SQLite project persistence through the Remix API', () => {
     expect(restored.data.catalogBdcIds).toEqual(document.data.catalogBdcIds)
     expect(restored.medias).toEqual(document.medias)
     expect(restored.bdcs.toSorted(compareById)).toEqual(document.bdcs.toSorted(compareById))
+    expect(restored.bdcs.find((bdc) => bdc.id === 'bdc-summary')).toMatchObject({
+      type: BDC_TYPE.SUMMARY,
+      presetId: DEFAULT_PRESET_ID.SUMMARY,
+      pageId: 'page-a',
+      section: null,
+      question: null,
+      card: null,
+    })
     expect(restored.data.revelationDefaults).toEqual(document.data.revelationDefaults)
     expect(restored.data.summary).toEqual(document.data.summary)
     expect(restored.data.profile).toEqual(document.data.profile)

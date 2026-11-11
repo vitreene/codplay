@@ -754,6 +754,8 @@ async function insertBdcDetail(database: ProjectDatabase, projectId: string, bdc
       await executePreparedQuery(database, prepareStatisticalGraphInsert(projectId, bdc.id, graph))
       return
     }
+    case BDC_TYPE.SUMMARY:
+      return
   }
 }
 

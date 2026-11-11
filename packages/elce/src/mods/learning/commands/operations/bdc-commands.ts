@@ -141,8 +141,9 @@ export function createBdc(
       && command.bdcType !== BDC_TYPE.QUESTION
       && command.bdcType !== BDC_TYPE.CARD
       && command.bdcType !== BDC_TYPE.EVALUATION_RESULT
-      && command.bdcType !== BDC_TYPE.STATISTICAL_GRAPH) {
-      fail('Une Diapo accepte un Carousel, un Quiz, une Carte, un Graphe ou un Résultat d’Évaluation.')
+      && command.bdcType !== BDC_TYPE.STATISTICAL_GRAPH
+      && command.bdcType !== BDC_TYPE.SUMMARY) {
+      fail('Une Diapo accepte un Carousel, un Quiz, une Carte, un Graphe, un Résultat d’Évaluation ou un Sommaire.')
     }
   }
   switch (command.bdcType) {
@@ -214,6 +215,10 @@ export function createBdc(
         case BDC_LOCATION.PARENT:
           fail('Un BDC Résultat ne peut pas être créé dans un autre BDC.')
       }
+      break
+    case BDC_TYPE.SUMMARY:
+      if (command.presetId !== DEFAULT_PRESET_ID.SUMMARY) fail('Un BDC Sommaire utilise son preset configuré.')
+      if (command.placement.kind !== BDC_LOCATION.PAGE) fail('Un BDC Sommaire doit être placé directement dans une page.')
       break
     case BDC_TYPE.QUESTION: {
       if (command.presetId !== DEFAULT_PRESET_ID.QUESTION) {
@@ -503,4 +508,11 @@ export function deleteEvaluationResult(document: LearningDocument, bdcId: BdcId)
     default:
       fail(`Seul un bdc Résultat peut être supprimé par cette commande : ${bdcId}`)
   }
+}
+
+/** Permanently removes one page or catalog Summary BDC. */
+export function deleteSummaryBdc(document: LearningDocument, bdcId: BdcId): LearningDocument {
+  const bdc = findBdc(document.bdcs, bdcId)
+  if (bdc.type !== BDC_TYPE.SUMMARY) fail(`Seul un BDC Sommaire peut être supprimé par cette commande : ${bdcId}`)
+  return deleteBdc(document, bdc.id)
 }

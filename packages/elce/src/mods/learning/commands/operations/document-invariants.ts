@@ -141,6 +141,7 @@ export function assertDocumentInvariants(document: LearningDocument, resources: 
             case BDC_TYPE.QUESTION:
             case BDC_TYPE.CARD:
             case BDC_TYPE.STATISTICAL_GRAPH:
+            case BDC_TYPE.SUMMARY:
               return false
             case BDC_TYPE.EVALUATION_RESULT:
               return !LearningPageCommandService.pageBelongsToEvaluationChapter(document, page)
@@ -265,6 +266,23 @@ export function assertDocumentInvariants(document: LearningDocument, resources: 
           fail(`La page du Graphe ${bdc.id} est absente.`)
         }
         resources.statisticalGraphService.assertStatisticalGraphContent(bdc.statisticalGraph)
+        break
+      }
+      case BDC_TYPE.SUMMARY: {
+        if (bdc.presetId !== DEFAULT_PRESET_ID.SUMMARY
+          || bdc.avatar != null
+          || bdc.section != null
+          || bdc.question != null
+          || bdc.evaluationResult != null
+          || bdc.carousel != null
+          || bdc.card != null
+          || bdc.statisticalGraph != null
+          || bdc.parentBdcId !== null) {
+          fail(`BDC Sommaire incomplet : ${bdc.id}`)
+        }
+        if (bdc.pageId === null || document.pages.find((candidate) => candidate.id === bdc.pageId) === undefined) {
+          fail(`Le BDC Sommaire ${bdc.id} doit appartenir directement à une page.`)
+        }
         break
       }
       default:

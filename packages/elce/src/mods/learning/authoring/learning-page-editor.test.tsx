@@ -30,6 +30,43 @@ describe('Remix production page editor', () => {
     document.body.replaceChildren()
   })
 
+  it('creates a Summary BDC from the page menu and edits the shared display rule', async () => {
+    const controller = createActor(controllerMachine, { input: {} })
+    controller.start()
+    controller.send({ type: 'editor.access.activate' })
+    const actions = new LearningEditorFacade(controller)
+    const page = controller.getSnapshot().context.document.pages[0]
+    if (page === undefined) throw new Error('The page editor fixture has no initial page.')
+    const rendered = render(<div id="elce-summary-bdc-editor-test-host">
+      <LearningEditorContextProvider controller={controller} actions={actions}>
+        <LearningPageEditor canMoveBdcToPage={actions.authoring.canMoveBdcToPage.bind(actions)} onOpenAppearanceTarget={() => undefined} />
+      </LearningEditorContextProvider>
+    </div>)
+    cleanup = () => {
+      rendered.cleanup()
+      controller.stop()
+    }
+
+    await actOnRemix(rendered, () => Promise.resolve())
+    await actOnRemix(rendered, () => rendered.$(`#elce-page-bdc-add-toggle-${page.id}`)?.click())
+    expect(rendered.$('#elce-summary-create')?.hasAttribute('disabled')).toBe(false)
+    await actOnRemix(rendered, () => rendered.$('#elce-summary-create')?.click())
+
+    const summaryBdc = controller.getSnapshot().context.document.bdcs.find((bdc) => bdc.type === BDC_TYPE.SUMMARY)
+    if (summaryBdc === undefined) throw new Error('The page menu did not create a Summary BDC.')
+    const mode = rendered.$(`#elce-summary-bdc-editor-${summaryBdc.id}-mode`) as HTMLSelectElement
+    expect(mode.value).toBe('pages')
+    expect(rendered.$(`#elce-summary-bdc-editor-${summaryBdc.id}-shared-hint`)?.textContent)
+      .toContain('Sommaire principal et aux autres blocs Sommaire')
+
+    await actOnRemix(rendered, () => {
+      mode.value = 'chapters'
+      mode.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
+    expect(controller.getSnapshot().context.document.data.summary.displayMode).toBe('chapters')
+  })
+
   it('renders and edits every ordered BDC in Remix through the existing XState actor', async () => {
     const controller = createActor(controllerMachine, { input: {} })
     controller.start()

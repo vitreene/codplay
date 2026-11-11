@@ -540,6 +540,36 @@ export const LEARNING_LAYOUT_STYLE_RULES = [
   color: var(--elce-appearance-text);
   background: transparent;
 }`],
+  [155, `
+
+.elce-summary--embedded {
+  width: 100%;
+  min-width: 0;
+  color: var(--elce-appearance-text);
+}`],
+  [156, `
+
+.elce-summary--embedded .elce-summary__entries {
+  gap: 0.35rem;
+}`],
+  [157, `
+
+.elce-summary--embedded .elce-summary__chapter-row {
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+}`],
+  [158, `
+
+.elce-summary__return-to-main {
+  display: inline-flex;
+  margin-block-start: 0.75rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--elce-appearance-border);
+  border-radius: 0.35rem;
+  color: var(--elce-appearance-accent);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}`],
   [126, `
 
 .elce-player-layout.project-layout.has-background .elce-summary--root {

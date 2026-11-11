@@ -42,6 +42,7 @@ export interface LearningPageBdcAvailability {
   readonly canCreateQuestion: boolean
   readonly canCreateSection: boolean
   readonly canCreateEvaluationResult: boolean
+  readonly canCreateSummary: boolean
   readonly canCreateCarousel: boolean
   readonly canCreateStandaloneCard: boolean
   readonly canCreateStatisticalGraph: boolean
@@ -86,6 +87,8 @@ export class LearningAuthoringService {
               return bdc.card == null ? [] : [bdc]
             case BDC_TYPE.STATISTICAL_GRAPH:
               return bdc.statisticalGraph == null ? [] : [bdc]
+            case BDC_TYPE.SUMMARY:
+              return [bdc]
             default:
               return []
           }
@@ -136,6 +139,7 @@ export class LearningAuthoringService {
       canCreateEvaluationResult: (isFlux || isDiapo)
         && isEvaluationChapter
         && (!isDiapo || !view.pageHasContent),
+      canCreateSummary: isFlux || (isDiapo && !view.pageHasContent),
       canCreateCarousel: isFlux || (isDiapo && !view.pageHasContent && !view.pageHasCarousel),
       canCreateStandaloneCard: isFlux || (isDiapo && !view.pageHasContent),
       canCreateStatisticalGraph: isFlux || (isDiapo && !view.pageHasContent),

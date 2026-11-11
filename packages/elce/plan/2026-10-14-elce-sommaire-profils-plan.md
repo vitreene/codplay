@@ -217,10 +217,33 @@ acceptation en attente
     chapitre, l’évaluation et le garde du BDC Résultat restent actifs. Réutiliser
     les gardes Sighty `canLeavePage` et `PAGE_ACCESS`. Les tests du builder et de
     la composition vérifient le maintien de ces contraintes en mode libre.
+11. **Sommaires intermédiaires par BDC — décisions acceptées, réalisation en
+    cours.** Le Sommaire intermédiaire est un BDC de liste seule, ajoutable aux
+    pages Flux et Diapo ; ce n’est pas un nouveau type de page. Il n’a pas de
+    titre ni de description propres. Le Sommaire principal et les BDC lisent et
+    éditent le même réglage `displayMode` dans `SummarySettings`, via la commande
+    documentaire existante ; aucun état parallèle n’est créé. Chaque vue
+    fournit une portée à la projection commune. L’analyse du Sommaire principal
+    part de la racine ; celle du BDC part du chapitre contenant sa page hôte,
+    sans remonter vers les chapitres ancêtres. Sur une page racine, le BDC
+    analyse tout l’arbre racine. Le mode `chapters` montre les chapitres un
+    niveau sous le point de départ ; le mode `pages` ajoute les pages de cette
+    portée. Le BDC peut proposer l’action « Retour au Sommaire principal » quand
+    la route du Sommaire principal existe (`showAtRoot`). La conversion du
+    Sommaire principal en BDC reste à évaluer ultérieurement et n’est pas
+    incluse dans cette tranche.
+    La navigation vers les pages listées réutilise les événements et routes
+    Sighty existants. À la fin de portée, `next` continue selon l’ordre normal
+    et s’arrête naturellement sans page suivante. Le retour automatique vers
+    le BDC d’origine en fin de portée est différé par décision explicite ; la
+    navigation `summary` existante du Sommaire principal reste inchangée. Le
+    positionnement éditorial général des BDC est une amélioration Elcé distincte
+    et n’entre pas dans cette tranche.
 
-Ces formats sont des choix internes pour avancer et seront soumis à relecture.
-Ils ne changent pas les comportements acceptés listés dans le plan de
-construction.
+Les décisions du BDC Sommaire ci-dessus sont acceptées pour la réalisation de
+cette tranche. Les autres formats internes restent provisoires. Cette tranche
+réutilise les contrats vérifiés listés dans le plan de construction et ne les
+remplace pas.
 
 ## Étapes
 
@@ -536,6 +559,37 @@ construction.
      spécifications concernées, actualiser le statut du plan de construction,
      puis retirer ce plan et les notes préparatoires devenues inutiles.
 
+9. **BDC Sommaire — Fini.**
+   - [x] Ajouter le BDC direct dans Learning et ses commandes, invariants,
+     Undo/Redo et persistance. Le créer depuis le menu de page Flux ou Diapo ;
+     respecter la limite Diapo d’un BDC de contenu plus son Avatar facultatif.
+     Le BDC ne porte aucun texte propre.
+   - [x] Ajouter son entrée d’édition et partager `displayMode` avec le
+     Sommaire principal par `summary.settings.update`.
+   - [x] Projeter la portée racine ou le chapitre de la page hôte sans inclure
+     les chapitres ancêtres ; `chapters` affiche un niveau sous le point de
+     départ et `pages` suit l’ordre des pages descendantes.
+   - [x] Composer la liste via `BuildAdditionalBdc` pour Flux et Diapo. Les
+     liens utilisent les routes Sighty existantes. L’action « Retour au
+     Sommaire principal » utilise `MENU_SUMMARY` et n’existe que si
+     `showAtRoot` active cette destination. Ne créer ni route locale, ni
+     navigation parallèle, ni modification CodPlay.
+   - [x] Différer le retour automatique vers le BDC d’origine en fin de portée,
+     conformément à la décision acceptée. Ce report ne concerne pas le
+     positionnement éditorial général des BDC, qui est une amélioration Elcé
+     distincte et hors du périmètre de cette tranche.
+   - [x] Ajouter les tests du projection builder, de l’éditeur, des commandes,
+     des invariants, du cache, de la composition Player Flux/Diapo, d’Undo/Redo
+     et de la persistance SQLite.
+   - [x] Exécuter les suites concernées, dont l’intégration HTTP/SQLite avec
+     l’accès loopback requis, ainsi que le build et le contrôle des frontières
+     de modules.
+   - [x] Vérifier le lecteur réel : rendu Flux et Diapo, navigation des pages,
+     action conditionnelle vers le Sommaire principal, réglage `displayMode`
+     partagé, et rendu mobile sans débordement horizontal.
+   - [x] Aligner la spécification Sommaire et les spécifications Flux/Diapo sur
+     les comportements vérifiés.
+
 ## Cache preview et état de consultation — appliqué et vérifié le 27 octobre 2026
 
 Les sources de scènes Question restent neutres et réutilisables ; le circuit
@@ -561,7 +615,8 @@ La synchronisation permanente débrayable reste une étape ultérieure du
 
 ## Gate de réalisation
 
-Les étapes et raccords ci-dessus sont acceptés. Les formats internes sont
-provisoires jusqu’à la relecture de l’auteur et ne bloquent pas l’intégration.
+Les étapes et raccords ci-dessus sont acceptés. Les décisions du BDC Sommaire
+sont relues et acceptées ; les autres formats internes restent provisoires et
+ne bloquent pas l’intégration.
 Toute divergence avec les spécifications existantes rouvre le contrat concerné
 avant le code. Les spécifications ne décrivent que les comportements vérifiés.

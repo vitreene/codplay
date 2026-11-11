@@ -5,13 +5,17 @@
 Le builder projette une page Elcé de type `diapo` en scène CodPlay. La Diapo
 contient au plus un BDC direct. Sa création propose un BDC Carousel ; l’auteur
 peut le remplacer par un BDC Carte autonome, un BDC Question (Quiz) ou un
-Graphe. Les cartes et Graphes d’un Carousel réutilisent leurs BDC
+Graphe ou un BDC Sommaire. Les cartes et Graphes d’un Carousel réutilisent leurs BDC
 Elcé dans une page Flux.
 
 Le type d’options communes expose `buildAdditionalBdc` sans importer Learning.
 La composition Learning l’utilise pour le BDC Résultat et vérifie son chapitre
 d’Évaluation ; un type sans constructeur ni contribution reçoit un refus
 explicite.
+La contribution Learning compose le BDC Sommaire dans la place de contenu de la
+Diapo, sans titre ni description propres. Sa liste suit le réglage partagé et
+la portée de sa page hôte selon la
+[spécification Sommaire](./summary-profile-spec.md#bdc-sommaire).
 
 ## Scène et lecture
 

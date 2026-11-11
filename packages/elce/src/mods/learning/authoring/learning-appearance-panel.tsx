@@ -610,6 +610,7 @@ function appearanceTargetLabel(view: EditorViewModel, target: AppearanceTarget):
     case BDC_TYPE.QUESTION: return 'Question'
     case BDC_TYPE.EVALUATION_RESULT: return 'Résultat'
     case BDC_TYPE.STATISTICAL_GRAPH: return 'Graphe'
+    case BDC_TYPE.SUMMARY: return 'Sommaire'
     default: return 'Bloc'
   }
 }

@@ -1669,6 +1669,17 @@ Qualifications dynamiques, variantes grammaticales, ACL et lot d’utilisateurs
 restent différés. Les formats internes intégrés sont disponibles pour relecture
 auteur ultérieure.
 
+## Amélioration globale Elcé différée — reprise sur un BDC du Flux
+
+Étudier un mécanisme commun de navigation pour les parcours lancés depuis un
+BDC intégré au Flux. Il devra définir le contexte auquel revenir — au minimum
+la page hôte — et permettre, si le parcours le demande, de reprendre à la
+position exacte du BDC dans cette page. Le retour automatique en `summary` à la
+fin d’une portée lancée depuis un BDC Sommaire en est le premier cas identifié ;
+le mécanisme devra être évalué pour les autres parcours Elcé qui ciblent un
+BDC. Cette amélioration est hors de la tranche des Sommaires intermédiaires et
+sera cadrée séparément.
+
 ## Export SCORM
 
 **Statut : En cours — réalisation du dossier SCORM autorisée ; intégration et

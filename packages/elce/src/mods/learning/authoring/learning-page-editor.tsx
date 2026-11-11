@@ -34,6 +34,7 @@ import { renderAppearanceTrigger } from '../../../core/authoring/appearance-trig
 import { renderPageEditorView } from '../../../core/authoring/page/page-editor-view'
 import { installOutsideMenuDismissal } from '../../../core/authoring/menus/outside-menu-dismissal'
 import { createLearningTextFieldFeature } from '../inline-text/learning-inline-text-field'
+import { renderSummaryBdcEditor } from '../../../resources/bdcs/summary/authoring/summary-bdc-editor'
 
 interface LearningPageEditorProps {
   readonly onOpenAppearanceTarget: (target: AppearanceTarget, triggerId: string) => void
@@ -207,6 +208,11 @@ function renderPageEditor(view: EditorViewModel, actions: LearningEditorFacade, 
     }
     state.updateAddContentMenuOpen(false)
   }
+  /** Adds one list-only Summary BDC at the end of the selected page. */
+  const addSummary = (): void => {
+    if (page !== undefined && availability.canCreateSummary) actions.createSummary(page.id, page.bdcIds.length)
+    state.updateAddContentMenuOpen(false)
+  }
   const addEvaluationResult = (): void => {
     if (page !== undefined && availability.canCreateEvaluationResult) {
       actions.createEvaluationResult(page.id, page.bdcIds.length)
@@ -258,6 +264,7 @@ function renderPageEditor(view: EditorViewModel, actions: LearningEditorFacade, 
       availability.canCreateEvaluationResult
         ? renderCreateButton('elce-evaluation-result-create', 'Ajouter un bloc résultat', 'Résultat', BadgeCheck, false, addEvaluationResult)
         : null,
+      page === undefined ? null : renderCreateButton('elce-summary-create', 'Ajouter un sommaire', 'Sommaire', List, !availability.canCreateSummary, addSummary),
     ],
     isAddContentMenuOpen: state.isAddContentMenuOpen(),
     onToggleAddContentMenu: () => state.updateAddContentMenuOpen(!state.isAddContentMenuOpen()),
@@ -374,6 +381,8 @@ function bdcNavigationPresentation(bdc: LearningBdc): Readonly<{
       return { icon: RectangleHorizontal, label: 'Carte' }
     case BDC_TYPE.STATISTICAL_GRAPH:
       return { icon: Activity, label: 'Graphe' }
+    case BDC_TYPE.SUMMARY:
+      return { icon: List, label: 'Sommaire' }
     default:
       return { icon: FileText, label: 'Bloc' }
   }
@@ -453,6 +462,15 @@ function renderBdcEditor(
         state.onOpenAppearanceTarget,
         textFieldFeature,
       )
+    case BDC_TYPE.SUMMARY:
+      return renderSummaryBdcEditor({
+        bdcId: bdc.id,
+        displayMode: view.documentModel.data.summary.displayMode,
+        onDisplayModeChange: (displayMode) => actions.updateSummarySettings({
+          ...view.documentModel.data.summary,
+          displayMode,
+        }),
+      })
     case BDC_TYPE.CAROUSEL: {
       if (bdc.carousel === null || bdc.carousel === undefined) return null
       const views = bdc.carousel.cards.flatMap((entry) => {
@@ -668,6 +686,9 @@ function deletePageBdc(bdc: LearningBdc, state: PageEditorRenderState): boolean 
       return true
     case BDC_TYPE.STATISTICAL_GRAPH:
       state.actions.deleteStatisticalGraph(bdc.id)
+      return true
+    case BDC_TYPE.SUMMARY:
+      state.actions.deleteSummaryBdc(bdc.id)
       return true
     default:
       return false

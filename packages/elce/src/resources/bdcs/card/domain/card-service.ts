@@ -11,7 +11,7 @@ import { ListService } from '../../../list/domain/list-service'
 
 /** Owns the shared data fields used by every Card layout. */
 export class ElceCardService {
-  private readonly listService = new ListService()
+  private readonly listService: ListService = new ListService()
   /** Creates a Card with every layout's fields initialized. */
   public createDefault(
     imagePosition: CarouselImagePosition = CAROUSEL_CONFIG.defaultImagePosition,

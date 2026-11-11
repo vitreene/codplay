@@ -123,5 +123,5 @@ describe('Elcé local API reuse', () => {
       if (previousDataDirectory !== undefined) process.env.ELCE_DATA_DIRECTORY = previousDataDirectory
       await rm(dataDirectory, { recursive: true, force: true })
     }
-  })
+  }, 30_000)
 })

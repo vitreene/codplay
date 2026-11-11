@@ -38,7 +38,7 @@ const CLASS_BY_PREFIX: Readonly<Record<ListPrefix, string>> = {
 
 /** Builds semantic list markup, row persos, and CodPlay reveal events. */
 export class ListSceneBuilder {
-  private readonly service = new ListService()
+  private readonly service: ListService = new ListService()
 
   /** Projects one List value without consulting the resource that hosts it. */
   public build(input: ListSceneBuildInput): ListSceneBuild {
@@ -136,7 +136,7 @@ function createListRevealStrap(
       const plannedReveals = rows.flatMap((row) => row.offsetMs === 0
         ? []
         : context.planned.wait(row.offsetMs, { event: { name: row.revealEventName } }))
-      return [{ update: { [stateKey]: nextPendingTimes } }, { events: immediateEvents }, ...corrections, ...plannedReveals]
+      return [{ update: { [stateKey]: nextPendingTimes } }, { events: immediateEvents }, corrections, plannedReveals]
     }
 
     if (event.name === exitEventName && exitEventName !== undefined) {
@@ -144,7 +144,7 @@ function createListRevealStrap(
         timeMs - nowMs,
         { event: { name: row.hideEventName } },
       )))
-      return [{ update: { [stateKey]: pendingTimes } }, ...corrections]
+      return [{ update: { [stateKey]: pendingTimes } }, corrections]
     }
 
     return undefined

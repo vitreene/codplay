@@ -7,6 +7,9 @@ import { CHAPTER_TYPE } from '../../organization/learning-organization-config'
 import type { LearningDocument } from '../../document/learning-document'
 import type { ElceCardPresetBuilder } from '../../../../core/presets/card-preset-builder'
 import type { ResourceInlineTextSceneFeature } from '../../../../resources/document/resource-inline-text-feature'
+import { SUMMARY_BDC_TYPE } from '../../../../resources/bdcs/summary/summary-config'
+import { buildSummaryBdcScene } from '../../organization/reading/learning-summary-scene-builder'
+import { appearanceClassNameForBdc } from '../../../../builders/scene-style/appearance-class-names'
 
 /** Builds the Learning Result contribution for shared page-format builders. */
 export function createLearningAdditionalBdcBuilder(
@@ -16,9 +19,20 @@ export function createLearningAdditionalBdcBuilder(
   inlineTextSceneFeature?: ResourceInlineTextSceneFeature,
 ): BuildAdditionalBdc {
   return (contentPage, resourceBdc) => {
-    if (resourceBdc.type !== EVALUATION_RESULT_BDC_TYPE) return null
     const page = document.pages.find((candidate) => candidate.id === contentPage.id)
     const bdc = document.bdcs.find((candidate) => candidate.id === resourceBdc.id)
+    if (resourceBdc.type === SUMMARY_BDC_TYPE) {
+      if (page === undefined || bdc?.type !== SUMMARY_BDC_TYPE) {
+        throw new Error(`Le BDC Sommaire ${resourceBdc.id} est incomplet dans le document Learning.`)
+      }
+      return buildSummaryBdcScene(
+        document,
+        page,
+        bdc.id,
+        appearanceClassNameForBdc(bdc.id, appearanceClassNamesByTarget),
+      )
+    }
+    if (resourceBdc.type !== EVALUATION_RESULT_BDC_TYPE) return null
     if (page === undefined || bdc?.evaluationResult == null) {
       throw new Error(`Le BDC Résultat ${resourceBdc.id} est incomplet dans le document Learning.`)
     }

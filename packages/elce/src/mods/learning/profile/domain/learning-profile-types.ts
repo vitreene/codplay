@@ -1,5 +1,6 @@
 import type { BdcId, ChapterId, MediaId, PageId } from '../../../../core/document/content-document-types'
 import type { ElceTextValue } from '../../../../resources/document/rich-text-types'
+import type { SummaryDisplayMode } from '../../../../resources/bdcs/summary/summary-config'
 
 export type ProfilePropertyId = string
 export type ProfileChoiceId = string
@@ -70,7 +71,7 @@ export interface SummarySettings {
   readonly backgroundMediaId: MediaId | null
   readonly showInMenu: boolean
   readonly showAtRoot: boolean
-  readonly displayMode: 'chapters' | 'pages'
+  readonly displayMode: SummaryDisplayMode
   readonly pageContinuationMode: 'endpage' | 'free'
   readonly permanentAccess: boolean
   readonly endChapterDestination: 'next' | 'summary'

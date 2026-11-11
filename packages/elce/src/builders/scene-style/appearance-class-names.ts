@@ -8,6 +8,7 @@ import { AVATAR_BDC_TYPE } from '../../resources/bdcs/avatar/avatar-config'
 import { QUESTION_BDC_TYPE } from '../../resources/bdcs/question/question-config'
 import { SECTION_BDC_TYPE } from '../../resources/bdcs/section/section-config'
 import { STATISTICAL_GRAPH_BDC_TYPE } from '../../resources/bdcs/statistical-graph/statistical-graph-config'
+import { SUMMARY_BDC_TYPE } from '../../resources/bdcs/summary/summary-config'
 import { FLUX_PAGE_TYPE } from '../../resources/pages/flux/flux-config'
 import { DIAPO_PAGE_TYPE } from '../../resources/pages/diapo/diapo-config'
 import {
@@ -30,6 +31,7 @@ export type AppearanceSurfaceRole =
   | 'carousel'
   | 'question'
   | 'evaluation-result'
+  | 'summary'
   | 'graph'
   | 'avatar'
 
@@ -185,6 +187,8 @@ function bdcAppearanceRole(
       return 'question'
     case STATISTICAL_GRAPH_BDC_TYPE:
       return 'graph'
+    case SUMMARY_BDC_TYPE:
+      return 'summary'
     default: {
       const role = resolveAdditionalRole?.(bdc)
       if (role !== undefined) return role

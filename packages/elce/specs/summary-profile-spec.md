@@ -152,6 +152,34 @@ Visibilité et les prérequis de chapitre. Les pages de résultat d’Évaluatio
 restent verrouillées jusqu’à ce que le parcours requis pour leur résultat soit
 terminé ; le seuil d’évaluation reste appliqué.
 
+## BDC Sommaire
+
+Le BDC Sommaire (`type: summary`, preset `summary-list`) est un contenu de page
+disponible sur Flux et Diapo. Il est placé directement parmi les BDC de la page
+et ne porte ni titre ni description propres. Il projette la liste selon le
+même `summary.displayMode` que le Sommaire principal ; son sélecteur d’édition
+commande l’objet `SummarySettings` partagé, sans enregistrer de copie de la
+règle. Flux peut contenir plusieurs BDC Sommaire. Diapo applique sa contrainte
+habituelle d’un seul BDC de contenu direct, avec son Avatar facultatif.
+
+La portée du Sommaire principal commence à la racine du scénario. Celle d’un
+BDC commence au chapitre de sa page hôte ; si la page est à la racine, elle
+commence à la racine du scénario. L’analyse ne remonte jamais vers les
+chapitres ancêtres de la page hôte. En mode `chapters`, la liste expose les
+chapitres enfants directs du point de départ, soit un niveau plus bas. En mode
+`pages`, elle expose les pages descendantes dans l’ordre du scénario. Les règles
+de Visibilité et les gardes d’accès existantes déterminent les entrées visibles
+et ouvrables.
+
+Les liens de la liste réutilisent les événements de menu et les routes Sighty
+des pages ; ils n’ajoutent aucune route de lecture parallèle. Lorsque
+`summary.showAtRoot` est actif, le BDC propose aussi l’action explicite
+« Retour au Sommaire principal », qui réutilise l’événement et les gardes du
+Sommaire racine. Si le Sommaire principal n’est pas dans le parcours, cette
+action n’est pas construite. Le BDC ne définit pas de retour automatique à son
+emplacement d’origine en fin de portée ; la navigation de fin de chapitre
+existante garde son comportement global.
+
 Chaque page propose aussi « Ignorer la contrainte de lecture » dans l’onglet
 « Style » du panneau droit, lorsque la page est la cible de ce panneau. Le
 réglage s’applique à la page source : lorsqu’il est actif, Suivant et un lien

@@ -8,7 +8,7 @@ import { ELCE_EVENTS } from './learning-reading-events'
 import { PAGE_LOCATION } from '../organization/learning-page-placement'
 import { QUESTION_TYPE } from '../../../resources/bdcs/question/question-config'
 import { BDC_LOCATION } from '../../../core/document/content-location'
-import { applyDocumentCommand, createCardBdcCommand, createCarouselBdcCommand, createChapterCommand, createDefaultPageCommand, createEvaluationResultBdcCommand, createPageCommand, createQuestionBdcCommand, createSectionBdcCommand, createStandaloneCardBdcCommand, createStatisticalGraphBdcCommand, createStatisticalGraphCarouselBdcCommand } from '../../../domain/commands/document-commands'
+import { applyDocumentCommand, createCardBdcCommand, createCarouselBdcCommand, createChapterCommand, createDefaultPageCommand, createEvaluationResultBdcCommand, createPageCommand, createQuestionBdcCommand, createSectionBdcCommand, createStandaloneCardBdcCommand, createStatisticalGraphBdcCommand, createStatisticalGraphCarouselBdcCommand, createSummaryBdcCommand } from '../../../domain/commands/document-commands'
 import { learningDocumentService } from '../document/learning-document-service'
 import { ElceQuestionService } from '../../../resources/bdcs/question/domain/question-service'
 import { INITIAL_PROJECT_TEST_STATE } from './learning-test-state-types'
@@ -195,6 +195,27 @@ describe('Elcé player composition', () => {
 
     expect(synchronized.scenes['scene-page-a']).not.toBe(reordered.scenes['scene-page-a'])
     expect(synchronized.scenes[`scene-${pageCommand.pageId}`]).toBe(reordered.scenes[`scene-${pageCommand.pageId}`])
+  })
+
+  it('rebuilds a Summary BDC scene when its host page changes chapter scope', () => {
+    let documentModel = learningDocumentService.createInitialDocument()
+    documentModel = applyDocumentCommand(documentModel, createSummaryBdcCommand('bdc-summary', 'page-a', 1))
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'chapter.create',
+      chapterId: 'chapter-destination',
+      name: 'Chapitre destination',
+    })
+    const cache: PageSceneCache = new Map()
+    const first = new LearningPageSceneCatalog().build(documentModel, {}, cache)
+    const firstSource = first.scenes['scene-page-a']
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'page.move',
+      pageId: 'page-a',
+      placement: { kind: PAGE_LOCATION.CHAPTER, chapterId: 'chapter-destination' },
+    })
+    const reparented = new LearningPageSceneCatalog().build(documentModel, {}, cache)
+
+    expect(reparented.scenes['scene-page-a']).not.toBe(firstSource)
   })
 
   it('mounts the layout, slot and Flux page through Sighty and CodPlay', async () => {
@@ -413,6 +434,66 @@ describe('Elcé player composition', () => {
       stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button--next')!.click()
       await vi.waitFor(() => expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Page A'))
     }
+  })
+
+  it.each(['flux', 'diapo'] as const)('plays a root-scoped Summary BDC on a %s page and opens the main summary action', async (pageType) => {
+    const initial = learningDocumentService.createInitialDocument()
+    let documentModel = initial
+    let pageId = 'page-a'
+    if (pageType === 'flux') {
+      documentModel = applyDocumentCommand(documentModel, {
+        type: 'page.move',
+        pageId,
+        placement: { kind: PAGE_LOCATION.SCENARIO },
+      })
+    }
+    if (pageType === 'diapo') {
+      const pageCommand = createDefaultPageCommand(documentModel, { kind: PAGE_LOCATION.SCENARIO }, 'Diapo Sommaire', PAGE_TYPE.DIAPO)
+      pageId = pageCommand.pageId
+      documentModel = applyDocumentCommand(documentModel, pageCommand)
+      documentModel = applyDocumentCommand(documentModel, { type: 'bdc.carousel.delete', bdcId: pageCommand.bdcId })
+    }
+    documentModel = applyDocumentCommand(documentModel, createPageCommand({
+      pageId: 'page-b',
+      bdcId: 'bdc-section-b',
+      name: 'Page B',
+      placement: { kind: PAGE_LOCATION.SCENARIO },
+    }))
+    documentModel = applyDocumentCommand(documentModel, createSummaryBdcCommand('bdc-summary', pageId, pageType === 'flux' ? 1 : 0))
+    documentModel = applyDocumentCommand(documentModel, {
+      type: 'summary.settings.update',
+      summary: {
+        ...documentModel.data.summary,
+        displayMode: 'pages',
+        showAtRoot: true,
+        permanentAccess: true,
+        pageContinuationMode: 'free',
+      },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    const preview = learningPreviewService.createPlayer(stage, {
+      documentModel,
+      selectedPageId: pageId,
+      mediaSources: {},
+    })
+    if (preview === null) throw new Error('The Summary BDC preview is missing.')
+    composition = preview
+
+    await preview.initialize()
+
+    const embeddedSummary = stage.querySelector<HTMLElement>('.elce-summary--embedded')
+    expect(embeddedSummary).not.toBeNull()
+    expect(embeddedSummary?.querySelectorAll('.elce-summary__entry-link--page')).toHaveLength(pageType === 'flux' ? 2 : 3)
+    const pageBEntry = embeddedSummary?.querySelector<HTMLAnchorElement>('.elce-summary__entry-link--page[data-page-id="page-b"]')
+    expect(pageBEntry?.textContent).toBe('Page B')
+    pageBEntry?.click()
+    await vi.waitFor(() => expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Page B'))
+
+    stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button:not(.elce-player-navigation__button--next)')?.click()
+    await vi.waitFor(() => expect(stage.querySelector('.elce-player-title')?.textContent).toBe(pageType === 'flux' ? 'Page A' : 'Diapo Sommaire'))
+    stage.querySelector<HTMLButtonElement>('.elce-summary__return-to-main')?.click()
+    await vi.waitFor(() => expect(stage.querySelector('.elce-summary--root')).not.toBeNull())
   })
 
   it('routes the active page to the root summary from its menu link', async () => {

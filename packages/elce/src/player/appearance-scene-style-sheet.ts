@@ -99,8 +99,10 @@ function generatedAppearanceStyleSheet(
 ): string {
   const rules = targets.flatMap((target) => {
     const resolved = resolveAppearance(document.data, target)
-    const role = appearanceSurfaceRoleForTarget(document.data, target, (bdc) =>
-      bdc.type === BDC_TYPE.EVALUATION_RESULT ? 'evaluation-result' : undefined)
+    const role = appearanceSurfaceRoleForTarget(document.data, target, (bdc) => {
+      if (bdc.type === BDC_TYPE.EVALUATION_RESULT) return 'evaluation-result'
+      return undefined
+    })
     const contrastBackground = resolveAppearanceContrastContext(document.data, target).color
     const colors = generateAppearanceColors(resolved, contrastBackground)
     const className = appearanceScopeClassName(document.data, target)

@@ -41,6 +41,7 @@ export class LearningPageSceneCatalog {
     const pageBdcIds = new Set(pageBdcs.flatMap((bdc) => bdc === undefined ? [] : [bdc.id]))
     const childBdcs = document.bdcs.filter((bdc) => bdc.parentBdcId !== null && pageBdcIds.has(bdc.parentBdcId))
     const sceneBdcs = pageBdcs.flatMap((bdc) => bdc === undefined ? [] : [bdc]).concat(childBdcs)
+    const hasSummaryBdc = sceneBdcs.some((bdc) => bdc.type === BDC_TYPE.SUMMARY)
     const mediaIds = new Set(sceneBdcs.flatMap((bdc) => {
       switch (bdc.type) {
         case BDC_TYPE.AVATAR:
@@ -75,6 +76,14 @@ export class LearningPageSceneCatalog {
       scenePage,
       sceneBdcs,
       document.data.appearance,
+      hasSummaryBdc ? [
+        page.chapterId,
+        document.data.summary.displayMode,
+        document.data.summary.showAtRoot,
+        document.data.scenarioEntries,
+        document.chapters,
+        document.pages.map((candidate) => [candidate.id, candidate.name]),
+      ] : null,
       pageMediaSources,
       pageMediaTypes,
       editorSettings,
@@ -87,7 +96,10 @@ export class LearningPageSceneCatalog {
       document.data,
       page,
       sceneBdcs,
-      (bdc) => bdc.type === BDC_TYPE.EVALUATION_RESULT ? 'evaluation-result' : undefined,
+      (bdc) => {
+        if (bdc.type === BDC_TYPE.EVALUATION_RESULT) return 'evaluation-result'
+        return undefined
+      },
     )
     const scene = buildPageScene(page, document.bdcs, {
       mediaSources: pageMediaSources,

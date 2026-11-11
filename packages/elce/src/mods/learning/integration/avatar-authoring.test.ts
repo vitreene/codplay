@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createActor } from 'xstate'
 import { applyDocumentCommand } from '../../../domain/commands/document-commands'
-import { LearningDocument } from '../document/learning-document'
+import { ELCE_DOCUMENT_VERSION, LearningDocument } from '../document/learning-document'
 import { learningControllerMachine } from '../authoring/learning-controller-machine'
 import { LearningPageSceneCatalog } from '../reading/learning-page-scene-catalog'
 import { resolveCarouselViewStarts } from '../../../resources/bdcs/carousel/domain/carousel-service'
@@ -69,7 +69,7 @@ describe('Avatar authoring through Learning commands', () => {
 
     const migrated = LearningDocument.fromJSON(legacy)
 
-    expect(migrated.data.version).toBe(14)
+    expect(migrated.data.version).toBe(ELCE_DOCUMENT_VERSION)
     expect(carouselIn(migrated).cards.map((entry) => entry.durationMs)).toEqual([2400, 4400, 5200])
     expect(carouselIn(migrated).cards.map((entry) => entry.cue)).toEqual([
       undefined,

@@ -7,12 +7,14 @@
   .density-compact.card-text-image.has-background > .elce-carousel-text-image__content { padding: clamp(0.5rem, 2cqw, 1.5rem); }
   .density-compact.card-image-caption.has-background > .elce-card__caption { padding: 0.35rem 0.55rem; }
   .density-compact:is(.question, .evaluation-result).has-background { padding: clamp(0.65rem, 2vw, 1rem); }
+  .density-compact.summary.has-background { padding: clamp(0.65rem, 2vw, 1rem); }
   .density-compact:is(
     .card-text-short,
     .card-text-image,
     .card-image-caption,
     .question,
-    .evaluation-result
+    .evaluation-result,
+    .summary
   ) :is(p, li, blockquote) {
     margin-block: 0 0.5em;
   }

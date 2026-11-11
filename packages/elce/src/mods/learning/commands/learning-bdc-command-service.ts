@@ -11,6 +11,7 @@ import {
   deleteEvaluationResult,
   deleteQuestion,
   deleteStatisticalGraph,
+  deleteSummaryBdc,
   setCardLayout,
   setStatisticalGraphLayout,
   updateCard,
@@ -73,6 +74,8 @@ export class LearningBdcCommandService {
         return deleteQuestion(document, command.bdcId)
       case 'bdc.evaluation-result.delete':
         return deleteEvaluationResult(document, command.bdcId)
+      case 'bdc.summary.delete':
+        return deleteSummaryBdc(document, command.bdcId)
       case 'bdc.carousel.delete':
         return deleteCarousel(document, command.bdcId)
       default:

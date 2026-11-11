@@ -17,6 +17,7 @@ import type { SectionCommand } from '../../../resources/bdcs/section/authoring/s
 import type { AnchorCommand } from '../../../resources/anchoring/authoring/anchor-command-types'
 import type { AppearanceProperty, AppearanceTarget, AppearanceTargetForProperty } from '../../../domain/appearance/appearance-target-types'
 import type { AuthoredTextValue } from '../../../core/document/rich-text-types'
+import type { SummaryBdcCommand } from '../../../resources/bdcs/summary/authoring/summary-bdc-command-types'
 
 export type { AppearanceProperty, AppearanceTarget, AppearanceTargetForProperty } from '../../../domain/appearance/appearance-target-types'
 
@@ -80,6 +81,7 @@ export type LearningDocumentCommand =
       presetId: typeof DEFAULT_PRESET_ID.EVALUATION_RESULT
       placement: BdcPlacement
     }>
+  | SummaryBdcCommand
   | SectionCommand
   | QuestionCommand
   | CarouselCommand
@@ -91,6 +93,7 @@ export type LearningDocumentCommand =
   | Readonly<{ type: 'bdc.evaluation-result.update'; bdcId: BdcId; evaluationResult: EvaluationResultContent }>
   | Readonly<{ type: 'summary.background.media.attach'; media: MediaMetadata }>
   | Readonly<{ type: 'bdc.evaluation-result.delete'; bdcId: BdcId }>
+  | Readonly<{ type: 'bdc.summary.delete'; bdcId: BdcId }>
   | AnchorCommand
   | Readonly<{ type: 'media.add'; media: MediaMetadata }>
   | Readonly<{ type: 'media.merge'; canonicalMediaId: MediaId; duplicateMediaIds: readonly MediaId[] }>

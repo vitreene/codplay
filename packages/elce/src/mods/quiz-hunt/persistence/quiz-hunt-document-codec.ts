@@ -72,7 +72,7 @@ export function readQuizHuntDocument(value: unknown): QuizHuntDocument {
     return card.list === undefined ? { ...bdc, card: { ...card, list: null } } : bdc
   })
   const normalizedBdcs = data.bdcs as unknown[]
-  const lists = new ListService()
+  const lists: ListService = new ListService()
   normalizedBdcs.forEach((value) => {
     const bdc = record(value)
     requireStrings(bdc, ['id', 'type', 'presetId'])

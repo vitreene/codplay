@@ -5,6 +5,7 @@ export * from '../../../resources/bdcs/carousel/authoring/carousel-command-facto
 export * from '../../../resources/bdcs/question/authoring/question-command-factory'
 export * from '../../../resources/bdcs/section/authoring/section-command-factory'
 export * from '../../../resources/bdcs/statistical-graph/authoring/statistical-graph-command-factory'
+export * from '../../../resources/bdcs/summary/authoring/summary-bdc-command-factory'
 export { applyDocumentCommand, canMoveBdcToPage } from './apply-document-command'
 import type { LearningDocument } from '../../../mods/learning/document/learning-document'
 import { learningDocumentCommandService } from '../../../mods/learning/commands/learning-command-composition'

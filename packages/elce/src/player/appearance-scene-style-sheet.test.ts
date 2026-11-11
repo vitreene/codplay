@@ -68,7 +68,7 @@ describe('appearance CSS assets for the document', () => {
 
     expect(LEARNING_PLAYER_STYLE_SHEET).toMatch(/\.page-flux \.question:not\(\.has-background\),\s*\.page-flux \.carousel\s*\{[^}]*padding: clamp\(1rem, 3vw, 1\.6rem\);/s)
     expect(noneDensity).not.toMatch(/\.density-none\.question\s*\{[^}]*padding:\s*0/)
-    expect(noneDensity).toContain('.density-none.evaluation-result { padding: 0; }')
+    expect(noneDensity).toMatch(/\.density-none:is\([^)]*\.evaluation-result[^)]*\)\s*\{\s*padding:\s*0;\s*\}/)
   })
 
   it('keeps heading rhythm distinct from paragraph spacing', async () => {
@@ -328,7 +328,7 @@ describe('appearance CSS assets for the document', () => {
     expect(normalDensity).toContain('.bdc.card-text-image.has-frame > .elce-carousel-text-image__content { padding: clamp(0.75rem, 3cqw, 2rem); }')
     expect(normalDensity).toContain('.bdc.card-image-caption.has-frame > .elce-card__caption { padding: 0.45rem 0.75rem; }')
     expect(normalDensity).toContain('.bdc.card-image-title.has-frame { box-sizing: border-box; padding: clamp(1rem, 3cqw, 2rem); }')
-    expect(normalDensity).toContain('.bdc:is(.card-photo, .carousel, .question, .evaluation-result, .graph).has-frame')
+    expect(normalDensity).toMatch(/\.bdc:is\(\.card-photo, \.carousel, \.question, \.evaluation-result, \.graph(?:, \.summary)?\)\.has-frame/)
     expect(normalDensity).not.toMatch(/has-frame[^}]*padding:\s*[^;}]*px/)
   })
 })
