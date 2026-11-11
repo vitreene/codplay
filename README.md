@@ -1,50 +1,32 @@
 # CodPlay
 
-CodPlay sert à créer des scènes interactives : des éléments peuvent apparaître,
-changer d'état, se déplacer et répondre aux événements d'un utilisateur.
+CodPlay permet de créer des scènes animées et interactives : des éléments
+apparaissent, se déplacent et répondent aux actions du visiteur.
 
-Pour écrire une scène avec le runtime V2, commencez par le
-[guide CodPlay V2](packages/codplay/README.md).
+## Commencer
 
-## Démarrer les exemples
+Le [guide de prise en main en français](packages/codplay/README.md) vous
+accompagne pas à pas :
 
-```bash
+1. Créer une première scène et son perso.
+2. Organiser son contenu avec un layout et ajouter une image.
+3. Animer l'image et le message.
+4. Ajouter un bouton, des événements, des actions et un strap.
+5. Exporter la scène, la lire dans une page et publier le site.
+
+## Explorer les exemples
+
+Depuis la racine du dépôt :
+
+```sh
 npm install
 npm run dev:demos
 ```
 
-Ouvrir ensuite <http://localhost:5173> et choisir une démo. Par exemple,
-`?demo=position` montre un élément qui passe d'un conteneur à un autre avec une
-transition ; `?demo=components` montre les composants HTML disponibles.
+Ouvrez l'adresse affichée par le serveur et choisissez une démo.
 
-## Déclarer un déplacement
+## Ouvrir l'éditeur
 
-Une scène décrit la position initiale et l'action qui déclenche le déplacement :
-
-```ts
-const item = {
-  id: 'card',
-  type: 'tag',
-  initial: { tag: 'div', move: { target: 'list-a' } },
-  actions: {
-    drop: {
-      move: {
-        target: 'list-b',
-        transition: { duration: 420, ease: 'out(2)' },
-      },
-    },
-  },
-}
-```
-
-Lorsque l'événement `drop` est joué, CodPlay conserve la scène logique et
-présente le passage de `list-a` à `list-b` pendant 420 ms. Play et Seek donnent
-la même image au même instant.
-
-## Autres commandes
-
-```bash
-npm run dev:editor   # ouvrir l'éditeur
-npm run test         # lancer les tests V1 historiques
-npm run test --workspace=codplay  # lancer les tests du runtime V2
+```sh
+npm run dev:editor
 ```
