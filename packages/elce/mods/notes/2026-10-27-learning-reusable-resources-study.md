@@ -8,6 +8,11 @@ de départ ; ses fonctionnalités doivent pouvoir être réemployées par d’au
 mods. Les décisions et le travail restant sont dans le
 [plan unique](../plan/2026-10-20-elce-mods-reconfiguration-plan.md).
 
+L’[audit des dépendances](2026-10-27-learning-independence-audit.md) complète
+cet examen avec le graphe actualisé, les chemins de types et de valeurs,
+ainsi que la reproduction du défaut de cache Question. Il ne certifie pas
+l’indépendance des ressources candidates.
+
 ## Conclusion de l’examen
 
 Aucune des capacités métier examinées n’exige, par sa fonction, d’être réservée

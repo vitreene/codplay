@@ -97,7 +97,7 @@ déclaration prend place avant celle du message :
     move: '@root',
     markup: `
       <article id="welcome-card" class="welcome-card">
-        <!-- data-part="picture" -->
+        <div id="welcome-picture" data-part="picture"></div>
         <div id="welcome-copy" data-part="copy"></div>
         <div id="welcome-controls" data-part="controls"></div>
       </article>
@@ -109,9 +109,8 @@ déclaration prend place avant celle du message :
 `markup` contient la structure HTML du layout. Une **part** est un emplacement
 nommé dans cette structure, où d'autres persos peuvent venir se placer.
 
-`<!-- data-part="picture" -->` déclare un **point d'ancrage**. Ce commentaire
-sert de repère : la racine du perso image sera insérée juste avant lui,
-directement dans la carte. Le layout n'ajoute aucun conteneur à cet endroit.
+`data-part="picture"` crée une zone appelée `picture`, comme les zones `copy`
+et `controls`. Chaque conteneur du markup possède son propre `id`.
 
 Les zones `copy` et `controls` utilisent l'autre forme : `data-part` porté par
 un élément HTML. Celui-ci reste leur conteneur et peut servir à regrouper ou
@@ -344,7 +343,7 @@ export const scene: SceneDoc = {
             move: '@root',
             markup: `
               <article id="welcome-card" class="welcome-card">
-                <!-- data-part="picture" -->
+              <div id="welcome-picture" data-part="picture"></div>
                 <div id="welcome-copy" data-part="copy"></div>
                 <div id="welcome-controls" data-part="controls"></div>
               </article>

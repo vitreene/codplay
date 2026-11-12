@@ -3,9 +3,12 @@
 Ce dossier réunit les études et notes sur les mods d’Elcé. Le
 [plan unique](plan/2026-10-20-elce-mods-reconfiguration-plan.md) conserve
 les conclusions, les décisions retenues et celles qui restent à prendre.
+Le [guide de développement](../src/mods/docs/README.md) donne un exemple concret dans Learning.
+Le [skill partagé](../src/mods/docs/SKILL.md) pilote la réalisation d’un mod.
 
 ## Architecture
 
+- [Audit des dépendances de Learning](notes/2026-10-27-learning-independence-audit.md) : graphe d’imports actualisé, frontières à séparer et cause du défaut de cache Question, corrigé depuis ; aucune extraction certifiée.
 - [Ressources réutilisables de Learning](notes/2026-10-27-learning-reusable-resources-study.md) : réexamen des fonctionnalités actuelles, de leurs classes métier et des adaptations à la composition du mod.
 - [Faisabilité et reconfiguration](notes/2026-10-20-elce-reconfiguration-study.md) : articulation du noyau, des ressources et des dispositifs des mods.
 - [Étude technique de l’extraction Learning](notes/2026-10-20-learning-extraction-study.md) : analyse du code, arborescence, cartographie et raccords envisagés.

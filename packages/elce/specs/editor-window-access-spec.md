@@ -1,15 +1,5 @@
 # Elcé — accès d’édition et synchronisation par focus
 
-## Statut
-
-**Le verrou entre fenêtres du même profil est vérifié ; l’extension exclusive
-entre navigateurs est implémentée et sa validation réelle à deux navigateurs
-reste en cours.** La suspension XState, la reprise IndexedDB, la paire de droit
-serveur et le transfert par événements sont vérifiés par les tests ciblés et
-un parcours Safari avec signaux de focus synthétiques. Les tests vérifient
-aussi que le droit reste actif si la sélection ou l’annulation précède le retour
-du focus. Le dialogue système réel reste à valider dans un navigateur.
-
 ## Rôle
 
 Le Web Lock garde un seul éditeur actif parmi les fenêtres de même origine qui
@@ -68,9 +58,10 @@ Des fenêtres sur des projets différents gardent des caches indépendantes.
   elle possède effectivement le focus.
 - Le droit serveur porte un bail de 12 secondes, renouvelé toutes les
   3 secondes par la page détentrice. Si un renouvellement échoue, la page se
-  suspend immédiatement ; après expiration, une page lectrice peut obtenir un
-  nouveau droit et relire la dernière révision confirmée. Les anciennes paires
-  restent refusées.
+  suspend immédiatement. L’expiration permet à une page lectrice de reprendre
+  le projet et relire la dernière révision confirmée ; elle ne révoque pas le
+  détenteur courant avant cette reprise. Les anciennes paires restent refusées
+  après leur remplacement.
 - Le bouton temporaire « Forcer l’accès » permet à une page lectrice de
   remplacer immédiatement le droit serveur, même si son bail est encore actif.
   Dans le même profil, `BroadcastChannel` suspend l’ancien détenteur ; dans un
@@ -87,6 +78,11 @@ Des fenêtres sur des projets différents gardent des caches indépendantes.
   sa copie locale, achève sa publication en attente, puis relit et installe la
   révision confirmée dans le même acteur XState avant d’autoriser les commandes.
   Le contrôleur conserve la page sélectionnée si elle existe encore.
+- Tant que le projet reste ouvert, le cadre auteur conserve les mêmes règles
+  de hauteur et de défilement lorsque l’accès passe entre `active` et
+  `waiting`. La perte de focus rend la surface `inert` sans retirer le cadre ni
+  réinitialiser la position de ses zones défilantes ; la reprise réactive
+  l’édition dans ce même cadre.
 - Une copie locale identique au document courant ne vide pas
   l’[historique documentaire](./document-history-spec.md) lors d’un simple
   retour de focus. L’installation d’un document différent le vide.
@@ -106,11 +102,23 @@ Des fenêtres sur des projets différents gardent des caches indépendantes.
   visible et focalisée déclenche d’abord la reprise automatique. Après trois
   tentatives de reprise consécutives échouées, l’interface montre un message de
   récupération et les commandes « Réessayer l’accès » et « Forcer l’accès ».
-  Une reprise réussie efface cet état. Les erreurs réelles de réseau ou de
-  synchronisation gardent leur message propre. Si un document local reste
-  `pending` ou `conflict`, « Enregistrer la copie locale sous… » apparaît
-  indépendamment. Aucun événement d’édition de cette page ne peut modifier le
-  document source.
+  Une reprise réussie efface cet état. Un `TypeError` de transport survenu
+  lorsque la page est masquée ou sans focus ne crée pas d’alerte périmée ; les
+  tentatives existantes reprennent au retour du réseau ou du focus. Si l’échec
+  persiste sur une page visible et focalisée, le message indique seulement que
+  la communication avec le serveur a échoué et propose de réessayer l’accès.
+  Le début d’une nouvelle tentative efface cette erreur transitoire : un refus
+  normal `409 edit_access_occupied` ou `409 edit_access_lost` laisse le projet
+  en lecture seule sans ancienne alerte. Cette transition conserve les
+  messages de récupération après plusieurs échecs et les avertissements de
+  synchronisation.
+  Pour une copie indépendante, un `TypeError` pendant la synchronisation indique
+  que celle-ci a échoué et que l’état local est conservé ; il n’affirme pas que
+  le réseau est indisponible. Une reprise réussie efface l’avertissement. Les
+  erreurs de synchronisation gardent leur message propre. Si un document local
+  reste `pending` ou `conflict`, « Enregistrer la copie locale sous… » apparaît
+  indépendamment de l’accès. Aucun événement d’édition de cette page ne peut
+  modifier le document source.
 - Web Locks et `BroadcastChannel` coordonnent les fenêtres du même profil.
   Une identité de page issue d’une recharge peut être conservée dans
   `sessionStorage` ; une identité copiée dans un onglet vivant est remplacée
@@ -118,28 +126,30 @@ Des fenêtres sur des projets différents gardent des caches indépendantes.
 
 ## Lire l’implémentation
 
-- [`project-editor-lock.ts`](../src/app/sync/project-editor-lock.ts) contient
+- [`project-editor-lock.ts`](../src/core/sync/project-editor-lock.ts) contient
   l’usage de Web Locks, de `BroadcastChannel`, de `focus` et de
   `visibilitychange`.
-- [`controller-machine.ts`](../src/app/controller/controller-machine.ts)
+- [`controller-machine.ts`](../src/core/controller/controller-machine.ts)
   possède le verrou d’édition logique et refuse les commandes lorsque l’accès
   est suspendu.
-- [`document-persistence.ts`](../src/app/controller/document-persistence.ts)
+- [`document-persistence.ts`](../src/core/persistence/document-persistence.ts)
   attend la fin des écritures IndexedDB, restaure le document actif avec ses
   sources média et installe une révision serveur confirmée dans l’acteur.
-- [`document-store.ts`](../src/infrastructure/indexed-db/document-store.ts)
+- [`document-store.ts`](../src/core/persistence/indexed-db/document-store.ts)
   conserve plusieurs caches projet dans la même base et expose la suppression
   ciblée d’un projet avec `deleteDocument()`.
-- [`project-sync-coordinator.ts`](../src/app/sync/project-sync-coordinator.ts)
+- [`project-sync-coordinator.ts`](../src/core/sync/project-sync-coordinator.ts)
   suspend les nouvelles requêtes réseau pendant le transfert, confirme sans
   délai la copie au blur, attend une requête déjà en cours et reprend à partir
   du document restauré.
-- [`project-session-coordinator.ts`](../src/app/projects/project-session-coordinator.ts)
+- [`project-session-coordinator.ts`](../src/core/projects/project-session-coordinator.ts)
   relit la révision serveur avant de réactiver l’édition et raccorde
   [`ExclusiveSyncSession`](../../authoring/exclusive-sync/specs/exclusive-sync-spec.md)
   au même acteur.
-- [`browser-entry.tsx`](../src/app/remix/browser-entry.tsx) compose ces services
-  autour de l’unique acteur XState de l’éditeur.
+- [`learning-project-session-coordinator.ts`](../src/mods/learning/persistence/learning-project-session-coordinator.ts)
+  injecte les règles documentaires Learning dans le coordinateur commun.
+- [`authoring-composition.tsx`](../src/mods/learning/composition/authoring-composition.tsx)
+  compose ces services autour de l’unique acteur XState de l’éditeur.
 
 ## Vérification
 
@@ -150,19 +160,27 @@ Des fenêtres sur des projets différents gardent des caches indépendantes.
   dernière copie locale avant de recevoir l’accès d’édition.
 - Les tests du coordinateur confirment que les sauvegardes serveur restent en
   attente pendant la suspension, puis reprennent après l’acquisition.
-- [`project-session-coordinator.test.ts`](../src/app/projects/project-session-coordinator.test.ts)
+- [`project-session-coordinator.test.ts`](../src/mods/learning/integration/project-session-coordinator.test.ts)
   vérifie l’envoi au blur et l’installation d’une révision serveur plus récente
-  avant la reprise de l’édition. [`project-editor-lock.test.ts`](../src/app/sync/project-editor-lock.test.ts)
+  avant la reprise de l’édition. [`project-editor-lock.test.ts`](../src/core/sync/project-editor-lock.test.ts)
   vérifie qu’une fenêtre visible sans focus attend, et qu’un retour de focus
-  pendant le transfert du verrou déclenche une nouvelle demande.
-  [`project-sync-coordinator.test.ts`](../src/app/sync/project-sync-coordinator.test.ts)
+  pendant le transfert du verrou déclenche une nouvelle demande. Le test du
+  coordinateur couvre aussi un `TypeError` temporaire pendant la perte de focus :
+  l’accès reste en attente sans `projectError`, puis le retour en ligne/focus et
+  l’acquisition réactivent l’édition sans message. Les 21 tests ciblés passent.
+  [`project-sync-coordinator.test.ts`](../src/mods/learning/integration/project-sync-coordinator.test.ts)
   vérifie qu’un blur qui arrive pendant une écriture n’ajoute pas une seconde
   tentative réseau et que le document courant, remplacé dans XState, est publié
   après le flush local.
-- [`project-editor-lock.test.ts`](../src/app/sync/project-editor-lock.test.ts)
+- [`project-editor-lock.test.ts`](../src/core/sync/project-editor-lock.test.ts)
   vérifie le maintien du droit pendant le sélecteur, le traitement d’un
   transfert concurrent après `change`, les retours de focus et de visibilité
   avant ou après `change`/`cancel`, l’annulation et la reprise du blur ordinaire.
+- [`project-session-coordinator.test.ts`](../src/mods/learning/integration/project-session-coordinator.test.ts)
+  reproduit une erreur de transport visible à l’acquisition, puis une reprise
+  refusée par `409 edit_access_occupied` ; l’erreur transitoire disparaît et le
+  projet reste en lecture seule. Le test de la machine confirme que cette
+  transition conserve les alertes de récupération et de synchronisation.
   Le test du
   [page editor](../src/app/remix/workspace/page-editor.test.tsx) relie ce blur
   au vrai input Remix et confirme qu’un JPG choisi avant le retour du focus
@@ -193,6 +211,10 @@ Des fenêtres sur des projets différents gardent des caches indépendantes.
   écriture du droit remplacé a reçu `409 edit_access_lost`. Le projet temporaire
   a ensuite été supprimé. Cette vérification n’établit pas le transfert de
   focus entre deux navigateurs réels ; cette preuve reste au plan.
+- Le test SQLite Learning de renouvellement après expiration vérifie que le
+  titulaire récupère son bail si aucune autre page ne l’a repris.
+  [`learning-sqlite-project-persistence.test.ts`](../src/mods/learning/persistence/server/sqlite/learning-sqlite-project-persistence.test.ts)
+  porte ce parcours.
 - Safari Technology Preview a exercé directement `IndexedDbDocumentStore` sur
   deux entrées projet dans une base temporaire : sauvegarder ou supprimer l’une
   a préservé le document, le checkpoint et les médias de l’autre. Le rejet
@@ -214,10 +236,24 @@ Les régressions ciblées vérifient aussi le Web Lock retenu après une sortie
 échouée, sa libération au retour du réseau, et la disponibilité de la copie
 locale sur la vue lectrice malgré l’installation du document confirmé.
 
-Les tests [`project-editor-lock.test.ts`](../src/app/sync/project-editor-lock.test.ts)
+Les tests [`project-editor-lock.test.ts`](../src/core/sync/project-editor-lock.test.ts)
 et [`project-application.test.tsx`](../src/app/remix/project-application.test.tsx)
 vérifient la priorité sur interaction, l’absence de message et de commandes
 d’accès dans le lecteur ordinaire, l’apparition du secours après trois échecs
 et son effacement après acquisition. Brave sur 5175 a également confirmé que
 le lecteur ordinaire ne montre que « Lecture seule ». Le transfert entre les
 deux fenêtres Brave reste à confirmer dans le plan d’accès exclusif.
+
+Le 27 octobre 2026, Safari MCP a confirmé sur `http://localhost:5175/` que la
+page sans focus reste en lecture seule sans l’ancienne alerte. Après activation
+de Safari, `document.hasFocus()` passe à `true`, l’éditeur revient à
+« Synchronisé » et le message ne réapparaît pas.
+
+Le 5 novembre 2026, le cadre auteur a été vérifié dans Safari MCP sur le Projet
+3. Avec la zone centrale à `scrollTop = 240`, une perte et une reprise simulées
+du focus ont conservé ce repère : l’état intermédiaire était « Lecture seule »
+avec `inert`, puis l’éditeur est revenu à « Synchronisé » et actif. Le cadre
+`elce-remix-project-app--project-open`, la hauteur de la zone (760 px) et le
+défilement de page (0 px) sont restés stables. Un changement d’onglet Safari
+vers la preview puis retour a aussi conservé la position centrale à 240 px avec
+`document.hasFocus()` revenu à `true`. Aucun contenu du projet n’a été modifié.

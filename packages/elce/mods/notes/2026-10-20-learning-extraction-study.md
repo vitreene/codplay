@@ -2,10 +2,11 @@
 
 Date : 20 octobre 2026.
 
-Cette étude réunit l’analyse du code actuel, la cartographie des responsabilités,
-les pistes de découpage et les exemples de raccords. Les signatures sont des
-propositions techniques ; les conclusions et décisions courantes sont dans
-le [plan unique du sujet](../plan/2026-10-20-elce-mods-reconfiguration-plan.md).
+Cette étude est une note d’analyse, pas un plan de travail. Elle réunit l’analyse
+du code actuel, la cartographie des responsabilités, les pistes de découpage et
+les exemples de raccords. Les signatures sont des propositions techniques ;
+les actions et décisions courantes sont dans le
+[plan unique du sujet](../plan/2026-10-20-elce-mods-reconfiguration-plan.md).
 
 Le [réexamen du 27 octobre](2026-10-27-learning-reusable-resources-study.md)
 étend les candidats au réemploi aux fonctionnalités précédemment attribuées
@@ -78,8 +79,10 @@ déterminé ; les points suivants demandent encore un cas d’usage ou une déci
   n’est pas établi ;
 - chargement des ressources exportées, raccord LMS/SCORM et pilotage durable
   de l’état de lecture suivi en D8 ; leurs API ne sont pas fixées ici ;
-- point de cache des réponses Question signalé dans cette analyse ; sa qualification reste
-  distincte des déplacements de code.
+- cache des scènes et état de consultation : la séparation des sources de scène
+  réutilisables et de l’état de preview est implémentée et décrite dans la
+  [spécification Preview](../../specs/player-preview-spec.md) ; les extractions
+  futures doivent préserver ce contrat.
 
 ### Dépendances autorisées
 
@@ -722,14 +725,15 @@ la valeur précédente selon le contrat actuel.
 | `app/player/popup-preview-host.ts` et `popup-preview-messages.ts` | `core/preview/` ; protocole, demandes et instantanés restent inchangés ; sérialisation/décodage par les services fournis. |
 | `app/player/popup-player.tsx` et CSS | Surface fenêtre/barre d’actions dans `core/preview/` ; chargement/réconciliation/projection/reset métier vers `mods/learning/preview/learning-preview-session.ts` et classes Learning. |
 | `app/player/player-preview.ts` | `isCatalogPage` reste dans `LearningPreviewService` ; collecte du profil, projection et validation du départ rejoignent le chemin partagé `LearningPlayer` et ses classes de profil. La surface commune ne lit plus `data.profile`. |
-| `app/player/project-test-state-session.ts` | `mods/learning/preview/` ; garder révision indépendante, file de sauvegarde, conflit et mode local existants. |
+| `app/player/project-test-state-session.ts` | `mods/learning/preview/` ; charger l’état initial depuis l’API. La preview garde ses changements en mémoire, sans file d’écriture, conflit ni sauvegarde serveur. |
 
-`LearningPreviewSession` raccorde les lectures/écritures techniques de l’état
-test au lecteur partagé. La composition de preview construit cette session ;
-le futur export possède son raccord de contexte. Les actions du scénario
-continuent de produire les changements via les ports Sighty actuels. Les classes Learning calculent
-projection, réconciliation et resets. La popup déclenche des intentions et
-affiche leur état ; elle ne conserve plus ces règles dans ses handlers JSX.
+`LearningPreviewSession` lit l’état test initial et garde l’état de consultation
+de la preview en mémoire avec le lecteur partagé. Elle n’écrit pas cet état sur
+le serveur ; le futur export possède son raccord de contexte. Les actions du
+scénario continuent de produire les changements via les ports Sighty actuels.
+Les classes Learning calculent projection, réconciliation et resets. La popup
+déclenche des intentions et affiche leur état ; elle ne conserve plus ces
+règles dans ses handlers JSX.
 
 Le document est actuellement v5 et l’état test v1 ; leurs éventuelles évolutions
 suivent [le cadre documentaire](../plan/2026-10-20-elce-mods-reconfiguration-plan.md#format-documentaire). Il n’est pas demandé de sérialiser un parcours Sighty générique ni
@@ -745,11 +749,12 @@ connaît pas `ElceSceneKey`/`ElceSlotName` et ne décide pas de démarrer le lay
 Learning. Le STOP média conserve `elce:page-media:stop` et son émission vers
 l’occurrence sortante, même lorsque la page a déjà perdu sa liaison active.
 
-**Cache :** reprendre la signature et les conditions d’invalidation actuelles
-avant de les factoriser. Vérifier explicitement contenu, médias, type de page,
-contexte Évaluation, styles et état de Question aux frontières utilisées.
-Si un défaut antérieur apparaît, le consigner et décider son traitement dans
-le plan propriétaire ; ne pas le masquer par une reconstruction systématique.
+**Cache :** la frontière à appliquer est détaillée dans la
+[note de raccords](../../notes/2026-10-14-sommaire-profils-etude-raccords.md#cache-preview-et-état-de-consultation).
+Vérifier contenu, médias, type de page, réglages Évaluation et styles pour les
+sources réutilisables, puis la restitution de l’état courant hors cache. Le
+raccord technique reste à relire avant factorisation ; le réemploi des sources
+doit rester effectif entre deux états de progression.
 
 ### Serveur, SQLite et points de lancement
 
@@ -758,7 +763,7 @@ le plan propriétaire ; ne pas le masquer par une reconstruction systématique.
 | `server/projects/project-persistence.ts` | Port de projet dans `core/server/projects/`, typé par le document fourni ; états et révisions du test Learning dans un port distinct du mod. |
 | `server/projects/project-api-controller.ts` | `core/server/projects/` ; recevoir le codec, les invariants et opérations nécessaires. Retirer les imports de version et de document Learning, sans changer les réponses HTTP. |
 | `server/projects/project-edit-grant.ts` | `core/server/projects/` ; mêmes règles d’en-têtes et erreurs. |
-| `server/projects/project-test-state-api-controller.ts` | `mods/learning/persistence/server/` ; validation métier dans `LearningTestStateService`. Préserver `/test-state`, ETag, erreurs et permissions de preview réseau. |
+| `server/projects/project-test-state-api-controller.ts` | `mods/learning/persistence/server/` ; validation métier dans `LearningTestStateService`. Préserver `/test-state`, ETag, erreurs, et lecture seule depuis l’origine réseau de preview. |
 | `server/projects/sqlite/`, dont migrations | `mods/learning/persistence/server/sqlite/` ; adapter le nom de classe en `LearningSqliteProjectPersistence`. Conserver la connexion et le circuit de migrations ; les changements de schéma suivent [le cadre documentaire](../plan/2026-10-20-elce-mods-reconfiguration-plan.md#format-documentaire). |
 | `server/media/` | `core/server/media/` ; réutiliser le port `MediaPersistence`, le stockage de fichiers et les contrôles actuels. |
 | `server/api-router.ts` | Routes projet/médias dans `core/server/http/` ; les routes Learning de test sont ajoutées explicitement par `mods/learning/composition/server/server-composition.ts`. Garder l’ordre et les hooks de nettoyage après remplacement/suppression. |
@@ -1315,8 +1320,9 @@ propriétaire ; retirer ce fichier après reprise des tests et du player.
 5. `createPageSceneCatalog` devient `LearningPageSceneCatalog.build` dans
    `learning-page-scene-catalog.ts`. Conserver sa sélection de pages et ses
    options de chapitre ; le cache technique et ses types vont dans
-   `core/reading/page-scene-cache.ts`. Le point de signature relevé dans l’analyse des frontières doit
-   être qualifié avant tout changement de sa sémantique.
+   `core/reading/page-scene-cache.ts`. Préserver le contrat de cache déjà
+   implémenté et vérifié dans la [spécification Preview](../../specs/player-preview-spec.md) :
+   les sources restent indépendantes de l’état de consultation.
 6. Déplacer `player/media-playback/` vers `core/reading/media-playback/` ;
    fournir le slot de contenu en argument à `bindPageMediaPlayback`. Conserver
    `withPageMediaStop` et le signal `elce:page-media:stop` vers l’occurrence sortante.
@@ -1343,13 +1349,14 @@ Recommencer/Relire encore non raccordées restent ouvertes dans leurs plans.
    de L6.3. Le message auteur de page exclue par le profil utilise les mêmes
    classes de projection, comme `presentSnapshot` le fait actuellement.
 4. Créer `mods/learning/preview/learning-preview-session.ts` avec les méthodes :
-   `presentDocument`, `presentSnapshot`, `saveTestState`, `resetTestProfile`,
-   `resetTestProgress`, `toggleProfileMode` et `destroy`, en reprenant leurs
-   corps depuis `PopupPlayer` et en appelant les classes L6.1.
+   `presentDocument`, `presentSnapshot`, `updateConsultationState`,
+   `resetTestProfile`, `resetTestProgress`, `toggleProfileMode` et `destroy`,
+   en reprenant leurs rôles depuis `PopupPlayer` et en appelant les classes L6.1.
+   `updateConsultationState` ne modifie que l’état en mémoire de la preview.
 5. `LearningPreviewSession` possède le snapshot lecteur, le cache de scènes,
-   la composition en cours, la session d’état test et le traitement métier
-   du conflit. Elle expose une vue en lecture et un abonnement ; elle ne
-   détient aucun document auteur mutable.
+   la composition en cours et l’état de consultation de la session. Elle expose
+   une vue en lecture et un abonnement ; elle ne détient aucun document auteur
+   mutable et ne sauvegarde pas l’état de preview sur le serveur.
 6. La surface commune `PopupPlayer` conserve le stage, la barre, les états
    d’ouverture visuels, les messages à l’opener et leurs timeouts. Elle reçoit
    la session construite par `createLearningPreviewComposition` et lui
@@ -1364,14 +1371,15 @@ Recommencer/Relire encore non raccordées restent ouvertes dans leurs plans.
 8. Déplacer `ProjectTestStateSession` vers Learning ; remplacer sa dépendance
    au client projet par `LearningTestStateApiClient` du lot L3.3.
 
-**Ordre à préserver :** obtenir les médias, ouvrir l’état test, réconcilier
-avec le document, enregistrer si nécessaire, détruire l’ancienne composition,
-construire et initialiser la nouvelle. Les deux resets gardent leurs portées
-distinctes. La preview réseau autorise seulement ses opérations actuelles.
+**Ordre à préserver :** obtenir les médias, lire l’état test initial, le
+réconcilier avec le document, détruire l’ancienne composition, puis construire
+et initialiser la nouvelle. Les deux resets gardent leurs portées distinctes.
+La preview réseau lit l’état test et refuse son prévol `PUT`.
 
 **Acceptation L7 :** tests popup/host/session/API, deux commandes de
-synchronisation, route réseau sans acteur auteur, médias serveur sans Blob
-local, conflit `412`, mode local autorisé et destruction pendant une requête.
+synchronisation, lecture initiale d’état test et absence d’écriture depuis la
+preview, route réseau sans acteur auteur, médias serveur sans Blob local et
+destruction pendant une requête.
 Vérifier aussi que `reading/` ne dépend pas du contexte preview. Lorsque le
 player exporté sera réalisé, la comparaison preview/export utilisera les mêmes
 documents, options et états de lecture ; cette validation relève du chantier

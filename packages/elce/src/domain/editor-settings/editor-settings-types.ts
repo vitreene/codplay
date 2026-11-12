@@ -1,4 +1,5 @@
-import type { BdcId, RevelationTransitionDefaults } from '../document/document-types'
+import type { BdcId } from '../../core/document/content-document-types'
+import type { RevelationTransitionDefaults } from '../../resources/revelation/revelation-types'
 import type { ELCE_EDITOR_SETTINGS } from '../../config/editor-settings'
 
 export type ElceScrollObservationZone = Readonly<{ threshold: number }>

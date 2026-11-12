@@ -63,6 +63,13 @@ dans `title` et dans le nom accessible du bouton. Au-dessus de 800 px, l’icôn
 et le libellé sont visibles ensemble.
 Le bouton « Test auteur » suit la même adaptation : son libellé est masqué sur
 petit écran, tandis que son nom accessible descriptif reste disponible.
+
+Le document de preview reste à la taille du viewport et ne défile pas lui-même.
+Le contenu Flux défile dans son scrollport vertical ; la barre de navigation
+reste au bord inférieur de la fenêtre. Le scrollport masque le débordement
+horizontal et conserve le défilement vertical. Brave a vérifié le scroll interne
+et la position de la navigation aux formats 855 × 783 et 1762 × 712 ; les
+mesures sont consignées dans le [plan de construction](../plan/2026-10-01-elce-construction-plan.md).
 Les icônes d’interface du lecteur, y compris l’ouverture et la fermeture du
 sommaire Sighty/CodPlay, suivent la hauteur de capitale de la police courante
 avec `block-size: 1cap` et une largeur automatique, sans taille fixe dans les
@@ -82,6 +89,16 @@ La popup locale peut fonctionner sans persistance lorsque le serveur est
 indisponible. Le contrat détaillé figure dans la
 [spécification Sommaire et profils](./summary-profile-spec.md).
 
+Dans la popup, une reconstruction provoquée par la remise à zéro de la
+progression reprend la page courante du lecteur depuis Sighty. Une demande
+explicite « Synchroniser » utilise la page sélectionnée dans l’éditeur. Le
+[test d’intégration popup](../src/mods/learning/integration/learning-preview-session.test.tsx)
+exerce ces deux actions avec la composition Sighty/CodPlay réelle et vérifie
+qu’une réponse de preview ne déclenche aucune écriture API. Les tests de
+[composition du player](../src/mods/learning/reading/learning-player.test.ts) vérifient
+la réutilisation des scènes Flux/Diapo, la restauration ou la suppression des
+réponses, et l’absence d’une nouvelle validation.
+
 Le document de l’éditeur reste la source unique. La communication entre les
 fenêtres transporte des demandes et des instantanés ; elle ne crée ni document,
 ni catalogue, ni navigation parallèle. Pour un média dont le transfert est
@@ -90,6 +107,54 @@ par l’API Elcé ; le navigateur charge le fichier comme une ressource ordinair
 et peut réutiliser son cache HTTP. Tant qu’un transfert reste en attente, le
 lecteur crée une URL objet depuis le Blob conservé localement. Après
 confirmation du transfert d’une image, le Blob n’est pas requis par le lecteur.
+
+### Télécommande de la Diapo narrée de démonstration
+
+Pour une Diapo qui porte un BDC Avatar avec une prise, le lecteur monte la
+télécommande partagée `@codplay/remote/remote` dans
+`#elce-navigation-remote`, à l’intérieur de la barre de navigation. Elle reste
+extérieure à la scène Diapo. Le statut de page et les commandes
+Précédent/Suivant restent présents. La présentation affiche Play/Pause,
+Revenir au début et le curseur de progression ; les vitesses et les diagnostics
+de la télécommande partagée sont masqués. Sur écran large, les boutons de
+navigation, les commandes de transport, le curseur et le compteur de page
+partagent le même centre vertical ; le compteur suit le curseur sur la même
+ligne. À 800 px et en dessous, les
+commandes de transport occupent une seconde ligne de la même barre.
+
+`bindLearningNavigationRemote` utilise `runtime.getInstance(sceneKey).telco`
+sur la sélection du slot `content`. Les commandes et les abonnements de
+progression appartiennent à la télécommande existante. Un changement de page
+détruit l’ancienne télécommande et ses abonnements ; une page sans
+configuration masque son emplacement. La destruction du player libère cette
+liaison avant le runtime.
+
+`LearningPlayer` dérive le démarrage de la Diapo du `playbackMode` de son
+Carousel : Manuel laisse la page narrée à zéro jusqu’au clic Play ; Automatique
+l’autorise au démarrage. À l’initialisation, `runtime.playAll` démarre les
+scènes actives autorisées. À chaque entrée sur une page en attente, l’observateur
+du slot la suspend par sa telco avant le clic Play. Les pages ordinaires
+conservent leur démarrage. Le champ persistant `avatar.autoStart` n’influence
+pas la lecture.
+
+Les deux tests de
+[`learning-navigation-remote.test.ts`](../src/mods/learning/reading/navigation-remote/learning-navigation-remote.test.ts)
+emploient Sighty et les vraies instances avec leurs propres scènes : attente
+de Play, Pause, Seek, fin/replay et retrait/remontage des commandes. Safari MCP
+vérifie le 5 novembre 2026 la preview standard du Projet 3 : audio à zéro et
+suspendu avant Play, Pause stable pendant 1,2 s, Seek à 7,5 s avec la deuxième
+carte, fin vocale puis replay, disparition des commandes sur Page A et retour
+à zéro sans duplication. Les commandes restent dans la barre à 1280 × 756 et
+390 × 844, sans débordement horizontal. Le mode Manuel conserve la première
+carte visible à zéro avant Play. Mesures dans le
+[relevé](../notes/assets/talking-head/elce-project-3-acceptance.json).
+L’alignement est mesuré à 1280 × 756 : les six éléments visibles ont leur
+centre vertical à 724 px. À 390 × 844, chaque rangée conserve son propre
+centre commun, sans débordement horizontal. Le test de styles et le build
+passent après ce changement de CSS.
+Le placement de l’Avatar et son affichage initial dans le canvas sont suivis
+dans la [spécification du BDC Avatar](./avatar-bdc-spec.md) et le lot 4 du
+[plan talking head](../plan/2026-11-04-talking-head-plan.md#lot-4--intégration-auteur--implémentation-en-cours).
 
 ### Sources de style du scénario
 
@@ -196,12 +261,12 @@ détruit les ressources du lecteur.
 
 ### Médias indépendants
 
-- [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
+- [`elce-player-composition.test.ts`](../src/mods/learning/reading/learning-player.test.ts)
   exerce une vidéo Carte dans la composition Sighty/CodPlay réelle : fin de
   page par l’adaptateur d’observation, clic Suivant, `STOP` à zéro, clic
   Précédent et réutilisation du même nœud et de la même source à zéro.
-- Les tests [Flux](../src/builders/flux/flux-scene-builder.test.ts) et
-  [Diapo](../src/builders/diapo/diapo-scene-builder.test.ts) couvrent aussi le
+- Les tests [Flux](../src/mods/learning/integration/flux-scene-builder.test.ts) et
+  [Diapo](../src/mods/learning/integration/diapo-scene-builder.test.ts) couvrent aussi le
   mode indépendant des vidéos de Question et les commandes de viewport Flux
   conservées. Leurs 22 tests passent le 14 octobre 2026.
 - Safari MCP, le 14 octobre 2026, monte un document et un MP4 produits pour la
@@ -242,34 +307,39 @@ détruit les ressources du lecteur.
   La vérification responsive précédente à 390 px conserve un libellé visuel
   masqué, un nom accessible disponible et une cible de 40 px.
   Aucun avertissement ou erreur n'est relevé dans la console de la popup.
+- Brave vérifie le 2 novembre 2026 le circuit de synchronisation sur « Test
+  Elcé — liens et date » dans la copie intégrée isolée : changer de page dans
+  le Scénario actualise la preview avec le suivi actif ; naviguer dans la
+  preview coupe le suivi ; « Revenir sur la page éditée » affiche la dernière
+  page choisie dans l’éditeur et réactive le suivi.
 - Suite Elcé : 523 tests réussis ; typecheck, build et `git diff --check`
   réussis. L'avertissement de taille du bundle Vite reste présent.
 
 ### Preuves des étapes précédentes
 
-- [`ProjectApplication`](../src/app/remix/project-application.ts) ouvre le
+- [`ProjectApplication`](../src/core/authoring/layout/project-application.tsx) ouvre le
   popup depuis la page sélectionnée et détruit sa liaison à la fermeture de
   l’application auteur.
-- [`PopupPreviewHost`](../src/app/player/popup-preview-host.ts) transmet les
+- [`PopupPreviewHost`](../src/core/preview/popup-preview-host.ts) transmet les
   instantanés et les demandes au moyen du protocole de messages existant,
   attaché à l’acteur XState auteur.
-- [`PopupPlayer`](../src/app/player/popup-player.tsx) est rendu par le routeur
+- [`PopupPlayer`](../src/mods/learning/preview/learning-preview-view.tsx) est rendu par le routeur
   `remix/spa`. Il reçoit les instantanés, résout les médias confirmés par l’URL
   de l’API Elcé et crée temporairement des URLs objet pour les transferts en
   attente. Il remonte la composition réelle à chaque instantané.
-- [`popup-player.css`](../src/app/player/popup-player.css) conserve les
+- [`popup-player.css`](../src/core/preview/popup-player.css) conserve les
   libellés sur ordinateur et masque le texte au profit des icônes à 800 px et
   en dessous.
-- [`popup-preview-host.test.ts`](../src/app/player/popup-preview-host.test.ts)
+- [`popup-preview-host.test.ts`](../src/core/preview/popup-preview-host.test.ts)
   vérifie la page de départ, la synchronisation du document édité et la
   sélection de la page courante.
-- [`popup-player.test.tsx`](../src/app/player/popup-player.test.tsx) vérifie la
+- [`popup-player.test.tsx`](../src/mods/learning/preview/learning-preview-view.test.tsx) vérifie la
   synchronisation unique lorsqu’une page éditée vient d’être créée et la
   résolution d’un média confirmé dont le Blob n’est plus présent en local. Il
   vérifie aussi l’icône partagée du bouton « Test auteur », ainsi que les
   messages de reprise sans éditeur et sans réponse initiale, sans chargement
   d’un ancien document local.
-- [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
+- [`elce-player-composition.test.ts`](../src/mods/learning/reading/learning-player.test.ts)
   vérifie la réutilisation des sources de scènes inchangées après une
   réorganisation et la reconstruction de la scène d’une page éditée. Il
   vérifie aussi le départ direct à la Question D, son achèvement par réponse et
@@ -326,9 +396,26 @@ détruit les ressources du lecteur.
   restait ouverte. Un nouveau clic sur « Prévisualiser » réutilise la popup,
   crée une nouvelle session et charge la page active (« Repérer les grandes
   formes — itération 3 ») sans fermer la fenêtre.
-- Pour cette correction, le typecheck et le build passent ; le build signale un
-  chunk JavaScript supérieur à 500 kB. La suite de composition Sighty/CodPlay
-  passe 28/28. La suite complète compte 218 succès et un échec d’environnement :
-  le test de persistance SQLite n’a pas pu ouvrir son listener local (`listen
-  EPERM: operation not permitted 127.0.0.1`). La vérification browser du départ
-  direct dans Projet 1 reste suivie au plan de construction.
+- Safari MCP, le 27 octobre 2026, a validé une réponse dans la preview réseau
+  d’un projet temporaire. À la réouverture, la Question était vierge ; une
+  lecture API a confirmé l’état serveur à la révision 0 avec
+  `questionAnswers: {}`. Un prévol `PUT` présenté avec l’origine preview a
+  répondu `403` et n’a autorisé que `GET`, `HEAD` et `OPTIONS`.
+- Safari MCP, le 28 octobre 2026, a exécuté le harnais browser du vrai
+  `LearningPlayer` dans un onglet isolé. Le harnais injecte un scheduler de
+  frames déterministe par l’option publique `frameScheduler`, car l’onglet MCP
+  reste en arrière-plan ; le player conserve son scheduler normal en
+  production. Sighty/CodPlay et l’`IntersectionObserver` natif sont réels. Le
+  harnais laisse d’abord Safari distribuer les observations natives, puis vide
+  les frames injectées ; cette attente ne change pas le runtime. Deux parcours
+  dans des onglets frais, sans instrumentation de l’observer, ont soumis le
+  profil, validé une réponse Question et amené le scrollport Flux au marqueur
+  bas. La progression et « Suivant » se sont déverrouillés ; Page A → Page B →
+  Page A a conservé le profil soumis, les deux pages terminées et la réponse.
+  L’image locale de Page B est chargée (`complete`, largeur intrinsèque 8).
+  Dans les deux parcours, la destruction vide le stage et l’inspecteur réseau
+  ne compte aucune requête `/test-state`.
+- Pour ce parcours, 114 tests ciblés sur 9 fichiers, le typecheck et le build
+  passent. Le build conserve son avertissement existant de chunk JavaScript
+  supérieur à 500 kB. La vérification browser du départ direct dans Projet 1
+  reste suivie au plan de construction.

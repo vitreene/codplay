@@ -4,7 +4,8 @@
 Demo5 est convertie en v7. Le générateur couleur OKLCH de la preview est
 implémenté. Le typecheck et le build du paquet Elcé passent ; Brave confirme
 partiellement les surfaces projet, page et BDC sur écran large et étroit. La
-cible vient d’être ramenée à 60–85 caractères ; son recalibrage reste à faire.
+cible demandée le 3 novembre est un optimum d’environ 75 caractères par ligne,
+avec un maximum visé de 80 ; la calibration réelle reste à valider.
 Le test typographique ciblé passe et la preview confirme ses espacements sur
 grand et petit écran. Le padding Normal des surfaces bordées sans fond est
 appliqué et vérifié sur Question ; Cadre est implémenté, hérité du projet aux
@@ -21,11 +22,90 @@ typecheck et le build Elcé.
 La mesure s’applique à la racine `.bdc` de tous les types. Décision utilisateur
 du 26 octobre : autoriser le bloc à s’étendre jusqu’à `55rem`, quelle
 que soit la densité, et continuer à augmenter la taille du texte au-delà de son
-plafond actuel pour viser 60–85 caractères par ligne. Les planchers de taille
-et les retours à la ligne naturels restent actifs sur écran étroit. La formule
-et ses paramètres sont isolés dans la
+plafond actuel. La cible initiale de 60–85 caractères a été remplacée le
+3 novembre par un optimum autour de 75 et un maximum visé de 80. Les planchers
+de taille et les retours à la ligne naturels restent actifs sur écran étroit.
+La formule et ses paramètres sont isolés dans la
 [spécification de taille responsive](../specs/responsive-text-sizing-spec.md).
 Le recalibrage réel des fontes et la vérification des autres BDC restent ouverts.
+
+## Reprise de la chaîne des portées
+
+**En cours pour l’audit ; découpage d’exécution A relire.** L’utilisateur demande
+de revoir toute la chaîne suivant un héritage vers les descendants. La capture
+Page A révèle que la surface de page ne couvre pas les mêmes éléments que la
+page métier. L’analyse causale et les autres écarts sont dans
+[l’étude existante](../notes/2026-10-22-style-tab-analysis.md#audit-de-la-chaîne-des-portées--9-novembre-2026).
+Ne pas implémenter les frontières proposées ci-dessous avant leur validation.
+
+### Base acceptée et invariants
+
+- L’apparence documentaire s’applique au rendu uniquement ; l’interface auteur
+  conserve son habillage. Une seule cible métier porte chaque modification.
+- Conserver la chaîne de données Application → Projet → Page → BDC → enfant BDC,
+  les exceptions locales par propriété et les identités de placement existantes.
+  Aucun réglage de chapitre n’est introduit par ce chantier.
+- Réinitialiser retire seulement l’exception locale. Ne pas copier la valeur
+  du parent dans le document enfant et ne pas écraser ses autres propriétés.
+- Les entrées de la palette Style expriment des intentions métier et déclenchent
+  les commandes existantes. Une entrée peut engager un pool d’actions cohérentes
+  qui modifient plusieurs propriétés du modèle ; elle n’attribue pas directement
+  un style CSS. Le CSS est produit ensuite à partir du modèle résolu. Ce principe
+  peut concerner chaque entrée ; les actions précises restent définies par sa
+  commande propriétaire.
+- Choisir une palette locale déclenche sa commande d’apparence, qui applique ses
+  rôles Fond et Texte au niveau courant selon le résolveur existant. Depuis une
+  densité effective `none`, cette commande rétablit aussi Normal et décoche
+  Transparence.
+- Transparent est une commande composée, pas une simple affectation CSS ni une
+  attribution isolée de `density: none` : elle sélectionne cette densité, rend
+  le fond transparent et entraîne les effets de retrait déjà définis dans la
+  [spécification Apparence](../specs/appearance-spec.md). Choisir un Fond ou une
+  palette depuis cet état rétablit Normal. Le couplage Transparent / padding /
+  densité reste inchangé.
+- Réutiliser façade → acteur XState → commandes → SQLite, résolveur d’apparence,
+  générateur OKLCH, producteurs de scène et export existants. Aucune nouvelle
+  observation DOM, mutation finale de styles ou modification CodPlay.
+- Conserver les couleurs fonctionnelles de correction et de données, les médias,
+  les géométries des layouts et le cycle de vie réel Sighty/CodPlay.
+
+### Décisions à relire avant exécution
+
+| Sujet | Proposition à valider |
+| --- | --- |
+| Projet | Porte la base de tout le document rendu ; menu et navigation restent ses descendants directs. La barre technique de preview reste extérieure au document. |
+| Page | Possède son titre et toute la zone de contenu, y compris ses retraits et le vide autour des BDC. Une exception page s’applique à cet ensemble et à ses descendants, sans modifier les pages sœurs ni les régions projet. |
+| BDC | Possède sa surface et ses contenus. Ses enfants héritent de cette cible métier ; leurs exceptions locales priment, sans effet sur les frères ni sur la page. Les layouts Carte conservent leurs zones textuelles et média distinctes. |
+| Sélection auteur | Sélectionner une page dans le Scénario met à jour la cible Style sans ouvrir automatiquement cet onglet ; les boutons Style explicites conservent leur ciblage projet/page/BDC. |
+| Surface héritée | Décider quand une couleur héritée peint la racine descendante et quand elle reste visible par transparence ; préciser le cas d’un parent visuel différent du parent métier. Le pool d’actions de Transparent et son couplage `density: none` / padding sont confirmés. Les autres entrées peuvent aussi engager plusieurs actions ; leurs effets relèvent de leur commande propriétaire. Le choix d’un Fond ou d’une palette depuis Transparent rétablit Normal. |
+
+### Actions ordonnées après validation
+
+1. Fixer dans ce plan la matrice cible métier → valeurs héritées → surface peinte,
+   pour projet, Flux, Diapo, Section, Carte, Carousel, Graphe, Question et Résultat.
+2. Revoir le ciblage dans `learning-project-application.tsx`, `scenario-panel.tsx`
+   et leurs types, sans ajouter une seconde sélection documentaire. Couvrir la
+   sélection d’une page déjà courante après ouverture du style d’un BDC.
+3. Revoir `appearance-resolver.ts`, les commandes et la persistance uniquement
+   pour les décisions qui les changent. Préserver les documents existants ; une
+   évolution de format exige son contrat et sa migration explicites.
+4. Faire correspondre `learning-layout-scene-builder.ts`, Flux/Diapo, les classes
+   d’apparence et `appearance-scene-style-sheet.ts` aux propriétaires retenus.
+   Le titre de page et les retraits ne doivent plus dépendre accidentellement
+   d’une classe projet hors de la portée page. Utiliser les slots, événements et
+   actions de présentation déjà établis, sans nouveau circuit de navigation.
+5. Couvrir projet/page/BDC sans exception puis avec exceptions distinctes, reset,
+   couleurs libres et sémantiques, contraste, transparence et palette locale.
+   Tester enfants Carousel et ancres, déplacement entre pages/parents et retour
+   catalogue/réinsertion : identité et valeurs locales conservées, héritage
+   recalculé, aucun effet sur les frères.
+6. Vérifier la chaîne réelle auteur → persistance → preview synchronisée et
+   fraîche → navigation A/B/A → export autonome. Inclure titre, retraits, zones
+   vides, scroll, resize, Play/Seek/replay, remontage et destruction selon les
+   propriétaires affectés. Les fixtures de tests restent indépendantes des démos.
+7. Exécuter tests ciblés, suite Elcé, typecheck, build et navigateur ; ne déclarer
+   aucune tranche finie sans ces preuves. Consolider ensuite les spécifications
+   Apparence, organisation, Flux, Diapo et Preview avec le seul contrat vérifié.
 
 ## Cadre — appliqué et vérifié (27 octobre 2026)
 
@@ -83,6 +163,19 @@ consomment cette palette. Les CSS de palette ne sont plus chargées pour peindre
 le lecteur. L’interface ne propose qu’un duo typographique ; `headingFontId` et
 `bodyFontId` restent distincts dans `appearance`.
 
+## Classes de portée d’apparence — 3 novembre 2026
+
+**Décision utilisateur :** proscrire les classes qui développent chaque
+caractère de l’identité de cible en une suite hexadécimale. La portée reste
+déterministe par document, page ou BDC, mais son nom doit rester court.
+
+Le générateur d’apparence réutilise `sceneStyleClassName` avec le rôle
+`appearance`. Il produit ainsi le même hachage compact base 36 que les autres
+styles de scène, sans dupliquer un circuit de nommage. **Acceptation restante :**
+vérifier que les classes produites restent identiques entre le markup lecteur,
+la feuille d’apparence de preview et l’export, et qu’elles sont nettement plus
+courtes ; les validations ciblées n’ont pas encore été relancées.
+
 ## Déjà réalisé
 
 - Document v7 : polices de titre et de corps indépendantes ; Transparent écrit
@@ -139,10 +232,10 @@ le lecteur. L’interface ne propose qu’un duo typographique ; `headingFontId`
    plein cadre. La Question réelle est vérifiée sur grand et petit écran ; une
    fixture Brave contrôle le Carousel et un test CSS protège les deux règles.
 3. **Calibrer.** Mesurer les lignes réelles avec les fontes du projet sur
-   conteneur étroit et jusqu’à la borne `55rem`. Confirmer que la taille qui
-   suit le conteneur garde 60–85 caractères par ligne quand la largeur le
-   permet, sans débordement ni effet de zoom excessif. Le panneau auteur
-   n’ajoute aucun réglage de largeur ou de taille.
+   conteneur étroit et jusqu’à la borne `55rem`. Viser environ 75 caractères
+   par ligne, sans dépasser la cible maximale de 80 quand la largeur le permet,
+   et sans débordement ni effet de zoom excessif. Le panneau auteur n’ajoute
+   aucun réglage de largeur ou de taille.
 4. **Clore.** Mettre les preuves MCP et les résultats de calibration dans cette
    spec, rejouer le contrôle SQLite requis, puis terminer le plan ou garder les
    valeurs à revoir.
@@ -279,7 +372,8 @@ et [`2026-10-25-content-typography-references.md`](../notes/2026-10-25-content-t
   du cadre ; garder 1 rem de padding minimum à l’intérieur du contenu lecteur.
   Les paddings de densité des pages et BDC restent cumulables avec ce minimum.
 - **Décision typographique de l’utilisateur :** lier la taille du texte à la
-  largeur de son vrai conteneur et viser 60–85 caractères par ligne en moyenne.
+  largeur de son vrai conteneur ; la cible initiale était 60–85 caractères par
+  ligne en moyenne.
   La formule du corps et les règles responsive des titres sont isolées dans la
   [spécification de taille responsive](../specs/responsive-text-sizing-spec.md).
   Le facteur `1.41` des titres H1–H6 s’applique aussi aux titres dédiés du
@@ -298,9 +392,10 @@ et [`2026-10-25-content-typography-references.md`](../notes/2026-10-25-content-t
   `.bdc` peut s’élargir jusqu’à `55rem` pour exploiter davantage la
   surface disponible. À mesure que le conteneur s’élargit, la taille du corps
   et des titres continue à suivre ses facteurs `cqi`, au-delà des plafonds
-  actuels, afin de garder la cible de 60–85 caractères par ligne. Les
-  planchers de densité, les lignes courtes sur petit écran et l’absence de
-  contrôle auteur restent inchangés. La règle est implémentée et documentée
+  actuels, afin de garder la cible alors fixée à 60–85 caractères par ligne.
+  Cette cible est remplacée le 3 novembre par un optimum de 75 et un maximum
+  visé de 80. Les planchers de densité, les lignes courtes sur petit écran et
+  l’absence de contrôle auteur restent inchangés. La règle est implémentée et documentée
   dans la
   [spécification de taille responsive](../specs/responsive-text-sizing-spec.md).
   Brave mesure
@@ -348,3 +443,20 @@ et [`2026-10-25-content-typography-references.md`](../notes/2026-10-25-content-t
   titres et leurs nouveaux espacements, enrichissements, fontes, BDC étroits,
   page avec/sans fond, écran étroit, resize et zoom. Recalibrer avec les fontes
   locales et garder la tranche `En cours` jusqu’à cette validation.
+
+## Ajustement de la cible de lecture — 3 novembre 2026
+
+**Décision utilisateur :** viser environ 75 caractères par ligne, avec 80 comme
+maximum visé, en remplacement de la plage précédente 60–85. Cette mesure reste
+approximative selon la fonte et le contenu ; aucun compteur JavaScript ni
+réglage auteur n’est ajouté.
+
+La mesure Brave du 26 octobre donne 76,9 caractères avec `2.76cqi` à la borne
+`55rem`. Après la proposition initiale `2.83cqi`, l’utilisateur a fixé le
+coefficient à `2.9cqi`. Cette valeur est centralisée dans la configuration CSS
+`--elce-reading-font-size-cqi` sur les éléments texte cibles, puis consommée par
+les feuilles du corps, Carte et Question pour conserver la largeur du conteneur
+local. **Validation restante :** mesurer dans la preview
+sur conteneur large, puis vérifier le plancher et l’absence de débordement sur
+écran étroit. Mettre à jour la spécification de taille responsive après cette
+validation.

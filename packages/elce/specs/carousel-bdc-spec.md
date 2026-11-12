@@ -28,10 +28,16 @@ nouveau BDC.
 
 `CarouselContent` contient la durée commune, le mode manuel ou automatique, le
 nombre fini de répétitions, le ratio, la transition et la liste ordonnée
-`cards` d’entrées `{ bdcId, durationMs }`. Chaque entrée référence un BDC Carte
-ou Graphe enfant. La durée particulière appartient à l’entrée du
-Carousel ; `null` signifie que la durée commune s’applique. Un Carousel doit
-contenir au moins une vue.
+`cards` d’entrées `{ bdcId, durationMs, cue? }`. Chaque entrée référence un BDC
+Carte ou Graphe enfant. La durée particulière appartient à l’entrée du
+Carousel ; `null` signifie que la durée commune s’applique. Dans une Diapo
+narrée, `durationMs` reste la source de vérité : les débuts de vue sont calculés
+en cumulant ces durées. Une association facultative de transcript identifie
+l’Avatar, la prise et l’index de l’occurrence ; son temps sert à recalculer les
+durées concernées pendant l’édition, sans être stocké comme début absolu. Le
+contrat d’association est détaillé dans la
+[spécification du BDC Avatar](./avatar-bdc-spec.md). Un Carousel doit contenir
+au moins une vue.
 
 Chaque BDC Carte porte dans `card` tous les champs : surtitre (`overline`),
 titre, description, message (250 caractères maximum), note, légende et
@@ -78,12 +84,25 @@ page Flux et ouvre son éditeur Remix. Les changements passent par les commandes
 XState et les services métier ; la vue ne conserve pas une seconde copie du
 document.
 
-`EditorActionsFacade` (`app/facades/editor-actions-facade.ts`) expose les
-intentions Carousel, Carte et Graphe à l’éditeur, puis délègue aux façades existantes.
-`ElceCarouselFacade` (`app/facades/carousel/`) orchestre les réglages du
-Carousel et délègue les champs des Cartes à `ElceCardFacade`
-(`app/facades/card/`). Les mêmes actions de Carte servent aux BDC directs de
-Flux ou Diapo et aux Cartes enfants du Carousel.
+`LearningEditorFacade` expose les intentions auteur au mod Learning et délègue
+les réglages à `ElceCarouselFacade` dans
+[`resources/bdcs/carousel/authoring/`](../src/resources/bdcs/carousel/authoring/).
+Cette façade orchestre le Carousel et délègue les champs à `ElceCardFacade`
+dans [`resources/bdcs/card/authoring/`](../src/resources/bdcs/card/authoring/).
+Les mêmes actions ressource Carte servent aux BDC directs de Flux ou Diapo et
+aux Cartes enfants du Carousel ; Learning reste propriétaire de la création,
+du placement documentaire et de l’accès au contrôleur. Quiz Hunt compose aussi
+les actions de `ElceCardFacade` pour ses Cartes de résultat, avec son propre
+dispatch et son import média. La façade Carte reçoit un getter du contenu
+courant : deux éditions successives partent ainsi du dernier état du document,
+qu’il s’agisse d’une Carte directe, enfant du Carousel ou de résultat. Les
+commandes de création et de placement restent propres au mod.
+Le champ Message de la Carte affiche les commandes Gras et Italique sous forme
+d’icônes uniquement ; leurs noms accessibles restent « Gras » et « Italique ».
+Le rendu est fourni par le champ texte partagé dans
+[`learning-inline-text-field.tsx`](../src/mods/learning/inline-text/learning-inline-text-field.tsx)
+et ses styles d’éditeur dans
+[`app-layout.css`](../src/app/layout/app-layout.css).
 
 L’auteur peut ajouter, supprimer et réordonner les vues Carte et Graphe
 statistique dans la même séquence. Les cinq layouts et leurs champs restent
@@ -92,21 +111,52 @@ layout. Chaque entrée conserve sa durée propre. Les valeurs masquées des Cart
 restent éditables après retour à un layout qui les affiche. Les médias arrivent
 depuis le catalogue ou l’import existant ; aucun nouveau circuit média n’est
 créé.
+Lors d’un import de plusieurs fichiers sur une Carte, le premier média reste
+rattaché à cette Carte et chaque fichier suivant crée une nouvelle Carte enfant
+dans le même Carousel, avec le layout, le cadrage et la position du média de la
+Carte cible. Chaque ressource importée conserve sa propre référence média.
 Les boutons d’ajout de vue affichent « Carte » et « Graphe » sous leur icône ;
 leur nom accessible conserve la description complète.
+Le menu d’ajout est un panneau compact ancré immédiatement à droite du bouton
+« + » ; il reste hors du flux horizontal et ne repousse pas les cibles Corbeille
+et Catalogue. Ce comportement est porté par
+[`renderCarouselViewActions`](../src/resources/bdcs/carousel/authoring/remix-carousel-editor.tsx)
+et [`carousel-editor.css`](../src/resources/bdcs/carousel/authoring/carousel-editor.css).
+`RemixCarouselEditor` garde l’état du menu et les commandes Carte/Graphe ; le
+clic extérieur est géré par
+[`installOutsideMenuDismissal`](../src/core/authoring/menus/outside-menu-dismissal.ts).
+Le rendu Safari MCP du Projet 3 confirme le menu flottant de 118,75 × 44,375 px
+et la rangée inchangée de 111,17 px. Un clic hors du menu le ferme, y compris
+sur une autre commande flottante ; choisir Carte exécute l’ajout et ferme le
+menu.
+
+Dans une Diapo narrée, l’association de transcript est éditée dans chaque BDC
+Carte enfant, avec un bouton radio caché par occurrence. Elle n’apparaît pas
+comme un sélecteur global dans le Carousel. Le champ alterne entre « Mot
+associé » avec le mot choisi et la durée de la vue, sous le libellé
+« Durée (sec.) ». Sans association, la durée reste éditable. Les temps des mots
+sont convertis en intervalles de durées lors de l’édition ; le BDC Avatar
+précise le comportement de retrait, de remplacement et de réassociation.
 
 Le Carousel règle aussi le mode, la durée commune, le ratio, la transition et
 le nombre de passages automatiques supplémentaires. Les valeurs initiales
 sont définies dans `CAROUSEL_CONFIG` : mode manuel, ratio 16:9, durée de cinq
-secondes, dix répétitions supplémentaires et fondu. Le nombre de répétitions va
-de 0 à 10 ; 0 correspond à un passage. En lecture automatique, une durée
-particulière remplace la durée commune pour l’entrée concernée. Les points
+secondes et dix répétitions supplémentaires. La transition n’a pas de défaut
+propre au Carousel : les nouveaux projets héritent de `swipe-right` pour
+l’entrée et la sortie depuis `ELCE_EDITOR_SETTINGS.revelation.projectDefaults`.
+`CAROUSEL_CONFIG` ne définit donc aucune transition par défaut. Le nombre de
+répétitions va de 0 à 10 ; 0 correspond à un passage. En lecture automatique,
+une durée particulière remplace la durée commune pour l’entrée concernée. Les points
 permettent de sélectionner une vue dans les deux modes. Cliquer sur un point
 pendant la lecture automatique sélectionne cette vue et interrompt la
 progression temporisée de l’instance courante : la lecture se poursuit en mode
 manuel et les clics suivants peuvent sélectionner d’autres vues. Cette
 bascule de lecture n’écrit pas dans le `playbackMode` enregistré du Carousel.
 Dans l’éditeur, les réglages du Carousel restent sur une rangée unique.
+Les libellés sont espacés de `0.35rem` de leurs champs. La rangée des
+réglages garde `0.35rem` avant les onglets des vues ; les onglets ont
+`0.4rem` d’espace vertical intérieur. Les réglages de la vue sélectionnée
+gardent `0.45rem` au-dessus et `0.75rem` au-dessous.
 Les valeurs affichées suivent le document courant. Une création utilise les
 défauts configurés ; après édition, le mode et la transition enregistrés restent
 sélectionnés après un changement de page et un rechargement. La transition
@@ -137,6 +187,24 @@ parent comme `h2`, paragraphe ou `footer`, avec leur classe de style issue du
 preset ; aucun élément texte vide ne les enveloppe. Les conteneurs de cadre,
 de média et de groupe restent lorsque le CSS ou la sémantique en a besoin, et
 portent le commentaire à l’intérieur.
+
+Dans l’éditeur Liste à points, l’intervalle commun et les délais particuliers
+des lignes s’affichent et se saisissent en secondes, avec un pas de `0,1 s`.
+Un délai de ligne vide conserve le comportement par défaut. L’éditeur convertit
+ces valeurs vers les millisecondes utilisées par le modèle et le player.
+
+Le layout `list-basic` compose le sous-module Liste dans sa zone sémantique
+`list`. En Flux, la racine d’une Carte Liste demande `initial: 'enter'` à son
+observation : si la première mesure la trouve dans la zone, elle émet le même
+signal d’entrée que lors d’une entrée ultérieure et déclenche la révélation des
+lignes par le strap de Liste. Les dispositions Carte sans Liste gardent leur
+comportement d’observation initial.
+Chaque signal de révélation applique à la ligne une `TweenAction` CodPlay
+linéaire de `200 ms` qui fait évoluer son opacité de `0` à `1`. Le signal de
+sortie masque la ligne ; une nouvelle révélation repart de `0`. Cette action
+reste attachée au même événement de ligne, qu’il provienne d’un strap live ou
+d’un eventime compilé. Le player matérialise la progression au fil de ses
+frames ; la feuille CSS ne déclare aucune transition pour la révélation.
 
 Dans « Texte avec image », `card.imagePosition` règle la projection partagée.
 Gauche et Droite gardent le média dans une colonne latérale et les textes dans
@@ -220,37 +288,40 @@ n’est ajouté dans React ou dans Elcé.
   clonage, la suppression en cascade du Carousel avec conservation des médias,
   la fusion des médias référencés par une Carte et le rejet des documents
   v1/v2/v3.
-- [`carousel-service.test.ts`](../src/domain/carousel/carousel-service.test.ts) vérifie
+- [`carousel-service.test.ts`](../src/resources/bdcs/carousel/domain/carousel-service.test.ts) vérifie
   l’ajout, le retrait, le réordonnancement des IDs et la conservation de la
   durée de chaque entrée lors du réordonnancement.
-- [`editor-settings-resolver.test.ts`](../src/domain/editor-settings/editor-settings-resolver.test.ts)
-  vérifie l’héritage project → parent → Carousel → entrée avec des valeurs
-  distinctes d’entrée et de sortie.
-- [`statistical-graph-placements.test.ts`](../src/builders/statistical-graph/statistical-graph-placements.test.ts)
+- [`statistical-graph-placements.test.ts`](../src/mods/learning/integration/statistical-graph-placements.test.ts)
   compile une vue Graphe enfant via le builder Carousel réel et vérifie sa place
   dans la séquence et son rôle de vue finale.
 - Le 9 octobre 2026, Brave DevTools crée une vue Graphe dans l’éditeur Remix,
   recharge le document, puis la sélectionne dans la preview. Le builder monte
   son SVG nommé et son tableau sémantique ; le point active cette vue et l’ordre
   Carte puis Graphe reste enregistré après rechargement.
-- [`app-layout.test.tsx`](../src/app/layout/app-layout.test.tsx) vérifie la
+- [`learning-project-application.test.tsx`](../src/mods/learning/authoring/learning-project-application.test.tsx) vérifie la
   création du Carousel, l’édition de cartes identifiées, leurs layouts et
   l’attachement de média par les commandes de l’éditeur.
-- [`flux-scene-builder.test.ts`](../src/builders/flux/flux-scene-builder.test.ts)
+- [`learning-editor-facade.test.ts`](../src/mods/learning/authoring/learning-editor-facade.test.ts)
+  vérifie que les éditions successives de Question et Carte lisent le dernier
+  document et partagent Undo/Redo. [`learning-page-editor.test.tsx`](../src/mods/learning/authoring/learning-page-editor.test.tsx)
+  exerce les BDC directs et les Cartes enfants du Carousel dans la page Remix.
+  Quiz Hunt couvre sa Carte résultat et son import média dans
+  [`quiz-hunt-controller.test.ts`](../src/mods/quiz-hunt/authoring/quiz-hunt-controller.test.ts).
+- [`flux-scene-builder.test.ts`](../src/mods/learning/integration/flux-scene-builder.test.ts)
   vérifie la projection des BDC Carte, des champs visibles, des médias selon
   le layout, les commentaires d’insertion et les plages Capsule, ainsi que dix
   passages automatiques supplémentaires finis ; CodPlay compile la scène.
-- [`card-preset-builder.test.ts`](../src/builders/card/card-preset-builder.test.ts)
+- [`card-preset-builder.test.ts`](../src/core/presets/card-preset-builder.test.ts)
   vérifie les cinq layouts, la part image facultative de Titre sur image et que
   la vidéo Carte cible la part responsive `elce-carousel-media` ;
-  [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
+  [`elce-player-composition.test.ts`](../src/mods/learning/reading/learning-player.test.ts)
   vérifie son montage dans le vrai composant CodPlay et la règle CSS qui adapte
   l’élément vidéo au logement. Le test d’export vérifie aussi la présence de
   cette règle dans la feuille de style du package. La composition réelle monte
   Titre sur image avec image, dégradé et navigation en Carousel, puis en BDC
   direct de Diapo ;
   l’export vérifie l’image, le dégradé et les styles du layout dans le package.
-- [`elce-anchor-extension.test.ts`](../src/app/editor/anchor/elce-anchor-extension.test.ts)
+- [`elce-anchor-extension.test.ts`](../src/resources/anchoring/authoring/elce-anchor-extension.test.ts)
   vérifie que l’aperçu d’ancre reçoit la classe d’apparence et sa feuille
   générée pour le layout Titre sur image.
 - [`appearance-scene-style-sheet.test.ts`](../src/player/appearance-scene-style-sheet.test.ts)
@@ -269,7 +340,7 @@ n’est ajouté dans React ou dans Elcé.
   supprimée après vérification ; la preview resynchronisée et l’éditeur ne
   contiennent plus ses textes, et le catalogue conserve ses quatre médias.
   Diapo, Carousel et aperçu d’ancre restent à valider.
-- [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
+- [`elce-player-composition.test.ts`](../src/mods/learning/reading/learning-player.test.ts)
   exécute le player réel en DOM de test : sélection manuelle, passage en lecture
   manuelle après un clic pendant l’automatique, absence de double Carte/point
   après les échéances et répétitions suivantes, maintien des sélections
@@ -309,7 +380,7 @@ n’est ajouté dans React ou dans Elcé.
   wrapper `.elce-carousel__frame` est absent. Le cadre mesure `686 × 386 px`
   avec `aspect-ratio: 16 / 9`, l’image charge, et un clic sur le second point
   change `aria-current` de `[true, false]` à `[false, true]`.
-- [`workspace/page-editor.test.tsx`](../src/app/remix/workspace/page-editor.test.tsx)
+- [`learning-page-editor.test.tsx`](../src/mods/learning/authoring/learning-page-editor.test.tsx)
   vérifie dans la page Remix de production les Cartes directes Flux et Diapo,
   les Cartes enfants, les champs partagés, la conservation après changement de
   layout, le réordonnancement et l’import multiple de médias via les façades

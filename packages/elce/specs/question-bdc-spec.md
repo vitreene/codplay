@@ -41,12 +41,22 @@ garde le titre et l’énoncé. Les invariants sont contrôlés par
 `ElceQuestionService` et lors des commandes documentaires, pas par le composant
 de rendu.
 
+Le libellé de chaque réponse est une chaîne de texte simple. Dans l’éditeur,
+il reste un champ texte natif : il ne reçoit ni étiquette de variable ou de
+page, ni date, ni mise en forme. Dans le lecteur, l’Input existant fournit à la
+fois le contrôle de choix et son libellé visible ; le preset Question ne rend
+pas une seconde copie du texte. À la réhydratation, un ancien libellé enregistré
+en document enrichi est aplati en texte afin de conserver son contenu dans le
+modèle v9.
+
 Après validation, l’événement `elce:question:answered` publie les identifiants
 des réponses présentes (`answerIds`), sélectionnées (`selectedAnswerIds`) et
 attendues (`expectedAnswerIds`), avec le résultat. L’état de test s’en sert
 pour réadmettre la réponse après réouverture ; le changement de libellé seul
 ne l’invalide pas, tandis qu’un changement d’identités ou de correction la
 retire.
+La forme partagée de ces quatre valeurs est `QuestionAnswerState`, définie par
+la ressource Question et utilisée par l’état de test Learning.
 
 La zone Illustration du preset accepte une ressource image ou vidéo du
 catalogue, ou un fichier local. Un fichier suit l’import média partagé et la
@@ -56,13 +66,17 @@ la ressource existante après vérification SHA-256, même si le nom diffère.
 
 ## Commandes et projection
 
-`EditorActionsFacade` (`app/facades/editor-actions-facade.ts`) appelle la façade
-applicative `ElceQuestionFacade` (`app/facades/question/`) pour transformer les
-gestes auteur en commandes documentaires envoyées au contrôleur XState. La
-création est insérée dans la position
-ordonnée de la page ; l’édition des réponses, du texte et de la référence média
-modifie le document par la même façade et les mêmes commandes. La vue Remix
-affiche le modèle et ne porte pas une copie de son état métier.
+Les vues auteur Learning et Quiz Hunt délèguent l’édition de Question à
+`ElceQuestionFacade` dans
+[`resources/bdcs/question/authoring/`](../src/resources/bdcs/question/authoring/)
+avant d’envoyer les commandes au contrôleur XState du mod courant. La façade
+reçoit un getter du contenu actuel, des callbacks typés de dispatch et
+d’import, et construit les commandes d’édition à partir de `QuestionContent` ;
+elle ne crée ni ne place le BDC. Learning conserve la limite d’une Question par
+page et son ordre d’insertion ; Quiz Hunt conserve la Question requise dans les
+pages des banques. Les règles de type et de réponse passent dans la ressource
+Question. La vue Remix affiche le modèle et ne porte pas une copie de son état
+métier.
 
 Le builder instancie le markup fixe du preset Question. Sa story autonome
 contient les persos CodPlay nécessaires : des `input` natifs, le bouton de
@@ -75,6 +89,11 @@ contrôles sont insérés directement dans leur conteneur sémantique ; la zone 
 validation est un commentaire après le `fieldset`, sans `div` intermédiaire.
 Les conteneurs de l’illustration et des réponses restent parce qu’ils portent
 leur cadrage et leur mise en page.
+
+Dans le lecteur, chaque réponse présente le contrôle de choix à gauche de son
+libellé, sur une même ligne. Le conteneur de rangée du lecteur est distinct de
+celui de l’éditeur afin que les règles de largeur des champs auteur ne puissent
+pas étirer le contrôle et repousser le libellé à la ligne.
 
 Dans le player, l’image de la Question utilise `object-fit: contain`, en Flux
 comme en Diapo. Le cadre Flux garde son rapport `4:3` ; en Diapo, le layout
@@ -122,31 +141,56 @@ le repère bas et la validation de la réponse ; la réponse peut être fausse.
 L’évaluation cumulative, lorsqu’elle existe, est un garde séparé du chapitre
 Évaluation sur sa dernière page. Elle n’est pas portée par chaque Question.
 
+Les sources de scènes Question mises en cache ne contiennent pas de réponse de
+consultation. Lorsqu’une composition démarre avec une réponse enregistrée,
+le scénario Sighty la transmet à la story Question lors du rafraîchissement
+de la page active. La story rétablit la sélection, les contrôles et le retour
+sans republier `elce:question:answered`. Les mêmes sources peuvent être
+réutilisées pour une autre réponse ou une remise à zéro. Les réponses saisies
+pendant la composition conservent le comportement de reset à la réadmission.
+Dans le lecteur preview, une réponse validée reste dans l’état de la session ;
+elle n’est pas envoyée au serveur et une nouvelle preview repart de son état
+test initial.
+
 ## Preuves
 
-- [`question-service.test.ts`](../src/domain/question/question-service.test.ts) vérifie
+- [`elce-player-composition.test.ts`](../src/mods/learning/reading/learning-player.test.ts)
+  vérifie en Flux et Diapo la réutilisation d’une source, la restitution de deux
+  réponses, leur suppression, l’absence de nouvelle validation et le seek.
+  Safari a aussi affiché une réponse enregistrée dans une preview réseau sur
+  une base temporaire ; ce contrôle ne couvre pas la réutilisation du cache.
+- [`popup-player-cache-integration.test.tsx`](../src/mods/learning/integration/learning-preview-session.test.tsx)
+  vérifie la validation Question et l’absence d’écriture serveur depuis la
+  preview. Safari MCP, le 27 octobre 2026, a confirmé l’affichage de la réponse,
+  son absence après réouverture et un état test serveur inchangé.
+
+- [`question-service.test.ts`](../src/resources/bdcs/question/domain/question-service.test.ts) vérifie
   les réponses par défaut, l’unicité de la réponse juste en Choix, au moins une
   réponse juste et plusieurs choix justes en Choix multiple, ainsi que l’ordre
   et la suppression des réponses.
 - [`document-commands.test.ts`](../src/domain/commands/document-commands.test.ts)
   vérifie la création d’une Question unique dans l’ordre de la page, les
   invariants de réponse, et la référence d’illustration.
-- [`controller-machine.test.ts`](../src/app/controller/controller-machine.test.ts)
+- [`controller-machine.test.ts`](../src/mods/learning/integration/controller-machine.test.ts)
   vérifie que le réimport d’une illustration identique depuis un autre nom de
   fichier rattache une seconde Question au même média et ne sauvegarde pas un
   second blob.
-- [`app-layout.test.tsx`](../src/app/layout/app-layout.test.tsx) exerce l’édition
+- [`learning-project-application.test.tsx`](../src/mods/learning/authoring/learning-project-application.test.tsx) exerce l’édition
   auteur à travers le contrôleur XState, le changement de type, l’énoncé, les
   marques de correction, le réordonnancement et la présence de l’icône Quiz
   ListChecks.
-- [`workspace/page-editor.test.tsx`](../src/app/remix/workspace/page-editor.test.tsx)
+- [`learning-page-editor.test.tsx`](../src/mods/learning/authoring/learning-page-editor.test.tsx)
   vérifie l’édition Question dans la page Remix de production ainsi que
   l’import d’une illustration par la file média XState existante.
+- [`quiz-hunt-controller.test.ts`](../src/mods/quiz-hunt/authoring/quiz-hunt-controller.test.ts)
+  vérifie les éditions Question successives, le changement de type, les
+  réponses, les médias et Undo/Redo par la façade Quiz Hunt, tout en protégeant
+  la Question requise de la banque.
 - Le 4 octobre, Safari MCP confirme qu’une page créée dans un chapitre
   Évaluation est une page Flux avec un BDC Question, et que la preview réelle
   CodPlay affiche cette Question avec ses réponses Oui/Non. La page et le
   chapitre temporaires du test ont été supprimés ensuite.
-- [`flux-scene-builder.test.ts`](../src/builders/flux/flux-scene-builder.test.ts)
+- [`flux-scene-builder.test.ts`](../src/mods/learning/integration/flux-scene-builder.test.ts)
   vérifie le preset, les zones et les persos produits par le builder ;
   [`scenario-builder.test.ts`](../src/builders/scenario/scenario-builder.test.ts)
   vérifie la progression de page et le garde d’évaluation.
@@ -160,11 +204,11 @@ L’évaluation cumulative, lorsqu’elle existe, est un garde séparé du chapi
   style et laisse l’image visible. La photo a bien été chargée depuis le
   serveur. Cette vérification précédait le cadrage `contain` et ne le valide
   pas visuellement.
-- [`card-preset-builder.test.ts`](../src/builders/card/card-preset-builder.test.ts)
+- [`card-preset-builder.test.ts`](../src/core/presets/card-preset-builder.test.ts)
   vérifie les cibles de zones par commentaires, la cible du prompt dans le
   `fieldset`, l’absence de conteneur de validation intermédiaire et l’omission
   des hôtes de titre/illustration facultatifs quand leur contenu est absent.
-- [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
+- [`elce-player-composition.test.ts`](../src/mods/learning/reading/learning-player.test.ts)
   valide les trois types dans CodPlay : aucune correction n’apparaît avant la
   validation, puis les états justes et faux se révèlent dans la liste.
 - Safari MCP vérifie dans le player réel une réponse Vrai/Faux fausse : avant
@@ -173,3 +217,15 @@ L’évaluation cumulative, lorsqu’elle existe, est un garde séparé du chapi
   La Question temporaire a ensuite été supprimée.
 - Le test du seuil cumulé dans le player réel reste ouvert dans le plan de
   construction.
+- [`card-preset-builder.test.ts`](../src/mods/learning/integration/card-preset-builder.test.ts)
+  vérifie que le texte du libellé n’est pas copié dans le markup du preset et
+  qu’il est fourni à l’unique Input de réponse. [`learning-page-editor.test.tsx`](../src/mods/learning/authoring/learning-page-editor.test.tsx)
+  vérifie que le champ de réponse n’est pas un éditeur inline et qu’une chaîne
+  `{{local-date:today}}` y reste du texte littéral. La réhydratation d’un ancien
+  document enrichi est vérifiée dans
+  [`learning-document.test.ts`](../src/mods/learning/document/learning-document.test.ts).
+  Le 2 novembre 2026, Brave sur la copie isolée « Test Elcé — liens et date »
+  confirme une seule occurrence de chaque réponse dans le Quiz et le contrôle
+  radio à gauche du libellé sur la même ligne. À 814 × 728 pixels, le contrôle
+  conserve sa largeur intrinsèque de 13 px ; l’éditeur et le lecteur gardent
+  des conteneurs de rangée distincts.

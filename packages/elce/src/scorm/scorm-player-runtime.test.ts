@@ -1,11 +1,11 @@
 /** @vitest-environment jsdom */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { PAGE_LOCATION } from '../config/document-config'
+import { PAGE_LOCATION } from '../mods/learning/organization/learning-page-placement'
 import { applyDocumentCommand, createDefaultPageCommand } from '../domain/commands/document-commands'
-import { createInitialDocument } from '../domain/document/document-model'
-import { INITIAL_PROJECT_TEST_STATE } from '../domain/summary-profile/test-state-types'
-import { createPlayerPreviewComposition } from '../app/player/player-preview'
+import { learningDocumentService } from '../mods/learning/document/learning-document-service'
+import { INITIAL_PROJECT_TEST_STATE } from '../mods/learning/reading/learning-test-state-types'
+import { learningPreviewService } from '../mods/learning/preview/learning-preview-service'
 import type { PipwerksScormApi } from '@codplay/sighty-scorm'
 import { encodeScormReaderState } from './scorm-state-codec'
 import { startScormPlayerRuntime } from './scorm-player-runtime'
@@ -61,7 +61,7 @@ describe('SCORM player runtime', () => {
       currentPageId: 'page-a',
       projectTestState: { ...INITIAL_PROJECT_TEST_STATE, finishedPageIds: ['page-a'] },
     }, '2004v4'))
-    const initial = createInitialDocument()
+    const initial = learningDocumentService.createInitialDocument()
     const pageCommand = createDefaultPageCommand(initial, { kind: PAGE_LOCATION.SCENARIO })
     const documentModel = applyDocumentCommand(initial, pageCommand)
     const stage = document.createElement('div')
@@ -88,8 +88,8 @@ describe('SCORM player runtime', () => {
     vi.stubGlobal('pipwerks', { SCORM: api })
     const stage = document.createElement('div')
     document.body.append(stage)
-    const preview = createPlayerPreviewComposition(stage, {
-      documentModel: createInitialDocument(),
+    const preview = learningPreviewService.createPlayer(stage, {
+      documentModel: learningDocumentService.createInitialDocument(),
       selectedPageId: null,
       mediaSources: {},
     })

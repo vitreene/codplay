@@ -277,7 +277,7 @@ class ScrollContainerObservationAdapter implements HtmlSourceAdapter {
       if (rules === undefined) continue
       for (const rule of rules.values()) {
         const visible = rule.declaration.zone?.trackVisibility !== true || isVisibleIntersectionEntry(entry)
-        const phase = entry.isIntersecting && visible ? 'inside' : 'outside'
+        const phase = isObservationInside(entry, rule, visible) ? 'inside' : 'outside'
         updates.push({ ruleId: rule.id, phase, ratio: entry.intersectionRatio })
       }
     }
@@ -421,4 +421,15 @@ function supportsIntersectionVisibility(): boolean {
 /** Checks IntersectionObserver's optional isVisible bit without retaining the native entry. */
 function isVisibleIntersectionEntry(entry: IntersectionObserverEntry): boolean {
   return 'isVisible' in entry && (entry as IntersectionObserverEntry & { isVisible?: boolean }).isVisible === true
+}
+
+/** Applies a numeric zone threshold to phase changes while arrays keep native sampling. */
+function isObservationInside(
+  entry: IntersectionObserverEntry,
+  rule: ScrollObservationRule,
+  visible: boolean,
+): boolean {
+  const threshold = rule.declaration.zone?.threshold
+  const phaseThreshold = typeof threshold === 'number' ? threshold : 0
+  return entry.isIntersecting && visible && entry.intersectionRatio >= phaseThreshold
 }

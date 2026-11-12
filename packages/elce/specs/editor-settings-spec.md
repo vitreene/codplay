@@ -35,6 +35,16 @@ projection :
   durée reste inférieure à celle du déplacement média. L’ouverture rétablit
   l’opacité à `1`. Ces réglages ne changent pas la transition `move` du média.
 
+Pour une Carte enfant de Carousel, les remplacements du placement s’appliquent
+aux valeurs héritées du parent, puis les valeurs locales non nulles de la
+Carte sont prioritaires. `revelation.byBdcId[cardId]` et
+`revelation.carouselsByBdcId[carouselId].entries[cardId]` portent les mêmes
+références effectives.
+
+La résolution de page reçoit `ContentPage` et `ResourceBdc`. Elle n’exige pas
+`LearningDocument` ni les champs d’organisation Learning ; une fixture avec une
+page et un BDC Section de ressource suffit à exercer l’héritage.
+
 Le résolveur décide des valeurs par défaut, priorités et conflits. Les builders
 reçoivent les réglages résolus et les projettent dans Sighty/CodPlay. Ils ne
 créent pas de nouveaux défauts de lecture. Une évolution de l’interface doit
@@ -48,8 +58,10 @@ Capsule résolues, sans second observateur. Une Carte sans média porte ses
 propres actions. La première mesure synchronise la phase sans animer une Carte
 déjà visible ; les passages suivants rejouent l’entrée et la sortie. La
 Section continue de gérer le placement de l’ancre. Le défaut des nouveaux
-projets est `swipe-right` pour les deux directions ; les références persistées
-et leurs remplacements restent prioritaires. Les anciens tweens image
+projets vient uniquement de `ELCE_EDITOR_SETTINGS.revelation.projectDefaults`
+et vaut `swipe-right` pour les deux directions ; le Carousel n’ajoute pas de
+défaut concurrent. Les références persistées et leurs remplacements restent
+prioritaires. Les anciens tweens image
 supplémentaires et l’opacité fixe `0.92` ne sont plus appliqués aux Cartes.
 L’illustration image d’une Question conserve sa propre entrée configurée.
 
@@ -59,14 +71,11 @@ elles ne sont pas recopiées comme réglages locaux dans les builders.
 
 ## Preuves
 
-- [`editor-settings-resolver.test.ts`](../src/domain/editor-settings/editor-settings-resolver.test.ts)
-  couvre l’héritage projet → parent → Carousel → entrée et vérifie la remise des
-  réglages player groupés.
 - [`flux-scene-builder.test.ts`](../src/builders/flux/flux-scene-builder.test.ts)
   vérifie les zones vidéo et fin de page, les événements de visibilité portés
   par la Carte et les actions Capsule portées par son média ou par sa racine
   lorsqu’elle n’a pas de média.
-- [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
+- [`elce-player-composition.test.ts`](../src/mods/learning/reading/learning-player.test.ts)
   vérifie la première mesure stable, l’entrée après une mesure extérieure et le
   rejeu des transitions dans les deux sens dans la composition réelle.
 - [`diapo-scene-builder.test.ts`](../src/builders/diapo/diapo-scene-builder.test.ts)

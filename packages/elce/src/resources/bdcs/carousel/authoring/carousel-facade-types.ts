@@ -1,0 +1,57 @@
+import type { AppearanceTarget } from '../../../../domain/appearance/appearance-target-types'
+import type { CardCommand } from '../../card/authoring/card-command-types'
+import type { CarouselCommand } from './carousel-command-types'
+import type { StatisticalGraphCommand } from '../../statistical-graph/authoring/statistical-graph-command-types'
+import type { CarouselPlaybackMode } from '../carousel-config'
+import type { CarouselTransition } from '../../../revelation/revelation-types'
+import type { MediaType } from '../../../../core/media/media-config'
+import type { CarouselAspectRatio, CarouselContent } from '../domain/carousel-types'
+import type { ResourceBdc } from '../../../document/resource-document-types'
+import type { CardContent } from '../../card/domain/card-types'
+import type { ElceCardEditorActions } from '../../card/authoring/card-facade-types'
+import type { ElceMediaImport } from '../../../../domain/media/media-resource-types'
+import type { StatisticalGraphContent } from '../../statistical-graph/domain/statistical-graph-types'
+import type { StatisticalGraphEditorActions } from '../../statistical-graph/authoring/statistical-graph-facade-types'
+import type { ResourceTextFieldFeature } from '../../../../core/authoring/resource-text-field-feature'
+
+export interface ElceCarouselFacadeOptions {
+  readonly dispatch: (command: CardCommand | CarouselCommand | StatisticalGraphCommand) => void
+  readonly getCard: (bdcId: string) => CardContent | null
+  readonly selectCard: (bdcId: string | null) => void
+  readonly importMedia: (bdcId: string, mediaImport: ElceMediaImport) => void
+}
+
+export interface ElceCarouselEditorActions extends ElceCardEditorActions {
+  readonly selectCard: (bdcId: string) => void
+  readonly addCard: () => void
+  readonly addList: () => void
+  readonly addStatisticalGraph: () => void
+  readonly removeCard: (bdcId: string, selectedBdcId: string | null) => void
+  readonly removeStatisticalGraph: (bdcId: string, selectedBdcId: string | null) => void
+  readonly moveCard: (bdcId: string, index: number) => void
+  readonly setDefaultViewDurationSeconds: (seconds: number) => void
+  readonly setPlaybackMode: (mode: CarouselPlaybackMode) => void
+  readonly setRepeatCount: (repeatCount: number) => void
+  readonly setAspectRatio: (aspectRatio: CarouselAspectRatio) => void
+  readonly setTransition: (transition: CarouselTransition) => void
+  readonly transitionPreset: CarouselTransition | null
+  readonly setCardDurationSeconds: (bdcId: string, seconds: number | null) => void
+  readonly importMediaFiles: (bdcId: string, files: readonly File[]) => void
+  readonly deleteCarousel: () => void
+}
+
+export interface ElceCarouselEditorProps {
+  readonly avatar?: ResourceBdc
+  readonly onAssociateWord?: (cardBdcId: string, avatarBdcId: string, wordIndex: number, startAtMs: number) => void
+  readonly onReturnBdcToCatalog: (bdcId: string) => void
+  readonly bdcId: string
+  readonly content: CarouselContent
+  readonly bdcs: readonly ResourceBdc[]
+  readonly selectedCardBdcId: string | null
+  readonly onOpenAppearanceTarget: (target: AppearanceTarget, triggerId: string) => void
+  readonly mediaById: Readonly<Record<string, Readonly<{ name: string; type: MediaType; source: string | null }>>>
+  readonly textFieldAttributes?: Readonly<Record<string, string>>
+  readonly textFieldFeature?: ResourceTextFieldFeature
+  readonly createStatisticalGraphActions: (bdcId: string, content: StatisticalGraphContent) => StatisticalGraphEditorActions
+  readonly actions: ElceCarouselEditorActions
+}

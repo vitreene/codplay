@@ -11,4 +11,4 @@ export {
   resetQuestionScene,
   saveProfileValuesAction,
   submitProfileAction,
-} from './scenario-builder'
+} from '../../mods/learning/reading/learning-scenario-actions'

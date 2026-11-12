@@ -54,9 +54,10 @@ message ajoutent respectivement les rôles `elce-card__overline` et
 `elce-card__message` ; les classes `elce-card__description` et
 `elce-card__caption` servent aussi aux styles de l’aperçu auteur. Les zones
 restent distinguées par leurs `data-part` et identifiants, pas par des classes
-spécifiques à chaque preset. Leurs définitions communes sont dans
-[`presets.ts`](../src/config/presets.ts), avec la vérification dans
-[`card-preset-builder.test.ts`](../src/builders/card/card-preset-builder.test.ts).
+spécifiques à chaque preset. Leurs définitions Carte sont dans
+[`card-presets.ts`](../src/resources/bdcs/card/card-presets.ts), avec la
+vérification dans
+[`card-preset-builder.test.ts`](../src/core/presets/card-preset-builder.test.ts).
 Ces règles s’appliquent au texte documentaire des BDC et au titre de page ;
 aucun contrôle auteur de largeur ou de taille n’est ajouté. Les déclarations
 restent en unités relatives. La calibration visuelle des fontes, contenus et
@@ -112,6 +113,12 @@ libellé d’origine. Chaque contrôle montre sa valeur effective ; son action
 aux pages et BDC descendants, sauf exception locale, et le reset rétablit la
 valeur de l’ancêtre.
 
+`resolveAppearance` et `resolveAppearanceContrastContext` reçoivent
+`ResourceDocumentData` et une cible. Ils résolvent la même cascade sans dépendre
+de `LearningDocument` ;
+[`appearance-resolver.test.ts`](../src/domain/appearance/appearance-resolver.test.ts)
+le vérifie avec une vue de données de ressource.
+
 Une couleur peut référencer un rôle sémantique d’une palette ou conserver une
 valeur personnalisée fixe. Le fond n’enregistre pas `transparent` : le choix
 Transparent sélectionne `density: 'none'` et rend le fond transparent. Le
@@ -148,10 +155,24 @@ Le champ Fond propose les trois dégradés sur les Cartes. Pour le layout Titre
 sur image, Couleur du texte et Contraste auto sont masqués : le traitement fixe
 du titre les remplace.
 
+Les couleurs du fond et du texte pilotent le rendu documentaire. Les champs
+et les surfaces de l’éditeur conservent leur habillage d’interface.
+Le picker natif transmet `input` et `change` à la même commande d’apparence ;
+une valeur déjà transmise par `input` n’ajoute pas un second geste à l’arrivée
+de `change`. La réinitialisation retire l’exception locale et retrouve la
+valeur héritée, sans modifier les autres cibles.
+L’ajout d’une couleur à la palette du projet utilise le bouton d’icône
+secondaire commun et l’icône Plus. Les cases Cadre, Transparent et Contraste
+auto partagent la même présentation : ligne flex, case de `1rem`, marge nulle
+et couleur d’accent auteur commune.
+
 Une icône Palette ouvre le style du projet depuis l’en-tête Scénario. Chaque
 page et BDC possède son bouton de style accessible ; dans l’en-tête d’un BDC,
 il est placé à côté de la corbeille et reprend le gabarit d’icône standard.
-Les commandes sont reliées au même contrôleur XState et à ses changements
+Tous ces boutons partagent la classe `.elce-appearance-trigger` et gardent la
+même taille carrée (`1.7rem`) ainsi qu’une icône fixe de `0.75rem`, quelle que
+soit leur cible. Les classes de placement ne modifient pas leur taille. Les
+commandes sont reliées au même contrôleur XState et à ses changements
 documentaires.
 
 ## Projection sur les scènes
@@ -235,7 +256,7 @@ inchangées.
 
 La preview ne rajoute ni marge ni bord autour de `.elce-player-stage`, règle
 portée par [`app-layout.css`](../src/app/layout/app-layout.css) et
-[`popup-player.css`](../src/app/player/popup-player.css) : son cadre fait partie
+[`popup-player.css`](../src/core/preview/popup-player.css) : son cadre fait partie
 de la surface auteur. Le slot `.elce-player-layout__content`, stylé dans
 [`elce-player-style.ts`](../src/player/elce-player-style.ts), conserve toujours
 `1rem` de padding intérieur, y compris sur fond transparent.
@@ -370,7 +391,7 @@ nécessaires et leurs licences dans le package ; la feuille exportée utilise
 - [`elce-local-server.test.ts`](../src/server/elce-local-server.test.ts)
   vérifie le routage des `.ttf` et le rejet des chemins invalides ; le test de
   l’exporteur vérifie l’inclusion des fontes et licences utilisées.
-- [`elce-scenario-exporter.test.ts`](../src/export/elce-scenario-exporter.test.ts)
+- [`learning-scenario-exporter.test.ts`](../src/mods/learning/persistence/server/learning-scenario-exporter.test.ts)
   vérifie que les feuilles CSS de thème utilisées sont présentes dans le CSS
   scoped du layout exporté et que les feuilles inutilisées en sont absentes. Le
   scénario Carte exporté vérifie aussi le titre, l’image, le dégradé généré et

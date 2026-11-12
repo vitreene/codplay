@@ -33,13 +33,15 @@ dépôt pour créer ou rejoindre un chapitre parent.
 
 ## Contrat
 
-Dans le bandeau du Scénario, les quatre actions de création affichent un
-libellé sous l’icône : « Chapitre », « Éval. », « Page » et « Diapo ». Les
-actions Page et Diapo intégrées aux lignes de chapitre restent iconographiques,
-avec nom accessible et infobulle complets. Les boutons de création du bandeau
-sont regroupés côte à côte ; les pages racine restent sous cet en-tête, sans
-second titre « Pages à la racine ». La
-création d’un chapitre Évaluation passe le type au constructeur de commande
+Le bandeau du Scénario regroupe le bouton « + », la Corbeille et le Catalogue ;
+le réglage de style du projet reste à droite. « + » ouvre à sa droite un menu
+flottant avec les quatre créations existantes — Chapitre, Page, Diapo et
+Évaluation — dont les commandes gardent leur nom accessible et leur infobulle.
+Un clic à l’extérieur ferme le menu, y compris sur une autre commande flottante.
+Le menu ne déplace pas les contrôles de la rangée. Les actions Page et Diapo
+intégrées aux lignes de chapitre restent iconographiques. Les pages racine
+restent sous l’en-tête, sans second titre « Pages à la racine ». La création
+d’un chapitre Évaluation passe le type au constructeur de commande
 documentaire, qui applique le seuil par défaut configuré de 80 %. Les deux
 types de chapitre et les pages sont créés par les commandes XState existantes.
 Chaque bouton de page envoie
@@ -49,9 +51,17 @@ chapitre l’ajoute à ce chapitre avec le type indiqué. Aucune création ne
 choisit implicitement le premier chapitre. Sans nom fourni, la page reçoit le
 prochain nom automatique et devient la page sélectionnée.
 
+Le 8 novembre 2026, Safari MCP sur Projet 3 confirme les commandes, le menu et
+sa fermeture lorsqu’un clic vise le rail de page. Les comportements de dépôt
+dans Corbeille et Catalogue restent à valider dans le plan actif.
+
 Les listes des chapitres et des pages n’affichent pas de puces. Leur texte est
-plus petit que le titre « Scénario » ; la corbeille compacte reste au bord droit
-de chaque ligne. Les pages gardent un léger retrait sous leur chapitre.
+plus petit que le titre « Scénario » ; les pages n’ont pas de corbeille répétée
+sur chaque ligne. La rangée du titre Scénario porte les commandes Ajouter,
+Corbeille et Catalogue. Une page peut être déplacée au Catalogue en la faisant
+glisser sur cette cible, ou supprimée en la déposant dans la Corbeille. Les
+chapitres vides gardent leur corbeille sur la ligne ; un chapitre non vide ne
+peut être supprimé. Les pages gardent un léger retrait sous leur chapitre.
 
 Dans une ligne de chapitre, la poignée et l’icône du type précèdent le nom,
 qui s’aligne à gauche et occupe l’espace disponible ; les actions restent à
@@ -73,6 +83,8 @@ chapitre. Si la page appartient à un chapitre, son titre éditable apparaît
 au-dessus du titre de page, avec un espacement net entre les deux. L’icône de
 type de chapitre et son nom éditable partagent la même ligne. Une page à la
 racine du scénario ou dans le catalogue n’affiche pas de titre de chapitre.
+À côté du titre, le bouton de style de la page la cible dans le panneau droit
+et ouvre l’onglet « Style ».
 
 Cliquer le nom ou l’icône d’un chapitre sélectionne ce chapitre dans l’état
 XState et remplace le contenu central par sa vue de réglages. Pour un chapitre
@@ -92,6 +104,67 @@ de retour par BDC n’est affiché dans la colonne. Les médias réutilisables
 restent dans leur onglet distinct. Le retour d’une Carte ancrée continue
 d’utiliser le circuit d’ancre.
 
+Le rail de navigation des BDC directs de la page se termine par « Ajouter un
+contenu ». Son menu réutilise les créations disponibles et se ferme au clic
+extérieur, y compris si le clic ouvre une autre commande flottante. Les deux
+mods installent le comportement commun de
+[`installOutsideMenuDismissal`](../src/core/authoring/menus/outside-menu-dismissal.ts)
+sur la racine dynamique de la page ; le listener est retiré au démontage et
+le menu de l’ancienne page disparaît lors d’un changement de page. Un clic
+dans le menu exécute toujours sa commande. La fermeture après création reste
+propre au mod : Learning ferme après la création ; Quiz Hunt laisse le menu
+ouvert après l’ajout d’un bloc Texte.
+
+Le 9 novembre 2026, Safari Technology Preview vérifie dans Learning l’ajout
+d’une vue Carte depuis le Carousel, les clics extérieur et concurrent, ainsi
+que les menus Projet et Scénario. Dans Quiz Hunt, il vérifie l’ajout d’un bloc
+Texte, le clic extérieur, l’ouverture du sélecteur Projet, le changement de
+page puis le rechargement avec le menu fermé. Quand il est ouvert, le menu reste
+au premier plan au-dessus des en-têtes et barres d’outils collants des BDC, y
+compris la barre de mise en forme d’une Section.
+
+### Cadres des BDC directs
+
+Chaque BDC direct de la page est rendu dans son propre `.elce-page-bdc` :
+fond clair, bordure pleine, coins arrondis et `1rem` d’espace intérieur. Le
+conteneur commun porte l’unique cadre extérieur ; la racine de l’éditeur BDC
+direct perd son fond, sa bordure, son arrondi et son padding propres pour éviter
+un double cadre. Cela couvre Section, Question, Résultat, Carousel, Carte
+(dont Avatar) et Graphe. Les éditeurs imbriqués, comme les Cartes d’un Carousel,
+gardent leur style intérieur. Les séparateurs d’insertion restent les cibles
+de déplacement entre les cadres.
+
+Le 8 novembre 2026, Safari MCP sur Projet 3 confirme sur les BDC Avatar et
+Carousel les dimensions calculées du conteneur : padding de `16px`, bordure
+pleine de `1px` couleur `#d9d4c9`, coins de `6.4px` et fond `#fffdf8`. À 800 px
+et 1139 px, les cadres gardent leur largeur disponible et le document ne
+déborde pas horizontalement. L’outil de capture Safari MCP a renvoyé une image
+entièrement vide ; la vérification porte donc sur le DOM et les styles
+calculés, pas sur une inspection visuelle de la capture.
+
+Les règles de l’arborescence Scénario partagée appartiennent à
+[`scenario-tree.css`](../src/core/authoring/layout/scenario-tree.css) ; le
+titre, le rail, les cadres et le menu d’ajout de BDC appartiennent à
+[`page-editor-view.css`](../src/core/authoring/page/page-editor-view.css).
+`learning-workspace.css` garde les adaptations Learning et
+`quiz-hunt-authoring.css` garde les espacements propres à Quiz Hunt. Un document
+chargé directement ne reçoit que la feuille de son mod, les feuilles core et
+les feuilles de ressources ; le sélecteur `/` ou `/new` reçoit les deux feuilles
+de mod car le choix se fait dans le navigateur.
+
+Le 9 novembre 2026, Safari Technology Preview vérifie l’interface des deux
+mods sur des documents temporaires isolés. La page Quiz Hunt garde ses commandes
+de scénario et le même cadre central et rail BDC que Learning. Le calcul des
+styles confirme à 1201 px le cadre central de `561 × 544 px`, l’écart intérieur
+de `16 px`, la grille BDC de `519 px` avec un écart de `3.2 × 20 px`, et le rail
+de `32 px`. Quiz Hunt garde ses écarts propres pour les lignes de page. À 800,
+801, 1200 et 1201 px, son arborescence et la grille centrale suivent les seuils
+établis. Une requête HTML directe finale sur la route Quiz Hunt, après le
+retrait des feuilles d’apparence Learning, confirme qu’elles ne sont pas
+chargées ; la sélection de ces feuilles est aussi couverte par
+[`elce-local-server.test.ts`](../src/server/elce-local-server.test.ts). Les
+documents temporaires et le serveur isolé ont été supprimés après le contrôle.
+
 L’onglet « Profil » apparaît quand un champ textuel compatible a le focus et que
 le document contient des propriétés de profil. Il contient l’unique contrôle
 d’insertion ; la sélection d’un autre contexte le retire. Les champs simples et
@@ -99,24 +172,29 @@ la Section Tiptap insèrent la référence stable de la propriété dans leur fo
 respectif. Le bouton « Sommaire » du Scénario ouvre les réglages du Sommaire et
 du profil et utilise la même icône que « Test auteur » dans la popup de preview.
 
-À 1200 px et moins, la colonne « Contenus » est masquée et son bouton iconique
-sans fond ni contour apparaît au bord droit de la zone centrale.
-L’ouverture ajoute la colonne de contenus à droite et réduit la zone centrale,
-qui reste visible. À 800 px et moins, les deux panneaux latéraux sont masqués
-au départ ; leurs commandes iconiques sans fond ni contour encadrent la zone
-centrale. Ouvrir Scénario ajoute sa colonne à gauche ; ouvrir Contenus ajoute sa
-colonne à droite. Un seul panneau latéral peut être ouvert à la fois.
-Les commandes restent de vrais boutons accessibles, avec un nom décrivant
-l’action, `aria-expanded` et `aria-controls` ; Échap ferme le panneau et rend le
-focus à sa commande. Les panneaux occupent la grille et ne recouvrent pas la page
-centrale. Aucune surcouche ne masque la page ni ne piège le focus.
+Chaque colonne latérale peut être réduite indépendamment. La commande porte le
+nom accessible « Réduire le panneau Scénario » ou « Réduire le panneau
+Contenus » et utilise l’icône Lucide de repli du côté concerné (`PanelLeftClose`
+ou `PanelRightClose`). Dans les deux panneaux, la commande occupe la même
+position en haut à droite, au contact du bord du conteneur et au-dessus du
+contenu. Celle de Contenus reste dans sa rangée au-dessus des onglets.
+Après réduction, la commande de réouverture apparaît dans la barre d’actions, à
+gauche de « Prévisualiser » pour Scénario et à droite pour Contenus. Réduire une
+colonne rend sa largeur à la zone centrale et laisse l’autre colonne en place.
+Les panneaux restent dans la grille et ne recouvrent pas la page centrale.
 
-Entre 801 et 1200 px, Scénario reste dans la colonne gauche ; lorsque le panneau
-Contenus est ouvert, les trois colonnes restent côte à côte. À 800 px
-et moins, le panneau ouvert et la zone centrale occupent chacun une colonne ;
-quand les deux panneaux sont fermés, la zone centrale occupe toute la largeur.
-Au-delà de 1200 px, les trois colonnes restent visibles et les commandes
-responsive disparaissent. Le bandeau affiche uniquement le nom « Elcé ».
+À 1200 px et moins, Contenus est fermé par défaut et son bouton de réouverture
+apparaît au bord droit de la zone centrale. Entre 801 et 1200 px, Scénario reste
+à gauche ; Contenus peut s’ouvrir à droite, les trois colonnes restant côte à
+côte. À 800 px et moins, les deux panneaux sont fermés par défaut ; leurs
+boutons encadrent la zone centrale et un seul panneau peut être ouvert à la
+fois. Le panneau ouvert et la zone centrale partagent la largeur disponible ;
+quand les deux panneaux sont fermés, le centre utilise toute la largeur.
+
+Les commandes restent de vrais boutons accessibles, avec un nom décrivant
+l’action, `aria-expanded` et `aria-controls`. Entrée ou Espace active la
+commande ; Échap réduit le panneau et rend le focus à son bouton de réouverture.
+Le bandeau affiche uniquement le nom « Elcé ».
 
 La barre de commandes située au-dessus de la zone centrale garde « Prévisualiser »
 à toutes les largeurs. Les commandes des panneaux partagent cette barre quand
@@ -126,15 +204,27 @@ Prévisualiser au milieu et Contenus à droite ; entre 801 et
 Au-delà de 1200 px, seul
 « Prévisualiser » reste dans cette barre, les deux panneaux étant visibles.
 L’erreur d’ouverture de la fenêtre de lecture y reste annoncée avec `role="alert"`.
-Le bouton continue d’appeler la même action de preview du workspace.
+Le bouton continue d’appeler la même action de preview du workspace, affiche une
+icône Œil à côté de son libellé et a la même hauteur minimale de 2,25 rem que le
+bouton Catalogue adjacent. Le 8 novembre 2026, Safari MCP sur Projet 3 confirme
+une hauteur calculée de 36 px pour chacun. Une marge basse de `0.5rem` sépare
+cette rangée du contenu central. Safari MCP mesure 8 px entre le bas de la barre
+et le haut de la page à 800 px et à 1139 px, sans débordement horizontal à
+800 px.
 
-La barre d’ajout de page affiche les libellés « Texte », « Quiz »,
+La barre d’ajout de page est rendue dans
+`#elce-remix-page-editor-host-container`, hors de `#elce-work-area` et avant
+celui-ci dans `#elce-page-editor-layout`. Elle affiche les libellés « Texte »,
+« Quiz »,
 « Carousel », « Carte » et « Graphe » sous leurs icônes. Le nom accessible et
-l’infobulle de chaque bouton gardent la description complète. Le bouton Quiz
-utilise ListChecks, sans point d’interrogation. La Question reste unique par
-page ; après son ajout, son bouton est désactivé. Une page créée dans un
-chapitre Évaluation reçoit déjà son BDC Question initial ; une page d’un
-chapitre standard reçoit un BDC Section.
+l’infobulle de chaque bouton gardent la description complète. Ces commandes
+conservent leurs actions ; au repos, elles n’ont ni fond ni contour et gardent
+un padding de `0.5rem`. Au survol, les boutons actifs reçoivent un fond clair.
+Le bouton Quiz utilise ListChecks, sans point
+d’interrogation. La Question reste unique par page ; après son ajout, son
+bouton est désactivé. Une page créée dans un chapitre Évaluation reçoit déjà
+son BDC Question initial ; une page d’un chapitre standard reçoit un BDC
+Section.
 
 Sur une page Flux d’un chapitre Évaluation, une icône BadgeCheck ajoute à la
 même séquence un BDC Résultat qui regroupe les branches Réussite et Échec.
@@ -149,13 +239,29 @@ supprimer leur BDC de la page. Supprimer une Section supprime aussi les Cartes
 ancrées qui lui appartiennent, sans supprimer les ressources média. Si la
 page devient vide, la barre permet toujours de créer Texte ou Quiz.
 
-Les champs de titre gardent leur saisie dans le DOM pendant l’édition. Le
-changement est envoyé au contrôleur XState à la perte de focus ou avec Entrée,
-par `document.apply` et la commande `page.rename` ou `chapter.rename`. Les
-espaces de bord sont retirés ; si le nom est vide, l’ancienne valeur est remise
-dans le champ et aucune commande n’est envoyée. Le modèle met à jour son nom
-sans changer les identifiants, l’ordre, l’affectation ou les BDC. La liste à
-gauche lit les noms actualisés depuis le document détenu par XState.
+Les champs de titre envoient au contrôleur XState chaque nouvelle valeur non
+vide pendant la saisie, par `document.apply` et la commande `page.rename` ou
+`chapter.rename`. La liste du Scénario lit le nom actualisé depuis le document
+détenu par XState. Avec la Preview synchronisée, son titre de page ou son
+sommaire reçoit aussi les changements immédiatement, sans changer la page
+affichée. Les frappes d’un même champ forment une seule étape d’historique.
+
+Un espace final reste provisoirement dans le champ pendant que l’auteur
+continue sa saisie ; il est envoyé avec le mot suivant ou normalisé au blur.
+Les espaces de bord sont retirés au blur. Si le brouillon est vide ou composé
+d’espaces, le champ retrouve sa dernière valeur valide et aucune commande de
+renommage n’est envoyée. Le modèle met à jour son nom sans changer les
+identifiants, l’ordre, l’affectation ou les BDC.
+
+Le champ natif partagé de Learning est un composant Remix identifié par l’ID
+du champ. Il possède le brouillon non validé et actualise sa valeur contrôlée
+depuis son gestionnaire `input`, avant la restauration contrôlée de Remix.
+Une nouvelle valeur du modèle remplace ce brouillon ; un changement d’ID crée
+une nouvelle instance. La valeur modèle est aussi portée par `defaultValue`
+pour que l’historique reconnaisse un titre encore saisi. L’écouteur `input` de
+l’application actualise la disponibilité d’Annuler ; la saisie possède son
+propre rendu local. La promotion d’un texte natif en texte enrichi conserve
+les callbacks et la sélection du circuit d’étiquettes existant.
 
 Dans Remix, `ProjectApplication` compose le Scénario, les réglages centraux du
 chapitre, le catalogue et `RemixPageEditor` depuis le sélecteur
@@ -208,10 +314,29 @@ séparées.
   panneau ouvert prend sa propre colonne (137/205 px pour Scénario,
   205/137 px pour Contenus). Échap ferme le panneau et rend le
   focus au bouton. Le document ne déborde pas horizontalement.
+- Le 2 novembre 2026, Brave vérifie la réduction indépendante à 1280 px : chaque
+  réduction agrandit le centre de 640 à 944 px sans déplacer l’autre panneau.
+  À 800 px, les deux panneaux sont fermés par défaut ; ouvrir Contenus après
+  Scénario referme Scénario, et le document reste à 800 px sans débordement.
+  À 855 px, Entrée ouvre Contenus et place le focus sur sa commande de réduction ;
+  Échap le réduit et rend le focus à sa commande de réouverture. Le module
+  `workspace-panel-state.ts` et son contrôle sont servis sans 404. À 855 px avec
+  Scénario ouvert, Contenus reste dans la colonne de droite malgré le bouton
+  Scénario masqué ; Prévisualiser demeure centré. À 780 px, les trois commandes
+  restent respectivement à gauche, au centre et à droite ; à 1280 px, la preview
+  reste centrée lorsque les deux commandes latérales sont masquées.
+- Le 2 novembre 2026, Brave confirme que le bouton de style adjacent au titre
+  d’une page cible cette page et ouvre l’onglet « Style » du panneau droit.
+- Le 2 novembre 2026, Brave vérifie les commandes « Réduire le panneau
+  Scénario » et « Réduire le panneau Contenus », leurs icônes de repli latérales
+  et leur alignement au même coin supérieur droit, contre le bord du conteneur,
+  à 855 px. Dans Contenus, la commande est dans une rangée au-dessus des onglets.
+  Réduire puis rouvrir chaque panneau met à jour son état et restitue le focus à
+  la commande correspondante.
 - [`remix-section-production.test.tsx`](../src/app/editor/section/remix-section-production.test.tsx)
   vérifie l’édition Section et les parcours d’ancre/média dans le page editor
   de production.
-- [`controller-machine.test.ts`](../src/app/controller/controller-machine.test.ts)
+- [`controller-machine.test.ts`](../src/mods/learning/integration/controller-machine.test.ts)
   vérifie que l’événement `page.create` conserve le placement explicitement
   demandé et sélectionne la page produite, et que la sélection de chapitre
   passe par le contrôleur puis se ferme lors de la sélection d’une page.
@@ -278,6 +403,16 @@ séparées.
   tentatives illimitées et la reprise de toutes les questions. Le projet de
   validation est supprimé ensuite.
 - À 1408 px, les trois colonnes restent visibles.
+- [`learning-project-application.test.tsx`](../src/mods/learning/authoring/learning-project-application.test.tsx)
+  vérifie qu’un titre de page met à jour le modèle et la ligne du Scénario
+  pendant la saisie, qu’un brouillon vide ne renomme pas le modèle, que le blur
+  restaure la valeur valide et qu’une Annuler regroupe les frappes en une
+  étape. [`chapter-settings.test.tsx`](../src/mods/learning/authoring/chapter-settings.test.tsx)
+  vérifie la mise à jour immédiate du titre de chapitre. Le 2 novembre 2026,
+  Brave sur la copie isolée confirme que les titres de page et de chapitre se
+  reflètent immédiatement dans la Preview synchronisée et le sommaire, que la
+  page affichée reste la même et que les brouillons vides sont restaurés au
+  blur.
 - Le 4 octobre, Safari MCP a sélectionné une page Flux d’Évaluation, ajouté le
   BDC Résultat avec son icône BadgeCheck puis supprimé le bloc temporaire depuis
   sa corbeille. Le retrait a conservé la séquence précédente de la page.

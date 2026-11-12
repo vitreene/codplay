@@ -3,10 +3,11 @@ import { mkdir } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createAssetServer } from 'remix/assets'
-import { uiHmr } from 'remix/ui-hmr/assets'
+import { componentHmr } from 'remix/component-hmr/assets'
 import { createRouter } from 'remix/router'
 import { createRequestListener } from 'remix/node-fetch-server'
 import { DEFAULT_ELCE_API_ORIGIN, ELCE_API_PORT } from '../config/api-config'
+import { resolveElceAuthoringLocation } from '../app/remix/elce-authoring-routes'
 import { createElceHttpServer } from './elce-http-server'
 import { createJsonModuleLoader } from './json-assets/json-module-loader'
 
@@ -14,15 +15,64 @@ const ELCE_PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../.
 const MONOREPO_ROOT = resolve(ELCE_PACKAGE_ROOT, '../..')
 const ASSET_BASE_PATH = '/assets'
 const FONT_BASE_PATH = '/fonts'
+const LOCAL_API_PROBE_ORIGIN = 'http://localhost:5175'
 const BROWSER_ENTRY = 'packages/elce/src/app/remix/browser-entry.tsx'
-const STYLE_FILES = [
+const SHARED_STYLE_FILES = [
+  'packages/elce/src/core/authoring/layout/project-application.css',
+  'packages/elce/src/core/authoring/layout/editor-frame.css',
   'packages/elce/src/app/layout/app-layout.css',
-  'packages/elce/src/app/appearance/appearance-panel.css',
-  'packages/elce/src/app/editor/card/card-editor.css',
-  'packages/elce/src/app/editor/carousel/carousel-editor.css',
-  'packages/elce/src/app/editor/statistical-graph/statistical-graph.css',
-  'packages/elce/src/app/player/popup-player.css',
+  'packages/elce/src/core/authoring/layout/scenario-tree.css',
+  'packages/elce/src/core/authoring/page/page-editor-view.css',
 ] as const
+
+const MOD_STYLE_FILES = {
+  learning: ['packages/elce/src/mods/learning/authoring/learning-workspace.css'],
+  'quiz-hunt': ['packages/elce/src/mods/quiz-hunt/authoring/quiz-hunt-authoring.css'],
+} as const
+
+const SHARED_RESOURCE_STYLE_FILES = [
+  'packages/elce/src/resources/bdcs/question/authoring/question-editor.css',
+  'packages/elce/src/core/authoring/media/media-picker.css',
+  'packages/elce/src/resources/bdcs/section/authoring/section-editor.css',
+  'packages/elce/src/core/authoring/appearance-trigger.css',
+] as const
+
+const LEARNING_STYLE_FILES = ['packages/elce/src/mods/learning/authoring/learning-appearance-panel.css'] as const
+
+const RESOURCE_STYLE_FILES = [
+  'packages/elce/src/resources/list/authoring/list-editor.css',
+  'packages/elce/src/resources/bdcs/card/authoring/card-editor.css',
+  'packages/elce/src/resources/bdcs/avatar/authoring/avatar-editor.css',
+  'packages/elce/src/resources/bdcs/carousel/authoring/carousel-editor.css',
+  'packages/elce/src/resources/bdcs/statistical-graph/authoring/statistical-graph.css',
+  'packages/elce/src/core/preview/popup-player.css',
+] as const
+
+const STYLE_FILES = [
+  ...SHARED_STYLE_FILES,
+  ...MOD_STYLE_FILES.learning,
+  ...MOD_STYLE_FILES['quiz-hunt'],
+  ...SHARED_RESOURCE_STYLE_FILES,
+  ...LEARNING_STYLE_FILES,
+  ...RESOURCE_STYLE_FILES,
+] as const
+
+/** Selects shared and mod-specific stylesheets for the requested authoring route. */
+export function authoringStyleFiles(pathname: string): readonly string[] {
+  const location = resolveElceAuthoringLocation(pathname)
+  const selectedMod = location.kind === 'document' ? location.mod : null
+  const modStyleFiles = selectedMod === null
+    ? [...MOD_STYLE_FILES.learning, ...MOD_STYLE_FILES['quiz-hunt']]
+    : MOD_STYLE_FILES[selectedMod]
+  const learningStyleFiles = selectedMod === null || selectedMod === 'learning' ? LEARNING_STYLE_FILES : []
+  return [
+    ...SHARED_STYLE_FILES,
+    ...modStyleFiles,
+    ...SHARED_RESOURCE_STYLE_FILES,
+    ...learningStyleFiles,
+    ...RESOURCE_STYLE_FILES,
+  ]
+}
 
 const BROWSER_PACKAGES = [
   'remix',
@@ -30,6 +80,9 @@ const BROWSER_PACKAGES = [
   'codplay',
   '@codplay/sighty',
   '@codplay/component-v2',
+  '@rive-app/canvas-advanced-single',
+  '@codplay/story',
+  '@codplay/remote',
   '@codplay/capsule-automation',
   '@codplay/exclusive-sync',
   '@codplay/scene-factory',
@@ -72,6 +125,7 @@ export async function startElceLocalServer(): Promise<ElceLocalServer> {
     'packages/codplay/src/**',
     'packages/sighty/src/**',
     'packages/authoring/component-v2/src/**',
+    'packages/authoring/audio-capture/src/**',
     'packages/authoring/scene-factory/src/**',
     'packages/authoring/capsule-automation/src/**',
     'packages/authoring/exclusive-sync/src/**',
@@ -86,14 +140,34 @@ export async function startElceLocalServer(): Promise<ElceLocalServer> {
       codplay: 'packages/codplay/src',
       sighty: 'packages/sighty/src',
       component: 'packages/authoring/component-v2/src',
+      audioCapture: 'packages/authoring/audio-capture/src',
+      story: 'packages/authoring/story/rive-talking-avatar',
+      remote: 'packages/authoring/remote/src',
       sceneFactory: 'packages/authoring/scene-factory/src',
       capsuleAutomation: 'packages/authoring/capsule-automation/src',
       exclusiveSync: 'packages/authoring/exclusive-sync/src',
+      elceVendor: 'packages/elce/node_modules',
       vendor: 'node_modules',
     },
-    allowFiles,
-    denyFiles,
-    files: { extensions: ['.ttf'] },
+    allowFiles: [
+      'packages/elce/src/**',
+      'packages/codplay/src/**',
+      'packages/sighty/src/**',
+      'packages/authoring/component-v2/src/**',
+      'packages/authoring/audio-capture/src/**',
+      'packages/authoring/remote/src/**',
+      'packages/authoring/scene-factory/src/**',
+      'packages/authoring/capsule-automation/src/**',
+      'packages/authoring/exclusive-sync/src/**',
+    ],
+    denyFiles: [
+      'packages/elce/src/**/*.test.*',
+      'packages/elce/src/server/**',
+      'packages/elce/src/core/server/**',
+      'packages/elce/src/mods/learning/persistence/server/**',
+      'packages/elce/src/mods/learning/composition/server/**',
+    ],
+    files: { extensions: ['.ttf', '.mp3', '.riv'] },
     allowPackages: BROWSER_PACKAGES,
     hmr: enableHmr
       ? {
@@ -101,7 +175,7 @@ export async function startElceLocalServer(): Promise<ElceLocalServer> {
           moduleImporter: 'remix/multiple-import-maps-polyfill',
         }
       : undefined,
-    scripts: { loaders: [jsonModules.load, ...(enableHmr ? [uiHmr()] : [])] },
+    scripts: { loaders: [jsonModules.load, ...(enableHmr ? [componentHmr()] : [])] },
     sourceMaps: isDevelopment ? 'external' : undefined,
     minify: !isDevelopment,
     watch: enableHmr ? { poll: true, pollInterval: 250 } : false,
@@ -111,7 +185,10 @@ export async function startElceLocalServer(): Promise<ElceLocalServer> {
   let webServer: Server | null = null
   try {
     const entry = await assets.getScriptEntry(BROWSER_ENTRY)
-    const styles = await Promise.all(STYLE_FILES.map((styleFile) => assets.getHref(styleFile)))
+    const styleHrefs = new Map<string, string>(await Promise.all(STYLE_FILES.map(async (styleFile) => [
+      styleFile,
+      await assets.getHref(styleFile),
+    ] as const)))
     const apiStart = await startOrReuseApi(preferredApiPort, dataDirectory, apiHost, networkPreviewOrigin)
     api = apiStart.server
     const apiPort = apiStart.port
@@ -128,6 +205,11 @@ export async function startElceLocalServer(): Promise<ElceLocalServer> {
           return new Response(null, { status: 405, headers: { Allow: 'GET, HEAD' } })
         }
         const apiOrigin = apiOriginForRequest(request, apiPort, networkPreviewOrigin)
+        const styles = authoringStyleFiles(path).map((styleFile) => {
+          const href = styleHrefs.get(styleFile)
+          if (href === undefined) throw new Error(`La feuille de style Elcé « ${styleFile} » n’a pas été compilée.`)
+          return href
+        })
         const documentHtml = renderDocumentHtml(entry, styles, apiOrigin, networkPreviewOrigin ?? null, isDevelopment)
         return new Response(request.method === 'HEAD' ? null : documentHtml, {
           headers: {
@@ -209,7 +291,9 @@ async function startOrReuseApi(
       throw new Error(`Le port API ${port} est déjà occupé. Arrête le serveur local actuel avant de lancer la preview réseau.`)
     }
     if (!(await isElceApiAvailable(port))) {
-      throw new Error(`Le port API ${port} est occupé par un service qui ne répond pas à l’API Elcé.`)
+      throw new Error(
+        `Le port API ${port} est occupé par un service qui ne fournit pas le contrat Elcé actuel (API ou CORS local). Arrêtez ce processus puis relancez Elcé.`,
+      )
     }
     return { server: null, port, reusesExistingApi: true }
   }
@@ -244,13 +328,18 @@ async function isPortAvailable(port: number, host: string): Promise<boolean> {
   }
 }
 
-/** Recognizes the local Elcé API without reading or changing its project data. */
+/** Recognizes an Elcé API that follows the local browser CORS contract. */
 async function isElceApiAvailable(port: number): Promise<boolean> {
   try {
     const response = await fetch(`http://127.0.0.1:${port}/api/projects`, {
+      headers: { Origin: LOCAL_API_PROBE_ORIGIN },
       signal: AbortSignal.timeout(1500),
     })
     if (!response.ok) return false
+    if (response.headers.get('Access-Control-Allow-Origin') !== LOCAL_API_PROBE_ORIGIN) return false
+    const variesByOrigin = response.headers.get('Vary')?.split(',')
+      .some((value) => value.trim().toLowerCase() === 'origin')
+    if (!variesByOrigin) return false
     const body: unknown = await response.json()
     return typeof body === 'object' && body !== null
       && Array.isArray((body as { readonly projects?: unknown }).projects)

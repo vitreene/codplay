@@ -29,3 +29,56 @@ spécification ou de marquer cette tranche `Fini`.
 
 Les extensions auteur sont séparées dans le
 [plan des évolutions à affecter](./evolutions/evolution-backlog.md#comportements-temporels-et-exposition-auteur-ace).
+## Usage HTML accepté pour les lignes Elcé
+
+Le sous-module Liste Elcé peut employer la `TweenAction` existante pour faire
+passer l'opacité d'une ligne HTML de `0` à `1` en `200 ms` linéaires, au signal
+de révélation de cette ligne. Cette portée ne crée pas de type public
+`Behavior` et ne modifie pas le runtime CodPlay. Le délai entre deux lignes
+reste porté par les occurrences existantes.
+
+L'acceptation doit observer la progression intermédiaire et la valeur finale
+dans le vrai parcours HTML player, puis vérifier Seek, retour, replay et
+réentrée. Si le player ne matérialise pas cette progression à chaque frame, la
+Liste ne doit pas compenser cette absence : ouvrir et faire accepter le plan
+CodPlay requis avant de modifier le runtime.
+
+## Extensions non décidées
+
+Ces sujets ne font pas partie de l'acceptation de la tranche logique actuelle.
+Avant une intégration de rendu continu, décider explicitement :
+
+- si `TweenAction` suffit comme surface auteur générale ou si un type public
+  `Behavior` est nécessaire ; le raccord étroit des lignes Liste Elcé est décrit
+  dans la section acceptée ci-dessus ;
+- si les options temporelles ACE `loop`, `loopDelay`, `reversed` et
+  `alternate` sont acceptées sur un comportement auteur, et comment vérifier
+  leur reconstruction de scène aux frontières Play/Seek ;
+- si un chemin préparé doit être disponible aux `TweenAction` auteur. Le chemin
+  de `move` est déjà couvert par sa spécification ; cette décision concerne
+  uniquement les tweens continus autonomes ;
+- si `spring`, les keyframes explicites ou les coordonnées polaires ont une
+  surface auteur V2. Leurs primitives ACE testées isolément ne leur donnent pas
+  ce statut ; définir aussi le raccord éventuel entre durée de stabilisation
+  du ressort et durée du tween ;
+- comment plusieurs actions continues composent leur présentation et si un
+  mode pondéré/additif est nécessaire. `blend`, ses poids et ses modes ne sont
+  pas un contrat V2 adopté ; fixer la règle avant toute intégration qui en
+  dépend ;
+- où passe la frontière entre l'évaluation logique et la matérialisation pour
+  SVG et les projections natives ; le style d'opacité d'un perso `tag` HTML
+  utilise le raccord commun décrit par la spécification.
+- si un scheduler, `context.live` ou des hooks d'annulation/lifecycle ont une
+  place dans ce contrat V2.
+
+Aucune de ces extensions n'est décrite comme comportement V2 certifié. Leur
+acceptation devra préserver le chemin logique Play/Seek spécifié et être reliée
+à ses preuves runtime. Les calculs ACE vérifiés isolément sont décrits dans la
+[spécification ACE](../specs/ace-calculation-v2-spec.md). L'inventaire des cas
+V1 et le contexte de ces questions restent dans la
+[note Behavior](./notes/2026-08-23-v1-behavior-inventory.md) ; elle n'ajoute
+aucune API V2.
+
+La rationale de séparation entre valeurs temporelles et occurrences planifiées,
+ainsi que la question non décidée d'un cycle `context.live`, est conservée dans
+la [note dédiée](./notes/2026-08-01-context-live-evolution.md).

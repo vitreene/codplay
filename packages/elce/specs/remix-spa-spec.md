@@ -7,22 +7,81 @@ Cette entrée compose l’application auteur dans le routeur navigateur
 Les builders et scènes restent des responsabilités Elcé, Sighty et CodPlay ;
 le portage ne crée pas de scène, d’état de lecture ni de commande parallèle.
 
+## Dépendance du workspace
+
+`packages/elce/package.json` est l’unique déclaration directe de `remix` dans
+le monorepo, fixée exactement à `3.1.0`. Cette version fournit les API
+`remix/component`, `remix/component-hmr` et `remix/spa` utilisées par les surfaces ci-dessous.
+La racine ne déclare pas de seconde version de Remix.
+
+Le lockfile résout une seule installation de `remix@3.1.0`, remontée dans le
+`node_modules` racine par npm. Les sous-paquets `@remix-run/*` conservent les
+versions requises par cet arbre ; leurs numéros de version sont indépendants
+de celui du paquet `remix`. La branche RC4 et ses anciens runtimes `ui` et
+`ui-hmr` ne sont plus installés.
+
 ## Composition
 
-- [`browser-entry.tsx`](../src/app/remix/browser-entry.tsx) compose le
-  contrôleur XState, IndexedDB, la synchronisation de projet et une unique
-  `EditorActionsFacade` pour l’application auteur. Sur une URL de popup, il ne
-  crée pas de contrôleur ou de store auteur.
-- [`remix-spa-router.tsx`](../src/app/remix/remix-spa-router.tsx) place l’acteur
-  et la façade auteur dans `EditorContextProvider`, puis rend
-  `ProjectApplication`. Sur l’URL de popup, la même route rend directement
-  `PopupPlayer` dans Remix, sans import dynamique d’une entrée historique.
-- [`ProjectApplication`](../src/app/remix/project-application.ts) rend la
-  gestion des projets, le Scénario, les réglages de chapitre, le catalogue,
-  l’aperçu popup et la zone centrale. Une sélection de page monte
-  [`RemixPageEditor`](../src/app/remix/workspace/page-editor.ts). Leurs
-  commandes et leur persistance restent attachées au même acteur XState.
-- `RemixPageEditor` conserve l’ordre `page.bdcIds`, les séparateurs de
+- [`browser-entry.tsx`](../src/app/remix/browser-entry.tsx) choisit la
+  composition auteur depuis la route du document. `/learning/:documentId`
+  construit Learning et `/hunt/:documentId` construit Quiz Hunt ; `/` et
+  `/new` choisissent Learning par défaut ou consomment la sélection temporaire
+  de « Autre… ». Une route documentaire transmet son identifiant au bootstrap
+  de la composition. Une URL de preview construit seulement la composition de
+  lecture correspondante, sans acteur ni store auteur.
+- [`createLearningAuthoringComposition`](../src/mods/learning/composition/authoring-composition.tsx)
+  et [`createQuizHuntAuthoringComposition`](../src/mods/quiz-hunt/composition/quiz-hunt-authoring-composition.tsx)
+  créent chacun leur store, leur session, leur acteur XState et leurs façades.
+  Chaque composition expose aussi l’ouverture d’un identifiant de document à
+  son coordinateur, utilisée par l’historique navigateur.
+- [`remix-spa-router.tsx`](../src/app/remix/remix-spa-router.tsx) reçoit
+  `authoringRoot` et `previewRoot`. Il route `/`, `/new`,
+  `/learning/:documentId` et `/hunt/:documentId` vers la racine auteur, et les
+  paramètres de preview vers la racine de lecture. La route par défaut répond
+  404. Il ne construit ni machine, ni façade, ni application projet, ni player.
+- [`renderCoreProjectApplication`](../src/core/authoring/layout/project-application.tsx)
+  fournit le sélecteur commun superposé à l’application sur `/` et `/new`.
+  `/` liste les documents du mod choisi ; Learning est le défaut et « Autre… »
+  charge le catalogue de l’autre mod. Un clic ouvre la route du document ; la
+  corbeille lance sa suppression confirmée. `/new` demande un nom avant
+  d’envoyer la création au coordinateur et d’ouvrir la route obtenue.
+- Les menus Projet, Scénario, ajout de contenu de page et ajout de vue Carousel
+  utilisent [`installOutsideMenuDismissal`](../src/core/authoring/menus/outside-menu-dismissal.ts).
+  Le propriétaire fournit la racine courante et, pour un menu contrôlé, son
+  état et son callback de fermeture. Un clic dedans reste disponible pour la
+  commande ; `pointerdown` ou `click` à l’extérieur ferme le menu. Le
+  propriétaire retire les listeners au démontage. L’état des menus et les
+  commandes restent dans leur application ou ressource ; le helper ne déplace
+  ni l’état du document ni la logique de création.
+- Les deux applications utilisent
+  [`createEditorPanelController`](../src/core/authoring/layout/editor-panel-controller.ts)
+  avec les calculs de [`editor-panel-state.ts`](../src/core/authoring/layout/editor-panel-state.ts).
+  À 800 px ou moins, les panneaux sont fermés au démarrage et un seul peut être
+  ouvert ; Échap le ferme et rend le focus au bouton qui l’a ouvert. De 801 à
+  1200 px, le Scénario est ouvert et le panneau droit fermé ; au-delà de
+  1200 px, les deux sont ouverts. Le passage d’une bande de largeur à une autre
+  applique ces valeurs partagées. Chaque mod garde son contenu de panneau et
+  son état local.
+- [`LearningProjectApplication`](../src/mods/learning/authoring/learning-project-application.tsx)
+  assemble le workspace Learning avec
+  [`renderCoreProjectApplication`](../src/core/authoring/layout/project-application.tsx),
+  qui possède l’en-tête projet, l’accès, l’historique et le cadre commun.
+  [`LearningWorkspace`](../src/mods/learning/authoring/learning-workspace.tsx)
+  et [`ScenarioPanel`](../src/mods/learning/authoring/scenario-panel.tsx)
+  gardent le parcours et ses placements. Leurs intentions passent par la
+  façade Learning et le même acteur auteur.
+- [`LearningPageEditor`](../src/mods/learning/authoring/learning-page-editor.tsx)
+  assemble les éditeurs de ressources et les contributions propres au mod ;
+  [`renderPageEditorView`](../src/core/authoring/page/page-editor-view.tsx)
+  possède la présentation commune du titre, du rail et des cadres BDC. Ses
+  règles CSS résident dans
+  [`page-editor-view.css`](../src/core/authoring/page/page-editor-view.css) ;
+  `scenario-tree.css` possède la présentation partagée de l’arborescence.
+  `learning-workspace.css` et `quiz-hunt-authoring.css` restent propres à leur
+  mod et fournissent leurs adaptations de contenu.
+  Les sessions Section/ancres gardent leurs callbacks de montage, d’actualisation
+  et de destruction.
+- `LearningPageEditor` conserve l’ordre `page.bdcIds`, les séparateurs de
   déplacement, les titres éditables, les commandes de création et le nettoyage
   au changement de page. Il rend dans Remix Section, Question, Résultat, Carte
   directe et Carousel à chaque ligne BDC. Les marqueurs de type du chapitre,
@@ -45,12 +104,32 @@ le portage ne crée pas de scène, d’état de lecture ni de commande parallèl
 - Les icônes Elcé sont créées à partir de `lucide-static` comme éléments SVG
   natifs ; aucun adaptateur d’icônes React n’est chargé.
 - Les vues Remix sont écrites en JSX dans des fichiers `.tsx`. TypeScript est
-  configuré avec `jsx: "react-jsx"` et `jsxImportSource: "remix/ui"` : le
-  runtime émis est celui de Remix (`remix/ui/jsx-runtime`), sans dépendance ni
+  configuré avec `jsx: "react-jsx"` et `jsxImportSource: "remix/component"` : le
+  runtime émis est celui de Remix (`remix/component/jsx-runtime`), sans dépendance ni
   import React.
 - [`elce-local-server.ts`](../src/server/elce-local-server.ts) sert le document
   Remix et ses assets, puis réutilise ou lance le serveur projet API sur
   `127.0.0.1:5181`. La réponse HTML fournit l’import map Remix et les styles.
+  Une requête HTML directe pour `/learning/:documentId` charge les feuilles
+  partagées, Learning et les ressources ; `/hunt/:documentId` charge les feuilles
+  partagées, Quiz Hunt et les ressources, sans les feuilles Learning. `/` et
+  `/new` conservent les deux feuilles de mod pendant que le sélecteur choisit
+  la composition côté navigateur. Les styles de l’éditeur appartiennent à
+  `core/authoring/layout/scenario-tree.css` et
+  `core/authoring/page/page-editor-view.css`.
+  Le module partagé `packages/authoring/audio-capture/src` est autorisé par
+  `allowFiles` et servi depuis son mount `audioCapture`, afin que l’éditeur
+  puisse importer `@codplay/audio-capture` sans déplacer son code dans Elcé.
+  Le mount `vendor` expose le `node_modules` racine et `elceVendor` expose
+  `packages/elce/node_modules` sous `/assets/elceVendor/`. Ces deux mounts
+  suivent la résolution des workspaces npm ; Remix 3.1.0 et son runtime
+  `component` sont servis depuis `vendor` dans l’installation actuelle.
+  Si le port API est déjà occupé en mode local, le serveur ne réutilise son
+  listener que si `GET /api/projects`, envoyé avec une origine locale, renvoie
+  le catalogue et les en-têtes `Access-Control-Allow-Origin` et `Vary: Origin`
+  attendus. Une ancienne API sans ce contrat fait échouer le démarrage avec un
+  diagnostic explicite du port ; l’éditeur ne démarre pas avec une API qui
+  ferait échouer ses lectures navigateur.
   En développement, elle n’émet pas les `modulepreload` de l’entrée Remix :
   les modules sont chargés à leur import et le navigateur n’affiche pas les
   avertissements de préchargements inutilisés. En production, les indications
@@ -73,6 +152,8 @@ le portage ne crée pas de scène, d’état de lecture ni de commande parallèl
   mécanismes existants de persistance et de synchronisation. L’interface reste
   sur 5175 et l’API sur 5181 ; le flux HMR utilise son canal local interne,
   sans serveur Vite navigateur supplémentaire.
+  Le chargeur de composants est `componentHmr()` depuis
+  `remix/component-hmr/assets` ; il complète le chargeur JSON existant.
 
 ## Imports JSON locaux
 
@@ -104,37 +185,22 @@ sources des paquets consommateurs.
 - Les source maps sont composées avec celles de la compilation TypeScript.
   La transformation fonctionne aussi avec minification et HMR désactivé.
 
-Preuves : les 16 cas de
 [`json-module-loader.test.ts`](../src/server/json-assets/json-module-loader.test.ts)
-compilent et évaluent les valeurs avec le véritable serveur d'assets Remix.
-Ils couvrent identités, imports/réexports, données invalides ou absentes,
-accès interdits et liens symboliques, invalidation des consommateurs,
-récupération après erreur, retrait des dépendances, fermeture et production.
-Le 29 octobre 2026, sur `develop`, une fixture temporaire importée par l'entrée
-réelle avant démarrage a été modifiée de la révision 1 à 2 : le module HTTP
-compilé restitue la nouvelle valeur et le canal SSE réel publie
-`{"type":"browser:reload"}`. La fixture est ensuite retirée. Le rendu et le
-rechargement dans le navigateur restent au
-[plan d'acceptation Elcé](../plan/2026-10-01-elce-construction-plan.md), l'accès
-MCP Brave ayant échoué pendant ce contrôle.
-
-Après intégration de `elce-remix` et `codplay-replace` le 29 octobre 2026,
-Brave charge l'entrée auteur réelle, ouvre le document Nutrition & Santé et
-affiche son état « Synchronisé ». Le même serveur compile les imports JSON
-du catalogue replace ; la prévisualisation réelle affiche les paragraphes
-de la page d'introduction et son image décodée à 1680 px de largeur native.
-Les 16 tests JSON, le typecheck et le build Elcé passent dans cet état intégré.
-Le suivi de l'intégration et de l'acceptation globale reste dans le
-[plan d'intégration](../../../docs/plans/2026-10-29-develop-integration-plan.md).
+couvre l’identité des modules JSON, les imports/réexports, les valeurs
+invalides ou absentes, les règles d’accès, les liens symboliques, l’invalidation
+HMR, la récupération après erreur et le mode production.
 
 ## Invariants
 
 - Le contrôleur XState reste l’unique propriétaire du document et de l’accès
-  au projet. Le Context Remix ne possède qu’une référence vers cet acteur ; les
-  snapshots locaux servent au rendu.
-- Chaque vue auteur utilise `EditorActionsFacade` et les façades métier
-  établies. Aucun composant Remix ne conserve un second document, ne fabrique
-  un circuit de synchronisation ou ne contourne les services métier.
+  au projet. Le contexte Remix Learning expose une référence vers cet acteur
+  et les façades injectées ; les snapshots locaux servent au rendu.
+- `CoreEditorFacade` possède les gestes projet et l’historique communs.
+  `LearningEditorFacade` délègue à ces gestes, aux façades de ressources et
+  aux commandes Learning. Les vues communes reçoivent des actions typées et
+  n’importent pas les façades concrètes.
+- Aucune vue auteur ne conserve un second document, ne fabrique un circuit de
+  synchronisation ou ne contourne les services métier.
 - Les BDC directs gardent l’ordre de `page.bdcIds`. Les Cartes enfants gardent
   leurs relations Carousel et leur ordre propre ; elles ne deviennent pas des
   BDC directs de page.
@@ -144,61 +210,55 @@ Le suivi de l'intégration et de l'acceptation globale reste dans le
   enregistrée.
 - Le routeur API reste séparé du routeur SPA. Ses réponses ne remplacent pas
   l’état documentaire possédé par XState.
+- Un identifiant de route est prioritaire sur le projet mémorisé. Le document
+  doit exister dans le catalogue du mod de la route ; un identifiant absent
+  affiche une erreur sans ouvrir un autre document.
+- L’ouverture depuis l’historique passe par la façade et le coordinateur du
+  même mod. Un changement de composition synchronise le document courant puis
+  libère sa session en conservant sa copie IndexedDB confirmée. En cas d’échec,
+  la session et la route courantes restent actives. Deux sessions documentaires
+  ne coexistent pas dans l’onglet.
+- `?mod=quiz-hunt` ne choisit plus la composition auteur. Ce paramètre reste
+  réservé à la sélection de la composition de preview ; son absence sélectionne
+  Learning. Le `PopupPreviewHost` partagé reçoit le `previewModKey` de
+  l'application propriétaire et le transmet à la popup, aussi bien pour une
+  session locale que pour une lecture réseau. Quiz Hunt passe `quiz-hunt` ;
+  l'ouverture Learning retire ce paramètre et garde le lecteur par défaut.
 - Aucun code de production ou test du workspace Elcé n’importe React,
   ReactDOM, `@xstate/react`, `@tiptap/react` ou `lucide-react`. Vite reste un
   outil de build, de tests et de chargement SSR du point d’entrée local ; il ne
   sert pas l’interface auteur dans le navigateur.
 
-## Preuves
+## Références de validation
 
-- [`workspace/page-editor.test.tsx`](../src/app/remix/workspace/page-editor.test.tsx)
-  monte l’éditeur de production. Il vérifie l’ordre et l’unicité des cinq BDC,
-  leurs éditions, les Cartes Carousel et leur réordonnancement, le déplacement
-  d’un BDC, le changement de page, la Carte directe Flux/Diapo et la
-  restitution des sélections enregistrées. Un parcours importe aussi des
-  médias Question, Carte et Carousel par le stockage et la file XState réels.
-- [`workspace/chapter-settings.test.tsx`](../src/app/remix/workspace/chapter-settings.test.tsx)
-  vérifie le réglage enregistré d’un chapitre après remontage.
-- [`remix-section-production.test.tsx`](../src/app/editor/section/remix-section-production.test.tsx)
-  vérifie dans le même `RemixPageEditor` le contenu, le titre, les commandes
-  Tiptap, le dépôt et la persistance d’une image, l’aperçu et le déplacement
-  d’ancre, ainsi que la conservation de l’instance Editor et de son DOM. Il
-  vérifie aussi que le bouton de retrait du média rend `lucide-trash-2`, tandis
-  que le bouton de fermeture du panneau rend `lucide-x`.
-- [`project-application.test.tsx`](../src/app/remix/project-application.test.tsx)
-  vérifie le montage de l’éditeur natif dans `ProjectApplication` et le
-  remplacement de la zone centrale après sélection d’un chapitre.
+- [`elce-authoring-routes.test.ts`](../src/app/remix/elce-authoring-routes.test.ts)
+  couvre le choix du mod, l’encodage des identifiants et les routes inconnues.
 - [`remix-spa-router.test.ts`](../src/app/remix/remix-spa-router.test.ts)
-  vérifie que l’URL de popup rend le lecteur sans monter l’application auteur.
-- [`elce-local-server.test.ts`](../src/server/elce-local-server.test.ts)
-  vérifie que la réponse de développement omet les `modulepreload`, tandis que
-  la réponse de production les conserve.
-- [`popup-player.test.tsx`](../src/app/player/popup-player.test.tsx) exerce le
-  protocole de messages et le chargement du média serveur sans Blob IndexedDB.
-- Brave DevTools, le 8 octobre 2026, a ouvert `npm run dev:elce` sur
-  `http://localhost:5176` puisque `localhost:5175` était occupé. La route a
-  rendu la liste des projets et l’éditeur depuis les entrées `.tsx`; les
-  16 modules de composants Remix ont été chargés avec succès. La console était
-  vide et aucun asset React ou ReactDOM n’a été demandé. Le parcours précédent
-  du même portage a aussi affiché le lecteur popup et ses cinq images serveur.
-- Le 9 octobre 2026, après remplacement du serveur Elcé sur le même port,
-  Brave DevTools a relu l’origine `http://localhost:5175` sans réinitialiser
-  IndexedDB. La base existante `elce-poc` (schéma v2) contient les documents
-  v4 de Projet 3 et Projet 1 ; ce dernier conserve 2 chapitres, 7 pages, 15 BDC,
-  5 références média et le checkpoint synchronisé à la révision 93. Les cinq
-  images serveur chargent. Après rechargement, Projet 3 est restauré et la
-  console ne contient aucune erreur.
-- Le 9 octobre 2026, Brave vérifie le HMR sur 5175 : une modification JSX
-  temporaire devient visible après rechargement automatique sans redémarrer le
-  serveur ; une règle CSS temporaire est également appliquée automatiquement.
-  Après chaque rechargement, Projet 1 reste ouvert et l’état revient à
-  « Synchronisé ». Les deux modifications de vérification sont retirées.
-- Le 13 octobre 2026, Brave vérifie le lancement réseau sur 5175/5181 et
-  l’ouverture du lecteur `elce-document` depuis l’éditeur. En émulation mobile
-  390 × 844, la page « Titre » et ses médias s’affichent sans en-tête Elcé ni
-  actions de synchronisation. La lecture API retourne la révision serveur 10.
-  L’API refuse la liste des projets et le prévol d’une mutation. Le téléphone
-  physique reste à vérifier sur le réseau local.
-- Les 206 tests Elcé passent, le typecheck passe et `vite build` réussit. Le
-  bundle JavaScript fait `1 314,76 kB` minifiés (`372,33 kB` gzip) et conserve
-  l’avertissement Vite au-dessus de `500 kB`.
+  couvre les routes de choix et de document ainsi que la sélection de la racine
+  Preview.
+- [`learning-project-application.test.tsx`](../src/mods/learning/authoring/learning-project-application.test.tsx)
+  couvre le sélecteur superposé et le formulaire de nommage.
+- [`outside-menu-dismissal.test.ts`](../src/core/authoring/menus/outside-menu-dismissal.test.ts)
+  vérifie les clics intérieurs et extérieurs pour les menus natifs et contrôlés,
+  ainsi que le retrait des listeners.
+- [`editor-panel-controller.test.ts`](../src/core/authoring/layout/editor-panel-controller.test.ts)
+  vérifie l’exclusivité étroite, le retour du focus et les limites 800/801 et
+  1200/1201 px.
+- [`learning-page-editor.test.tsx`](../src/mods/learning/authoring/learning-page-editor.test.tsx)
+  vérifie la fermeture du menu Page quand une autre commande de menu s’ouvre.
+- Le 9 novembre 2026, Safari Technology Preview valide les menus et panneaux
+  dans Learning et Quiz Hunt. Il exerce l’ajout d’une Carte par le Carousel,
+  l’ajout d’un bloc Texte dans Quiz Hunt, les clics extérieurs, le sélecteur
+  Projet, le changement de page et le rechargement. Aux largeurs 800, 801, 1200
+  et 1201 px, les deux mods conservent les états de panneau prévus ; Échap
+  referme le panneau étroit et rend le focus à son bouton.
+- Le 9 novembre 2026, Safari Technology Preview ouvre en lecture seule le
+  document Quiz Hunt existant depuis son éditeur : l'URL locale porte
+  `mod=quiz-hunt`, le lecteur affiche le scénario et sa console ne contient
+  aucune erreur ni aucun avertissement. Le document Learning existant ouvre
+  une URL sans `mod` et affiche sa Section, ses Cartes ancrées et son Graphe ;
+  sa console ne contient aucune erreur ni aucun avertissement.
+- [`project-session-coordinator.test.ts`](../src/mods/learning/integration/project-session-coordinator.test.ts)
+  et [`project-operations.test.ts`](../src/mods/learning/integration/project-operations.test.ts)
+  couvrent la création nommée, l’ouverture demandée, la conservation de la
+  session après erreur et la libération inter-mod via le même acteur.

@@ -1,0 +1,23 @@
+:scope.v2-demo-scene-slot:has(#rive-matt-stage) {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+  container-type: size;
+  padding: 1rem;
+  background: #111827;
+}
+
+#rive-matt-stage {
+  display: block;
+  border-radius: 0.5rem;
+  box-shadow: 0 24px 80px rgb(17 24 39 / 45%);
+}
+
+#rive-matt-stage [data-codplay-rive="document"] {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

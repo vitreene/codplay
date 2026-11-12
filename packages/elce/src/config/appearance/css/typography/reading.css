@@ -1,4 +1,11 @@
 @scope (.elce-player-layout) {
+  .bdc :is(
+    p, li, blockquote, dd, dt, figcaption, label, legend,
+    .elce-card__copy, .elce-question-instructions
+  ) {
+    --elce-reading-font-size-cqi: 2.9cqi;
+  }
+
   .elce-flux-article,
   .elce-diapo-content,
   .section > div,
@@ -15,7 +22,7 @@
 
   /* Keep the reading measure stable as the BDC grows, down to the readable floor. */
   .bdc :is(p, li, blockquote, dd, dt, figcaption, label, legend) {
-    font-size: max(0.9rem, 2.76cqi);
+    font-size: max(0.9rem, var(--elce-reading-font-size-cqi));
   }
 
   /* Each minimum is multiplied exactly by 1.41; headings keep scaling with the BDC. */

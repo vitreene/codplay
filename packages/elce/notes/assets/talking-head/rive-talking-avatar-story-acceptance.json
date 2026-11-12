@@ -1,0 +1,79 @@
+{
+  "date": "2026-11-04",
+  "route": "http://localhost:5173/?demo=rive-view-model",
+  "scope": "@codplay/story/rive-talking-avatar through the V2 shared layout and the real Rive/audio resources",
+  "method": "Safari MCP page controls and ordinary range-input Seek events; native audio, ViewModel bindings and consecutive state-machine deltas observed without replacing their implementation.",
+  "play": {
+    "audioTimeSeconds": 2.0925,
+    "caption": "ancien",
+    "pausedAfterControl": true,
+    "sampledFrames": 127,
+    "maxFrameDeltaMs": 26.2111,
+    "clockResetsAtVisemes": 0
+  },
+  "seek": {
+    "targetMs": 7500,
+    "audioTimeSeconds": 7.5,
+    "caption": "l'espace",
+    "backwardTargetMs": 1000,
+    "backwardAudioTimeSeconds": 1,
+    "backwardCaption": "Interstellar,",
+    "sameViewModelValuesAfterReturn": true
+  },
+  "packageRelocationSmoke": {
+    "subpath": "@codplay/story/rive-talking-avatar",
+    "sceneStatus": "ready",
+    "audioSrc": "/assets/talking-head/speech.mp3",
+    "audioDurationSeconds": 14.445714285714285,
+    "seek": {
+      "targetMs": 7500,
+      "audioTimeSeconds": 7.5,
+      "caption": "l'espace"
+    },
+    "backwardSeek": {
+      "targetMs": 1000,
+      "audioTimeSeconds": 1,
+      "caption": "Interstellar,"
+    }
+  },
+  "replay": {
+    "audioTimeAtRewind": 0,
+    "audioTimeAfterPlaySeconds": 1.002,
+    "pausedAfterControl": true
+  },
+  "remount": {
+    "oldAudioPaused": true,
+    "oldAudioConnected": false,
+    "oldCanvasConnected": false,
+    "newAudio": true,
+    "newCanvas": true,
+    "audioCount": 1,
+    "timeMs": 0
+  },
+  "responsive": [
+    {
+      "viewport": { "width": 1280, "height": 720 },
+      "frame": { "width": 367.390625, "height": 367.390625 },
+      "frameContained": true,
+      "captionContained": true,
+      "audioTimeSeconds": 7.5
+    },
+    {
+      "viewport": { "width": 800, "height": 900 },
+      "frame": { "width": 593.515625, "height": 593.515625 },
+      "frameContained": true,
+      "captionContained": true,
+      "audioTimeSeconds": 7.5
+    }
+  ],
+  "checks": {
+    "componentTestFiles": 15,
+    "componentTestsPassed": 72,
+    "storyTestFiles": 1,
+    "storyTestsPassed": 4,
+    "componentTypecheck": true,
+    "storyTypecheck": true,
+    "demoTypecheck": true,
+    "demoBuild": true
+  }
+}

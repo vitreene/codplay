@@ -67,4 +67,4 @@ d’essais et la restauration depuis un état JSON-sérialisé.
 Le transfert des métadonnées depuis l’événement Sighty et une Question jouée
 par le player réel est vérifié dans
 [`scenario-builder.test.ts`](../src/builders/scenario/scenario-builder.test.ts)
-et [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts).
+et [`elce-player-composition.test.ts`](../src/mods/learning/reading/learning-player.test.ts).

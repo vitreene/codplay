@@ -24,10 +24,13 @@ atomique et déplaçable. Ses attributs métier sont `bdcId`, `partId` et
 `paddingBottom`. L’extension ne stocke ni `mediaId` ni type de média :
 l’éditeur résout le BDC par `bdcId`. Une Carte utilise son preset et ses médias ;
 un Graphe utilise son builder de scène.
-L’aperçu utilise le même `ElceCardPresetBuilder` et le même `CARD_PRESETS` que
-la projection Flux ; il affiche les champs de texte déclarés par le layout et
-les médias compatibles avec ce layout, en conservant ses réglages de position
-et de cadrage lorsqu’ils s’appliquent. Texte court peut donc servir aux
+L’aperçu utilise l’instance `ElceCardPresetBuilder` fournie à l’extension.
+Elle lit le preset par `getPreset` et génère le gabarit par `build`, comme la
+projection Flux. Learning assemble les registres de ressources dans
+`LEARNING_PRESETS` et fournit le constructeur depuis sa composition ; le moteur
+ne lit aucun registre global. L’aperçu affiche les champs de texte déclarés par
+le layout et les médias compatibles avec ce layout, en conservant ses réglages
+de position et de cadrage lorsqu’ils s’appliquent. Texte court peut donc servir aux
 citations et exergues sans introduire un type de BDC distinct. Les layouts
 Texte avec image et Image avec légende gardent leur gabarit Carte ; Photo reste
 le seul layout qui accepte une vidéo. L’éditeur affiche une prise déplaçable ;
@@ -82,9 +85,12 @@ visuelle et recalcule sa réservation quand la largeur change ; aucun code Elcé
 ne mesure ou ne déplace un nœud après le montage CodPlay. Le parseur statique
 relit les attributs de l’ancre lorsqu’un markup est rouvert dans Tiptap.
 
-Le dépôt d’un fichier image ou vidéo passe par `EditorActionsFacade`
-(`app/facades/editor-actions-facade.ts`), qui délègue à la façade spécialisée
-`ElceAnchorDropFacade` (`app/facades/anchor/`) avant le contrôleur XState.
+Le service métier `ElceAnchorDropService` reçoit `ResourceDocumentData` pour
+résoudre les cibles et préparer la commande sans connaître l’agrégat Learning.
+La composition Learning ajoute le libellé de son BDC Résultat via
+`createLearningAnchorDropService`. Le dépôt d’un fichier image ou vidéo passe
+par `LearningEditorFacade`, qui délègue à la façade spécialisée
+`ElceAnchorDropFacade` (`resources/anchoring/authoring/`) avant le contrôleur XState.
 Cette façade délègue à `ElceAnchorDropService` les cibles métier et la création
 de commande ; le service métier applique la whitelist Carte/Graphe et décrit le
 BDC. La
@@ -123,14 +129,14 @@ Safari expose `dropEffect: move` mais une liste `DataTransfer.types` vide sur ce
 s’appuie donc sur l’identifiant et la position mémorisés au départ, l’effet
 `move` et la vérification du nœud courant ; elle ne revalide pas le type MIME
 après le dépôt.
-`SectionEditor` transmet le document riche actualisé à `EditorActionsFacade`,
+`SectionEditor` transmet le document riche actualisé à `LearningEditorFacade`,
 qui appelle `ElceAnchorDropFacade` ; XState traite `section.change`, puis la
 commande `bdc.anchor.return` vérifie l’ancre,
 conserve son identifiant et sa ressource média, et réaffecte le BDC au
 catalogue. Le BDC n’est ni cloné ni supprimé.
 
 Une édition ordinaire du texte (`kind: 'content'`) met à jour la Section par
-`bdc.section.update`. [`ElceAnchorReferenceService`](../src/domain/anchor/anchor-reference-service.ts)
+`bdc.section.update`. [`ElceAnchorReferenceService`](../src/resources/anchoring/domain/anchor-reference-service.ts)
 compare les identifiants présents dans l’ancien et le nouveau document riche ;
 chaque BDC ancré qui n’est plus référencé est supprimé dans la même commande,
 et son média reste conservé. Le BDC est le transport unique d’une insertion ;
@@ -179,26 +185,44 @@ l’image ou à la vidéo, au même emplacement que le BDC sélectionné, au lie
 s’ajouter après tout le texte de la Section. Le clic fait défiler ce cadre dans
 la zone visible avec `scrollIntoView({ block: 'nearest' })`.
 
+Le gestionnaire DOM du plugin intercepte les dépôts de fichiers dans la Section
+avant le traitement de position par ProseMirror, puis empêche l’ouverture du
+fichier par le navigateur. Si la cible est l’aperçu média d’une Carte ancrée,
+le fichier remplace le média de cette même Carte via l’action d’import Card
+existante ; l’identifiant du BDC et son ancre restent inchangés. Un dépôt sans
+position métier valide, ou sur un aperçu non compatible, est consommé sans
+créer ni modifier de BDC. À une position de Section valide hors aperçu ancré,
+le comportement existant crée une nouvelle Carte ancrée. Le ratio recalculé
+après chargement du média met à jour la réservation de l’ancre comme donnée
+dérivée, sans ajouter un geste à l’historique.
+La composition auteur Learning installe également une garde de `drop` au niveau
+du document en phase de propagation : elle laisse les cibles gérer le fichier
+d’abord et n’annule l’action navigateur que si aucune cible ne l’a déjà prise.
+Un dépôt hors de ProseMirror et hors de tout sélecteur média est ainsi refusé
+sans navigation.
+
 ## Preuve
 
-- [`elce-anchor-extension.test.ts`](../src/app/editor/anchor/elce-anchor-extension.test.ts)
+- [`elce-anchor-extension.test.ts`](../src/resources/anchoring/authoring/elce-anchor-extension.test.ts)
   vérifie la conversion JSON → `span` statique, les attributs de ciblage,
   l’aperçu image Photo et les aperçus Texte court, Texte avec image et Image
   avec légende. Les gabarits de ces aperçus viennent de `ElceCardPresetBuilder`.
+  Il couvre aussi le dépôt fichier sur l’aperçu d’une Carte, le dépôt à une
+  position valide pour créer une ancre et le refus d’un dépôt sans position.
   Le test vérifie aussi le déplacement d’une ancre image par le chemin complet
   `dragstart` → ProseMirror → `drop` → commande de déplacement. Le test vérifie
   que le même BDC change de position et qu’un glisser en mode copie ne le
   duplique pas. Le test du retour couvre le cas Safari où `dragend` garde
   `dropEffect: move` avec une liste de types vide. Il couvre aussi le collage
   qui retire les ancres.
-- [`remix-section-production.test.tsx`](../src/app/editor/section/remix-section-production.test.tsx)
+- [`remix-section-production.test.tsx`](../src/mods/learning/integration/remix-section-production.test.tsx)
   vérifie dans la page Remix de production le rafraîchissement du média après
   persistance XState sans remplacer l’instance `Editor` ni son DOM ProseMirror.
   Avec une image déjà complète au montage, il vérifie que le ratio calculé passe
   par XState jusqu’à `flowReservations` du builder Flux. Il déclenche aussi le
   clic sur le vrai bouton d’édition, puis vérifie que le panneau partagé cible le
   cadre du même BDC, avec sa position CSS et son défilement.
-- [`section-editor-tiptap-adapter.test.ts`](../src/app/editor/section/section-editor-tiptap-adapter.test.ts)
+- [`section-editor-tiptap-adapter.test.ts`](../src/resources/bdcs/section/authoring/section-editor-tiptap-adapter.test.ts)
   couvre explicitement l’image chargée avant le montage du NodeView et la
   soumission du ratio calculé par le callback de modification de Section.
 - Le 22 octobre, le vrai bouton `40 × 40 px` ouvre l’éditeur partagé du même
@@ -221,10 +245,10 @@ la zone visible avec `scrollIntoView({ block: 'nearest' })`.
 - **Contrôle Brave après doublement, le 26 octobre 2026 :** sur la preview Demo5,
   les deux BDC ancrés commencent à `2rem` du haut de leur slot et laissent
   `2rem` en bas. Ces espacements suivent la largeur mobile et ordinateur sans
-  débordement horizontal. [`anchor-position.test.ts`](../src/app/anchor/anchor-position.test.ts),
-  [`elce-anchor-extension.test.ts`](../src/app/editor/anchor/elce-anchor-extension.test.ts),
-  [`flux-scene-builder.test.ts`](../src/builders/flux/flux-scene-builder.test.ts)
-  et [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
+  débordement horizontal. [`anchor-position.test.ts`](../src/domain/anchor/anchor-position.test.ts),
+  [`elce-anchor-extension.test.ts`](../src/resources/anchoring/authoring/elce-anchor-extension.test.ts),
+  [`flux-scene-builder.test.ts`](../src/mods/learning/integration/flux-scene-builder.test.ts)
+  et [`elce-player-composition.test.ts`](../src/mods/learning/reading/learning-player.test.ts)
   couvrent les réservations et les deux marges ; typecheck et build passent.
 - Le 8 octobre 2026, Brave DevTools reproduit le défaut dans la preview réelle
   de Page A du Projet 1, sans modifier le document : le slot réservait
@@ -241,29 +265,29 @@ la zone visible avec `scrollIntoView({ block: 'nearest' })`.
   `elce-player-composition.test.ts` celui du perso monté dans la composition
   réelle. Les 35 tests ciblés et les 206 tests Elcé passent ; le typecheck et le
   build réussissent.
-- [`flux-anchor-player-markup.test.ts`](../src/builders/flux/flux-anchor-player-markup.test.ts)
+- [`flux-anchor-player-markup.test.ts`](../src/resources/pages/flux/flux-anchor-player-markup.test.ts)
   vérifie que la projection conserve le texte, remplace l’ancre d’édition par
   un slot de flux inline à largeur nulle et conserve la cible logique du bdc.
-- [`flux-scene-builder.test.ts`](../src/builders/flux/flux-scene-builder.test.ts)
+- [`flux-scene-builder.test.ts`](../src/mods/learning/integration/flux-scene-builder.test.ts)
   vérifie que le builder dirige le perso image vers la part du slot projeté
   sans générer un second hôte média.
-- [`elce-player-composition.test.ts`](../src/player/elce-player-composition.test.ts)
+- [`elce-player-composition.test.ts`](../src/mods/learning/reading/learning-player.test.ts)
   vérifie le montage de l’image dans le slot projeté par le runtime réel
   Sighty/CodPlay.
-- [`anchor-drop-service.test.ts`](../src/domain/anchor/anchor-drop-service.test.ts)
+- [`anchor-drop-service.test.ts`](../src/mods/learning/integration/anchor-drop-service.test.ts)
   vérifie les cibles et commandes métier pour l’insertion d’une Carte ou d’un
   Graphe.
-- [`statistical-graph-placements.test.ts`](../src/builders/statistical-graph/statistical-graph-placements.test.ts)
+- [`statistical-graph-placements.test.ts`](../src/mods/learning/integration/statistical-graph-placements.test.ts)
   vérifie le slot de Section, la réserve Tableau/SVG et le montage de la story
 du Graphe par le builder Flux réel.
-- [`anchor-drop-facade.test.ts`](../src/app/facades/anchor/anchor-drop-facade.test.ts)
+- [`anchor-drop-facade.test.ts`](../src/resources/anchoring/authoring/anchor-drop-facade.test.ts)
   vérifie le transfert de l’intention Section vers le contrôleur.
 - [`document-commands.test.ts`](../src/domain/commands/document-commands.test.ts)
   vérifie qu’une mise à jour de texte ordinaire ou une suppression dédiée
   efface le BDC ancré sans le réinscrire au catalogue, conserve le média,
   supprime aussi les ancres lorsqu’une Section entière est supprimée, et refuse
   une ancre dupliquée.
-- [`controller-machine.test.ts`](../src/app/controller/controller-machine.test.ts)
+- [`controller-machine.test.ts`](../src/mods/learning/integration/controller-machine.test.ts)
   vérifie que deux dépôts dont la sauvegarde IndexedDB est asynchrone restent
   ordonnés dans la machine XState et produisent chacun leur bdc et leur ancre.
   Il vérifie aussi qu’un même fichier déposé sous deux noms réutilise un seul
@@ -283,9 +307,32 @@ du Graphe par le builder Flux réel.
   disponible sous le même identifiant. L’autre Carte reste ancrée. Le retour
   et la conservation de l’ancre restante persistent après un nouveau
   rechargement Safari.
-- [`elce-anchor-extension.test.ts`](../src/app/editor/anchor/elce-anchor-extension.test.ts)
+- [`elce-anchor-extension.test.ts`](../src/resources/anchoring/authoring/elce-anchor-extension.test.ts)
   vérifie que le collage de texte conserve les mots et retire les ancres
   copiées, et qu’un glisser-déposer en mode copie est arrêté.
+- Le 28 octobre 2026, Safari MCP au premier plan dépose un PNG de 169 octets,
+  fourni par un `DataTransfer` synthétique, sur le vrai éditeur Section d’un
+  projet temporaire. Le gestionnaire ProseMirror existant crée l’ancre et le
+  Card enfant de la Section ; `PUT /document` répond `200` à la révision 27,
+  l’upload média répond `201` et son `GET` répond `200` avec `image/png` et
+  169 octets. La preview Sighty/CodPlay ouvre cette page, affiche l’image depuis
+  l’URL API en `2 × 2 px` et ne rend aucune ancre d’édition. La console n’a
+  aucune erreur ni avertissement et la preview n’émet aucun `/test-state`.
+  Cette vérification exerce le gestionnaire applicatif par événement
+  synthétique ; elle ne certifie pas le glisser physique depuis Finder.
+- Le 28 octobre 2026, sur Page D MCP dans Safari (`5175`), un fichier image
+  synthétique déposé sur l’image de la Carte ancrée est traité par le vrai
+  gestionnaire DOM de la Section : la page reste sur 5175, le même BDC reçoit
+  le nouveau média, `PUT /document` répond `200` et l’import média `201`. Un
+  clic Annuler restaure l’ancienne image et un clic Rétablir remet la nouvelle,
+  chacun en un geste. Un dépôt avec des coordonnées sans position est annulé,
+  ne change ni l’éditeur ni l’historique et n’émet aucun `PUT /document`. Le
+  dépôt d’un fichier sur le fond de la page est aussi annulé après propagation,
+  sans navigation ni mutation documentaire. Le
+  média original a ensuite été restauré sur le projet et vérifié après
+  rechargement. Le geste Finder post-correction n’est pas simulé par les outils
+  MCP ; la reproduction manuelle initiale de l’ouverture navigateur a été
+  fournie par l’utilisateur.
 
 La preuve navigateur se fait dans l’application Elcé : déposer une image ou
 une vidéo dans la Section WYSIWYG, attendre la fin de la commande XState, puis

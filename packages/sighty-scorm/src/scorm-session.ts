@@ -165,7 +165,9 @@ export class ScormSession {
     }
     if (update.progress !== undefined) {
       if (this.version === '1.2') {
-        const lessonStatus = update.progress.successStatus ?? update.progress.completionStatus
+        const lessonStatus = update.progress.successStatus === 'unknown'
+          ? update.progress.completionStatus
+          : update.progress.successStatus ?? update.progress.completionStatus
         if (lessonStatus !== undefined) {
           this.assertSuccess(this.api.set('cmi.core.lesson_status', lessonStatus), 'écriture de l’état du chapitre')
         }
@@ -173,6 +175,9 @@ export class ScormSession {
         this.assertSuccess(this.api.set('cmi.progress_measure', String(update.progress.measure)), 'écriture de la progression globale')
         if (update.progress.completionStatus !== undefined) {
           this.assertSuccess(this.api.set('cmi.completion_status', update.progress.completionStatus), 'écriture de l’état de complétion global')
+        }
+        if (update.progress.successStatus !== undefined) {
+          this.assertSuccess(this.api.set('cmi.success_status', update.progress.successStatus), 'écriture de l’état de réussite global')
         }
         for (const objective of update.progress.objectives ?? []) {
           this.writeObjectiveProgress(objective)

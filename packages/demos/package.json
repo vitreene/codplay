@@ -24,6 +24,7 @@
     "@codplay/scene-factory": "*",
     "@codplay/selection-frame": "*",
     "@codplay/sighty": "*",
+    "@codplay/story": "*",
     "codplay": "*",
     "codplay-v1": "*"
   },

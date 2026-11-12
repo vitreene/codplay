@@ -1,43 +1,36 @@
 import { run } from 'remix/spa'
 
-import { createActor } from 'xstate'
-import { controllerMachine } from '../controller/controller-machine'
-import { EditorActionsFacade } from '../facades/editor-actions-facade'
-import { IndexedDbDocumentStore } from '../../infrastructure/indexed-db/document-store'
-import { ElceProjectApiClient } from '../../infrastructure/project-api/project-api-client'
-import { POPUP_PREVIEW_PROJECT_PARAM, POPUP_PREVIEW_SESSION_PARAM } from '../player/popup-preview-messages'
+import {
+  POPUP_PREVIEW_MOD_PARAM,
+  POPUP_PREVIEW_PROJECT_PARAM,
+  POPUP_PREVIEW_SESSION_PARAM,
+} from '../../core/preview/popup-preview-messages'
 import { createElceSpaRouter } from './remix-spa-router'
-import { ProjectSessionCoordinator } from '../projects/project-session-coordinator'
+import { consumeChooserMod, resolveElceAuthoringLocation } from './elce-authoring-routes.ts'
 
-/** Composes one authoring actor, store, persistence attachment, and Remix router. */
+/** Starts the selected mod composition inside the Remix browser runtime. */
 async function startRemixEditor(): Promise<void> {
-  const searchParams = new URLSearchParams(window.location.search)
-  const isPreviewReader = searchParams.has(POPUP_PREVIEW_SESSION_PARAM)
-    || searchParams.has(POPUP_PREVIEW_PROJECT_PARAM)
-  const documentStore = isPreviewReader ? null : new IndexedDbDocumentStore()
-  if (documentStore !== null) {
-    try {
-      await documentStore.deleteOrphanedMedia()
-    } catch (error) {
-      console.error('Le nettoyage des médias locaux Elcé a échoué.', error)
-    }
-  }
-  const projectApi = isPreviewReader ? null : new ElceProjectApiClient()
-  const projectSession = documentStore === null || projectApi === null
-    ? null
-    : new ProjectSessionCoordinator(documentStore, projectApi)
-  const controller = documentStore === null
-    ? null
-    : createActor(controllerMachine, { input: { documentStore, projectSession: projectSession ?? undefined } })
-  const editorActions = controller === null ? null : new EditorActionsFacade(controller)
-  controller?.start()
-
-  if (controller !== null && projectSession !== null && editorActions !== null) {
-    await projectSession.attach(controller)
-    editorActions.bootstrapProjects(projectSession.rememberedProjectId())
-  }
-
-  const runtime = run(createElceSpaRouter(controller, editorActions), {
+  const url = new URL(window.location.href)
+  const searchParams = url.searchParams
+  const isQuizHunt = searchParams.get(POPUP_PREVIEW_MOD_PARAM) === 'quiz-hunt'
+  const isPreview = searchParams.has(POPUP_PREVIEW_SESSION_PARAM) || searchParams.has(POPUP_PREVIEW_PROJECT_PARAM)
+  const location = resolveElceAuthoringLocation(url.pathname)
+  const authoringMod = location.kind === 'document'
+    ? location.mod
+    : location.kind === 'chooser'
+      ? consumeChooserMod(window.sessionStorage)
+      : 'learning'
+  const composition = isPreview ? null : await createAuthoringComposition(
+    authoringMod,
+    location.kind === 'document' ? location.documentId : undefined,
+  )
+  const previewComposition = isPreview
+    ? isQuizHunt ? await createQuizHuntPreview(searchParams) : await createLearningPreview(searchParams)
+    : null
+  const runtime = run(createElceSpaRouter({
+    authoringRoot: composition?.authoringRoot ?? null,
+    previewRoot: previewComposition?.root ?? null,
+  }), {
     fallback: <p
       id="elce-remix-loading"
       role="status"
@@ -47,13 +40,48 @@ async function startRemixEditor(): Promise<void> {
   })
   await runtime.ready()
 
+  /** Reopens the document named by browser history through the active mod session. */
+  const handlePopState = (): void => {
+    const nextLocation = resolveElceAuthoringLocation(window.location.pathname)
+    if (nextLocation.kind !== 'document') return
+    if (nextLocation.mod !== authoringMod) {
+      window.location.reload()
+      return
+    }
+    void composition?.openDocument(nextLocation.documentId)
+  }
+  window.addEventListener('popstate', handlePopState)
+
   const dispose = (): void => {
-    void (projectSession?.dispose() ?? Promise.resolve()).finally(() => {
-      controller?.stop()
-      runtime.dispose()
-    })
+    window.removeEventListener('popstate', handlePopState)
+    void Promise.all([
+      composition?.dispose() ?? Promise.resolve(),
+      previewComposition?.dispose() ?? Promise.resolve(),
+    ]).finally(() => runtime.dispose())
   }
   window.addEventListener('pagehide', dispose, { once: true })
+}
+
+/** Loads the selected authoring mod only when its route is active. */
+async function createAuthoringComposition(mod: 'learning' | 'quiz-hunt', requestedProjectId?: string) {
+  if (mod === 'quiz-hunt') {
+    const { createQuizHuntAuthoringComposition } = await import('../../mods/quiz-hunt/composition/quiz-hunt-authoring-composition')
+    return createQuizHuntAuthoringComposition(requestedProjectId)
+  }
+  const { createLearningAuthoringComposition } = await import('../../mods/learning/composition/authoring-composition')
+  return createLearningAuthoringComposition(requestedProjectId)
+}
+
+/** Keeps Learning's preview modules out of Quiz Hunt's authoring bundle. */
+async function createLearningPreview(searchParams: URLSearchParams) {
+  const { createLearningPreviewComposition } = await import('../../mods/learning/composition/preview-composition')
+  return createLearningPreviewComposition(searchParams)
+}
+
+/** Loads Quiz Hunt's player only in its own preview window. */
+async function createQuizHuntPreview(searchParams: URLSearchParams) {
+  const { createQuizHuntPreviewComposition } = await import('../../mods/quiz-hunt/composition/quiz-hunt-preview-composition')
+  return createQuizHuntPreviewComposition(searchParams)
 }
 
 void startRemixEditor().catch((error: unknown) => {

@@ -10,6 +10,39 @@ la preview et la palette dérivée en OKLCH restent à concevoir et à valider d
 le plan Style ; les lignes ci-dessous qui décrivent cette extension ne sont pas
 des contrats vérifiés.
 
+## Audit de la chaîne des portées — 9 novembre 2026
+
+L’utilisateur demande une reprise de la chaîne entière selon un héritage vers
+les descendants. Les couleurs documentaires concernent le rendu uniquement,
+pas les champs ni les surfaces de l’éditeur. La capture fournie montre une
+Page A bleue limitée au contenu, entourée du jaune projet ; son titre reste
+sur une autre surface issue du projet. Elle ne prouve pas une écriture sur le
+BDC : sur la fixture Learning, la commande page écrit bien `page.appearance`,
+et le BDC Section reste sans exception locale.
+
+| Frontière observée | Mécanisme actuel | Conséquence / point à revoir |
+| --- | --- | --- |
+| Cible auteur | `LearningProjectApplication` conserve `appearanceTarget` hors de la sélection documentaire ; `scenario-panel.tsx` sélectionne une page sans changer cette cible. | Après Style Section puis sélection de Page A dans le Scénario, le panneau reste sur Section. Le bouton Style de page cible correctement la page. Cette désynchronisation est distincte de la surface bleue de la capture. |
+| Commande et persistance | Le picker appelle la façade Learning, puis `document.apply` ; `appearance-commands.ts` conserve des exceptions sparse par projet/page/BDC. SQLite conserve les champs à leur niveau. | L’écriture page est correcte sur le parcours observé. Ne pas déplacer les données vers un BDC pour compenser le rendu. |
+| Résolution | `appearance-resolver.ts` parcourt cible → parent BDC éventuel → page → projet → application, propriété par propriété. | La parenté métier est explicite ; elle ne correspond pas toujours à la parenté DOM. Le résolveur relit un seul parent BDC, conforme aux compositions actuellement admises. |
+| Palette et valeurs implicites | `presetValueFor` fournit Fond et Texte lorsqu’un niveau porte `paletteId`, même sans ces deux propriétés explicites. | Une palette locale constitue aussi une nouvelle origine implicite de couleur. Distinguer ce comportement de l’héritage d’une valeur personnalisée du parent dans le contrat revu. |
+| Fond et transparence | `appearanceBackgroundAppliesToSurface` ne peint que la cible portant l’origine du fond ; les autres racines restent transparentes. Transparent enregistre `density: none`. | Hériter d’une couleur et peindre une nouvelle surface sont actuellement deux règles distinctes. Le contrat revu doit décider cette relation, ainsi que le maintien du lien historique transparence/densité. |
+| Génération | `generateAppearanceColors` calcule une gamme complète par cible depuis les valeurs résolues et le fond opaque sémantique le plus proche. `appearance-scene-style-sheet.ts` émet ensuite variables et règles de peinture. | Un défaut de surface n’est pas un défaut du calcul OKLCH. Les rôles texte, titre, intertitre, menu/navigation et états fonctionnels doivent rester distingués. |
+| Projet et page rendus | `LearningLayoutSceneBuilder` pose les classes projet sur le layout et le slot contenu. Le header, le titre, le retrait du slot et la navigation sont hors de la racine de page. Flux pose les classes page sur l’article sous le scrollport ; Diapo les pose sur son article interne. | Une exception page ne peut atteindre son titre ni le retrait externe de contenu. C’est la cause structurelle du partage jaune/bleu de la capture. |
+| BDC et enfants | Les builders transmettent les classes de chaque BDC ; Carte/Graphe ancrés et vues de Carousel possèdent leurs propres cibles. Les Cartes ont plusieurs surfaces textuelles selon leur layout. | Une correction doit suivre ces identités et leurs parents métier, y compris quand le montage de lecture les présente ailleurs dans le DOM. |
+| Preview et export | La preview reçoit un instantané, reconstruit le vrai player et sa feuille d’apparence ; le cache de scène inclut les apparences du document, de la page et des BDC. L’export réutilise ce producteur. | Conserver ce circuit et vérifier la même portée sur preview synchronisée, ouverture fraîche et export. Aucun style injecté après montage ni second lecteur. |
+
+Le sélecteur natif n’écoutait que `change`. Les événements `input` pendant le
+choix ne passaient pas par la commande ; ce raccord est corrigé séparément,
+avec déduplication de `input` suivi de `change`. Le bouton d’ajout de couleur
+reprend le bouton d’icône secondaire commun ; Cadre et Contraste auto utilisent
+la même présentation de checkbox. Ces corrections ne tranchent pas les nouvelles
+frontières Projet/Page/BDC.
+
+Le modèle de portée à relire et ses acceptations se trouvent dans le
+[plan Style](../plan/2026-10-22-elce-style-tab-plan.md#reprise-de-la-chaîne-des-portées).
+Les descriptions antérieures de cette note ne remplacent pas cette relecture.
+
 ## Décisions détaillées
 
 

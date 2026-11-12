@@ -1,6 +1,11 @@
 # Elcé — plan de construction
 
-**Statut : fixe — ordre accepté ; réalisation du POC en cours.**
+**Statut : cadre fixe ; bilan révisé le 28 octobre 2026.** Le séquencement
+initial n’est plus un relevé fiable de l’avancement : le socle auteur, le player
+et la plupart des modules prévus sont réalisés et documentés. Le tableau
+ci-dessous remplace les anciens statuts génériques « En cours ». Les
+spécifications liées décrivent le comportement vérifié ; les plans dédiés
+portent les validations encore ouvertes.
 
 ## Cadre retenu
 
@@ -37,6 +42,24 @@ non arrêtés y restent **A relire**. L’[étude technique Learning](../mods/no
 détaille les découpages et raccords envisagés. Les contrats et acceptations du
 présent plan restent propriétaires du mod actuel, désormais nommé Learning.
 
+## Étude distincte — tête parlante
+
+La [note tête parlante](../notes/2026-11-04-talking-head-study.md) et son
+[plan de cadrage](./2026-11-04-talking-head-plan.md) suivent le composant Rive
+ViewModel, la narration Diapo/Carousel et la captation réutilisable. Les lots
+0 à 2 sont **Finis** : composant, démo validée et story réutilisable séparés
+dans leurs packages respectifs. Ils sont couverts par les spécifications
+[Rive](../../codplay/specs/third-party-rive-spec.md) et
+[story d’avatar](../../authoring/story/specs/rive-talking-avatar-story-spec.md).
+Le lot 3 est **En cours** dans « Projet 3 » : la Diapo à quatre cartes et
+l’avatar se montent dans la preview standard ; Play/Pause et Seek sont observés.
+La fin vocale se raccorde dans Elcé au signal de fin existant selon G3 ;
+la proposition de modification du moteur CodPlay est retirée.
+La télécommande partagée est dans la barre de navigation, avec démarrage sur
+Play, Pause, Seek et replay vérifiés dans Safari. Le placement responsive et
+l’affichage initial de l’avatar restent à achever avant l’édition (lot 4) et
+la captation (lot 5).
+
 ## Étude distincte de l’onglet Style
 
 L’[analyse de l’onglet Style](../notes/2026-10-22-style-tab-analysis.md) et son
@@ -48,6 +71,17 @@ regroupe les décisions et acceptations restantes ; la méthode de construction
 et d’application des classes est **A relire**. Ses détails sont conservés
 dans les notes Style.
 
+## Sélecteur « Vos projets » — superposition en cours
+
+La liste de projets doit se superposer à l’espace de travail auteur lorsqu’aucun
+document n’est sélectionné. Elle reste sous l’en-tête commun, couvre le viewport
+disponible avec un fond opaque et ne repousse pas l’espace de travail dans le
+flux. Les actions d’ouverture et de création continuent d’utiliser la façade et
+le contrôleur projet existants. L’acceptation vérifie que l’espace de travail
+reste derrière le sélecteur sans déplacement ni défilement de page, au démarrage
+sans projet et après fermeture du projet. Mettre à jour la
+[spécification de session](../specs/project-session-spec.md) après validation.
+
 ## Export standard réimportable — plan à relire
 
 Le [plan export/import coordonnés](./2026-10-26-elce-standard-export-import-plan.md)
@@ -56,7 +90,7 @@ reprise en projet éditable. Le socle est le document actuel ; les propositions
 de format, de périmètre et de publication restent **A relire**. Aucun changement
 de code ou de contrat SCORM n’est réalisé par cette préparation.
 
-## Ordre et critères de sortie
+## État actuel des tranches
 
 | Ordre | Tranche | État | Critère de sortie |
 | --- | --- | --- | --- |
@@ -71,10 +105,46 @@ de code ou de contrat SCORM n’est réalisé par cette préparation.
 | 8 | Page Diapo | En cours — Carousel par défaut, alternatives Quiz/Carte autonome et signal de fin vérifiés dans le player réel et Brave. Réduction de la profondeur DOM du Carousel Diapo implémentée et vérifiée le 7 octobre 2026 : cinq éléments jusqu’à `img.cp-img-inner` dans Safari, navigation aux points, replay de page stable ; 160 tests, typecheck et build Elcé passent. La voix facultative et son effet sur les durées restent à traiter. Le BDC séquence réunissant plusieurs types reste une proposition à évaluer. | Ajouter le type de page sans défilement et son builder distinct. Une Diapo porte un seul BDC direct : la création propose un Carousel ; l’auteur peut le supprimer et le remplacer par un BDC Question/Quiz ou un BDC Carte autonome réutilisant le modèle Carte du Carousel. Le Carousel porte la séquence de ses cartes. Plusieurs contenus de types différents et leur temporalité ne sont pas simulés par une composition locale ; évaluer séparément la proposition de BDC séquence. La fin fonctionnelle de Diapo publie le même événement que la fin de défilement d’une Page : `elce:page:finished` avec `pageId`, visibilité `public`, par le marqueur `emit.observe` partagé avec Flux ou par l’action de validation du Quiz. Le traitement Sighty existant met à jour le verrouillage global de la navigation ; l’événement ne déclenche pas lui-même la navigation. La Diapo garde son affichage sans défilement. Ne pas utiliser `scene:end` pour cet achèvement et ne pas modifier CodPlay. Le comportement vocal et ses règles de répartition de durée restent à appliquer selon le plan ci-dessous. |
 | 9 | Acceptation finale du POC | En cours — fenêtre distincte, suivi automatique de l’éditeur, arrêt par navigation dans la preview et reprise par retour à la page éditée vérifiés dans Brave le 30 octobre ; médias, typecheck, 523 tests et build passent. Correction de la preview orpheline vérifiée le 26 octobre : elle ne charge plus le document local par défaut, termine l’état de chargement et demande de rouvrir depuis l’éditeur ; une nouvelle preview rend le document v7. Le même jour, Brave a vérifié la récupération après une session restée sans instantané malgré un éditeur ouvert : recliquer sur « Prévisualiser » réutilise la popup et charge la page active avec une nouvelle session. Le 26 octobre, le libellé « Test auteur » a aussi été réintégré à l’adaptation responsive : masqué sur mobile, visible sur ordinateur, sans débordement. La suite Elcé passe 483 tests sur 484 ; le test SQLite restant est bloqué par `listen EPERM`. Lors d’une sélection, Brave signale qu’un descendant garde le focus au moment où le tiroir reçoit `aria-hidden` ; ce transfert reste à corriger. L’incohérence ARIA observée au passage de 800 à 801 px est reportée à une évolution CodPlay indépendante de la matérialisation. L’intégration du focus reste en attente d’une décision sur l’état accessible du menu de bureau après retrait de son adaptateur impératif. | Rejouer les parcours auteur et player, y compris mobile, chargement après fermeture et lecture en fenêtre distincte. Conserver la modale intégrée désactivée afin de comparer les deux choix pendant le POC. La synchronisation automatique débrayable est appliquée et décrite dans la spécification preview ; conserver les autres acceptations de la tranche ouvertes. Définir comment le menu reste accessible sur ordinateur sans logique DOM impérative, puis appliquer les actions de focus CodPlay et rejouer les vérifications concernées, le typecheck, les tests, le build et le navigateur. Le défaut 800/801 reste différé ; ne pas le résoudre par un patch local Elcé ou HTML. Documenter seulement les comportements effectivement vérifiés. |
 
+**Alignement responsive des commandes de panneau — appliqué et vérifié le 2 novembre 2026.**
+Les commandes Scénario, Prévisualiser et Contenus restent respectivement dans
+les première, deuxième et troisième colonnes de la barre, même lorsque l’une
+des commandes latérales est masquée. Les colonnes explicites évitent que le
+masquage de Scénario fasse glisser Contenus vers le centre. Brave vérifie le
+bord droit de Contenus et le centrage de Prévisualiser à 855 px, les trois
+positions à 780 px, et le centrage de Prévisualiser avec les deux commandes
+masquées à 1280 px. `editor-workspace.test.tsx` passe ses six tests.
+
+**Réduction des panneaux — appliquée et vérifiée le 2 novembre 2026.** Les
+commandes portent les noms accessibles « Réduire le panneau Scénario » et
+« Réduire le panneau Contenus » et utilisent `PanelLeftClose`/`PanelRightClose`.
+Elles sont alignées au même coin supérieur droit, contre le bord de leur
+conteneur et au-dessus du contenu ; celle de Contenus a sa rangée au-dessus des
+onglets. À 855 px, Brave confirme les libellés et les icônes, la
+réduction/réouverture des deux panneaux et la restitution du focus. Voir la
+[spécification de l’éditeur](../specs/organization-editor-spec.md).
+
 **Éditeur central de page — appliqué et vérifié le 22 octobre 2026.** La
 rangée d’actions de création précède maintenant les titres ; le titre de page
 est plus affirmé et distinct du titre de chapitre. `workspace/page-editor.test.tsx`
 vérifie l’ordre de la structure, et Brave confirme l’affichage dans l’éditeur.
+
+**Saisie des titres — correctif vérifié.** Le contrat reste celui
+de la spécification Organisation : les valeurs valides suivent `page.rename`
+et `chapter.rename`, les brouillons vides ou terminés par un espace restent
+locaux et le blur normalise ou restaure le titre. Le champ natif partagé doit
+posséder son brouillon et son propre rendu Remix : une frappe native laisse
+Remix restaurer la valeur contrôlée avant l’écouteur `document`. L’écouteur
+`input` de l’application actualise uniquement la disponibilité d’Annuler.
+- [x] Remplacer le helper natif par un composant local dans
+  `learning-inline-text-field.tsx`, identifié par l’ID du champ ; supprimer la
+  Map globale et les lectures du DOM utilisées comme état de saisie.
+- [x] Réconcilier un changement de valeur du modèle, normaliser au blur et
+  conserver le circuit existant de promotion vers le texte enrichi.
+- [x] Vérifier le brouillon visible avant blur, la frappe suivante, le
+  changement de modèle ou d’identité, et l’intégration XState/historique.
+- [x] Vérifier dans Safari la suppression du dernier signe après un espace,
+  les suppressions successives et la reprise de saisie ; rétablir le titre
+  initial puis consolider la spécification Organisation.
 
 **Mise à jour du 22 octobre 2026 — tranche 3.** Les dix ancres média de Demo5
 ne conservent plus `12rem` : ses neuf images utilisent leur ratio intrinsèque
@@ -355,7 +425,10 @@ le refus d’une action directe si la page n’est pas terminée.
 
 **État, 25 octobre :** le défaut est appliqué au code et au projet Demo5 par la
 commande `document.revelation.update` (révision 32) ; aucun remplacement local
-de BDC n’a été modifié ; le défaut des transitions entre cartes reste « Fondu ».
+de BDC n’a été modifié. À cette date, le Carousel gardait encore son défaut
+« Fondu » distinct. Le 3 novembre 2026, ce défaut concurrent a été supprimé :
+les Carousel héritent désormais de la paire projet centralisée
+`swipe-right`/`swipe-right`.
 Le bouton « Précédent » ne vérifie plus de garde de sortie, et « Suivant » sépare
 la sortie courante de l’accès à sa destination ; à la frontière SCO, le handler
 revalide la page et l’identifiant cible. Le test de scénario couvre les deux
@@ -436,6 +509,42 @@ intégration dépendante ; les travaux indépendants continuent.
   spécifique qui impose `display:flex` au Scénario pendant l’édition ; le panneau
   fermé restait donc dans la grille et repoussait la zone centrale. Le sélecteur
   de masquage est maintenant limité au panneau latéral fermé dans l’espace auteur.
+
+### Panneaux latéraux escamotables au bureau — réalisation validée
+
+Les colonnes « Scénario » et « Contenus » peuvent être rabattues séparément,
+car leur présence simultanée réduit trop la largeur d’édition. Chaque colonne
+ouverte porte sa commande de réduction en haut à droite. Quand une colonne est
+réduite, son bouton de réouverture apparaît dans la barre d’actions qui contient
+« Prévisualiser » : Scénario à gauche, Contenus à droite. Les panneaux restent
+dans la grille ; leur réduction rend leur largeur à la zone centrale et ne crée
+pas de superposition.
+
+Les règles responsives déjà vérifiées restent en vigueur : Contenus est fermé
+par défaut à 1200 px et moins ; à 800 px et moins les deux panneaux sont fermés
+au départ et un seul peut être ouvert. Les boutons de réouverture restent de
+part et d’autre de « Prévisualiser » quand le panneau correspondant est fermé.
+Les contrôles gardent un nom accessible, `aria-expanded`, `aria-controls` et un
+retour du focus vers la commande de réouverture après réduction.
+
+**État au 2 novembre 2026 :** les commandes séparées, l’exclusivité à 800 px et
+moins et le transfert du focus sont appliqués. Le 404 initial de
+`workspace-panel-state.ts` venait d’imports locaux sans extension dans les
+modules Remix ; les imports explicites corrigent le chargement. Brave reçoit
+304 pour les deux modules de panneau. À 1280 px, réduire l’une ou l’autre colonne
+rend 304 px au centre sans déplacer l’autre ; à 800 px, ouvrir un panneau réduit
+l’autre et le document ne déborde pas. À 855 px, Entrée et Espace ouvrent
+Contenus, Échap le réduit et rend le focus à sa commande de réouverture.
+L’éditeur a d’abord reçu `edit_access_occupied` depuis un ancien onglet de test ;
+la fermeture de cet onglet a libéré l’accès, ensuite obtenu avec une réponse 200.
+La spécification Organisation décrit maintenant le comportement vérifié.
+
+**Acceptation :** à plus de 1200 px, réduire chaque colonne séparément puis la
+rouvrir depuis son bouton autour de « Prévisualiser » ; vérifier que le centre
+occupe l’espace libéré et que l’autre colonne ne bouge pas. Refaire aux largeurs
+801–1200 px et 800 px et moins, en vérifiant les règles responsives existantes,
+l’ouverture exclusive sur petit écran, le clavier et l’absence de débordement.
+Mettre à jour la spécification Organisation après validation intégrée.
 
 ### Placement du bouton d’export Sighty — décision acceptée
 
@@ -667,6 +776,55 @@ réelle dans la preview, deux fenêtres Brave avec vidéo en lecture et scroll
 conservés pendant l’arrêt, retour et suivi réactivé. L’acceptation responsive
 précédente reste acquise. Typecheck, 523 tests, build et contrôle d'espacement
 passent.
+
+### Défilement horizontal du Flux — accepté le 3 novembre 2026
+
+La preview ne doit pas permettre de faire défiler horizontalement une page.
+Brave montre que le scrollport a `overflow-y: auto`, mais que l’axe horizontal
+devient lui aussi défilable par défaut. Une Carte ancrée décalée par sa
+transition étend temporairement `scrollWidth` au-delà du viewport. Le correctif
+explicite `overflow-x: hidden` sur le scrollport et conserve son défilement
+vertical natif.
+
+Brave confirme déjà à 855 px `overflow-x: hidden`, `overflow-y: auto` et aucun
+débordement du document hôte. La translation des Cartes ancrées reste active ;
+leur largeur transformée n’est plus exposée au défilement horizontal de
+l’utilisateur. Acceptation restante : refaire ce contrôle sur une largeur
+étroite et confirmer le défilement vertical et les transitions complètes de
+Carte ancrée avant de fermer ce point.
+
+### Barre de navigation ancrée en bas de la preview — accepté le 3 novembre 2026
+
+La barre de navigation reste au bas de la fenêtre de lecture pendant le
+défilement vertical du contenu. Brave a montré que le titre HTML masqué de
+fallback « Graphe », positionné en absolu sans conteneur positionné, allongeait
+le document hôte à 3 483 px et faisait remonter le lecteur. Ce titre redoublait
+le nom du SVG et le `caption` du tableau. Le builder ne produit plus ce titre
+HTML quand l’auteur n’en a pas saisi ; un titre rédigé par l’auteur reste dans
+le flux normal.
+
+Brave confirme le comportement à 855 × 783 : pendant 320 px de défilement
+interne, `window.scrollY` reste à 0, le document reste à 783 px et la
+navigation touche le bas du viewport (`bottom: 783`). À 1762 × 712, le
+document reste exactement à la taille du viewport, la navigation touche le
+bas (`bottom: 712`) et le scrollport conserve `overflow-x: hidden`,
+`overflow-y: auto` et un contenu vertical défilable. Le correctif ne modifie
+pas la grille du lecteur ni le scrollport Flux.
+
+### Omission des contenus vides du rendu — accepté le 3 novembre 2026
+
+Les textes facultatifs vides ou réduits à des espaces ne produisent ni balise
+de contenu ni perso. Les blocs de texte vides dans une Section, les
+paragraphes éditoriaux vides et les conteneurs de légendes Graphe sans légende
+sont omis de la projection. Les points de montage d’ancre ou de texte, la
+structure du tableau, les contrôles requis et la zone de retour dynamique du
+Quiz restent lorsqu’ils servent au rendu ou au runtime ; ils ne sont pas du
+contenu vide inutilisé.
+
+Le code des builders Graphe, Carte, Question et Flux applique cette règle.
+Acceptation restante : vérifier les sorties sans contenu et les variantes
+avec texte, ancres, champs Tiptap et tableau ; contrôler l’export du scénario.
+Le plan reste `En cours` jusqu’à cette vérification.
 
 Avant de clore la tranche 9 : traiter l'écart `aria-expanded` et l'ordre du
 transfert de focus du sommaire décrits ci-dessus, puis rejouer leur acceptation
@@ -1500,6 +1658,7 @@ passent. Le parcours navigateur réseau et sa validation mobile restent à faire
 
 - [Plan Sommaire et profils](2026-10-14-elce-sommaire-profils-plan.md) : étapes,
   acceptation et points restant à vérifier.
+- [Plan variables et liens internes](2026-10-30-elce-variables-et-liens-internes-plan.md) : promotion paresseuse des champs en Tiptap, résolution dans la preview et navigation par les gardes existantes.
 - [Spécification Sommaire et profils](../specs/summary-profile-spec.md) :
   comportements intégrés et vérifiés.
 - [Notes d’enquête](../notes/2026-10-14-sommaire-profils-contraintes.md) et
@@ -1509,6 +1668,32 @@ passent. Le parcours navigateur réseau et sa validation mobile restent à faire
 Qualifications dynamiques, variantes grammaticales, ACL et lot d’utilisateurs
 restent différés. Les formats internes intégrés sont disponibles pour relecture
 auteur ultérieure.
+
+## Amélioration globale Elcé différée — reprise sur un BDC du Flux
+
+Étudier un mécanisme commun de navigation pour les parcours lancés depuis un
+BDC intégré au Flux. Il devra définir le contexte auquel revenir — au minimum
+la page hôte — et permettre, si le parcours le demande, de reprendre à la
+position exacte du BDC dans cette page. Le retour automatique en `summary` à la
+fin d’une portée lancée depuis un BDC Sommaire en est le premier cas identifié ;
+le mécanisme devra être évalué pour les autres parcours Elcé qui ciblent un
+BDC. Cette amélioration est hors de la tranche des Sommaires intermédiaires et
+sera cadrée séparément.
+
+## Composition future des pages par BDC — direction acceptée, réalisation différée
+
+- Conserver pour chaque type de page ses paramètres métier dans son propriétaire
+  et son interface d’auteur dédiée. Quand la lecture compose des BDC, cette
+  interface peut aussi exposer leurs réglages pertinents sans déplacer la
+  propriété de leur état. Les BDC apportent le contenu ou la présentation ; ils
+  ne deviennent pas propriétaires de la politique métier de la page.
+- Le Sommaire principal est le premier cas : sa page de réglages reste en place
+  et sa vue racine pourra composer le BDC Sommaire, avec une Carte BDC éventuelle
+  pour le titre. Le plan Sommaire et profils précise les décisions encore
+  ouvertes pour cette composition.
+- L’Évaluation est le candidat suivant. Avant réalisation, préciser quels
+  contenus de lecture elle expose et quels réglages restent dans son modèle et
+  sa classe métier ; établir ensuite un plan et son parcours d’acceptation.
 
 ## Export SCORM
 

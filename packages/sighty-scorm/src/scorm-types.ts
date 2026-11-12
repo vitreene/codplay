@@ -36,7 +36,7 @@ export interface ScormObjectiveProgress {
 export interface ScormProgressUpdate {
   readonly measure: number
   readonly completionStatus?: 'completed' | 'incomplete'
-  readonly successStatus?: 'passed' | 'failed'
+  readonly successStatus?: 'unknown' | 'passed' | 'failed'
   readonly objectives?: readonly ScormObjectiveProgress[]
 }
 

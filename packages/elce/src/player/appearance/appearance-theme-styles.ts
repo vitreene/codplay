@@ -1,7 +1,7 @@
 import {
   APPEARANCE_READING_CSS_FILE,
   APPEARANCE_FONT_DEFINITIONS,
-} from '../../config/appearance/appearance-definitions.ts'
+} from '../../config/appearance/appearance-definitions'
 import { getAppearanceDensity } from '../../config/appearance/appearance-config'
 import type { AppearanceDensity } from '../../config/appearance/appearance-types'
 

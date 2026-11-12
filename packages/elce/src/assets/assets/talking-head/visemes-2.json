@@ -1,0 +1,1432 @@
+{
+  "text": "Dans Interstellar, Cooper est un ancien pilote devenu agriculteur sur une Terre en crise. Il accepte de partir dans l'espace pour chercher une solution a la survie humaine. La mission le conduit a travers un trou de ver près de Saturne.",
+  "rules": "fr",
+  "shapeSet": "azure",
+  "target": "viewModel",
+  "input": null,
+  "visemes": [
+    {
+      "shape": 19,
+      "value": 119,
+      "property": "v119",
+      "start": 0,
+      "end": 0.093,
+      "letters": "D"
+    },
+    {
+      "shape": 2,
+      "value": 102,
+      "property": "v102",
+      "start": 0.093,
+      "end": 0.302,
+      "letters": "an"
+    },
+    {
+      "shape": 4,
+      "value": 104,
+      "property": "v104",
+      "start": 0.302,
+      "end": 0.372,
+      "letters": "In"
+    },
+    {
+      "shape": 19,
+      "value": 119,
+      "property": "v119",
+      "start": 0.372,
+      "end": 0.418,
+      "letters": "t"
+    },
+    {
+      "shape": 4,
+      "value": 104,
+      "property": "v104",
+      "start": 0.418,
+      "end": 0.488,
+      "letters": "e"
+    },
+    {
+      "shape": 13,
+      "value": 113,
+      "property": "v113",
+      "start": 0.488,
+      "end": 0.534,
+      "letters": "r"
+    },
+    {
+      "shape": 15,
+      "value": 115,
+      "property": "v115",
+      "start": 0.534,
+      "end": 0.604,
+      "letters": "s"
+    },
+    {
+      "shape": 19,
+      "value": 119,
+      "property": "v119",
+      "start": 0.604,
+      "end": 0.662,
+      "letters": "t"
+    },
+    {
+      "shape": 4,
+      "value": 104,
+      "property": "v104",
+      "start": 0.662,
+      "end": 0.755,
+      "letters": "e"
+    },
+    {
+      "shape": 14,
+      "value": 114,
+      "property": "v114",
+      "start": 0.755,
+      "end": 0.813,
+      "letters": "ll"
+    },
+    {
+      "shape": 2,
+      "value": 102,
+      "property": "v102",
+      "start": 0.813,
+      "end": 0.964,
+      "letters": "a"
+    },
+    {
+      "shape": 13,
+      "value": 113,
+      "property": "v113",
+      "start": 0.964,
+      "end": 1.08,
+      "letters": "r"
+    },
+    {
+      "shape": 0,
+      "value": 100,
+      "property": "v100",
+      "start": 1.08,
+      "end": 1.231,
+      "letters": ","
+    },
+    {
+      "shape": 20,
+      "value": 120,
+      "property": "v120",
+      "start": 1.231,
+      "end": 1.3,
+      "letters": "C"
+    },
+    {
+      "shape": 8,
+      "value": 108,
+      "property": "v108",
+      "start": 1.3,
+      "end": 1.416,
+      "letters": "oo"
+    },
+    {
+      "shape": 21,
+      "value": 121,
+      "property": "v121",
+      "start": 1.416,
+      "end": 1.498,
+      "letters": "p"
+    },
+    {
+      "shape": 4,
+      "value": 104,
+      "property": "v104",
+      "start": 1.498,
+      "end": 1.591,
+      "letters": "e"
+    },
+    {
+      "shape": 13,
+      "value": 113,
+      "property": "v113",
+      "start": 1.591,
+      "end": 1.683,
+      "letters": "r"
+    },
+    {
+      "shape": 4,
+      "value": 104,
+      "property": "v104",
+      "start": 1.683,
+      "end": 1.707,
+      "letters": "e"
+    },
+    {
+      "shape": 15,
+      "value": 115,
+      "property": "v115",
+      "start": 1.707,
+      "end": 1.823,
+      "letters": "s"
+    },
+    {
+      "shape": 4,
+      "value": 104,
+      "property": "v104",
+      "start": 1.823,
+      "end": 1.95,
+      "letters": "un"
+    },
+    {
+      "shape": 2,
+      "value": 102,
+      "property": "v102",
+      "start": 1.95,
+      "end": 2.02,
+      "letters": "an"
+    },
+    {
+      "shape": 15,
+      "value": 115,
+      "property": "v115",
+      "start": 2.02,
+      "end": 2.09,
+      "letters": "ci"
+    },
+    {
+      "shape": 6,
+      "value": 106,
+      "property": "v106",
+      "start": 2.09,
+      "end": 2.159,
+      "letters": "ci"
+    },
+    {
+      "shape": 2,
+      "value": 102,
+      "property": "v102",
+      "start": 2.159,
+      "end": 2.276,
+      "letters": "en"
+    },
+    {
+      "shape": 21,
+      "value": 121,
+      "property": "v121",
+      "start": 2.276,
+      "end": 2.31,
+      "letters": "p"
+    },
+    {
+      "shape": 6,
+      "value": 106,
+      "property": "v106",
+      "start": 2.31,
+      "end": 2.392,
+      "letters": "i"
+    },
+    {
+      "shape": 14,
+      "value": 114,
+      "property": "v114",
+      "start": 2.392,
+      "end": 2.45,
+      "letters": "l"
+    },
+    {
+      "shape": 8,
+      "value": 108,
+      "property": "v108",
+      "start": 2.45,
+      "end": 2.543,
+      "letters": "o"
+    },
+    {
+      "shape": 19,
+      "value": 119,
+      "property": "v119",
+      "start": 2.543,
+      "end": 2.728,
+      "letters": "td"
+    },
+    {
+      "shape": 4,
+      "value": 104,
+      "property": "v104",
+      "start": 2.728,
+      "end": 2.798,
+      "letters": "e"
+    },
+    {
+      "shape": 18,
+      "value": 118,
+      "property": "v118",
+      "start": 2.798,
+      "end": 2.833,
+      "letters": "v"
+    },
+    {
+      "shape": 2,
+      "value": 102,
+      "property": "v102",
+      "start": 2.833,
+      "end": 2.961,
+      "letters": "en"
+    },
+    {
+      "shape": 7,
+      "value": 107,
+      "property": "v107",
+      "start": 2.961,
+      "end": 3.065,
+      "letters": "u"
+    },
+    {
+      "shape": 2,
+      "value": 102,
+      "property": "v102",
+      "start": 3.065,
+      "end": 3.111,
+      "letters": "a"
+    },
+    {
+      "shape": 20,
+      "value": 120,
+      "property": "v120",
+      "start": 3.111,
+      "end": 3.17,
+      "letters": "g"
+    },
+    {
+      "shape": 13,
+      "value": 113,
+      "property": "v113",
+      "start": 3.17,
+      "end": 3.228,
+      "letters": "r"
+    },
+    {
+      "shape": 6,
+      "value": 106,
+      "property": "v106",
+      "start": 3.228,
+      "end": 3.286,
+      "letters": "i"
+    },
+    {
+      "shape": 20,
+      "value": 120,
+      "property": "v120",
+      "start": 3.286,
+      "end": 3.344,
+      "letters": "c"
+    },
+    {
+      "shape": 7,
+      "value": 107,
+      "property": "v107",
+      "start": 3.344,
+      "end": 3.413,
+      "letters": "u"
+    },
+    {
+      "shape": 14,
+      "value": 114,
+      "property": "v114",
+      "start": 3.413,
+      "end": 3.471,
+      "letters": "l"
+    },
+    {
+      "shape": 19,
+      "value": 119,
+      "property": "v119",
+      "start": 3.471,
+      "end": 3.553,
+      "letters": "t"
+    },
+    {
+      "shape": 8,
+      "value": 108,
+      "property": "v108",
+      "start": 3.553,
+      "end": 3.727,
+      "letters": "eu"
+    },
+    {
+      "shape": 13,
+      "value": 113,
+      "property": "v113",
+      "start": 3.727,
+      "end": 3.843,
+      "letters": "r"
+    },
+    {
+      "shape": 15,
+      "value": 115,
+      "property": "v115",
+      "start": 3.843,
+      "end": 3.889,
+      "letters": "s"
+    },
+    {
+      "shape": 7,
+      "value": 107,
+      "property": "v107",
+      "start": 3.889,
+      "end": 3.982,
+      "letters": "u"
+    },
+    {
+      "shape": 13,
+      "value": 113,
+      "property": "v113",
+      "start": 3.982,
+      "end": 4.052,
+      "letters": "r"
+    },
+    {
+      "shape": 4,
+      "value": 104,
+      "property": "v104",
+      "start": 4.052,
+      "end": 4.191,
+      "letters": "un"
+    },
+    {
+      "shape": 19,
+      "value": 119,
+      "property": "v119",
+      "start": 4.191,
+      "end": 4.238,
+      "letters": "T"
+    },
+    {
+      "shape": 4,
+      "value": 104,
+      "property": "v104",
+      "start": 4.238,
+      "end": 4.319,
+      "letters": "e"
+    },
+    {
+      "shape": 13,
+      "value": 113,
+      "property": "v113",
+      "start": 4.319,
+      "end": 4.447,
+      "letters": "rr"
+    },
+    {
+      "shape": 2,
+      "value": 102,
+      "property": "v102",
+      "start": 4.447,
+      "end": 4.551,
+      "letters": "en"
+    },
+    {
+      "shape": 20,
+      "value": 120,
+      "property": "v120",
+      "start": 4.551,
+      "end": 4.609,
+      "letters": "c"
+    },
+    {
+      "shape": 13,
+      "value": 113,
+      "property": "v113",
+      "start": 4.609,
+      "end": 4.69,
+      "letters": "r"
+    },
+    {
+      "shape": 6,
+      "value": 106,
+      "property": "v106",
+      "start": 4.69,
+      "end": 4.807,
+      "letters": "i"
+    },
+    {
+      "shape": 15,
+      "value": 115,
+      "property": "v115",
+      "start": 4.807,
+      "end": 5.016,
+      "letters": "s"
+    },
+    {
+      "shape": 0,
+      "value": 100,
+      "property": "v100",
+      "start": 5.016,
+      "end": 5.77,
+      "letters": ". "
+    },
+    {
+      "shape": 6,
+      "value": 106,
+      "property": "v106",
+      "start": 5.77,
+      "end": 5.863,
+      "letters": "I"
+    },
+    {
+      "shape": 14,
+      "value": 114,
+      "property": "v114",
+      "start": 5.863,
+      "end": 5.968,
+      "letters": "l"
+    },
+    {
+      "shape": 2,
+      "value": 102,
+      "property": "v102",
+      "start": 5.968,
+      "end": 6.002,
+      "letters": "a"
+    },
+    {
+      "shape": 20,
+      "value": 120,
+      "property": "v120",
+      "start": 6.002,
+      "end": 6.06,
+      "letters": "c"
+    },
+    {
+      "shape": 15,
+      "value": 115,
+      "property": "v115",
+      "start": 6.06,
+      "end": 6.118,
+      "letters": "ce"
+    },
+    {
+      "shape": 4,
+      "value": 104,
+      "property": "v104",
+      "start": 6.118,
+      "end": 6.177,
+      "letters": "ce"
+    },
+    {
+      "shape": 21,
+      "value": 121,
+      "property": "v121",
+      "start": 6.177,
+      "end": 6.235,
+      "letters": "p"
+    },
+    {
+      "shape": 19,
+      "value": 119,
+      "property": "v119",
+      "start": 6.235,
+      "end": 6.42,
+      "letters": "td"
+    },
+    {
+      "shape": 4,
+      "value": 104,
+      "property": "v104",
+      "start": 6.42,
+      "end": 6.502,
+      "letters": "e"
+    },
+    {
+      "shape": 21,
+      "value": 121,
+      "property": "v121",
+      "start": 6.502,
+      "end": 6.548,
+      "letters": "p"
+    },
+    {
+      "shape": 2,
+      "value": 102,
+      "property": "v102",
+      "start": 6.548,
+      "end": 6.618,
+      "letters": "a"
+    },
+    {
+      "shape": 13,
+      "value": 113,
+      "property": "v113",
+      "start": 6.618,
+      "end": 6.687,
+      "letters": "r"
+    },
+    {
+      "shape": 19,
+      "value": 119,
+      "property": "v119",
+      "start": 6.687,
+      "end": 6.769,
+      "letters": "t"
+    },
+    {
+      "shape": 6,
+      "value": 106,
+      "property": "v106",
+      "start": 6.769,
+      "end": 6.861,
+      "letters": "i"
+    },
+    {
+      "shape": 13,
+      "value": 113,
+      "property": "v113",
+      "start": 6.861,
+      "end": 6.943,
+      "letters": "r"
+    },
+    {
+      "shape": 19,
+      "value": 119,
+      "property": "v119",
+      "start": 6.943,
+      "end": 6.978,
+      "letters": "d"
+    },
+    {
+      "shape": 2,
+      "value": 102,
+      "property": "v102",
+      "start": 6.978,
+      "end": 7.082,
+      "letters": "an"
+    },
+    {
+      "shape": 14,
+      "value": 114,
+      "property": "v114",
+      "start": 7.082,
+      "end": 7.14,
+      "letters": "l"
+    },
+    {
+      "shape": 4,
+      "value": 104,
+      "property": "v104",
+      "start": 7.14,
+      "end": 7.175,
+      "letters": "e"
+    },
+    {
+      "shape": 15,
+      "value": 115,
+      "property": "v115",
+      "start": 7.175,
+      "end": 7.256,
+      "letters": "s"
+    },
+    {
+      "shape": 21,
+      "value": 121,
+      "property": "v121",
+      "start": 7.256,
+      "end": 7.338,
+      "letters": "p"
+    },
+    {
+      "shape": 2,
+      "value": 102,
+      "property": "v102",
+      "start": 7.338,
+      "end": 7.488,
+      "letters": "a"
+    },
+    {
+      "shape": 15,
+      "value": 115,
+      "property": "v115",
+      "start": 7.488,
+      "end": 7.598,
+      "letters": "ce"
+    },
+    {
+      "shape": 4,
+      "value": 104,
+      "property": "v104",
+      "start": 7.598,
+      "end": 7.825,
+      "letters": "ce"
+    },
+    {
+      "shape": 21,
+      "value": 121,
+      "property": "v121",
+      "start": 7.825,
+      "end": 7.895,
+      "letters": "p"
+    },
+    {
+      "shape": 7,
+      "value": 107,
+      "property": "v107",
+      "start": 7.895,
+      "end": 7.964,
+      "letters": "ou"
+    },
+    {
+      "shape": 13,
+      "value": 113,
+      "property": "v113",
+      "start": 7.964,
+      "end": 8.022,
+      "letters": "r"
+    },
+    {
+      "shape": 16,
+      "value": 116,
+      "property": "v116",
+      "start": 8.022,
+      "end": 8.092,
+      "letters": "ch"
+    },
+    {
+      "shape": 4,
+      "value": 104,
+      "property": "v104",
+      "start": 8.092,
+      "end": 8.15,
+      "letters": "e"
+    },
+    {
+      "shape": 13,
+      "value": 113,
+      "property": "v113",
+      "start": 8.15,
+      "end": 8.208,
+      "letters": "r"
+    },
+    {
+      "shape": 16,
+      "value": 116,
+      "property": "v116",
+      "start": 8.208,
+      "end": 8.301,
+      "letters": "ch"
+    },
+    {
+      "shape": 4,
+      "value": 104,
+      "property": "v104",
+      "start": 8.301,
+      "end": 8.359,
+      "letters": "e"
+    },
+    {
+      "shape": 13,
+      "value": 113,
+      "property": "v113",
+      "start": 8.359,
+      "end": 8.406,
+      "letters": "r"
+    },
+    {
+      "shape": 4,
+      "value": 104,
+      "property": "v104",
+      "start": 8.406,
+      "end": 8.533,
+      "letters": "un"
+    },
+    {
+      "shape": 15,
+      "value": 115,
+      "property": "v115",
+      "start": 8.533,
+      "end": 8.568,
+      "letters": "s"
+    },
+    {
+      "shape": 8,
+      "value": 108,
+      "property": "v108",
+      "start": 8.568,
+      "end": 8.661,
+      "letters": "o"
+    },
+    {
+      "shape": 14,
+      "value": 114,
+      "property": "v114",
+      "start": 8.661,
+      "end": 8.719,
+      "letters": "l"
+    },
+    {
+      "shape": 7,
+      "value": 107,
+      "property": "v107",
+      "start": 8.719,
+      "end": 8.777,
+      "letters": "u"
+    },
+    {
+      "shape": 19,
+      "value": 119,
+      "property": "v119",
+      "start": 8.777,
+      "end": 8.858,
+      "letters": "t"
+    },
+    {
+      "shape": 6,
+      "value": 106,
+      "property": "v106",
+      "start": 8.858,
+      "end": 8.94,
+      "letters": "i"
+    },
+    {
+      "shape": 8,
+      "value": 108,
+      "property": "v108",
+      "start": 8.94,
+      "end": 9.056,
+      "letters": "on"
+    },
+    {
+      "shape": 2,
+      "value": 102,
+      "property": "v102",
+      "start": 9.056,
+      "end": 9.114,
+      "letters": "a"
+    },
+    {
+      "shape": 14,
+      "value": 114,
+      "property": "v114",
+      "start": 9.114,
+      "end": 9.137,
+      "letters": "l"
+    },
+    {
+      "shape": 2,
+      "value": 102,
+      "property": "v102",
+      "start": 9.137,
+      "end": 9.242,
+      "letters": "a"
+    },
+    {
+      "shape": 15,
+      "value": 115,
+      "property": "v115",
+      "start": 9.242,
+      "end": 9.288,
+      "letters": "s"
+    },
+    {
+      "shape": 7,
+      "value": 107,
+      "property": "v107",
+      "start": 9.288,
+      "end": 9.369,
+      "letters": "u"
+    },
+    {
+      "shape": 13,
+      "value": 113,
+      "property": "v113",
+      "start": 9.369,
+      "end": 9.439,
+      "letters": "r"
+    },
+    {
+      "shape": 18,
+      "value": 118,
+      "property": "v118",
+      "start": 9.439,
+      "end": 9.497,
+      "letters": "v"
+    },
+    {
+      "shape": 6,
+      "value": 106,
+      "property": "v106",
+      "start": 9.497,
+      "end": 9.671,
+      "letters": "i"
+    },
+    {
+      "shape": 7,
+      "value": 107,
+      "property": "v107",
+      "start": 9.671,
+      "end": 9.729,
+      "letters": "u"
+    },
+    {
+      "shape": 21,
+      "value": 121,
+      "property": "v121",
+      "start": 9.729,
+      "end": 9.787,
+      "letters": "m"
+    },
+    {
+      "shape": 4,
+      "value": 104,
+      "property": "v104",
+      "start": 9.787,
+      "end": 10.124,
+      "letters": "ain"
+    },
+    {
+      "shape": 0,
+      "value": 100,
+      "property": "v100",
+      "start": 10.124,
+      "end": 10.693,
+      "letters": ". "
+    },
+    {
+      "shape": 14,
+      "value": 114,
+      "property": "v114",
+      "start": 10.693,
+      "end": 10.762,
+      "letters": "L"
+    },
+    {
+      "shape": 2,
+      "value": 102,
+      "property": "v102",
+      "start": 10.762,
+      "end": 10.879,
+      "letters": "a"
+    },
+    {
+      "shape": 21,
+      "value": 121,
+      "property": "v121",
+      "start": 10.879,
+      "end": 10.925,
+      "letters": "m"
+    },
+    {
+      "shape": 6,
+      "value": 106,
+      "property": "v106",
+      "start": 10.925,
+      "end": 10.995,
+      "letters": "i"
+    },
+    {
+      "shape": 15,
+      "value": 115,
+      "property": "v115",
+      "start": 10.995,
+      "end": 11.064,
+      "letters": "ss"
+    },
+    {
+      "shape": 6,
+      "value": 106,
+      "property": "v106",
+      "start": 11.064,
+      "end": 11.122,
+      "letters": "i"
+    },
+    {
+      "shape": 8,
+      "value": 108,
+      "property": "v108",
+      "start": 11.122,
+      "end": 11.238,
+      "letters": "on"
+    },
+    {
+      "shape": 14,
+      "value": 114,
+      "property": "v114",
+      "start": 11.238,
+      "end": 11.262,
+      "letters": "l"
+    },
+    {
+      "shape": 4,
+      "value": 104,
+      "property": "v104",
+      "start": 11.262,
+      "end": 11.343,
+      "letters": "e"
+    },
+    {
+      "shape": 20,
+      "value": 120,
+      "property": "v120",
+      "start": 11.343,
+      "end": 11.378,
+      "letters": "c"
+    },
+    {
+      "shape": 8,
+      "value": 108,
+      "property": "v108",
+      "start": 11.378,
+      "end": 11.505,
+      "letters": "on"
+    },
+    {
+      "shape": 19,
+      "value": 119,
+      "property": "v119",
+      "start": 11.505,
+      "end": 11.598,
+      "letters": "d"
+    },
+    {
+      "shape": 7,
+      "value": 107,
+      "property": "v107",
+      "start": 11.598,
+      "end": 11.691,
+      "letters": "u"
+    },
+    {
+      "shape": 6,
+      "value": 106,
+      "property": "v106",
+      "start": 11.691,
+      "end": 11.923,
+      "letters": "i"
+    },
+    {
+      "shape": 2,
+      "value": 102,
+      "property": "v102",
+      "start": 11.923,
+      "end": 12.051,
+      "letters": "a"
+    },
+    {
+      "shape": 19,
+      "value": 119,
+      "property": "v119",
+      "start": 12.051,
+      "end": 12.098,
+      "letters": "t"
+    },
+    {
+      "shape": 13,
+      "value": 113,
+      "property": "v113",
+      "start": 12.098,
+      "end": 12.144,
+      "letters": "r"
+    },
+    {
+      "shape": 2,
+      "value": 102,
+      "property": "v102",
+      "start": 12.144,
+      "end": 12.214,
+      "letters": "a"
+    },
+    {
+      "shape": 18,
+      "value": 118,
+      "property": "v118",
+      "start": 12.214,
+      "end": 12.26,
+      "letters": "v"
+    },
+    {
+      "shape": 4,
+      "value": 104,
+      "property": "v104",
+      "start": 12.26,
+      "end": 12.33,
+      "letters": "e"
+    },
+    {
+      "shape": 13,
+      "value": 113,
+      "property": "v113",
+      "start": 12.33,
+      "end": 12.423,
+      "letters": "r"
+    },
+    {
+      "shape": 4,
+      "value": 104,
+      "property": "v104",
+      "start": 12.423,
+      "end": 12.516,
+      "letters": "un"
+    },
+    {
+      "shape": 19,
+      "value": 119,
+      "property": "v119",
+      "start": 12.516,
+      "end": 12.562,
+      "letters": "t"
+    },
+    {
+      "shape": 13,
+      "value": 113,
+      "property": "v113",
+      "start": 12.562,
+      "end": 12.62,
+      "letters": "r"
+    },
+    {
+      "shape": 7,
+      "value": 107,
+      "property": "v107",
+      "start": 12.62,
+      "end": 12.736,
+      "letters": "ou"
+    },
+    {
+      "shape": 19,
+      "value": 119,
+      "property": "v119",
+      "start": 12.736,
+      "end": 12.771,
+      "letters": "d"
+    },
+    {
+      "shape": 4,
+      "value": 104,
+      "property": "v104",
+      "start": 12.771,
+      "end": 12.864,
+      "letters": "e"
+    },
+    {
+      "shape": 18,
+      "value": 118,
+      "property": "v118",
+      "start": 12.864,
+      "end": 12.922,
+      "letters": "v"
+    },
+    {
+      "shape": 4,
+      "value": 104,
+      "property": "v104",
+      "start": 12.922,
+      "end": 13.073,
+      "letters": "e"
+    },
+    {
+      "shape": 13,
+      "value": 113,
+      "property": "v113",
+      "start": 13.073,
+      "end": 13.189,
+      "letters": "r"
+    },
+    {
+      "shape": 21,
+      "value": 121,
+      "property": "v121",
+      "start": 13.189,
+      "end": 13.235,
+      "letters": "p"
+    },
+    {
+      "shape": 13,
+      "value": 113,
+      "property": "v113",
+      "start": 13.235,
+      "end": 13.293,
+      "letters": "r"
+    },
+    {
+      "shape": 4,
+      "value": 104,
+      "property": "v104",
+      "start": 13.293,
+      "end": 13.398,
+      "letters": "è"
+    },
+    {
+      "shape": 19,
+      "value": 119,
+      "property": "v119",
+      "start": 13.398,
+      "end": 13.433,
+      "letters": "d"
+    },
+    {
+      "shape": 4,
+      "value": 104,
+      "property": "v104",
+      "start": 13.433,
+      "end": 13.526,
+      "letters": "e"
+    },
+    {
+      "shape": 15,
+      "value": 115,
+      "property": "v115",
+      "start": 13.526,
+      "end": 13.56,
+      "letters": "S"
+    },
+    {
+      "shape": 2,
+      "value": 102,
+      "property": "v102",
+      "start": 13.56,
+      "end": 13.677,
+      "letters": "a"
+    },
+    {
+      "shape": 19,
+      "value": 119,
+      "property": "v119",
+      "start": 13.677,
+      "end": 13.746,
+      "letters": "t"
+    },
+    {
+      "shape": 7,
+      "value": 107,
+      "property": "v107",
+      "start": 13.746,
+      "end": 13.862,
+      "letters": "u"
+    },
+    {
+      "shape": 13,
+      "value": 113,
+      "property": "v113",
+      "start": 13.862,
+      "end": 13.92,
+      "letters": "r"
+    },
+    {
+      "shape": 19,
+      "value": 119,
+      "property": "v119",
+      "start": 13.92,
+      "end": 14.153,
+      "letters": "n"
+    },
+    {
+      "shape": 0,
+      "value": 100,
+      "property": "v100",
+      "start": 14.153,
+      "end": 14.396,
+      "letters": "."
+    }
+  ],
+  "words": [
+    {
+      "text": "Dans",
+      "start": 0,
+      "end": 0.244
+    },
+    {
+      "text": "Interstellar,",
+      "start": 0.302,
+      "end": 1.115
+    },
+    {
+      "text": "Cooper",
+      "start": 1.231,
+      "end": 1.625
+    },
+    {
+      "text": "est",
+      "start": 1.683,
+      "end": 1.753
+    },
+    {
+      "text": "un",
+      "start": 1.823,
+      "end": 1.881
+    },
+    {
+      "text": "ancien",
+      "start": 1.95,
+      "end": 2.229
+    },
+    {
+      "text": "pilote",
+      "start": 2.276,
+      "end": 2.635
+    },
+    {
+      "text": "devenu",
+      "start": 2.694,
+      "end": 3.019
+    },
+    {
+      "text": "agriculteur",
+      "start": 3.065,
+      "end": 3.773
+    },
+    {
+      "text": "sur",
+      "start": 3.843,
+      "end": 4.005
+    },
+    {
+      "text": "une",
+      "start": 4.052,
+      "end": 4.156
+    },
+    {
+      "text": "Terre",
+      "start": 4.191,
+      "end": 4.423
+    },
+    {
+      "text": "en",
+      "start": 4.447,
+      "end": 4.493
+    },
+    {
+      "text": "crise.",
+      "start": 4.551,
+      "end": 5.166
+    },
+    {
+      "text": "Il",
+      "start": 5.77,
+      "end": 5.921
+    },
+    {
+      "text": "accepte",
+      "start": 5.968,
+      "end": 6.339
+    },
+    {
+      "text": "de",
+      "start": 6.385,
+      "end": 6.455
+    },
+    {
+      "text": "partir",
+      "start": 6.502,
+      "end": 6.896
+    },
+    {
+      "text": "dans",
+      "start": 6.943,
+      "end": 7.059
+    },
+    {
+      "text": "l'espace",
+      "start": 7.082,
+      "end": 7.709
+    },
+    {
+      "text": "pour",
+      "start": 7.825,
+      "end": 7.988
+    },
+    {
+      "text": "chercher",
+      "start": 8.022,
+      "end": 8.382
+    },
+    {
+      "text": "une",
+      "start": 8.406,
+      "end": 8.499
+    },
+    {
+      "text": "solution",
+      "start": 8.533,
+      "end": 9.021
+    },
+    {
+      "text": "a",
+      "start": 9.056,
+      "end": 9.079
+    },
+    {
+      "text": "la",
+      "start": 9.114,
+      "end": 9.183
+    },
+    {
+      "text": "survie",
+      "start": 9.242,
+      "end": 9.59
+    },
+    {
+      "text": "humaine.",
+      "start": 9.613,
+      "end": 10.182
+    },
+    {
+      "text": "La",
+      "start": 10.693,
+      "end": 10.82
+    },
+    {
+      "text": "mission",
+      "start": 10.879,
+      "end": 11.192
+    },
+    {
+      "text": "le",
+      "start": 11.238,
+      "end": 11.297
+    },
+    {
+      "text": "conduit",
+      "start": 11.343,
+      "end": 11.831
+    },
+    {
+      "text": "a",
+      "start": 11.923,
+      "end": 11.993
+    },
+    {
+      "text": "travers",
+      "start": 12.051,
+      "end": 12.399
+    },
+    {
+      "text": "un",
+      "start": 12.423,
+      "end": 12.469
+    },
+    {
+      "text": "trou",
+      "start": 12.516,
+      "end": 12.69
+    },
+    {
+      "text": "de",
+      "start": 12.736,
+      "end": 12.806
+    },
+    {
+      "text": "ver",
+      "start": 12.864,
+      "end": 13.119
+    },
+    {
+      "text": "près",
+      "start": 13.189,
+      "end": 13.375
+    },
+    {
+      "text": "de",
+      "start": 13.398,
+      "end": 13.468
+    },
+    {
+      "text": "Saturne.",
+      "start": 13.526,
+      "end": 14.396
+    }
+  ]
+}

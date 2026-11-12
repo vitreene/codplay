@@ -2,7 +2,8 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { CodPlayEventime, CodPlayFrameScheduler } from 'codplay'
+import { TagComponent } from 'codplay'
+import type { CodPlayEventime, CodPlayFrameScheduler, CodPlayOptions, RuntimeComponentDefinition } from 'codplay'
 import type { SceneDoc } from 'codplay/scene/types'
 import {
   Sighty,
@@ -20,6 +21,24 @@ type FeatureSlotName = 'main'
 
 type RollbackSceneKey = 'layout' | 'first' | 'second' | 'dynamic'
 type RollbackSlotName = 'first' | 'second'
+
+const runtimeLibraryPreparationOrder: string[] = []
+
+/** Records when a library-dependent component enters CodPlay materialization. */
+class RuntimeLibraryTagComponent extends TagComponent {
+  constructor(input: ConstructorParameters<typeof TagComponent>[0]) {
+    runtimeLibraryPreparationOrder.push('component')
+    super(input)
+  }
+}
+
+const LIBRARY_COMPONENT_DEFINITION: RuntimeComponentDefinition = {
+  type: 'feature-library-tag',
+  component: RuntimeLibraryTagComponent,
+  modules: ['replace-text'],
+  libraries: ['feature-runtime-library'],
+  validateInitial: () => undefined,
+}
 
 /** Creates a deterministic CodPlay scheduler for end-signal integration tests. */
 function createManualFrameScheduler(): CodPlayFrameScheduler & { flush: () => void } {
@@ -79,6 +98,7 @@ function createFeatureLayout(): SceneDoc<string> {
 function createFeatureScene(
   sceneKey: Exclude<FeatureSceneKey, 'layout'>,
   listen: NonNullable<SceneDoc<string>['stories'][string]['listen']> = [],
+  componentType = 'tag',
 ): SceneDoc<string> {
   return {
     id: `feature-${sceneKey}`,
@@ -87,7 +107,7 @@ function createFeatureScene(
         id: 'main',
         persos: [{
           id: `feature-${sceneKey}-content`,
-          type: 'tag',
+          type: componentType,
           initial: {
             tag: 'article',
             content: sceneKey,
@@ -356,8 +376,10 @@ function createProject(
   scenario: SightyScenarioDefinition<FeatureSceneKey, FeatureSlotName>,
   options: Readonly<{
     context?: Readonly<Record<string, unknown>>
+    codplay?: CodPlayOptions
     openStyleSheet?: string
     dynamicStyleSheet?: string
+    sceneOverrides?: Partial<Record<FeatureSceneKey, SceneDoc<string>>>
     lazySource?: () => SceneDoc<string> | Readonly<{ sceneDoc: SceneDoc<string>; styleSheet: string }>
     guards?: SightyGuards<FeatureSceneKey>
   }> = {},
@@ -375,7 +397,7 @@ function createProject(
       : { sceneDoc: createFeatureScene('dynamic'), styleSheet: options.dynamicStyleSheet },
   }
   const sceneSources = options.lazySource === undefined ? undefined : { lazy: options.lazySource }
-  const scenes = availableScenes
+  const scenes = { ...availableScenes, ...options.sceneOverrides }
 
   return new Sighty({
     scenario: {
@@ -396,8 +418,17 @@ function createProject(
         dynamic: 'feature-dynamic-1',
       },
       context: options.context,
+      codplay: options.codplay,
     },
   })
+}
+
+/** Creates CodPlay capabilities for scenes that require one engine library. */
+function createRuntimeLibraryEngineOptions(load: () => unknown): NonNullable<CodPlayOptions['engine']> {
+  return {
+    components: { register: [LIBRARY_COMPONENT_DEFINITION] },
+    libraries: { register: [{ id: 'feature-runtime-library', load }] },
+  }
 }
 
 describe('Sighty runtime feature reconstruction', () => {
@@ -733,6 +764,65 @@ describe('Sighty runtime feature reconstruction', () => {
     expect(sourceCalls).toBe(1)
     expect(project.runtime.getMountedSceneKey('main')).toBe('lazy')
     expect(project.runtime.getInstance('lazy')).toBeDefined()
+  })
+
+  it('prepares direct scene libraries before creating their instances and reuses them', async () => {
+    runtimeLibraryPreparationOrder.length = 0
+    const loadLibrary = vi.fn(async () => {
+      await Promise.resolve()
+      runtimeLibraryPreparationOrder.push('library')
+      return { ready: true }
+    })
+    project = createProject(createFeatureScenario(), {
+      codplay: { engine: createRuntimeLibraryEngineOptions(loadLibrary) },
+      sceneOverrides: {
+        menu: createFeatureScene('menu', [], 'feature-library-tag'),
+        open: createFeatureScene('open', [], 'feature-library-tag'),
+      },
+    })
+
+    await project.runtime.initialize()
+    expect(project.runtime.getInstance('menu')).toBeDefined()
+    expect(loadLibrary).toHaveBeenCalledTimes(1)
+    expect(runtimeLibraryPreparationOrder).toEqual(['library', 'component'])
+
+    await project.runtime.dispatch({ name: 'feature:open', sourceSceneKey: 'menu' })
+    expect(project.runtime.getInstance('open')).toBeDefined()
+    expect(loadLibrary).toHaveBeenCalledTimes(1)
+    expect(runtimeLibraryPreparationOrder).toEqual(['library', 'component', 'component'])
+  })
+
+  it('prepares a deferred scene library after resolving its source and before creation', async () => {
+    runtimeLibraryPreparationOrder.length = 0
+    const loadLibrary = vi.fn(async () => {
+      await Promise.resolve()
+      runtimeLibraryPreparationOrder.push('library')
+      return { ready: true }
+    })
+    project = createProject(createFeatureScenario({ includeLazy: true }), {
+      codplay: { engine: createRuntimeLibraryEngineOptions(loadLibrary) },
+      lazySource: () => createFeatureScene('lazy', [], 'feature-library-tag'),
+    })
+
+    await project.runtime.initialize()
+    expect(loadLibrary).not.toHaveBeenCalled()
+    expect(project.runtime.getInstance('lazy')).toBeUndefined()
+
+    await project.runtime.dispatch({ name: 'feature:open-lazy', sourceSceneKey: 'menu' })
+    expect(project.runtime.getInstance('lazy')).toBeDefined()
+    expect(loadLibrary).toHaveBeenCalledTimes(1)
+    expect(runtimeLibraryPreparationOrder).toEqual(['library', 'component'])
+  })
+
+  it('does not load libraries for a scene with no library requirements', async () => {
+    const loadLibrary = vi.fn(() => ({ ready: true }))
+    project = createProject(createFeatureScenario(), {
+      codplay: { engine: createRuntimeLibraryEngineOptions(loadLibrary) },
+    })
+
+    await project.runtime.initialize()
+
+    expect(loadLibrary).not.toHaveBeenCalled()
   })
 
   it('installs a direct scene stylesheet through the scoped CodPlay preload channel', async () => {

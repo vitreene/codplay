@@ -26,12 +26,32 @@
   filenames, comments, documentation, and UI labels. Use a role-specific term
   such as `layout`, `frame`, `stage`, or `host` instead.
 
+## Randomness
+
+- Throughout the project, random behavior means pseudo-random behavior derived
+  from an initial seed. Perform an initial draw by default; the seed is editable
+  and remains stable during editing, with automatic renewal inactive, so question
+  sequences can be reproduced. In distribution mode, the Random option is checked
+  by default and renews the seed for each new game, including Restart. With Random
+  disabled, retain the fixed seed and its reproducible draw.
+
 ## Implementation process
 
 - Ask the user questions when implementation certainty is below 95%.
 - Before any analysis or modification, reread the applicable specifications and contracts in the repository; do not rely on conversation summaries or assumptions.
 - For every browser validation or other MCP-backed task, inspect both the local MCP server configuration and the complete live tool inventory offered by the current session before starting. Compare configured servers with the tools actually exposed here and review their names and descriptions; do not decide availability from a name-only search for `browser` or `Safari`. Use only the exposed tools, and never infer availability from installed applications, previous sessions, or another machine. If a configured server has no callable tools in this session, report that work as pending instead of launching a different local application or treating it as equivalent.
-- Do not add a rule to a specification merely to record this working instruction or to compensate for not having reread it. Update specifications only for behavior that has been implemented and verified; keep decisions that are open or agreed but unapplied in the active plan.
+- During browser validation, bring the configured, already connected browser
+  to the foreground and select the intended tab yourself. Do not ask the user
+  to focus Safari or make Elcé visible. When Safari Technology Preview is the
+  verified connected browser, activate it with
+  `osascript -e 'tell application "/Applications/Safari Technology Preview.app" to activate'`
+  (using the required execution permission when sandboxed), select its tab
+  through Safari MCP, and verify `document.visibilityState` and
+  `document.hasFocus()` before editing. Preserve the application's normal
+  focus and edit-access rules; never simulate visibility or bypass its locks.
+- Do not put working instructions in specifications. Maintain the owning
+  internal specification whenever an accepted change implements and verifies
+  behavior; keep open or agreed-but-unapplied decisions in the working plan.
 - Respect established specs strictly. Do not patch behavior opportunistically when the implementation diverges from the spec.
 - If a gap, ambiguity, or design failure is discovered, stop and discuss how to enrich or correct the spec before changing the implementation.
 - V2 demos are instruments for advancing CodPlay, not local demo products. They exercise the real project contracts, expose missing or incorrect core behavior, and provide the concrete acceptance path for fixing it. When a demo fails, first investigate and correct the applicable CodPlay contract or runtime; a demo-local change is allowed only to express the authored scenario or to make the fixture observe the agreed behavior, never to hide, compensate for, or replace a missing core capability.
@@ -69,8 +89,8 @@
 - V2 demos are pre-release validation references, not disposable bug fixtures. A fix in a complex component must not be accepted from one visual symptom or one passing scenario.
 - Before declaring such a fix stable, record the causal analysis and run the complete relevant validation set: focused regression tests for the failing boundary, non-regression tests for affected parent/child and reparent cases, and the applicable Play, Seek, resize, persistence, lifecycle, typecheck, test, build, and browser checks. Omit categories only when the analysis explicitly proves they are not affected.
 - If this evidence is incomplete, keep the implementation `En cours` or `A relire`; do not present it as stabilized and do not modify the demo to hide the defect.
-- A `README.md` is a user guide for a feature or package: it explains the purpose in plain language and shows at least one concrete usage example. It is not the authority for internal contracts. Verified, stable contracts belong in the applicable specifications; plans track implementation work, validation status, and decisions that are open or agreed but unapplied.
-- Keep the specification, plan, implementation status, and acceptance tests aligned. Never mark a module or tranche complete while a required behavior is only simulated, bypassed, or unverified.
+- A `README.md` is a user guide for a feature or package: it explains the purpose in plain language and shows at least one concrete usage example. It is not the authority for internal contracts. Verified, stable contracts belong in the applicable specifications; plans track implementation work, validation status, and decisions that are open or agreed but unapplied. A README must not contain internal contracts, architecture, implementation status, plans, or validation tracking.
+- Keep the owning specification, accepted working plan, implementation, and acceptance tests aligned. Never mark a module or tranche complete while a required behavior is only simulated, bypassed, or unverified.
 
 ## Documentation and implementation tracking
 
@@ -99,6 +119,61 @@
 - Before resuming CodPlay V2 work, use the applicable verified specification
   and detailed plan, located through `packages/codplay/plan/codplay-v2-plan.md`.
   Keep stabilization work distinct from the future evolution plans indexed there.
+- Internal technical specifications are mandatory maintained references for
+  agents. They explain verified project behavior so an agent can understand it
+  from the specification before reading implementation code. Keep the owning
+  specification current in the same task as each implemented and verified change.
+  Consolidate the existing specification; create one only when no existing
+  specification owns the concern. Never create a specification per intervention.
+- Final project documentation deliverables are retained at the user's explicit
+  request. Internal technical specifications remain necessary independently of
+  those deliverables. Do not automatically create additional reports, READMEs,
+  indexes, or copies for each task, correction, or validation.
+- Study notes, working plans, and review drafts are disposable aids. Keep only
+  what is necessary for active work and continuity; do not multiply files or
+  duplicate content. A draft named `spec` must be reviewed and consolidated into
+  the owning specification before it can serve as a verified reference.
+- Document roles are exclusive:
+  - Study notes collect remarks, questions, observations, research, alternatives,
+    reasoning, and decision rationale. They provide the material from which a
+    precise, concise plan can be derived. Keep this elaboration out of plans.
+  - A plan states the objective, scope, accepted decisions, open decisions,
+    ordered actions, affected files or owners, dependencies, and acceptance
+    criteria. Update those items rather than appending accounts of interventions.
+  - An execution-plan version must let another agent begin implementation from
+    that version alone, without reconstructing the conversation or reading the
+    study notes. Include the necessary context, applicable contracts, existing
+    circuit and owner, changes to perform, invariants, prerequisites, and concrete
+    validation steps. Keep the supporting discussion in the study notes.
+  - A specification describes the implemented and verified system:
+    purpose, responsibilities, mechanisms, contracts, invariants, and limits.
+    It contains no progress status, work history, intervention dates, execution
+    results, or narrative account of the agent's actions. Useful references to
+    implementation or tests may support the description without becoming logs.
+- Pre-delivery review is an action, not another document. Before closing the
+  task, check the owning specification against implementation and evidence,
+  remove work-report content, and consolidate the verified description.
+- Report changes, validation results, and remaining difficulties in the final
+  task response. Do not copy that report into project documentation unless the
+  user explicitly requests a retained report.
+- Reuse and consolidate existing working material instead of creating parallel
+  versions, per-task reports, or additional tracking files. Do not create a file
+  merely to record that a rule was followed or an action was performed.
+- At project completion, retain internal reference specifications and the
+  documentation deliverables requested by the user. Remove disposable working
+  material once it is no longer needed. Preserve unresolved work needed for
+  continuity; never remove existing project references merely because they have
+  not yet been reviewed under these rules.
+- Existing verified specifications remain authoritative for established behavior.
+  Read the applicable specification first to identify the contract, circuit, and
+  owner, then the active plan for open or unapplied decisions. Consult code and
+  tests to resolve gaps, investigate a concrete divergence, or implement accepted
+  work. Extend the established circuit. Stop dependent implementation when a
+  contract is missing or a divergence requires a decision. These rules do not
+  authorize CodPlay core changes or bypass accepted-plan gates.
+- A handoff report is a snapshot for transfer, not an accumulating journal or
+  a substitute for study notes, an execution plan, or a delivered specification.
+- Before resuming CodPlay V2 work, read [`packages/codplay/plan/notes/2026-08-26-decouverte-etat-codplay-v2.md`](packages/codplay/plan/notes/2026-08-26-decouverte-etat-codplay-v2.md) after identifying the applicable detailed plan.
 
 ## Module status
 

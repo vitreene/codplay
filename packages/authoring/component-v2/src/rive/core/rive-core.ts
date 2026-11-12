@@ -1,0 +1,60 @@
+import type {
+  CodPlayEngineOptions,
+  RuntimeComponentDefinition,
+  RuntimeLibraryDefinition,
+} from 'codplay'
+
+import { RiveDocumentComponent } from './rive-document-component'
+import { getRiveRuntime } from './rive-preload'
+import { RiveStateMachineComponent } from '../state-machine/rive-state-machine-component'
+import { validateRiveStateMachineAction, validateRiveStateMachineInitial } from '../state-machine/rive-state-machine-validation'
+import { RiveViewModelComponent } from '../view-model/rive-view-model-component'
+import { validateRiveViewModelAction, validateRiveViewModelInitial } from '../view-model/rive-view-model-validation'
+import { validateRiveAction, validateRiveInitial } from './rive-validation'
+
+/** Engine-owned Rive runtime declaration. */
+export const RIVE_LIBRARY: RuntimeLibraryDefinition = {
+  id: 'rive',
+  load: getRiveRuntime,
+  origin: 'foreign',
+}
+
+/** Rive components registered by the module. */
+export const RIVE_COMPONENTS: readonly RuntimeComponentDefinition[] = [
+  {
+    type: 'rive',
+    component: RiveDocumentComponent,
+    modules: [],
+    libraries: ['rive'],
+    validateInitial: validateRiveInitial,
+    validateAction: validateRiveAction,
+    targetProvider: (component) => {
+      if (!(component instanceof RiveDocumentComponent)) return undefined
+      return { value: component.getTarget(), scope: 'host' }
+    },
+  },
+  {
+    type: 'rive-state-machine',
+    component: RiveStateMachineComponent,
+    modules: [],
+    libraries: ['rive'],
+    runtimeProfile: 'attached',
+    validateInitial: validateRiveStateMachineInitial,
+    validateAction: validateRiveStateMachineAction,
+  },
+  {
+    type: 'rive-view-model',
+    component: RiveViewModelComponent,
+    modules: [],
+    libraries: ['rive'],
+    runtimeProfile: 'attached',
+    validateInitial: validateRiveViewModelInitial,
+    validateAction: validateRiveViewModelAction,
+  },
+]
+
+/** Engine capabilities needed by the Rive document host. */
+export const RIVE_ENGINE: Pick<CodPlayEngineOptions, 'libraries' | 'components'> = {
+  libraries: { register: [RIVE_LIBRARY] },
+  components: { register: RIVE_COMPONENTS },
+}

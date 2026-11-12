@@ -1,0 +1,67 @@
+
+
+.elce-media-picker {
+  position: relative;
+  display: flex;
+  min-height: 4rem;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: #65736d;
+  background: #fffdf8;
+  border: 1px dashed #b9c7c0;
+  border-radius: 0.3rem;
+  cursor: copy;
+  font-size: 0.8rem;
+}
+
+.elce-media-picker > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem;
+}
+
+.elce-media-add-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--elce-icon-gap);
+}
+
+.elce-media-picker .elce-media-add-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--elce-icon-gap);
+  padding: 0.6rem;
+}
+
+.elce-media-add-prompt__label {
+  color: #526b66;
+  font-size: 0.74rem;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.elce-media-add-prompt__hint {
+  color: #777d76;
+  font-size: 0.68rem;
+  line-height: 1.1;
+  text-align: center;
+}
+
+.elce-media-picker img,
+.elce-media-picker video {
+  display: block;
+  width: 100%;
+  object-fit: cover;
+}
+
+.elce-media-picker__clear {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+}

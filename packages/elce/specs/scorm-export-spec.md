@@ -1,4 +1,8 @@
-# Elcé — export SCORM
+# Learning — export SCORM
+
+Cette spécification décrit l’export SCORM de Learning. Quiz Hunt possède un
+exporteur monoSCO dédié décrit dans la
+[spécification de son mod](./quiz-hunt-mod-spec.md#export-scorm).
 
 ## Rôle
 
@@ -41,7 +45,7 @@ ces en-têtes aux origines locales de l’éditeur.
   vérifie la normalisation, l’édition, le suffixe monoSCO et la date.
 - [`scorm-export-api-controller.test.ts`](../src/server/export/scorm-export-api-controller.test.ts)
   vérifie les en-têtes HTTP et l’absence de persistance.
-- [`elce-scorm-export-client.test.ts`](../src/export/elce-scorm-export-client.test.ts)
+- [`learning-scorm-export-client.test.ts`](../src/mods/learning/persistence/learning-scorm-export-client.test.ts)
   vérifie le nom transmis à l’API et repris par le client.
 - [`project-application.test.tsx`](../src/app/remix/project-application.test.tsx)
   vérifie que le nom fourni par l’API est celui remis au téléchargement.
@@ -50,5 +54,10 @@ ces en-têtes aux origines locales de l’éditeur.
   manifeste et le lanceur, tout en conservant le chemin technique fondé sur
   son identifiant. Il vérifie aussi que le lanceur transmet au runtime la
   table des identifiants SCORM des chapitres.
-- [`sqlite-project-persistence.test.ts`](../src/server/projects/sqlite/sqlite-project-persistence.test.ts)
+- [`learning-scenario-exporter.test.ts`](../src/mods/learning/persistence/server/learning-scenario-exporter.test.ts)
+  enchaîne l’export Sighty Learning réel avec le packageur SCORM et ouvre le
+  ZIP résultant pour vérifier les chapitres et leurs lanceurs. Le package
+  monoSCO Quiz Hunt réel est vérifié dans
+  [`quiz-hunt-scorm-package.test.ts`](../src/mods/quiz-hunt/scorm/quiz-hunt-scorm-package.test.ts).
+- [`sqlite-project-persistence.test.ts`](../src/mods/learning/persistence/server/sqlite/learning-sqlite-project-persistence.test.ts)
   vérifie l’exposition CORS de l’en-tête de nom de fichier.

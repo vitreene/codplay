@@ -1,0 +1,513 @@
+{
+  "date": "2026-11-05",
+  "status": "in-progress",
+  "browser": "Safari MCP",
+  "visibility": "visible",
+  "origin": "http://localhost:5175",
+  "project": {
+    "id": "elce-document-2b78033e-180d-45c0-bb90-d0aa414b464d",
+    "name": "Projet 3",
+    "revision": 2,
+    "pageId": "page-70cd6ceb-a31c-45c6-aec1-6a4c6694f905",
+    "pageName": "Tête parlante — Interstellar",
+    "cardCount": 4
+  },
+  "path": "Standard editor popup preview; diagnostic observations and commands use its actual LearningPlayer and CodPlay instance.",
+  "runtimeImplementationChangedDuringThisResumption": false,
+  "assetResponse": {
+    "riveStatus": 200,
+    "mp3Status": 200,
+    "mp3SizeBytes": 231592,
+    "mp3ContentType": "audio/mpeg",
+    "nativeAudioDuration": "Infinity",
+    "nativeAudioEndNotCertified": true
+  },
+  "observations": {
+    "carouselNavigationCount": 0,
+    "seek7500": {
+      "timelineMs": 7500,
+      "audioSeconds": 7.5,
+      "paused": true,
+      "visibleCard": 2
+    },
+    "seek1000": {
+      "timelineMs": 1000,
+      "audioSeconds": 1,
+      "paused": true,
+      "visibleCard": 1
+    },
+    "pause1200Ms": {
+      "timelineUnchanged": true,
+      "audioTimeUnchanged": true,
+      "canvasUnchanged": true
+    },
+    "playSamples": [
+      {
+        "timelineMs": 176.16558342706412,
+        "audioSeconds": 0.18136025010608137,
+        "visibleCard": 1
+      },
+      {
+        "timelineMs": 3862.927392629754,
+        "audioSeconds": 3.8733904343488033,
+        "visibleCard": 1
+      },
+      {
+        "timelineMs": 7479.598974993168,
+        "audioSeconds": 7.482763266607835,
+        "visibleCard": 2
+      },
+      {
+        "timelineMs": 11979.847225765123,
+        "audioSeconds": 11.99074360070227,
+        "visibleCard": 3
+      },
+      {
+        "timelineMs": 14478.74631,
+        "audioSeconds": 14.47874631,
+        "visibleCard": 4
+      }
+    ],
+    "voiceCompletion": {
+      "declaredAtMs": 14446,
+      "publicEventsReceived": [],
+      "finishedPages": [],
+      "result": "failed"
+    },
+    "leavePage": {
+      "destination": "page-a",
+      "oldAudioPaused": true,
+      "oldAudioSeconds": 1,
+      "canvasCount": 0
+    },
+    "returnPage": {
+      "audioCount": 1,
+      "canvasCount": 1,
+      "sameAudioNode": true
+    },
+    "layout": {
+      "verified": true,
+      "position": "top-right",
+      "widthPercent": 24,
+      "composition": "Carousel and Avatar share one 1/1 Diapo grid cell; the Carousel fills the page root and Avatar overlays it.",
+      "desktop": {
+        "viewport": {
+          "width": 1280,
+          "height": 756
+        },
+        "pageRoot": {
+          "x": 288,
+          "y": 141.078125,
+          "width": 976,
+          "height": 533.921875
+        },
+        "carousel": {
+          "x": 288,
+          "y": 141.078125,
+          "width": 976,
+          "height": 533.921875
+        },
+        "avatar": {
+          "x": 1010.25,
+          "y": 156.1875,
+          "width": 234.234375,
+          "height": 278.84375
+        },
+        "sameGridCell": true,
+        "visibleAfterPlay": true,
+        "cardTextOverlap": false
+      },
+      "mobile": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "pageRoot": {
+          "x": 16,
+          "y": 142.59375,
+          "width": 358,
+          "height": 582.21875
+        },
+        "carousel": {
+          "x": 16,
+          "y": 142.59375,
+          "width": 358,
+          "height": 582.21875
+        },
+        "avatar": {
+          "x": 280.9375,
+          "y": 159.46875,
+          "width": 85.90625,
+          "height": 102.265625
+        },
+        "sameGridCell": true,
+        "visibleAfterPlay": true,
+        "cardTextOverlap": false,
+        "horizontalOverflow": false
+      },
+      "beforeFirstPlay": {
+        "firstCardVisible": true,
+        "timelineMs": 0,
+        "avatarCanvasPainted": false
+      }
+    }
+  },
+  "independentReproduction": {
+    "dependencies": [
+      "CodPlay public facade",
+      "tag component"
+    ],
+    "scene": {
+      "id": "temporary-public-finish-comparison",
+      "stories": {
+        "main": {
+          "id": "main",
+          "persos": [
+            {
+              "id": "marker",
+              "type": "tag",
+              "initial": {
+                "tag": "span",
+                "attr": {
+                  "id": "temporary-public-finish-comparison-marker"
+                }
+              },
+              "actions": {
+                "test:compiled": {
+                  "content": "compiled-reached"
+                },
+                "test:scheduled": {
+                  "attr": {
+                    "data-scheduled": "reached"
+                  }
+                }
+              }
+            }
+          ],
+          "eventimes": [
+            {
+              "name": "test:compiled",
+              "startAt": 100,
+              "visibility": "public"
+            }
+          ]
+        }
+      }
+    },
+    "procedure": [
+      "Build with CodPlay.build, prepareScene, then instances.create using the build functions.",
+      "Subscribe through instance.events.onEvent.",
+      "Inject { name: 'test:scheduled', startAt: 150, visibility: 'public' } through instance.events.emit with { scope: 'scene' }.",
+      "Call instance.telco.play, observe after 350 ms wall time, then destroy the owner."
+    ],
+    "result": {
+      "timelineMs": 349,
+      "publicEventNames": [
+        "test:scheduled"
+      ],
+      "markerState": {
+        "tag": "span",
+        "attr": {
+          "data-scheduled": "reached"
+        },
+        "content": "compiled-reached"
+      }
+    }
+  },
+  "tests": {
+    "packageDirectory": "packages/elce",
+    "command": "npm run test -- src/mods/learning/integration/diapo-scene-builder.test.ts src/mods/learning/reading/learning-player.test.ts src/mods/learning/integration/learning-preview-session.test.tsx",
+    "passed": 68,
+    "failed": 2,
+    "narratedBuilderTest": "passed",
+    "failuresBeforeAnyImplementationChangeInThisResumption": [
+      "reuses the Question story and exposes its reset path in a Diapo: missing :prompt perso",
+      "records scroll-end when the anchored Card outro and bottom marker use separate observer groups: missing observer"
+    ],
+    "typecheck": "existing TS6133 unused title in src/resources/bdcs/statistical-graph/reading/statistical-graph-scene-builder.ts:72",
+    "build": "not-rerun-at-contract-gate"
+  },
+  "completionCorrection": {
+    "owner": "Elce Diapo composition only",
+    "codplayImplementationChanged": false,
+    "declaration": "sequence:end at voice.durationMs, with listen.emit publishing elce:page:finished and pageId",
+    "initialCoreProposal": "withdrawn; existing end circuit suffices",
+    "seekToEnd": {
+      "timelineMs": 14446,
+      "sequenceEnded": false,
+      "publicEvents": [],
+      "finishedPages": []
+    },
+    "playFrom13500": {
+      "timelineMs": 14446,
+      "sequenceEnded": true,
+      "status": "paused",
+      "publicEvents": [
+        {
+          "name": "elce:page:finished",
+          "data": {
+            "pageId": "page-70cd6ceb-a31c-45c6-aec1-6a4c6694f905"
+          }
+        }
+      ],
+      "finishedPages": [
+        "page-70cd6ceb-a31c-45c6-aec1-6a4c6694f905"
+      ],
+      "samePage": true,
+      "audioPaused": true
+    },
+    "resetAndFullPlayback": {
+      "timelineMs": 14446,
+      "sequenceEnded": true,
+      "publicFinishCount": 1,
+      "samePage": true,
+      "audioPaused": true
+    },
+    "tests": {
+      "passed": 68,
+      "failed": 2,
+      "samePreviouslyObservedFailures": true,
+      "narratedBuilder": "passed"
+    },
+    "build": "passed; chunk size warning",
+    "typecheck": "TS6133: unused title in resources/bdcs/statistical-graph/reading/statistical-graph-scene-builder.ts:72; file unchanged",
+    "remaining": [
+      "initial Avatar frame before Play",
+      "complete integration acceptance"
+    ]
+  },
+  "navigationRemote": {
+    "date": "2026-11-05",
+    "owner": "Elce Learning navigation, using @codplay/remote/remote unchanged",
+    "codplayImplementationChanged": false,
+    "host": "#elce-navigation-remote inside .elce-player-layout__navigation",
+    "autoStart": false,
+    "initial": {
+      "audioSeconds": 0,
+      "audioPaused": true,
+      "progressMs": 0,
+      "firstCardVisible": true
+    },
+    "play": {
+      "audioSeconds": 4.468919712989286,
+      "audioPaused": false,
+      "progressMs": 4450,
+      "buttonLabel": "Pause"
+    },
+    "pause1200Ms": {
+      "audioSecondsBefore": 4.478054379634254,
+      "audioSecondsAfter": 4.478054379634254,
+      "progressMs": 4470,
+      "canvasUnchanged": true
+    },
+    "seek7500": {
+      "audioSeconds": 7.5,
+      "paused": true,
+      "progressMs": 7500,
+      "visibleCard": 2
+    },
+    "ordinaryPage": {
+      "remoteCount": 0,
+      "hostHidden": true,
+      "canvasCount": 0
+    },
+    "return": {
+      "audioSeconds": 0,
+      "audioPaused": true,
+      "progressMs": 0,
+      "remoteCount": 1
+    },
+    "endFromRemotePlay": {
+      "timelineMs": 14446,
+      "status": "paused",
+      "sequenceEnded": true,
+      "audioPaused": true,
+      "buttonLabel": "Lire",
+      "seekDisabled": true
+    },
+    "replay": {
+      "audioSeconds": 6.58414747436015,
+      "audioPaused": false,
+      "buttonLabel": "Pause"
+    },
+    "geometry": [
+      {
+        "viewportWidth": 1280,
+        "viewportHeight": 756,
+        "remoteX": 412,
+        "remoteY": 707.203125,
+        "remoteWidth": 728,
+        "remoteHeight": 40,
+        "statusAboveTransport": true
+      },
+      {
+        "viewportWidth": 390,
+        "viewportHeight": 844,
+        "remoteX": 12,
+        "remoteY": 795.203125,
+        "remoteWidth": 366,
+        "remoteHeight": 40,
+        "rangeWidth": 269.21875,
+        "horizontalOverflow": false
+      }
+    ],
+    "tests": {
+      "focusedPassed": 20,
+      "existingIntegrationPassed": 68,
+      "existingIntegrationFailed": 2,
+      "failuresUnchanged": true
+    },
+    "build": "passed; existing large chunk warning",
+    "typecheck": "only existing TS6133 unused title in statistical-graph-scene-builder.ts:72",
+    "remainingAvatarAcceptance": [
+      "rig visible before first Play"
+    ],
+    "documentPersistenceChanged": false,
+    "centerAlignment": {
+      "date": "2026-11-05",
+      "change": "Elce navigation CSS only: horizontal centered transport and page counter after slider",
+      "desktop": {
+        "width": 1280,
+        "height": 756,
+        "centerY": 724,
+        "elements": [
+          "Previous",
+          "Play/Pause",
+          "Rewind",
+          "Progress slider",
+          "Page counter",
+          "Next"
+        ],
+        "horizontalOverflow": false
+      },
+      "mobile": {
+        "width": 390,
+        "height": 844,
+        "navigationRowCenterY": 766.90625,
+        "transportRowCenterY": 815.203125,
+        "horizontalOverflow": false
+      },
+      "styleTest": "passed",
+      "build": "passed; existing chunk size warning",
+      "transportLogicChanged": false
+    }
+  },
+  "avatarResourceReplacement": {
+    "date": "2026-11-05",
+    "userFile": "packages/elce/dist/avatars/my-matt-visemes.riv",
+    "canonicalSource": "packages/elce/src/assets/avatars/my-matt-visemes.riv",
+    "servedPath": "/assets/elce/assets/avatars/my-matt-visemes.riv",
+    "sizeBytes": 84538,
+    "sha256": "5b475e49eae9fcd63e759c75c4d1866d74c75b0d367240fd0236e009894c5e4a",
+    "sourceAndUserFileIdentical": true,
+    "browserResponseStatus": 200,
+    "browserSha256Matches": true,
+    "profileChanged": false,
+    "runtimeCodeChanged": false,
+    "playAndPause": {
+      "audioTimeSeconds": 9.08878482237295,
+      "canvasWidth": 420,
+      "canvasHeight": 500,
+      "transparentPixels": 173790,
+      "paintedPixels": 36210,
+      "cornerAlpha": 0
+    },
+    "seek7500": "verified through the actual navigation remote",
+    "browserWarningsAndErrors": [],
+    "distUserBackupPreserved": "packages/elce/dist/avatars/x--my-matt-visemes.riv",
+    "buildAfterLayoutChange": "passed with vite build --emptyOutDir false; original dist avatar and backup preserved"
+  },
+  "editorLayoutValidation": {
+    "build": "passed after fixed corner margin and slider range updates with vite build --emptyOutDir false; dist preserved; existing large chunk warning",
+    "typecheck": "existing TS6133 unused title in src/resources/bdcs/statistical-graph/reading/statistical-graph-scene-builder.ts:72",
+    "noCodplayChanges": true,
+    "avatarWidthSlider": {
+      "oldStepsPercent": [
+        10,
+        19,
+        28,
+        36,
+        45
+      ],
+      "newStepsPercent": [
+        10,
+        20,
+        30,
+        45,
+        60
+      ],
+      "currentProjectValuePercent": 30,
+      "currentValueLabel": "Moyen",
+      "projectValueChanged": false
+    }
+  },
+  "fixedCornerPlacementValidation": {
+    "date": "2026-11-05",
+    "browser": "Safari MCP",
+    "position": "top-right",
+    "fixedVisibleInsetPx": 16,
+    "rigCanvas": {
+      "width": 420,
+      "height": 500,
+      "paintedPixelBounds": {
+        "left": 125,
+        "top": 129,
+        "right": 305,
+        "bottom": 383
+      },
+      "transparentInsetsPercent": {
+        "left": 29.76,
+        "top": 25.8,
+        "right": 27.14,
+        "bottom": 23.2
+      }
+    },
+    "desktop": {
+      "viewport": {
+        "width": 1280,
+        "height": 756
+      },
+      "pageRoot": {
+        "x": 288,
+        "y": 141.078125,
+        "width": 976,
+        "height": 533.921875
+      },
+      "avatarWidthPercent": 30,
+      "paintedBounds": {
+        "left": 1121.87,
+        "top": 157.09,
+        "right": 1248.05,
+        "bottom": 334.86
+      },
+      "visibleInset": {
+        "topPx": 16.02,
+        "rightPx": 15.95
+      }
+    },
+    "mobile": {
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "pageRoot": {
+        "x": 16,
+        "y": 142.59375,
+        "width": 358,
+        "height": 582.21875
+      },
+      "avatarWidthPercent": 30,
+      "paintedBounds": {
+        "left": 311.75,
+        "top": 158.55,
+        "right": 358.03,
+        "bottom": 223.75
+      },
+      "visibleInset": {
+        "topPx": 15.96,
+        "rightPx": 15.97
+      },
+      "horizontalOverflow": false
+    }
+  }
+}

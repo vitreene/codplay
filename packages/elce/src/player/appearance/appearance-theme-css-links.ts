@@ -1,4 +1,4 @@
-import { appearanceThemeCssAssetUrl } from './appearance-theme-styles.ts'
+import { appearanceThemeCssAssetUrl } from './appearance-theme-styles'
 
 export interface AppearanceThemeCssLinks {
   readonly loaded: Promise<void>

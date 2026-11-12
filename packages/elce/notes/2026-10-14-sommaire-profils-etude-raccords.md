@@ -2,8 +2,8 @@
 
 ## Résultats de l’enquête
 
-Cette note conserve les raisons des choix d’intégration. Le comportement
-implémenté et ses preuves sont décrits dans la
+Cette note d’étude conserve les raisons des choix d’intégration ; ce n’est pas
+le plan de travail. Le comportement implémenté et ses preuves sont décrits dans la
 [spécification Sommaire et profils](../specs/summary-profile-spec.md) ; l’ordre
 et le suivi de la validation restante sont dans le
 [plan dédié](../plan/2026-10-14-elce-sommaire-profils-plan.md). Les formats
@@ -40,11 +40,12 @@ de saisie locales et le passage de page dans l’admission Sighty.
 
 ### État de test auteur
 
-L’état de test est stocké côté serveur, dans un enregistrement distinct du
-document. L’éditeur, sa popup et la preview réseau doivent retrouver le même
-état. Une révision dédiée évite qu’une fenêtre plus ancienne écrase une
-modification récente ; la route de preview autorise l’état de test tout en
-laissant les modifications du document et des médias interdites.
+L’état de test est stocké côté serveur dans un enregistrement distinct du
+document. Une preview peut lire cet état à son ouverture, mais ses interactions
+restent dans sa session et ne sont jamais enregistrées sur le serveur. La
+révision dédiée et le compare-and-swap protègent les clients API qui effectuent
+des écritures ; l’origine réseau de preview peut lire l’état, mais son prévol
+`PUT` reçoit `403`, comme les mutations du document et des médias.
 
 La restitution concerne aussi l’interface des Questions et des Évaluations :
 recharger seulement le contexte aurait laissé des contrôles vierges alors que
@@ -52,12 +53,44 @@ le scénario croyait les réponses acquises. Les réponses sont donc réadoptée
 dans les machines concernées, et une reconfiguration invalide uniquement ce
 qui n’est plus compatible.
 
+### Cache preview et état de consultation
+
+**Décision Fixe, appliquée et vérifiée le 27 octobre 2026.** Les composants et
+leur configuration appartiennent au contenu édité. Tout l’état de consultation,
+navigation comprise, reste dans la session du lecteur, séparément du contenu,
+des sources de scène et du cache des ressources. Une variation de cet état à
+document inchangé réutilise les ressources et restitue l’état courant. La
+preview ne l’enregistre pas sur le serveur.
+
+Le cache conserve des productions réutilisables ; l’état de consultation varie
+au cours de la lecture. Capturer cet état dans une source conservée faisait
+réapparaître une ancienne réponse ou empêchait de restituer une nouvelle valeur.
+L’[audit Learning](../mods/notes/2026-10-27-learning-independence-audit.md#défaut-reproduit--réponses-question-et-cache-de-scènes)
+documente les observations avant correction. Les tests d’intégration actuels
+couvrent aussi reset et synchronisation dans la popup réelle ; leurs preuves
+sont dans les spécifications Preview, Question et Sommaire/profils.
+
+Les composants édités et l’état de consultation ont des cycles distincts. Le
+lecteur présente l’état courant dans les composants sans l’inclure dans les
+scènes conservées par le cache des ressources. La [note d’étude sur la
+responsabilité de l’état de lecture](../mods/notes/2026-10-16-reading-state-ownership-study.md#contenu-édité-et-état-de-consultation)
+examine séparément la question plus large du pilotage Sighty.
+
+Les sources de scène sont neutres ; le circuit de rafraîchissement Sighty
+restitue la réponse du contexte courant sans republier l’événement de
+validation. La popup conserve la page active de Sighty lors d’une reconstruction,
+tandis que « Synchroniser » utilise la page choisie dans l’éditeur. Les slots
+et directions précédente/suivante sont dérivés du graphe ; aucun historique de
+navigation distinct n’est sérialisé. Les spécifications liées décrivent ces
+contrats et leurs preuves.
+
 ## Références actuelles
 
 - [Inventaire des composants et circuits étudiés](2026-10-14-sommaire-profils-inventaire-technique.md)
 - [Plan d’intégration et validations restantes](../plan/2026-10-14-elce-sommaire-profils-plan.md)
 - [Contrat vérifié et preuves](../specs/summary-profile-spec.md)
 
-La validation visuelle du Sommaire et la vérification de la preview réseau sur
-navigateur et téléphone restent ouvertes dans le plan. Les qualifications,
-variantes grammaticales et ACL ne font pas partie de cette réalisation.
+La vérification réseau de preview en navigateur est passée ; la confirmation
+sur téléphone et la validation visuelle du Sommaire restent ouvertes dans le
+plan. Les qualifications, variantes grammaticales et ACL ne font pas partie
+de cette réalisation.
