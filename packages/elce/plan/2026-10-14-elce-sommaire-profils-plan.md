@@ -229,9 +229,9 @@ acceptation en attente
     analyse tout l’arbre racine. Le mode `chapters` montre les chapitres un
     niveau sous le point de départ ; le mode `pages` ajoute les pages de cette
     portée. Le BDC peut proposer l’action « Retour au Sommaire principal » quand
-    la route du Sommaire principal existe (`showAtRoot`). La conversion du
-    Sommaire principal en BDC reste à évaluer ultérieurement et n’est pas
-    incluse dans cette tranche.
+    la route du Sommaire principal existe (`showAtRoot`). L’usage du BDC
+    Sommaire dans la composition de lecture du Sommaire principal est accepté
+    pour une évolution ultérieure et n’est pas inclus dans cette tranche.
     La navigation vers les pages listées réutilise les événements et routes
     Sighty existants. À la fin de portée, `next` continue selon l’ordre normal
     et s’arrête naturellement sans page suivante. Le retour automatique vers
@@ -239,6 +239,11 @@ acceptation en attente
     navigation `summary` existante du Sommaire principal reste inchangée. Le
     positionnement éditorial général des BDC est une amélioration Elcé distincte
     et n’entre pas dans cette tranche.
+    **Direction acceptée pour une évolution ultérieure :** conserver la page de
+    réglages du Sommaire et composer sa vue de lecture racine avec le BDC
+    Sommaire. Une Carte BDC pourrait fournir le titre. Le type d’hôte racine et
+    la source canonique du titre restent à décider ; cette composition n’est
+    pas incluse dans la tranche BDC Sommaire.
 
 Les décisions du BDC Sommaire ci-dessus sont acceptées pour la réalisation de
 cette tranche. Les autres formats internes restent provisoires. Cette tranche

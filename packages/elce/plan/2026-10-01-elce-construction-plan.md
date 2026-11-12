@@ -1680,6 +1680,21 @@ le mécanisme devra être évalué pour les autres parcours Elcé qui ciblent un
 BDC. Cette amélioration est hors de la tranche des Sommaires intermédiaires et
 sera cadrée séparément.
 
+## Composition future des pages par BDC — direction acceptée, réalisation différée
+
+- Conserver pour chaque type de page ses paramètres métier dans son propriétaire
+  et son interface d’auteur dédiée. Quand la lecture compose des BDC, cette
+  interface peut aussi exposer leurs réglages pertinents sans déplacer la
+  propriété de leur état. Les BDC apportent le contenu ou la présentation ; ils
+  ne deviennent pas propriétaires de la politique métier de la page.
+- Le Sommaire principal est le premier cas : sa page de réglages reste en place
+  et sa vue racine pourra composer le BDC Sommaire, avec une Carte BDC éventuelle
+  pour le titre. Le plan Sommaire et profils précise les décisions encore
+  ouvertes pour cette composition.
+- L’Évaluation est le candidat suivant. Avant réalisation, préciser quels
+  contenus de lecture elle expose et quels réglages restent dans son modèle et
+  sa classe métier ; établir ensuite un plan et son parcours d’acceptation.
+
 ## Export SCORM
 
 **Statut : En cours — réalisation du dossier SCORM autorisée ; intégration et
