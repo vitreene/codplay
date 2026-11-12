@@ -408,14 +408,64 @@ et sur les raccords minimaux à exposer. Le plan reste ouvert jusqu’à cette
 acceptation. Sa copie doit conserver le guide et le skill utilisables sans le
 dossier local `.agents`.
 
+## Sélection extensible des mods
+
+**Adaptation d'interface retenue ; réalisation non engagée.** Elcé est déjà
+organisé pour accueillir de nouveaux mods par ses compositions explicites et
+ses ressources partagées. Tout ajout doit respecter leurs règles et la
+séparation entre métier réutilisable, adaptations du mod et entrées produit.
+
+Le nombre de mods réalisables n'est pas limité à Learning, Quiz Hunt ou
+Sighty-TV. Ce chantier porte l'interface de sélection et ses raccords aux
+compositions existantes ; il est distinct du scheduler et ne redéfinit pas
+l'architecture d'ajout des mods.
+
+Objectif : remplacer le choix binaire actuel du sélecteur par un choix parmi
+les mods proposés par le produit, sans plafond fixé par l'interface.
+Conserver Learning comme choix initial et préserver les identités et routes
+des mods existants.
+
+- Définir une configuration produit explicite des mods proposés : identité,
+  nom visible, route et raccord à leur composition. L'interface parcourt les
+  choix déclarés ; elle ne calcule pas un unique « autre mod ».
+- Conserver les compositions directes en TypeScript, le chargement des
+  capacités utiles au mod choisi et les frontières core/ressources/mods.
+  Ne pas introduire de registre générique de plugins.
+- Préserver catalogue filtré par mod, synchronisation avant changement,
+  libération de la session courante et une seule session documentaire active.
+- Affecter les modifications à
+  `src/core/authoring/layout/project-application.tsx`, aux entrées de
+  `src/app/remix/` et à leurs compositions produit. Le scheduler ne porte
+  aucun de ces mécanismes.
+- Préparer l'acceptation avec plusieurs choix, dont plus de deux, à partir
+  de fixtures appartenant aux tests ; ne pas fabriquer des mods de production
+  pour qualifier le sélecteur. Vérifier sélection, routes, création, navigation
+  et absence de mélange entre catalogues.
+
+Les signatures de cette configuration et le détail du parcours seront arrêtés
+dans ce chantier avant implémentation. Mettre à jour la spécification de
+session seulement après réalisation et vérification. Le plan Sighty-TV
+référence cette capacité comme une dépendance de son raccord produit.
+
+L'[ordre commun des cinq chantiers](2026-11-11-digital-signage-calendar-program-plan.md#liens-entre-chantiers-et-ordre-de-réalisation)
+précise cette dépendance : qualifier d'abord le sélecteur avec les mods
+existants et des fixtures, puis terminer son parcours Sighty-TV quand
+l'entrée et le document du mod sont réels. Le moteur calendaire, la migration
+du Sommaire et le BDC Calendrier dans Learning n'attendent pas ce sélecteur.
+
 ## Sequence et scheduler
 
-Le point de départ de l’[étude dédiée](../notes/2026-10-20-sequence-scheduler-study.md)
-distingue les enchaînements locaux de `sequence` et leur programmation temporelle
-par `scheduler`. Le métier de ces ressources doit pouvoir être employé par
-plusieurs mods ; leurs adaptations DGS appartiendront à ce mod. La possibilité
-d’utiliser `sequence` sans scheduler reste ouverte. Leur réalisation est hors
-du chantier actuel.
+Le [plan calendrier et programmes](2026-11-11-digital-signage-calendar-program-plan.md)
+porte le périmètre initial et l'ordre commun. Le moteur calendaire et le BDC
+Calendrier sont des ressources partagées ; Learning peut recevoir le BDC en
+premier. Le scheduler et les programmes restent dans `digital-signage`.
+Leur extraction ne sera envisagée qu'avec un autre projet consommateur réel.
+
+L'[étude dédiée](../notes/2026-10-20-sequence-scheduler-study.md) conserve
+les pistes de diffusion plus larges. Le terme `sequence` des points suivants
+désigne l'exploration des enchaînements aujourd'hui portée par les programmes ;
+ces pistes ne rendent pas leur métier partagé dans le périmètre initial.
+Leur réalisation reste hors du chantier de reconfiguration des mods.
 
 Les séquences et calendriers sont des données auteur à persister. Les builders
 et contributions du mod les transforment en scénario, scènes, actions et guards.
@@ -443,7 +493,7 @@ sont des pistes étudiées ; aucun parcours n’est encore retenu.
 
 | Réf. | Décision ouverte |
 | --- | --- |
-| SQ1 | Usage de `sequence` sans calendrier et découpage physique du métier réutilisable et des adaptations propres aux mods. |
+| SQ1 | Réemploi ultérieur du scheduler ou des programmes si un autre projet l'exige ; le premier découpage reste privé à `digital-signage`, sans extraction préalable. |
 | SQ2 | Format documentaire et projection BDD des séquences ; génération distincte des passages successifs et compositions par zones en vues et scènes Sighty/CodPlay, avec correspondance des identités. |
 | SQ3 | Durées, contrat des signaux de fin et raccord de la fin collective, cas des chapitres, transitions, chargement et dépassement. |
 | SQ4 | Projection temporelle des passages successifs et scènes parallèles : durée finie, inconnue ou boucle. |
