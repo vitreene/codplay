@@ -40,7 +40,7 @@ export const CAROUSEL_PLAYER_STYLE_RULES = [
 }`],
   [65, `
 
-/* Flex-item margins do not collapse, so the heading supplies this one gap. */
+/* Grid item margins do not collapse, so the heading supplies this one gap. */
 .elce-card--text-short > .elce-card__overline:has(+ .elce-card__title),
 .elce-card--text-image > .elce-carousel-text-image__content > .elce-card__overline:has(+ .elce-card__title) {
   margin-block-end: 0;
@@ -49,14 +49,14 @@ export const CAROUSEL_PLAYER_STYLE_RULES = [
 
 .elce-card--text-image > .elce-carousel-text-image__content {
   box-sizing: border-box;
-  display: flex;
-  width: 60%;
+  display: grid;
+  grid-column: 3;
+  grid-row: 1;
+  grid-template-rows: minmax(0, 1fr) auto auto auto auto auto minmax(0, 1fr);
+  width: 100%;
   height: 100%;
   min-width: 0;
   min-height: 0;
-  flex-direction: column;
-  justify-content: center;
-  margin-inline-start: 40%;
   overflow: hidden;
 }`],
   [72, `
@@ -74,36 +74,79 @@ export const CAROUSEL_PLAYER_STYLE_RULES = [
   [73, `
 
 .elce-card--text-image.elce-card--image-position-right > .elce-carousel-text-image__content {
-  margin-inline: 0 40%;
-}`],
-  [74, `
+  grid-column: 1;
+}
 
-.elce-card--text-image.elce-card--image-position-right > .elce-carousel-text-image__content > .elce-carousel-text-image__image {
-  inset-inline: auto 0;
+.elce-card--text-image.elce-card--image-position-right {
+  grid-template-columns: minmax(0, 1fr) 2rem minmax(0, 40%);
 }`],
   [76, `
 
 .elce-card--text-image.elce-card--image-position-center > .elce-carousel-text-image__content {
-  position: relative;
+  display: grid;
+  grid-column: 1;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
   width: 100%;
   height: 100%;
-  margin: 0;
 }`],
   [77, `
 
 .elce-card--text-image.elce-card--image-position-center > .elce-carousel-text-image__content > .elce-carousel-text-image__image {
-  position: static;
-  z-index: auto;
-  display: flex;
+  position: relative;
+  display: grid;
+  grid-row: 4;
   width: 100%;
-  flex: 1 1 auto;
-  align-items: center;
-  justify-content: center;
+  min-height: 0;
+  margin-block: 2rem;
+  place-items: center;
 }`],
   [78, `
 
 .elce-card--text-image.elce-card--image-position-center > .elce-carousel-text-image__content > :not(.elce-carousel-text-image__image) {
   text-align: center;
+}`],
+  [80, `
+
+.elce-card--text-image > .elce-carousel-text-image__content > .elce-card__overline {
+  grid-row: 2;
+}
+
+.elce-card--text-image > .elce-carousel-text-image__content > .elce-card__title {
+  grid-row: 3;
+}
+
+.elce-card--text-image > .elce-carousel-text-image__content > .elce-card__description {
+  grid-row: 4;
+}
+
+.elce-card--text-image > .elce-carousel-text-image__content > .elce-card__message {
+  grid-row: 5;
+}
+
+.elce-card--text-image > .elce-carousel-text-image__content > .elce-card__meta:not(.elce-card__overline) {
+  grid-row: 6;
+}
+
+.elce-card--text-image.elce-card--image-position-center > .elce-carousel-text-image__content > .elce-card__overline {
+  grid-row: 1;
+}
+
+.elce-card--text-image.elce-card--image-position-center > .elce-carousel-text-image__content > .elce-card__title {
+  grid-row: 2;
+}
+
+.elce-card--text-image.elce-card--image-position-center > .elce-carousel-text-image__content > .elce-card__description {
+  grid-row: 3;
+}
+
+.elce-card--text-image.elce-card--image-position-center > .elce-carousel-text-image__content > .elce-card__message {
+  grid-row: 5;
+}
+
+.elce-card--text-image.elce-card--image-position-center > .elce-carousel-text-image__content > .elce-card__meta:not(.elce-card__overline) {
+  grid-row: 6;
+}
 }`],
   [79, `
 

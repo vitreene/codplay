@@ -1,6 +1,6 @@
 # Plan Texte avec image centrée
 
-**Statut : Fixe — comportement accepté ; code appliqué, validation restante.**
+**Statut : Fixe — placements par Grid acceptés ; implémentation à aligner, validation restante.**
 
 ## Comportement retenu
 
@@ -22,16 +22,19 @@
 
 ## Raccord retenu
 
-Dans `src/config/presets.ts`, placer la part image dans le groupe de contenu,
-après la description et avant le message. L’ordre du DOM reste ainsi celui de
-lecture pour les trois positions. En Gauche/Droite, la feuille player place
-l’image en absolu dans la colonne latérale et réserve cette largeur aux textes ;
-en Centrée, elle reste dans le flux flex et prend l’espace vertical disponible.
-La classe de position est produite par le builder Carte partagé pour que Flux,
-Diapo, Carousel et aperçu d’ancre suivent le même choix. Les parts CodPlay et
-les champs enregistrés restent inchangés. Le marqueur historique
-`elce-carousel-view--image-right` reste présent dans le Carousel et l’aperçu
-d’ancre ; les règles de rendu utilisent la classe partagée du BDC.
+Dans `src/config/presets.ts`, la part image reste dans le groupe de contenu,
+après la description et avant le message : l’ordre du DOM reste celui de lecture.
+La feuille player emploie Grid pour Gauche, Droite et Centrée. Les positions
+latérales utilisent trois pistes `40% 2rem 1fr` (inversées pour Droite) ; la
+colonne texte garde sa surface d’apparence et l’image remplit la piste latérale.
+La position Centrée utilise une piste verticale flexible pour l’image entre
+description et message, avec `2rem` d’espace avant et après l’image. La classe
+de position est produite par le builder Carte partagé pour que Flux, Diapo et
+Carousel suivent le même choix. Les parts CodPlay
+et les champs enregistrés restent inchangés. L’aperçu d’ancre utilise les mêmes
+pistes Grid avec un espacement compact adapté à sa taille réduite. Le marqueur
+historique `elce-carousel-view--image-right` reste présent dans le Carousel et
+l’aperçu d’ancre ; les règles de rendu utilisent la classe partagée du BDC.
 
 ## Actions ordonnées
 
