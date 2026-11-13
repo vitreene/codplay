@@ -225,6 +225,18 @@ courtes ; les validations ciblées n’ont pas encore été relancées.
    Photos ancrées et Question sans débordement aux deux formats. La preview
    Brave ouverte le 26 octobre montre les pages accessibles 1–5, sans layout
    Carte ; la vérification visuelle de ces rôles CSS reste à faire sur une Carte.
+   Dans Texte court et Texte avec image, le titre et le message partagent les
+   mêmes règles de rôle CSS. En Carousel, les textes de chaque Carte utilisent
+   la largeur du BDC Carte comme référence responsive commune, afin que leur
+   taille reste identique entre Cartes à une largeur donnée et évolue avec la
+   largeur du Carousel. Les colonnes latérales de Texte avec image gardent un
+   espace de `2rem` entre média et texte. Brave vérifie les styles calculés et
+   le rendu réel du Carousel Nutrition & Santé à 1280 px et 900 px de viewport :
+   les Cartes 1991 et 1993 partagent les mêmes tailles de titre/message aux deux
+   largeurs, et la séparation de 1991 mesure 32 px. À 390 px, le lecteur réduit
+   la Carte à 52 px et la colonne de texte à 0 px ; cette largeur ne valide pas
+   le comportement mobile et doit être résolue ou couverte par une vérification
+   sur un player responsive avant clôture.
    Le Résultat reste verrouillé ; ne pas répondre au quiz pour le valider.
    **Décision acceptée et appliquée le 26 octobre :** un BDC dont la bordure est
    visible conserve un padding Normal même sans fond. Cela concerne la Question

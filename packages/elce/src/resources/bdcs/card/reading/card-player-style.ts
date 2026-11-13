@@ -38,7 +38,8 @@ export const CARD_PLAYER_STYLE_RULES = [
 }`],
   [67, `
 
-.elce-card--text-short .elce-card__title {
+.elce-card--text-short .elce-card__title,
+.elce-card--text-image .elce-card__title {
   font-size: max(1.7625rem, 4.935cqi);
   line-height: 1.2;
 }`],
@@ -49,14 +50,16 @@ export const CARD_PLAYER_STYLE_RULES = [
 }`],
   [69, `
 
-.elce-card--text-short .elce-card__message {
+.elce-card--text-short .elce-card__message,
+.elce-card--text-image .elce-card__message {
   line-height: 1.4;
 }`],
   [70, `
 
 .elce-card--text-image {
   position: relative;
-  display: block;
+  display: grid;
+  grid-template-columns: minmax(0, 40%) 2rem minmax(0, 1fr);
   width: 100%;
   height: 100%;
   min-width: 0;
@@ -66,19 +69,7 @@ export const CARD_PLAYER_STYLE_RULES = [
   [75, `
 
 .elce-card--text-image.elce-card--image-position-center {
-  display: flex;
-  flex-direction: column;
-}`],
-  [80, `
-
-.elce-card--text-image .elce-card__title {
-  font-size: max(1.551rem, 4.23cqi);
-  line-height: 1.2;
-}`],
-  [81, `
-
-.elce-card--text-image .elce-card__message {
-  line-height: 1.35;
+  grid-template-columns: minmax(0, 1fr);
 }`],
   [82, `
 

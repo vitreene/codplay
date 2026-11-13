@@ -216,6 +216,17 @@ player vérifié dans Brave le 27 octobre couvre actuellement la Carte directe
 en Flux sur écran large et mobile. Diapo, Carousel et aperçu d’ancre restent
 à valider dans le plan actif.
 
+Dans un Carousel, « Texte court » et « Texte avec image » partagent les mêmes
+règles de taille pour le titre et le message. Les tailles `cqi` sont référées à
+la largeur commune du BDC Carte, même quand le contenu Texte avec image occupe
+une piste plus étroite. Les placements latéraux utilisent Grid avec une piste
+de média de 40 %, une piste de séparation de `2rem` et la piste de texte ; la
+position Droite inverse les côtés. Le dimensionnement responsive et ce gap
+sont décrits par les règles player dans
+[`card-player-style.ts`](../src/resources/bdcs/card/reading/card-player-style.ts),
+[`carousel-player-style.ts`](../src/resources/bdcs/carousel/reading/carousel-player-style.ts)
+et [`reading.css`](../src/config/appearance/css/typography/reading.css).
+
 Dans « Titre sur image », la Carte conserve le ratio 16:9 et place le titre au
 centre des deux axes. Le titre est gras (`700`) et ses lignes utilisent
 `text-wrap: balance`. Il repose sur un cadre ajusté à sa largeur, avec un

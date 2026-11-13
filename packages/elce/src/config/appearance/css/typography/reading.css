@@ -13,6 +13,10 @@
     container-type: inline-size;
   }
 
+  .elce-carousel-view.card-text-image > .elce-carousel-text-image__content {
+    container-type: normal;
+  }
+
   .bdc {
     box-sizing: border-box;
     max-inline-size: min(100%, 55rem);

@@ -45,6 +45,19 @@ coefficients par celui du corps. Les titres dédiés du lecteur gardent leurs
 échelles de composant documentées dans
 [`appearance-spec.md`](./appearance-spec.md).
 
+## Cartes du Carousel
+
+Dans un Carousel, le BDC Carte est la référence responsive commune aux titres
+et aux textes des layouts « Texte court » et « Texte avec image ». Le contenu
+texte imbriqué d’une Carte avec image ne crée pas un conteneur de requête : les
+unités `cqi` continuent de se rapporter à la largeur de la Carte, pas à la
+colonne de texte réduite par l’image. Les deux layouts partagent donc la même
+taille à largeur de Carte égale, tout en réagissant au redimensionnement du
+Carousel. La règle de conteneur est portée par
+[`reading.css`](../src/config/appearance/css/typography/reading.css) ; les
+échelles communes du titre et du message sont portées par
+[`card-player-style.ts`](../src/resources/bdcs/card/reading/card-player-style.ts).
+
 ## Cible et limites
 
 Le coefficient `2.76` vise environ 60–85 caractères par ligne en moyenne quand
