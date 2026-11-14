@@ -194,12 +194,31 @@ du profil ne doivent pas être emportés entièrement avec le Sommaire : leur
 réemploi pour le dévoilement est à examiner. Flux/Diapo sont des rendus dont
 le partage se discute séparément de l’appartenance des BDC au cœur.
 
+## Piste : narration non linéaire
+
 Chapitres/pages et chemins de lecture sont distincts. Plusieurs chemins
 peuvent rejoindre une même page sans dupliquer ses contenus. Une
 représentation en graphe serait adaptée au non-linéaire ; le Sommaire
 actuel représente le parcours ordonné du mod Learning. Le graphe auteur et une
 éventuelle carte lecteur ont des rôles différents, notamment pour le
 dévoilement. Leur forme et leurs gestes d’édition restent ouverts.
+
+Cette piste part du besoin d’ajouter au parcours d’un mod Elcé des scènes
+évoluées conçues dans le projet `editor`. Un kit ou une factory pourrait fournir
+les échanges minimaux nécessaires pour raccorder une scène à un projet Elcé et
+la faire participer à son parcours. La forme de ce raccord et les communications
+requises restent à définir ; cette idée prolonge la piste des
+[scènes préconçues](2026-10-20-elce-reconfiguration-study.md#extensions-envisagées-par-des-bdc-dédiés).
+
+Pour un mod narratif de type « livre dont vous êtes le héros », un mode
+graphique du Sommaire pourrait compléter ces scènes en représentant les
+bifurcations du parcours. Mermaid pourrait servir à en produire une vue, tandis
+qu’un outil comme React Flow permettrait d’explorer une représentation
+interactive. Il reste à décider si ce mode s’adresse à l’auteur, au lecteur ou
+aux deux, et s’il relève d’une évolution d’Elcé ou d’un outil distinct. Le
+Sommaire actuel représente le parcours ordonné de Learning ; cette piste ne
+définit ni le modèle auteur ni le raccord des scènes et n’engage aucune
+réalisation.
 
 ## Quatrième mode étudié : DGS
 

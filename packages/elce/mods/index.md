@@ -26,6 +26,7 @@ Le [skill partagé](../src/mods/docs/SKILL.md) pilote la réalisation d’un mod
 
 - [Quiz Hunt](notes/2026-10-15-quiz-hunt-adaptation-study.md).
 - [Quest](notes/2026-10-15-quest-mod-note.md).
+- [Parcours narratif non linéaire, de type « livre dont vous êtes le héros »](notes/2026-10-15-elce-mods-study.md#piste-narration-non-linéaire) : scènes avancées conçues dans `editor`, raccord à Elcé par un kit ou une factory, et Sommaire graphique ; piste sans projet arrêté.
 - [Cours partagé et application de participation](notes/2026-10-15-elce-mods-study.md#autre-exemple-cité--cours-partagé-et-réponses-des-participants).
 
 Ces exemples ne constituent pas des engagements de réalisation.
