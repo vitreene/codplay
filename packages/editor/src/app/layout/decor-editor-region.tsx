@@ -4,10 +4,12 @@ import { createDecorEditorBridge } from '../bridges/decor-editor-bridge'
 import type { BridgeHandle } from '../bridges/types'
 import type { EditorCoordinationBridge } from '../bridges/editor-coordination-bridge'
 import type { controllerMachine } from '../controller/controller-machine'
+import type { EditorActionsFacade } from '../facades/editor-actions-facade'
 
 type DecorEditorRegionProps = Readonly<{
   controller: Actor<typeof controllerMachine>
   coordination: EditorCoordinationBridge
+  actions: EditorActionsFacade
 }>
 
 /** Mounts and releases the existing decor-editor bridge in one stable host. */
@@ -17,7 +19,7 @@ export function DecorEditorRegion(handle: Handle<DecorEditorRegionProps>) {
     if (bridge !== null) return
     const container = document.getElementById(handle.id)
     if (container instanceof HTMLElement) {
-      bridge = createDecorEditorBridge(container, handle.props.controller, handle.props.coordination)
+      bridge = createDecorEditorBridge(container, handle.props.controller, handle.props.coordination, handle.props.actions)
     }
   })
   handle.signal.addEventListener('abort', () => bridge?.destroy(), { once: true })

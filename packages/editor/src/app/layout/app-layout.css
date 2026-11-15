@@ -6,9 +6,10 @@
   --app-text: #f9fafb;
   --app-text-muted: #9ca3af;
   --app-scene-outline: #6b7280;
-  /* The timeline keeps one reserved track so selection details cannot resize
-     the scene row while an interaction changes the infobar contents. */
-  --app-timeline-height: clamp(160px, 25vh, 220px);
+  --app-min-scene-height: 200px;
+  --app-min-timeline-height: 160px;
+  --app-timeline-resizer-height: 8px;
+  --app-timeline-height: 160px;
 
   --app-font: ui-sans-serif, system-ui, sans-serif;
   --app-font-size: 13px;
@@ -26,9 +27,14 @@ body,
 .app-layout {
   display: grid;
   grid-template-columns: 220px 1fr 280px;
-  grid-template-rows: minmax(0, 1fr) var(--app-timeline-height) auto;
+  grid-template-rows:
+    minmax(var(--app-min-scene-height), 1fr)
+    var(--app-timeline-resizer-height)
+    minmax(var(--app-min-timeline-height), var(--app-timeline-height))
+    auto;
   grid-template-areas:
     'menu   scene panel'
+    'timeline-resizer timeline-resizer timeline-resizer'
     'timeline timeline timeline'
     'telco  telco  telco';
   width: 100%;
@@ -70,6 +76,31 @@ body,
   grid-area: timeline;
   min-height: 0;
   overflow: hidden;
+}
+
+.app-timeline-resizer {
+  grid-area: timeline-resizer;
+  z-index: 1;
+  cursor: row-resize;
+  touch-action: none;
+}
+
+.app-timeline-resizer::after {
+  content: '';
+  display: block;
+  height: 2px;
+  margin-block-start: 3px;
+  background: var(--app-border);
+}
+
+.app-timeline-resizer:hover::after,
+.app-layout--resizing-timeline .app-timeline-resizer::after {
+  background: #60a5fa;
+}
+
+.app-layout--resizing-timeline {
+  cursor: row-resize;
+  user-select: none;
 }
 
 .app-region--telco {
@@ -126,6 +157,43 @@ body,
 }
 
 .editor-menu-section > button {
+  width: 100%;
+}
+
+.editor-menu-button,
+.editor-menu-select {
+  box-sizing: border-box;
+  min-height: 2.25rem;
+  padding: 6px 10px;
+  color: var(--app-text);
+  background: #111827;
+  border: 1px solid var(--app-border);
+  border-radius: 4px;
+  font: inherit;
+}
+
+.editor-menu-button {
+  cursor: pointer;
+}
+
+.editor-menu-button:hover:not(:disabled),
+.editor-menu-select:hover:not(:disabled) {
+  border-color: #4b5563;
+}
+
+.editor-menu-button:focus-visible,
+.editor-menu-select:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+.editor-menu-button:disabled,
+.editor-menu-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.editor-menu-select {
   width: 100%;
 }
 

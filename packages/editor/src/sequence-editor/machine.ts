@@ -150,7 +150,7 @@ export type SequenceEditorEvent =
   | { type: 'VIEWPORT.SET_MODE'; mode: 'full-sequence' | 'text-priority' }
   | { type: 'VIEWPORT.SET_LAYOUT_PROFILE'; profile: LayoutProfile }
   | { type: 'VIEWPORT.SET_DISPLAY_CONFIG'; config: DisplayConfig }
-  | { type: 'TRACK.MOVE'; trackId: string; parentId: string | null; order?: string }
+  | { type: 'TRACK.MOVE'; trackId: string; parentId: string | null; order?: string; beforeItemId?: string; afterItemId?: string }
   | { type: 'TRACK.REMOVE'; trackId: string }
   | { type: 'TRACK.TOGGLE_VISIBILITY'; trackId: string }
   | { type: 'TRACK.RESET_KEYFRAMES'; trackId: string }
@@ -614,9 +614,9 @@ export const sequenceEditorMachine = setup({
 
             let commands: Command[]
             if (!intro) {
-              commands = [{ name: 'createNamedKeyframe', args: { itemId: event.trackId, keyframeId: freshId('kf'), timeMs: clampedMs, name: 'intro' } }]
+              commands = [{ name: 'createNamedKeyframe', args: { itemId: event.trackId, keyframeId: freshId('kf'), timeMs: clampedMs } }]
             } else if (!outro) {
-              commands = [{ name: 'createNamedKeyframe', args: { itemId: event.trackId, keyframeId: freshId('kf'), timeMs: clampedMs, name: 'outro' } }]
+              commands = [{ name: 'createNamedKeyframe', args: { itemId: event.trackId, keyframeId: freshId('kf'), timeMs: clampedMs } }]
             } else {
               const moveId = Math.abs(clampedMs - intro.timeMs) <= Math.abs(clampedMs - outro.timeMs) ? intro.id : outro.id
               commands = [{ name: 'moveKeyframe', args: { itemId: event.trackId, keyframeId: moveId, timeMs: clampedMs } }]
@@ -681,7 +681,13 @@ export const sequenceEditorMachine = setup({
         'TRACK.MOVE': {
           actions: emit(({ event }) => ({
             type: 'commandBatch' as const,
-            commands: [{ name: 'attachItem', args: { itemId: event.trackId, parentId: event.parentId, order: event.order } }],
+            commands: [{ name: 'attachItem', args: {
+              itemId: event.trackId,
+              parentId: event.parentId,
+              ...(event.order === undefined ? {} : { order: event.order }),
+              ...(event.beforeItemId === undefined ? {} : { beforeItemId: event.beforeItemId }),
+              ...(event.afterItemId === undefined ? {} : { afterItemId: event.afterItemId }),
+            } }],
           })),
         },
         'TRACK.REMOVE': {
@@ -871,8 +877,8 @@ export const sequenceEditorMachine = setup({
               const commands: Command[] = []
               if (existingIntro) commands.push({ name: 'deleteKeyframe', args: { itemId: i.trackId, keyframeId: existingIntro.id } })
               if (existingOutro) commands.push({ name: 'deleteKeyframe', args: { itemId: i.trackId, keyframeId: existingOutro.id } })
-              commands.push({ name: 'createNamedKeyframe', args: { itemId: i.trackId, keyframeId: i.introId || freshId('kf'), timeMs: minMs, name: 'intro' } })
-              commands.push({ name: 'createNamedKeyframe', args: { itemId: i.trackId, keyframeId: i.outroId || freshId('kf'), timeMs: maxMs, name: 'outro' } })
+              commands.push({ name: 'createNamedKeyframe', args: { itemId: i.trackId, keyframeId: i.introId || freshId('kf'), timeMs: minMs } })
+              commands.push({ name: 'createNamedKeyframe', args: { itemId: i.trackId, keyframeId: i.outroId || freshId('kf'), timeMs: maxMs } })
               return { type: 'commandBatch' as const, commands }
             }),
             assign({ interaction: null }),

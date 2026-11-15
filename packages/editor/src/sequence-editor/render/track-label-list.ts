@@ -1,6 +1,7 @@
 import type { MachineContext } from '../machine'
 import type { Item, MarkerTrack } from '../types'
-import { childrenOf, getTrackRowHeight } from '../utils'
+import { childrenInFrontOrder, childrenOf, getTrackRowHeight } from '../utils'
+import { resolveTrackDrop, type TrackDropMode, type TrackMovePlacement } from '../tree-reorder'
 
 type FlatEntry = { item: Item; depth: number }
 
@@ -17,7 +18,7 @@ function flattenWithDepth(
 ): FlatEntry[] {
   const result: FlatEntry[] = []
   function walk(parentId: string | null, depth: number): void {
-    for (const item of childrenOf(items, parentId)) {
+    for (const item of childrenInFrontOrder(items, parentId)) {
       result.push({ item, depth })
       if (!collapsedIds.has(item.id)) walk(item.id, depth + 1)
     }
@@ -43,6 +44,8 @@ export function renderTrackLabelList(
   onToggleMarkerTrackVisibility?: (markerTrackId: string) => void,
   onAddMarkerTrack?: () => void,
   onRemoveMarkerTrack?: (markerTrackId: string) => void,
+  onMoveTrack?: (placement: TrackMovePlacement) => void,
+  onRemoveTrack?: (trackId: string) => void,
 ): void {
   container.innerHTML = ''
 
@@ -78,9 +81,68 @@ export function renderTrackLabelList(
   }
 
   const collapsed = collapsedIds ?? new Set<string>()
-  for (const { item, depth } of flattenWithDepth(ctx.scene.items, collapsed)) {
-    container.appendChild(buildLabelRow(item, depth, ctx, collapsed, onTrackClick, onToggleVisibility, onToggleCollapse))
+  const dragState: { trackId: string | null } = { trackId: null }
+  /** Clears stale placement feedback before inspecting the next drag target. */
+  const clearDropIndicators = (): void => {
+    container.querySelectorAll('.seq-label-row--drop-before, .seq-label-row--drop-after, .seq-label-row--drop-inside')
+      .forEach((row) => row.classList.remove('seq-label-row--drop-before', 'seq-label-row--drop-after', 'seq-label-row--drop-inside'))
   }
+  for (const { item, depth } of flattenWithDepth(ctx.scene.items, collapsed)) {
+    container.appendChild(buildLabelRow(
+      item,
+      depth,
+      ctx,
+      collapsed,
+      onTrackClick,
+      onToggleVisibility,
+      onToggleCollapse,
+      dragState,
+      clearDropIndicators,
+      onMoveTrack,
+      onRemoveTrack,
+    ))
+  }
+
+  const firstRootItem = childrenInFrontOrder(ctx.scene.items, null)[0]
+  if (firstRootItem !== undefined && onMoveTrack !== undefined) {
+    // Routes drops in the leading label area through the same placement used by the first row's top edge.
+    container.ondragover = (event) => {
+      const firstRow = getFirstRootRow()
+      if (dragState.trackId === null || firstRow === null || event.clientY >= firstRow.getBoundingClientRect().top) return
+      const placement = resolveTrackDrop(ctx.scene, dragState.trackId, firstRootItem.id, 'before')
+      clearDropIndicators()
+      if (placement === null) {
+        if (event.dataTransfer !== null) event.dataTransfer.dropEffect = 'none'
+        return
+      }
+      event.preventDefault()
+      if (event.dataTransfer !== null) event.dataTransfer.dropEffect = 'move'
+      firstRow.classList.add('seq-label-row--drop-before')
+    }
+    container.ondrop = (event) => {
+      const firstRow = getFirstRootRow()
+      if (dragState.trackId === null || firstRow === null || event.clientY >= firstRow.getBoundingClientRect().top) return
+      event.preventDefault()
+      const placement = resolveTrackDrop(ctx.scene, dragState.trackId, firstRootItem.id, 'before')
+      dragState.trackId = null
+      clearDropIndicators()
+      if (placement !== null) onMoveTrack(placement)
+    }
+  }
+
+  /** Finds the rendered row used as the leading insertion anchor. */
+  function getFirstRootRow(): HTMLElement | null {
+    return [...container.querySelectorAll<HTMLElement>('.seq-label-row[data-track-id]')]
+      .find((row) => row.dataset.trackId === firstRootItem.id) ?? null
+  }
+}
+
+/** Chooses an insertion edge or the interior of a capsule from the pointer's row position. */
+function dropModeFor(event: DragEvent, row: HTMLElement, item: Item): TrackDropMode {
+  const bounds = row.getBoundingClientRect()
+  const relativeY = bounds.height > 0 ? (event.clientY - bounds.top) / bounds.height : 0.5
+  if (item.type === 'capsule' && relativeY >= 0.25 && relativeY <= 0.75) return 'inside'
+  return relativeY < 0.5 ? 'before' : 'after'
 }
 
 /** Même lookup que `render/waveform-row.ts::masterWaveform` — dupliqué ici plutôt que partagé pour rester un test booléen local, pas une dépendance croisée entre deux modules de rendu indépendants. */
@@ -156,12 +218,17 @@ function buildLabelRow(
   onTrackClick: (trackId: string) => void,
   onToggleVisibility?: (trackId: string) => void,
   onToggleCollapse?: (capsuleId: string) => void,
+  dragState?: { trackId: string | null },
+  clearDropIndicators?: () => void,
+  onMoveTrack?: (placement: TrackMovePlacement) => void,
+  onRemoveTrack?: (trackId: string) => void,
 ): HTMLElement {
   const row = document.createElement('div')
   row.classList.add('seq-label-row')
   row.dataset.trackId = item.id
   row.dataset.kind = item.type === 'capsule' ? 'capsule' : 'element'
   row.dataset.depth = String(depth)
+  row.draggable = onMoveTrack !== undefined
   row.style.height = `${getTrackRowHeight(item, ctx.layoutProfile)}px`
 
   const isSelected = ctx.selection.trackId === item.id && ctx.selection.keyframeId === null
@@ -206,6 +273,62 @@ function buildLabelRow(
   })
   row.appendChild(visBtn)
 
+  if (onRemoveTrack !== undefined) {
+    const removeButton = document.createElement('button')
+    removeButton.classList.add('seq-label-row__remove')
+    removeButton.dataset.glyph = '×'
+    removeButton.title = item.type === 'capsule' ? 'Supprimer l’élément et ses enfants' : 'Supprimer l’élément'
+    removeButton.setAttribute('aria-label', removeButton.title)
+    removeButton.addEventListener('click', (event) => {
+      event.stopPropagation()
+      onRemoveTrack(item.id)
+    })
+    row.appendChild(removeButton)
+  }
+
   row.addEventListener('click', () => onTrackClick(item.id))
+  if (dragState !== undefined && clearDropIndicators !== undefined && onMoveTrack !== undefined) {
+    row.addEventListener('dragstart', (event) => {
+      if (event.target instanceof Element && event.target.closest('button') !== null) {
+        event.preventDefault()
+        return
+      }
+      dragState.trackId = item.id
+      if (event.dataTransfer !== null) {
+        event.dataTransfer.setData('text/plain', item.id)
+        event.dataTransfer.effectAllowed = 'move'
+      }
+    })
+    row.addEventListener('dragover', (event) => {
+      if (dragState.trackId === null) return
+      const mode = dropModeFor(event, row, item)
+      const placement = resolveTrackDrop(ctx.scene, dragState.trackId, item.id, mode)
+      clearDropIndicators()
+      if (placement === null) {
+        if (event.dataTransfer !== null) event.dataTransfer.dropEffect = 'none'
+        return
+      }
+      event.preventDefault()
+      if (event.dataTransfer !== null) event.dataTransfer.dropEffect = 'move'
+      row.classList.add(`seq-label-row--drop-${mode}`)
+    })
+    row.addEventListener('dragleave', () => row.classList.remove(
+      'seq-label-row--drop-before', 'seq-label-row--drop-after', 'seq-label-row--drop-inside',
+    ))
+    row.addEventListener('drop', (event) => {
+      event.preventDefault()
+      const mode = dropModeFor(event, row, item)
+      const placement = dragState.trackId === null
+        ? null
+        : resolveTrackDrop(ctx.scene, dragState.trackId, item.id, mode)
+      dragState.trackId = null
+      clearDropIndicators()
+      if (placement !== null) onMoveTrack(placement)
+    })
+    row.addEventListener('dragend', () => {
+      dragState.trackId = null
+      clearDropIndicators()
+    })
+  }
   return row
 }

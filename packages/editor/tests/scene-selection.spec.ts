@@ -108,6 +108,17 @@ describe('scene item selection', () => {
       expect(documentCommits).toHaveLength(0)
       expect(actions.getHistoryState()).toEqual({ canUndo: false, canRedo: false })
 
+      const motionControl = document.createElement('button')
+      motionControl.dataset.motionPathControl = ''
+      motionControl.dataset.editorOverlay = 'motion-control'
+      sceneRoot.append(motionControl)
+      motionControl.dispatchEvent(pointerEvent('pointerdown', 150, 150))
+
+      expect(actor.getSnapshot().context.selection.itemIds).toEqual([itemId])
+      expect(documentCommits).toHaveLength(0)
+      expect(actions.getHistoryState()).toEqual({ canUndo: false, canRedo: false })
+      motionControl.remove()
+
       gridBackground.dispatchEvent(pointerEvent('pointerdown', 300, 300))
       gridBackground.dispatchEvent(pointerEvent('pointerup', 300, 300))
 

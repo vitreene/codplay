@@ -118,7 +118,14 @@
   cursor: pointer;
   box-sizing: border-box;
 }
+.seq-label-row[data-kind="element"],
+.seq-label-row[data-kind="capsule"] { cursor: grab; }
+.seq-label-row[data-kind="element"]:active,
+.seq-label-row[data-kind="capsule"]:active { cursor: grabbing; }
 .seq-label-row:hover { background: var(--seq-label-row-hover); }
+.seq-label-row--drop-before { box-shadow: inset 0 2px 0 var(--seq-accent); }
+.seq-label-row--drop-after { box-shadow: inset 0 -2px 0 var(--seq-accent); }
+.seq-label-row--drop-inside { outline: 2px solid var(--seq-accent); outline-offset: -2px; }
 .seq-label-row--selected {
   background: rgba(245, 158, 11, 0.18);
   box-shadow: inset 3px 0 0 var(--seq-selected);
@@ -166,6 +173,7 @@
   opacity: 0.5;
 }
 .seq-label-row__remove:hover { opacity: 1; color: #ef4444; }
+.seq-label-row__remove::before { content: attr(data-glyph); }
 
 .seq-label-row--add-marker-track {
   color: var(--seq-text-muted);
@@ -279,6 +287,8 @@
 .seq-kf:hover .seq-kf__diamond { fill: var(--seq-accent); }
 .seq-kf--selected .seq-kf__diamond { fill: var(--seq-kf-selected-fill); }
 .seq-kf[data-kf-name] .seq-kf__diamond { fill: var(--seq-kf-fill-named); }
+.seq-kf--intro .seq-kf__diamond,
+.seq-kf--outro .seq-kf__diamond { fill: var(--seq-kf-fill-named); }
 .seq-kf__label {
   fill: var(--seq-text-muted);
   font-size: 8px;

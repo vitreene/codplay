@@ -1,7 +1,7 @@
 import type { MachineContext, VirtualKeyframe } from '../machine'
 import type { Item } from '../types'
 import { resolveKeyframeChannel } from '../types'
-import { childrenOf, getTrackRowHeight, getParentClipMarkers } from '../utils'
+import { childrenInFrontOrder, getTrackRowHeight, getParentClipMarkers } from '../utils'
 import { createKeyframeHandle } from './keyframe-handle'
 import { timeToPixel, pixelToTime } from './geometry'
 
@@ -16,7 +16,7 @@ const SVG_NS = 'http://www.w3.org/2000/svg'
 function flattenFiltered(items: Item[], collapsedIds: ReadonlySet<string>): Item[] {
   const result: Item[] = []
   function walk(parentId: string | null): void {
-    for (const item of childrenOf(items, parentId)) {
+    for (const item of childrenInFrontOrder(items, parentId)) {
       result.push(item)
       if (!collapsedIds.has(item.id)) walk(item.id)
     }
@@ -93,6 +93,8 @@ export function renderTrackRows(
     const rowHeight = getTrackRowHeight(item, layoutProfile)
     const rowEl = buildTrackRow(item, rowHeight)
     const poseKeyframes = sortPoseKeyframes(item)
+    const introKeyframeId = poseKeyframes[0]?.id
+    const outroKeyframeId = poseKeyframes.length > 1 ? poseKeyframes.at(-1)?.id : undefined
     const decorationKeyframes = sortDecorationKeyframes(ctx, item)
     const hasPoseChannel = poseKeyframes.length > 0
     const hasDecorChannel = item.keyframes.some((keyframe) => resolveKeyframeChannel(keyframe) === 'decor')
@@ -211,12 +213,16 @@ export function renderTrackRows(
     for (const kf of item.keyframes) {
       const effectiveMs = getEffectiveMs(kf.id, kf.timeMs, ctx)
       const x = toPx(effectiveMs)
+      const boundary = kf.id === introKeyframeId ? 'intro'
+        : kf.id === outroKeyframeId ? 'outro'
+          : undefined
       const handle = createKeyframeHandle(
         kf,
         x,
         rowHeight,
         layoutProfile,
         channelCenter(rowHeight, resolveKeyframeChannel(kf), dualChannel),
+        boundary,
       )
       const isDragging = drag?.keyframeId === kf.id && drag.trackId === item.id
 
@@ -252,8 +258,8 @@ export function renderTrackRows(
     const vkfsForTrack = ctx.virtualKeyframes.filter((v: VirtualKeyframe) => v.trackId === item.id)
     for (const vkf of vkfsForTrack) {
       const x = toPx(vkf.timeMs)
-      const fakeKf = { id: vkf.id, timeMs: vkf.timeMs, name: vkf.name, decorId: '', channel: 'pose' as const }
-      const handle = createKeyframeHandle(fakeKf, x, rowHeight, layoutProfile, channelCenter(rowHeight, 'pose', dualChannel))
+      const fakeKf = { id: vkf.id, timeMs: vkf.timeMs, decorId: '', channel: 'pose' as const }
+      const handle = createKeyframeHandle(fakeKf, x, rowHeight, layoutProfile, channelCenter(rowHeight, 'pose', dualChannel), vkf.name)
       handle.classList.add('seq-kf--virtual')
       if (!vkf.visible) handle.classList.add('seq-kf--out-of-bounds')
       if (onMaterializeVirtual) {

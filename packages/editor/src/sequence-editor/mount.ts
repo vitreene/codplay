@@ -10,7 +10,7 @@ import { createPlayheadOverlay, renderPlayhead } from './render/playhead-line'
 import { createCueRow, renderCueRow } from './render/cue-row'
 import { createMarkerTrackRows, renderMarkerTrackRows } from './render/marker-row'
 import { createWaveformRow, renderWaveformRow } from './render/waveform-row'
-import { findParentClipBounds } from './utils'
+import { descendantIds, findParentClipBounds } from './utils'
 
 /**
  * Un `<button>` dont le `textContent` est un glyphe Unicode seul (▶/■/≫/⊡/×) expose ce nœud texte
@@ -299,6 +299,7 @@ export function mountSequenceEditor(
       startPan(e)
       return
     }
+    if (e.target instanceof Element && e.target.closest('.seq-kf')) return
     const rowEl = (e.target as HTMLElement).closest('[data-track-id]') as HTMLElement | null
     if (rowEl?.dataset.kind === 'capsule') {
       startClipDrag(rowEl.dataset.trackId!, e)
@@ -356,8 +357,7 @@ export function mountSequenceEditor(
     const ctx = ctrl.getSnapshot().context
     const bounds = findParentClipBounds(vkf.trackId, ctx.scene.items, ctx.scene.meta.durationMs)
     const timeMs = Math.max(bounds.minMs, Math.min(bounds.maxMs, requestedTimeMs))
-    const id = ctrl.addKeyframe(vkf.trackId, timeMs)
-    ctrl.renameKeyframe(vkf.trackId, id, vkf.name)
+    ctrl.addKeyframe(vkf.trackId, timeMs)
   }
 
   let cancelVirtualKeyframeDrag: (() => void) | null = null
@@ -628,6 +628,15 @@ export function mountSequenceEditor(
         ctrl.addMarkerTrack(label)
       },
       (id) => ctrl.removeMarkerTrack(id),
+      (placement) => ctrl.moveTrack(placement.trackId, placement.parentId, undefined, placement),
+      (trackId) => {
+        const scene = ctrl.getScene()
+        const root = scene.items.find((item) => item.id === trackId)
+        const selectedTrackId = ctrl.getSelection().trackId
+        const removedIds = new Set(root === undefined ? [] : [root.id, ...descendantIds(scene.items, root.id)])
+        if (selectedTrackId !== null && removedIds.has(selectedTrackId)) ctrl.selectTrack(null)
+        ctrl.removeTrack(trackId)
+      },
     )
     markerAddSpacer.style.height = `${ctx.layoutProfile.rowHeightMarkers + 1}px`
     if (

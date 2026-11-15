@@ -57,20 +57,21 @@ export function buildSceneDocV2(
   scene: EditorScene,
   styleDefaultsByItem: ReadonlyMap<string, StyleDefaultCapture> = new Map(),
 ): BuildSceneV2Result {
-  const diagnostics = validateSceneInput(scene)
+  const compilationScene = { ...scene, items: itemsForCompilation(scene.items) }
+  const diagnostics = validateSceneInput(compilationScene)
   if (diagnostics.some((diagnostic) => diagnostic.level === 'error')) {
     return failure(diagnostics)
   }
 
-  const rootItems = childrenOf(scene.items, null)
-  const itemById = new Map(scene.items.map((item) => [item.id, item]))
-  const rootCapsule = scene.rootCapsule
+  const rootItems = childrenOf(compilationScene.items, null)
+  const itemById = new Map(compilationScene.items.map((item) => [item.id, item]))
+  const rootCapsule = compilationScene.rootCapsule
   const rootCapsuleType = rootCapsule?.kind ?? CAPSULE_TYPE.card
   const rootTransitionDefaults = resolveAutoCapsuleDefaults(rootCapsuleType, {
     introTransitionRef: rootCapsule?.defaultTransitionIn,
     outroTransitionRef: rootCapsule?.defaultTransitionOut,
   })
-  const preRollMs = TransitionTiming.computeScenePreRollMs(scene.items.map((item) => {
+  const preRollMs = TransitionTiming.computeScenePreRollMs(compilationScene.items.map((item) => {
     const firstKeyframe = sortPoseKeyframes(item)[0]
     const parentTransitionDefaults = resolveParentTransitionDefaults(item, itemById, rootTransitionDefaults)
     return {
@@ -81,10 +82,10 @@ export function buildSceneDocV2(
     }
   }))
 
-  const rootZones = zonesForCapsule(scene, null)
+  const rootZones = zonesForCapsule(compilationScene, null)
   const rootResolution = resolveCapsule(rootItems, rootCapsuleType, preRollMs, diagnostics, {
     sceneRoot: true,
-    fallbackClipDurationMs: scene.meta.durationMs,
+    fallbackClipDurationMs: compilationScene.meta.durationMs,
     grid: rootCapsule?.grid,
     targetPlacements: resolveZoneTargetPlacements(rootZones),
     distribution: rootCapsule?.distribution ?? { mode: 'stagger', staggerInMs: 0, staggerOutMs: 0 },
@@ -94,11 +95,12 @@ export function buildSceneDocV2(
     return failure(diagnostics)
   }
 
-  const rootPerso: PersoDoc<'list'> = buildRootPerso(scene, rootResolution.rootArtifact.className)
+  const rootPerso: PersoDoc<'list'> = buildRootPerso(compilationScene, rootResolution.rootArtifact.className)
   const persos: Array<V2Perso> = [rootPerso]
   const eventimes: Array<{ name: string; startAt: number }> = []
   const styleDefaultRequests: StyleDefaultRequest[] = []
   const styleSheets: string[] = [rootResolution.styleSheet]
+  const stackRules = new Set<string>()
   type WorkItem = Readonly<{
     items: Item[]
     capsuleId: string | null
@@ -109,7 +111,7 @@ export function buildSceneDocV2(
 
   while (worklist.length > 0) {
     const current = worklist.shift()!
-    const zones = zonesForCapsule(scene, current.capsuleId)
+    const zones = zonesForCapsule(compilationScene, current.capsuleId)
     persos.push(...zones.flatMap((zone) => {
       const targetId = zoneTargetPersoId(zone.id)
       const childArtifact = current.resolution.childArtifactById.get(targetId)
@@ -119,7 +121,8 @@ export function buildSceneDocV2(
       }
       return [buildZoneTargetPerso(zone, current.parentPersoId, childArtifact)]
     }))
-    for (const item of current.items) {
+    for (const [stackOrder, item] of current.items.entries()) {
+      stackRules.add(`.editor-stack-${stackOrder}{z-index:${stackOrder}}`)
       const childArtifact = current.resolution.childArtifactById.get(item.id)
       if (childArtifact === undefined) {
         diagnostics.push(error('EDITOR_V2_CAPSULE_CHILD_UNRESOLVED', `No capsule artifact was produced for item '${item.id}'.`, { itemId: item.id }))
@@ -127,13 +130,13 @@ export function buildSceneDocV2(
       }
 
       if (item.type === 'capsule') {
-        const nested = buildNestedCapsulePerso(scene, item, current.parentPersoId, childArtifact, preRollMs, diagnostics)
+        const nested = buildNestedCapsulePerso(compilationScene, item, current.parentPersoId, childArtifact, stackOrder, preRollMs, diagnostics)
         if (nested === undefined) continue
         persos.push(nested.perso)
         eventimes.push(...nested.eventimes)
         styleSheets.push(nested.resolution.styleSheet)
         worklist.push({
-          items: childrenOf(scene.items, item.id),
+          items: childrenOf(compilationScene.items, item.id),
           capsuleId: item.id,
           parentPersoId: item.id,
           resolution: nested.resolution,
@@ -142,9 +145,8 @@ export function buildSceneDocV2(
       }
 
       const leaf = buildLeafPerso(
-        scene, item, current.parentPersoId, childArtifact, preRollMs, diagnostics,
-        styleDefaultsByItem.get(item.id),
-        styleDefaultRequests,
+        compilationScene, item, current.parentPersoId, childArtifact, preRollMs, diagnostics,
+        styleDefaultsByItem.get(item.id), styleDefaultRequests, stackOrder,
       )
       persos.push(...leaf.persos)
       eventimes.push(...leaf.eventimes)
@@ -152,10 +154,11 @@ export function buildSceneDocV2(
   }
 
   if (diagnostics.some((diagnostic) => diagnostic.level === 'error')) return failure(diagnostics)
+  styleSheets.push([...stackRules].join('\n'))
 
   const sceneDoc: SceneDoc = {
-    id: scene.id,
-    name: scene.meta.title,
+    id: compilationScene.id,
+    name: compilationScene.meta.title,
     stories: {
       [EDITOR_V2_STORY_ID]: {
         id: EDITOR_V2_STORY_ID,
@@ -214,6 +217,22 @@ function validateSceneInput(scene: EditorScene): BuilderDiagnostic[] {
   return diagnostics
 }
 
+/** Removes hidden items and descendants before Editor projects the document into V2. */
+function itemsForCompilation(items: readonly Item[]): Item[] {
+  const itemById = new Map(items.map((item) => [item.id, item]))
+  return items.filter((item) => {
+    let current: Item | undefined = item
+    const visited = new Set<string>()
+    while (current !== undefined) {
+      if (current.visible === false) return false
+      if (visited.has(current.id)) return true
+      visited.add(current.id)
+      current = current.parentId === null ? undefined : itemById.get(current.parentId)
+    }
+    return true
+  })
+}
+
 /** Validates the implicit scene-root decor with the same zone rules as item decors. */
 function validateRootDecor(scene: EditorScene, diagnostics: BuilderDiagnostic[]): void {
   if (scene.rootDecorId === undefined) return
@@ -240,7 +259,6 @@ function validateItemInput(
   if (!['bloc', 'text', 'image', 'video', 'media', 'capsule'].includes(item.type)) {
     diagnostics.push(error('EDITOR_V2_ITEM_TYPE_UNSUPPORTED', `Item type '${item.type}' is not part of the V2 editor mapping.`, { itemId: item.id }))
   }
-  if (item.visible === false) diagnostics.push(error('EDITOR_V2_ITEM_VISIBILITY_UNSUPPORTED', 'An invisible item has no V2 mapping in this increment.', { itemId: item.id }))
   if (item.parentId !== null && !itemById.has(item.parentId)) {
     diagnostics.push(error('EDITOR_V2_PARENT_NOT_FOUND', `Parent item '${item.parentId}' is not present.`, { itemId: item.id, parentId: item.parentId }))
   } else if (item.parentId !== null && itemById.get(item.parentId)?.type !== 'capsule') {
@@ -369,6 +387,11 @@ function childrenOf(items: readonly Item[], parentId: string | null): Item[] {
   return items
     .filter((item) => item.parentId === parentId)
     .sort((left, right) => left.order < right.order ? -1 : left.order > right.order ? 1 : left.id.localeCompare(right.id))
+}
+
+/** Names the private frame class that maps sibling order to rendered stack order. */
+function stackClassName(stackOrder: number): string {
+  return `editor-stack-${stackOrder}`
 }
 
 type V2LeafPerso = PersoDoc<'tag'> | PersoDoc<'img'> | PersoDoc<'media'>
@@ -671,6 +694,7 @@ function buildNestedCapsulePerso(
   item: Item,
   parentPersoId: string,
   childArtifact: AutoCapsuleChildElementArtifact,
+  stackOrder: number,
   preRollMs: number,
   diagnostics: BuilderDiagnostic[],
 ): Readonly<{ perso: PersoDoc<'list'>; eventimes: Array<{ name: string; startAt: number }>; resolution: CapsuleResolution }> | undefined {
@@ -694,7 +718,7 @@ function buildNestedCapsulePerso(
     ? resolveInitialStyle(scene, item)
     : resolveKeyframeStyle(scene, item, firstKeyframe)
   const zoneActions = buildZoneMoveActions(scene, item, parentPersoId, keyframes, preRollMs)
-  const className = [resolution.rootArtifact.className, childArtifact.className].filter(Boolean).join(' ') || undefined
+  const className = [resolution.rootArtifact.className, childArtifact.className, stackClassName(stackOrder)].filter(Boolean).join(' ') || undefined
   const actions: Record<string, { style?: Record<string, unknown>; move?: Move }> = { ...transition.actions }
   for (const action of zoneActions) actions[action.name] = { move: action.move }
   return {
@@ -726,6 +750,7 @@ function buildLeafPerso(
   diagnostics: BuilderDiagnostic[],
   styleDefaults: StyleDefaultCapture | undefined,
   styleDefaultRequests: StyleDefaultRequest[],
+  stackOrder: number,
 ): Readonly<{ persos: V2Perso[]; eventimes: Array<{ name: string; startAt: number }> }> {
   const content = item.contentId === null ? undefined : scene.contents[item.contentId]
   const keyframes = sortPoseKeyframes(item)
@@ -767,7 +792,7 @@ function buildLeafPerso(
   const common = {
     move: { target: resolveMoveTarget(parentPersoId, initialZoneId) },
     attr: { 'data-item-id': `${EDITOR_V2_STORY_ID}:${item.id}` },
-    editorFrameClassName: childArtifact.className,
+    editorFrameClassName: [childArtifact.className, stackClassName(stackOrder)].filter(Boolean).join(' '),
     ...(initialClassName === undefined ? {} : { className: initialClassName }),
     ...(Object.keys(initial).length > 0 ? { style: initial } : {}),
   }

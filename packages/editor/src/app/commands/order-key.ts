@@ -44,12 +44,23 @@ export function orderKeyBetween(before: string | null, after: string | null): st
   if (before >= after) {
     throw new Error(`orderKeyBetween: 'before' (${before}) must sort strictly before 'after' (${after})`)
   }
+  if (after.startsWith(before)) {
+    const suffix = after.slice(before.length)
+    const firstCode = suffix.charCodeAt(0)
+    if (firstCode === ALPHABET_START && suffix.length === 1) {
+      throw new OrderKeyHardBoundaryError('between', `${before} and ${after}`)
+    }
+    if (firstCode === ALPHABET_START) return `${before}${String.fromCharCode(ALPHABET_START)}`
+    return `${before}${String.fromCharCode(Math.floor((ALPHABET_START + firstCode) / 2))}`
+  }
   return before + CENTER_LETTER
 }
 
 export class OrderKeyHardBoundaryError extends Error {
-  constructor(direction: 'low' | 'high', key: string) {
-    super(`orderKeyBetween: hard alphabet boundary reached going ${direction} from '${key}' — call rebalanceOrderKeys on this sibling set`)
+  constructor(direction: 'low' | 'high' | 'between', key: string) {
+    super(direction === 'between'
+      ? `orderKeyBetween: no key exists between '${key}' — call rebalanceOrderKeys on this sibling set`
+      : `orderKeyBetween: hard alphabet boundary reached going ${direction} from '${key}' — call rebalanceOrderKeys on this sibling set`)
     this.name = 'OrderKeyHardBoundaryError'
   }
 }
@@ -98,12 +109,20 @@ function decrementKey(key: string): string {
  */
 export function rebalanceOrderKeys(count: number): string[] {
   if (count <= 0) return []
-  const span = ALPHABET_END - ALPHABET_START + 1
-  const step = Math.max(1, Math.floor(span / (count + 1)))
-  const keys: string[] = []
-  for (let i = 1; i <= count; i += 1) {
-    const code = Math.min(ALPHABET_START + i * step, ALPHABET_END)
-    keys.push(String.fromCharCode(code))
+  let capacity = 26n
+  let width = 1
+  while (capacity <= BigInt(count)) {
+    capacity *= 26n
+    width += 1
   }
-  return keys
+  const step = capacity / BigInt(count + 1)
+  return Array.from({ length: count }, (_, index) => {
+    let value = BigInt(index + 1) * step
+    const chars = Array.from({ length: width }, () => 'a')
+    for (let position = width - 1; position >= 0; position -= 1) {
+      chars[position] = String.fromCharCode(ALPHABET_START + Number(value % 26n))
+      value /= 26n
+    }
+    return chars.join('')
+  })
 }

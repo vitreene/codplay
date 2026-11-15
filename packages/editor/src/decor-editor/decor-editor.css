@@ -110,6 +110,34 @@
   padding: 3px 6px;
 }
 
+.dedit-field__control input[type="color"][data-color-state="unset"],
+.dedit-field__control input[type="color"][data-color-state="mixed"] {
+  -webkit-appearance: none;
+  appearance: none;
+  border: 1px solid var(--dedit-border);
+  border-radius: 999px;
+  padding: 4px;
+  background-image: repeating-conic-gradient(#ddd 0% 25%, #fff 0% 50%);
+  background-size: 8px 8px;
+}
+
+.dedit-field__control input[type="color"][data-color-state="unset"]::-webkit-color-swatch-wrapper,
+.dedit-field__control input[type="color"][data-color-state="mixed"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.dedit-field__control input[type="color"][data-color-state="unset"]::-webkit-color-swatch,
+.dedit-field__control input[type="color"][data-color-state="mixed"]::-webkit-color-swatch {
+  background: transparent;
+  border: 0;
+}
+
+.dedit-field__control input[type="color"][data-color-state="unset"]::-moz-color-swatch,
+.dedit-field__control input[type="color"][data-color-state="mixed"]::-moz-color-swatch {
+  background: transparent;
+  border: 0;
+}
+
 .dedit-field--mixed input,
 .dedit-field--mixed select {
   color: var(--dedit-text-muted);

@@ -27,7 +27,7 @@
     "dev:elce": "npm run dev --workspace=@codplay/elce",
     "dev:elce:network": "npm run dev:network --workspace=@codplay/elce",
     "dev:demos": "npm run dev --workspace=@codplay/demos -- --open /",
-    "demo:sighty": "npm run dev --workspace=@codplay/demos -- --open /sighty.html",
+    "dev:sighty": "npm run dev --workspace=@codplay/demos -- --open /sighty.html",
     "test": "npm run test --workspace=codplay-v1",
     "test:gates": "npm run test:gates --workspace=codplay-v1",
     "build": "npm run build --workspace=codplay-v1"

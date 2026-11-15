@@ -272,6 +272,7 @@ describe('createSelectionFrameV2', () => {
     handle.setCreationMode({ kind: 'free' })
 
     const surface = root.querySelector<HTMLElement>('[data-selection-frame-creation="v2"]')!
+    expect(surface.style.cursor).toBe('crosshair')
     surface.dispatchEvent(pointerEvent('pointerdown', 100, 80, 20, 30))
     surface.dispatchEvent(pointerEvent('pointermove', 200, 140, 120, 90))
     expect(root.querySelector<HTMLElement>('[data-selection-frame-creation-preview]')!.style.width).toBe('100px')
@@ -281,6 +282,7 @@ describe('createSelectionFrameV2', () => {
     expect(created).toEqual([{ kind: 'rect', rect: { x: 20, y: 30, width: 100, height: 60 } }])
     expect(handle.element.style.display).toBe('none')
     handle.setCreationMode(null)
+    expect(surface.style.cursor).toBe('')
     expect(handle.element.style.display).toBe('')
     handle.destroy()
   })

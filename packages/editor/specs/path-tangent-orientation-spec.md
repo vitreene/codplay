@@ -40,8 +40,10 @@
   garde le cadre de contenu. Le body du Selection Frame est l’unique surface de
   déplacement et son preview suit `snapshot.set`, y compris aux KFs extrêmes.
   L’overlay ne monte pas de surface de déplacement. En édition, son point de
-  contrôle et son bouton de tangente restent au-dessus du Selection Frame pour
-  être ciblables lorsque la pose interpolée recouvre la courbe. En lecture, la
+  contrôle porte `data-editor-overlay` afin que la capture globale de sélection
+  laisse sa saisie de trajectoire commencer sans désélectionner l’item. Le point
+  de contrôle et le bouton de tangente restent au-dessus du Selection Frame
+  pour être ciblables lorsque la pose interpolée recouvre la courbe. En lecture, la
   suspension Editor masque le point central et l’action de tangente ; leur
   affichage reprend à la sortie de `playing`. Aucun consommateur ne déduit son
   propre centre ou ne retombe sur un cadre sans bordure.
@@ -84,6 +86,9 @@ Le contrat de calcul et de transport runtime est décrit par les
   sur un chemin actif explicite, son niveau de ciblage au-dessus du Selection
   Frame, ainsi que l’usage de la même géométrie bordée par le chemin et les
   ghosts. La suspension masque le point de trajectoire et sa reprise le réaffiche.
+  Il vérifie aussi que le contrôle central est déclaré comme overlay ;
+  [`scene-selection.spec.ts`](../tests/scene-selection.spec.ts) confirme qu’un
+  `pointerdown` sur ce contrôle conserve la sélection et ne crée aucun commit.
   Le déplacement appartient au Selection Frame, sans surface seconde.
   Le test vérifie aussi que
   les ghosts réutilisables perdent leur adresse de KF lorsqu'ils sortent de la

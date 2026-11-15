@@ -95,6 +95,106 @@ describe('buildSceneDocV2 — current native editor increment', () => {
     expect(item.initial).not.toHaveProperty(['move', 'parentId'])
   })
 
+  it('projects sibling order into the default rendered stack while preserving authored z-index', () => {
+    const scene = fixtureScene()
+    const item = scene.items[0]!
+    scene.items = [
+      { ...item, id: 'back', order: 'a', keyframes: [] },
+      { ...item, id: 'front', order: 'b', initialDecorId: 'text-decor-b', keyframes: [] },
+    ]
+    scene.decors['text-decor-b'] = {
+      ...scene.decors['text-decor-b']!,
+      style: { ...scene.decors['text-decor-b']!.style, 'z-index': 9 },
+    }
+    const result = buildSceneDocV2(scene)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    const persos = result.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos
+    const back = persos.find((perso) => perso.id === 'back')!
+    const front = persos.find((perso) => perso.id === 'front')!
+    expect(back.initial).toHaveProperty('editorFrameClassName', expect.stringContaining('editor-stack-0'))
+    expect(front.initial).toHaveProperty('editorFrameClassName', expect.stringContaining('editor-stack-1'))
+    expect(front.initial.style).toMatchObject({ 'z-index': 9 })
+    expect(result.styleSheet).toContain('.editor-stack-0{z-index:0}')
+    expect(result.styleSheet).toContain('.editor-stack-1{z-index:1}')
+  })
+
+  it('omits hidden items from compilation while preserving the authored scene', () => {
+    const scene = fixtureScene()
+    scene.items[0]!.visible = false
+
+    const result = buildSceneDocV2(scene)
+    expect(result.ok).toBe(true)
+    expect(scene.items[0]!.visible).toBe(false)
+    if (!result.ok) return
+
+    const story = result.sceneDoc.stories[EDITOR_V2_STORY_ID]!
+    expect(story.persos.map((perso) => perso.id)).not.toContain('item-1')
+
+    const owner = new CodPlay({ engine: EDITOR_ENGINE_OPTIONS })
+    const compiled = owner.build({ scene: result.sceneDoc })
+    expect(compiled.ok).toBe(true)
+    if (compiled.ok) {
+      expect(compiled.compiledScene.scene.stories[EDITOR_V2_STORY_ID]?.persos.map((perso) => perso.id)).not.toContain('item-1')
+    }
+    owner.destroy()
+  })
+
+  it('omits a hidden capsule subtree and keeps its visible siblings compilable', () => {
+    const scene = fixtureScene()
+    const visibleSibling = scene.items[0]!
+    scene.items = [
+      {
+        id: 'capsule-hidden',
+        type: 'capsule',
+        parentId: null,
+        order: 'a',
+        visible: false,
+        contentId: null,
+        initialDecorId: 'root-decor',
+        capsule: {
+          kind: 'grille',
+          grid: { rows: 1, cols: 1 },
+          distribution: { mode: 'stagger', staggerInMs: 0, staggerOutMs: 0 },
+        },
+        keyframes: [],
+      },
+      {
+        id: 'item-hidden-child',
+        type: 'text',
+        parentId: 'capsule-hidden',
+        order: 'a',
+        visible: true,
+        contentId: 'text-content',
+        initialDecorId: 'text-decor-a',
+        keyframes: [],
+      },
+      { ...visibleSibling, order: 'b' },
+    ]
+
+    const result = buildSceneDocV2(scene)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    const story = result.sceneDoc.stories[EDITOR_V2_STORY_ID]!
+    const persoIds = story.persos.map((perso) => perso.id)
+    expect(persoIds).not.toContain('capsule-hidden')
+    expect(persoIds).not.toContain('item-hidden-child')
+    expect(persoIds).toContain('item-1')
+
+    const owner = new CodPlay({ engine: EDITOR_ENGINE_OPTIONS })
+    const compiled = owner.build({ scene: result.sceneDoc })
+    expect(compiled.ok).toBe(true)
+    if (compiled.ok) {
+      const compiledIds = compiled.compiledScene.scene.stories[EDITOR_V2_STORY_ID]?.persos.map((perso) => perso.id)
+      expect(compiledIds).not.toContain('capsule-hidden')
+      expect(compiledIds).not.toContain('item-hidden-child')
+      expect(compiledIds).toContain('item-1')
+    }
+    owner.destroy()
+  })
+
   it('emits named fade actions and an interpolated decor diff as pure eventime triggers', () => {
     const result = buildSceneDocV2(fixtureScene())
     expect(result.ok).toBe(true)

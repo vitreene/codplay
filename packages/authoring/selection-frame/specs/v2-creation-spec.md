@@ -19,7 +19,9 @@ la conversion d’unités et la persistance.
   `pointercancel`, une suspension ou un changement de mode interrompt le tracé
   courant sans création.
 - La surface ne capte les pointeurs qu’en mode création ; le cadre de sélection
-  existant est masqué le temps du tracé et revient à la fin du mode.
+  existant est masqué le temps du tracé et revient à la fin du mode. Le curseur
+  devient une croix pendant que cette surface est active et revient à sa valeur
+  normale quand le mode se termine ou se suspend.
 - La géométrie utilise `offsetX`/`offsetY` et les dimensions locales de la
   surface (`clientWidth`/`clientHeight`). Elle ne lit pas de rectangle DOM ni
   de nœud player.

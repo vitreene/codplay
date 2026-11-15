@@ -178,6 +178,7 @@ export function createSelectionFrameV2(options: SelectionFrameV2Options): Select
     const active = creationMode !== null && !suspended
     creationSurface.style.display = active ? '' : 'none'
     creationSurface.style.pointerEvents = active ? 'auto' : 'none'
+    creationSurface.style.cursor = active ? 'crosshair' : ''
     renderCreationTrace(null)
     renderValue(value)
   }

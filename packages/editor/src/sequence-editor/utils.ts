@@ -10,6 +10,11 @@ export function childrenOf(items: Item[], parentId: string | null): Item[] {
   return items.filter((item) => item.parentId === parentId).sort((a, b) => (a.order < b.order ? -1 : a.order > b.order ? 1 : 0))
 }
 
+/** Returns siblings in the list's front-to-back display order. */
+export function childrenInFrontOrder(items: Item[], parentId: string | null): Item[] {
+  return childrenOf(items, parentId).reverse()
+}
+
 export function getTrackRowHeight(item: Item, profile: LayoutProfile): number {
   return item.type === 'capsule' ? profile.rowHeightCapsule : profile.rowHeightElement
 }
