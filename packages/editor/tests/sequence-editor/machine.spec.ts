@@ -217,7 +217,7 @@ describe('sequenceEditorMachine — drag (l\'état/interaction reste local ; le 
 })
 
 describe('sequenceEditorMachine — clip draw (capsule intro/outro)', () => {
-  it('CLIP.START_DRAW → DRAW_MOVE → DRAW_END emits delete-old (none here) + two createNamedKeyframe', () => {
+  it('CLIP.START_DRAW → DRAW_MOVE → DRAW_END emits two unnamed boundary keyframes', () => {
     const actor = actorWithScene(baseScene([capsuleItem('cap')]))
     const batches = collectCommands(actor)
     actor.send({ type: 'CLIP.START_DRAW', trackId: 'cap', pointerMs: 1000, introId: 'intro-1', outroId: 'outro-1' })
@@ -227,8 +227,8 @@ describe('sequenceEditorMachine — clip draw (capsule intro/outro)', () => {
 
     expect(actor.getSnapshot().value).toBe('idle')
     expect(batches).toEqual([[
-      { name: 'createNamedKeyframe', args: { itemId: 'cap', keyframeId: 'intro-1', timeMs: 1000, name: 'intro' } },
-      { name: 'createNamedKeyframe', args: { itemId: 'cap', keyframeId: 'outro-1', timeMs: 4000, name: 'outro' } },
+      { name: 'createNamedKeyframe', args: { itemId: 'cap', keyframeId: 'intro-1', timeMs: 1000 } },
+      { name: 'createNamedKeyframe', args: { itemId: 'cap', keyframeId: 'outro-1', timeMs: 4000 } },
     ]])
   })
 
@@ -248,8 +248,8 @@ describe('sequenceEditorMachine — clip draw (capsule intro/outro)', () => {
     expect(batches[0]).toEqual([
       { name: 'deleteKeyframe', args: { itemId: 'cap', keyframeId: 'old-intro' } },
       { name: 'deleteKeyframe', args: { itemId: 'cap', keyframeId: 'old-outro' } },
-      { name: 'createNamedKeyframe', args: { itemId: 'cap', keyframeId: 'new-intro', timeMs: 1000, name: 'intro' } },
-      { name: 'createNamedKeyframe', args: { itemId: 'cap', keyframeId: 'new-outro', timeMs: 3000, name: 'outro' } },
+      { name: 'createNamedKeyframe', args: { itemId: 'cap', keyframeId: 'new-intro', timeMs: 1000 } },
+      { name: 'createNamedKeyframe', args: { itemId: 'cap', keyframeId: 'new-outro', timeMs: 3000 } },
     ])
   })
 
@@ -267,7 +267,27 @@ describe('sequenceEditorMachine — clip draw (capsule intro/outro)', () => {
     const batches = collectCommands(actor)
 
     actor.send({ type: 'CLIP.PLACE', trackId: 'cap', pointerMs: 1000 })
-    expect(batches[0]![0]).toMatchObject({ name: 'createNamedKeyframe', args: { name: 'intro', timeMs: 1000 } })
+    expect(batches[0]![0]).toMatchObject({ name: 'createNamedKeyframe', args: { timeMs: 1000 } })
+  })
+
+  it('moving the exit keyframe preserves the entry and emits one move for the targeted keyframe', () => {
+    const cap = capsuleItem('cap', {
+      keyframes: [
+        { id: 'entry', timeMs: 1000, decorId: 'decor-init', name: 'intro' },
+        { id: 'exit', timeMs: 5000, decorId: 'decor-init', name: 'outro' },
+      ],
+    })
+    const actor = actorWithScene(baseScene([cap]))
+    const batches = collectCommands(actor)
+
+    actor.send({ type: 'DRAG.START_KEYFRAME', trackId: 'cap', keyframeId: 'exit' })
+    actor.send({ type: 'DRAG.MOVE', pointerMs: 7000 })
+    actor.send({ type: 'DRAG.END' })
+
+    expect(batches).toEqual([[
+      { name: 'moveKeyframe', args: { itemId: 'cap', keyframeId: 'exit', timeMs: 7000 } },
+    ]])
+    expect(actor.getSnapshot().context.scene.items[0]!.keyframes).toEqual(cap.keyframes)
   })
 })
 
@@ -385,6 +405,15 @@ describe('sequenceEditorMachine — tracks (items) : structure du document, comm
     const batches = collectCommands(actor)
     actor.send({ type: 'TRACK.MOVE', trackId: 't1', parentId: 'cap', order: 'b' })
     expect(batches).toEqual([[{ name: 'attachItem', args: { itemId: 't1', parentId: 'cap', order: 'b' } }]])
+  })
+
+  it('TRACK.MOVE forwards sibling placement anchors to the CENTRAL attachItem command', () => {
+    const actor = actorWithScene(baseScene([elementItem('t1'), capsuleItem('cap')]))
+    const batches = collectCommands(actor)
+    actor.send({ type: 'TRACK.MOVE', trackId: 't1', parentId: null, beforeItemId: 'cap' })
+    expect(batches).toEqual([[
+      { name: 'attachItem', args: { itemId: 't1', parentId: null, beforeItemId: 'cap' } },
+    ]])
   })
 
   it('TRACK.REMOVE emits the CENTRAL deleteItem command', () => {

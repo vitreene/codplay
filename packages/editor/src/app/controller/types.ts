@@ -73,11 +73,11 @@ export type Command =
   | { name: 'setZonesSurface'; args: { capsuleId: string | null; orientation: Orientation; zones: readonly { id: string; name: string; area: ZoneRect }[] } }
   | { name: 'assignType'; args: { itemId: string; type: ItemType } }
   | { name: 'assignContent'; args: { itemId: string; content: Omit<Content, 'id'> } }
-  | { name: 'attachItem'; args: { itemId: string; parentId: string | null; order?: string } }
+  | { name: 'attachItem'; args: { itemId: string; parentId: string | null; order?: string; beforeItemId?: string; afterItemId?: string } }
   | { name: 'setDecor'; args: { decorId: string; patch: Partial<Omit<Decor, 'id'>> } }
   | { name: 'registerDecor'; args: { decorId: string } }
   | { name: 'createKeyframe'; args: { itemId: string; timeMs: number; decorId?: string } }
-  | { name: 'createCapsule'; args: { geometry: OffsetData; capsuleDef: CapsuleDef; parentId?: string | null } }
+  | { name: 'createCapsule'; args: { geometry: OffsetData; capsuleDef: CapsuleDef; parentId?: string | null; zoneId?: string } }
   | { name: 'setCapsuleDef'; args: { itemId: string; patch: Partial<CapsuleDef> } }
   | { name: 'placeInZone'; args: { itemId: string; zoneId: string | null } }
   | { name: 'deleteItem'; args: { itemId: string } }

@@ -122,6 +122,7 @@ export function createMotionOverlay(
   const control = doc.createElement('button')
   control.type = 'button'
   control.dataset.motionPathControl = ''
+  control.dataset.editorOverlay = 'motion-control'
   control.setAttribute('aria-label', 'Modifier la trajectoire')
   control.title = 'Modifier la trajectoire'
   control.textContent = ''

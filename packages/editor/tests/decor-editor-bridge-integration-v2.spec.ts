@@ -211,10 +211,11 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     actor.send({ type: 'SEEK', timelineMs: 2_500 })
     await waitTurns()
 
-    const item = sceneRoot.querySelector<HTMLElement>('[data-editor-visual-for="item"]')
+    let item = sceneRoot.querySelector<HTMLElement>('[data-editor-visual-for="item"]')
     expect(item).not.toBeNull()
     const colorInput = decorPanel.querySelector<HTMLInputElement>('input[type="color"]')
     expect(colorInput).not.toBeNull()
+    expect(colorInput!.dataset.colorState).toBe('set')
     expect(colorInput!.value.toLowerCase()).not.toBe('#808080')
     colorInput!.value = '#00ff00'
     colorInput!.dispatchEvent(new Event('input', { bubbles: true }))
@@ -225,6 +226,8 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     expect(actor.getSnapshot().context.scene).toBe(documentScene)
 
     colorInput!.dispatchEvent(new Event('change', { bubbles: true }))
+    await waitTurns()
+    item = sceneRoot.querySelector<HTMLElement>('[data-editor-visual-for="item"]')!
     const committedScene = actor.getSnapshot().context.scene!
     expect(committedScene).not.toBe(documentScene)
     const committedItem = committedScene.items.find(candidate => candidate.id === 'item')!
@@ -235,9 +238,12 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     expect(actions.getHistoryState()).toEqual({ canUndo: true, canRedo: false })
 
     actions.undo()
+    await waitTurns()
     expect(actor.getSnapshot().context.scene).toBe(documentScene)
     expect(actions.getHistoryState()).toEqual({ canUndo: false, canRedo: true })
     actions.redo()
+    await waitTurns()
+    item = sceneRoot.querySelector<HTMLElement>('[data-editor-visual-for="item"]')!
     expect(actor.getSnapshot().context.scene).toBe(committedScene)
     expect(actions.getHistoryState()).toEqual({ canUndo: true, canRedo: false })
 
@@ -250,6 +256,9 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     await waitTurns()
     expect(item!.getAttribute('style')).toContain('background-color')
     expect(colorInput!.value.toLowerCase()).not.toBe('#808080')
+    expect(item!.style.getPropertyValue('background-color')).toBe(
+      committedScene.decors[created!.decorId]?.style?.['background-color'],
+    )
     expect(actor.getSnapshot().context.scene).not.toBe(documentScene)
   })
 
@@ -408,6 +417,10 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     actor = createActor(controllerMachine)
     actor.start()
     const documentScene = tangentScene()
+    documentScene.decors.last!.style = {
+      ...documentScene.decors.last!.style,
+      padding: '4px 0px 0px 8px',
+    }
     actor.send({ type: 'SCENE_LOADED', scene: documentScene })
     coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
 
@@ -450,9 +463,10 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const readOverlayFrame = readFrameValue
     const targetDocumentFrame: SelectionFrameValue = { x: 50, y: 50, width: 20, height: 20, rotate: 0 }
     const testInsets = { top: 0.6, right: 0.6, bottom: 0.6, left: 0.6 }
+    const targetInsets = { top: 4.6, right: 0.6, bottom: 0.6, left: 8.6 }
     const sourceDocumentFrame: SelectionFrameValue = { x: 10, y: 10, width: 20, height: 20, rotate: 0 }
     const sourcePathAnchor = motionPathAnchorForFrame(sourceDocumentFrame, testInsets)
-    const targetPathAnchor = motionPathAnchorForFrame(targetDocumentFrame, testInsets)
+    const targetPathAnchor = motionPathAnchorForFrame(targetDocumentFrame, targetInsets)
     const sourceTangent = motionPathTangentAngle(
       'M 0 0 A 0.7 0.7 0 0 1 1 0',
       sourcePathAnchor,
@@ -484,6 +498,14 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     expect(frameVisualCenter(actualSourceGhost).x).toBeCloseTo(frameVisualCenter(projectedSourceGhost).x, 1)
     expect(frameVisualCenter(actualSourceGhost).y).toBeCloseTo(frameVisualCenter(projectedSourceGhost).y, 1)
 
+    actor.send({ type: 'RUN_TRANSACTION', commands: [{
+      name: 'setDecor',
+      args: {
+        decorId: 'last',
+        patch: { offset: { translate: { x: 50, y: 50 }, width: 20, height: 20, rotate: 53.1721857677278 } },
+      },
+    }] })
+    await waitTurns(24)
     actor.send({ type: 'SELECT_ITEM', itemIds: ['item'], keyframeId: 'last-kf' })
     actor.send({ type: 'SEEK', timelineMs: 5_000 })
     await waitTurns(24)
@@ -499,23 +521,37 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
       expect(presentedItemAngle()).toBeCloseTo(frameAngle, 1)
       return frameAngle
     }
+    const startingFrame = readFrameValue(frame)
+    const startingAuthorFrame = { ...targetDocumentFrame, rotate: 53.1721857677278 }
+    const startingAuthorAnchor = motionPathAnchorForFrame(startingAuthorFrame, targetInsets)
     let firstPreviewRotation = Number.NaN
     rotateNeedle(frame, tip, 90, () => {
       const frameAngle = readFrameRotation(frame)
       firstPreviewRotation = frameAngle
       const itemPreviewAngle = readTransformRotationDegrees(itemNode)
-      expect(itemPreviewAngle).toBeCloseTo(frameAngle, 1)
+      expect(itemPreviewAngle).toBeCloseTo(frameAngle - startingFrame.rotate!, 1)
     })
     await waitTurns(24)
 
     const committedScene = actor.getSnapshot().context.scene!
     const committedItem = committedScene.items.find((candidate) => candidate.id === 'item')!
     const targetKeyframe = committedItem.keyframes.find((keyframe) => keyframe.id === 'last-kf')!
-    expect(committedScene.decors[targetKeyframe.decorId]?.offset?.rotate).toBe(90)
+    expect(committedScene.decors[targetKeyframe.decorId]?.offset?.rotate).toBeCloseTo(143.1721857677278, 8)
+    const committedOffset = committedScene.decors[targetKeyframe.decorId]!.offset!
+    const committedAnchor = motionPathAnchorForFrame({
+      ...startingAuthorFrame,
+      x: committedOffset.translate!.x!,
+      y: committedOffset.translate!.y!,
+      rotate: committedOffset.rotate!,
+    }, targetInsets)
+    expect(committedAnchor.x).toBeCloseTo(startingAuthorAnchor.x, 8)
+    expect(committedAnchor.y).toBeCloseTo(startingAuthorAnchor.y, 8)
     expect(Number.isFinite(firstPreviewRotation)).toBe(true)
     expect(committedItem.keyframes).toHaveLength(2)
     const frameAngle = expectItemAlignedWithFrame()
     expect(Number.isFinite(frameAngle)).toBe(true)
+    const committedItemNode = sceneRoot.querySelector<HTMLElement>('[data-item-id="story-main:item"]')!
+    expect(readTransformRotationDegrees(committedItemNode)).toBeCloseTo(frameAngle, 1)
 
     let secondPreviewRotation = Number.NaN
     rotateNeedle(frame, tip, 30, () => { secondPreviewRotation = readFrameRotation(frame) })
@@ -523,7 +559,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const rotatedAgainScene = actor.getSnapshot().context.scene!
     const rotatedAgainItem = rotatedAgainScene.items.find((candidate) => candidate.id === 'item')!
     const rotatedAgainKeyframe = rotatedAgainItem.keyframes.find((keyframe) => keyframe.id === 'last-kf')!
-    expect(rotatedAgainScene.decors[rotatedAgainKeyframe.decorId]?.offset?.rotate).toBe(120)
+    expect(rotatedAgainScene.decors[rotatedAgainKeyframe.decorId]?.offset?.rotate).toBeCloseTo(173.1721857677278, 8)
     expect(Number.isFinite(secondPreviewRotation)).toBe(true)
     expect(rotatedAgainItem.keyframes).toHaveLength(2)
     expectItemAlignedWithFrame()
@@ -564,7 +600,8 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
       .toEqual(pivotedTarget.offset?.rotationOrigin)
     expectItemAlignedWithFrame()
     expect(Number.isFinite(previewedRotationAfterPivot)).toBe(true)
-    expect(rotatedWithPivotScene.decors[rotatedWithPivotKeyframe.decorId]?.offset?.rotate).toBe(150)
+    expect(rotatedWithPivotScene.decors[rotatedWithPivotKeyframe.decorId]?.offset?.rotate)
+      .toBeCloseTo(-156.8278142322722, 8)
     // Browser acceptance compares preview/commit content corners. jsdom does not resolve the
     // CSS transform list used to capture the runtime geometry, so it cannot certify that equality.
 
@@ -581,7 +618,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const movedItem = movedScene.items.find((candidate) => candidate.id === 'item')!
     const movedKeyframe = movedItem.keyframes.find((keyframe) => keyframe.id === 'last-kf')!
     const movedTarget = movedScene.decors[movedKeyframe.decorId]!
-    expect(movedTarget.offset?.rotate).toBe(150)
+    expect(movedTarget.offset?.rotate).toBe(rotatedWithPivotScene.decors[rotatedWithPivotKeyframe.decorId]?.offset?.rotate)
     expect(Number.isFinite(movedPreviewRotation)).toBe(true)
     expectItemAlignedWithFrame()
 
@@ -900,6 +937,8 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     actor = createActor(controllerMachine)
     actor.start()
     const documentScene = scene()
+    documentScene.decors.first!.offset!.rotate = 76.694
+    documentScene.decors.last!.offset!.rotate = 76.694
     actor.send({ type: 'SCENE_LOADED', scene: documentScene })
     coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
 
@@ -926,10 +965,12 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     expect(tip).not.toBeNull()
     expect(pivot).not.toBeNull()
 
-    // At 2.5s the interpolated item is x/y=30cqw and 20cqw wide: the default axis is (320, 320).
-    tip!.dispatchEvent(pointerEvent('pointerdown', 320, 284))
-    tip!.dispatchEvent(pointerEvent('pointermove', 356, 320))
-    tip!.dispatchEvent(pointerEvent('pointerup', 356, 320))
+    // Snap the fractional absolute angle 76.694° + 13.2° to the nearest whole degree.
+    let previewRotation = Number.NaN
+    rotateNeedle(frame!, tip!, 13.2, () => {
+      previewRotation = Number.parseFloat(frame!.style.transform.match(/rotate\(([-\d.]+)deg\)/)?.[1] ?? 'NaN')
+    })
+    expect(previewRotation).toBe(90)
 
     // A Selection Frame rotation is a pose gesture: the middle waypoint is materialized on release.
     const rotatedScene = actor.getSnapshot().context.scene!
@@ -973,9 +1014,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const exactFrame = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')!
     const exactTip = sceneRoot.querySelector<HTMLElement>('[data-selection-frame-needle-tip]')!
     const exactPivot = sceneRoot.querySelector<HTMLElement>('[data-selection-frame-pivot]')!
-    exactTip.dispatchEvent(pointerEvent('pointerdown', 160, 124))
-    exactTip.dispatchEvent(pointerEvent('pointermove', 196, 160))
-    exactTip.dispatchEvent(pointerEvent('pointerup', 196, 160))
+    rotateNeedle(exactFrame, exactTip, 13.2)
     await waitTurns(24)
     exactPivot.dispatchEvent(pointerEvent('pointerdown', 160, 160))
     exactPivot.dispatchEvent(pointerEvent('pointermove', 240, 80))

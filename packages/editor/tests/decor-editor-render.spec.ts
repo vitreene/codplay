@@ -81,4 +81,34 @@ describe('createDecorEditorPalette — champ couleur, rafraîchissement après p
 
     ctrl.destroy()
   })
+
+  it('indicates a transparent background instead of presenting the color-picker fallback as the item color', () => {
+    const ctrl = new DecorEditorController(catalogs())
+    const palette = createDecorEditorPalette(ctrl)
+    ctrl.attachItems([attachInput()])
+    palette.render()
+
+    let input = palette.element.querySelector<HTMLInputElement>('input[type="color"]')!
+    expect(input.dataset.colorState).toBe('unset')
+    expect(input.title).toBe('Aucun fond (transparent)')
+
+    ctrl.attachItems([attachInput({ patch: { style: { 'background-color': '#808080' } } })])
+    palette.render()
+    expect(input.dataset.colorState).toBe('set')
+    expect(input.title).toBe('Fond')
+    expect(input.value.toLowerCase()).toBe('#808080')
+
+    ctrl.attachItems([
+      attachInput({ patch: { style: { 'background-color': '#ff0000' } } }),
+      attachInput({ itemId: 'item-2', patch: { style: { 'background-color': '#0000ff' } } }),
+    ])
+    expect(ctrl.resolveField('style.background-color').kind).toBe('mixed')
+    palette.render()
+    input = palette.element.querySelector<HTMLInputElement>('input[type="color"]')!
+    expect(input.dataset.colorState).toBe('mixed')
+    expect(input.title).toBe('Couleurs différentes — Fond')
+
+    palette.destroy()
+    ctrl.destroy()
+  })
 })

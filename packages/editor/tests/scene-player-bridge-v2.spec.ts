@@ -9,6 +9,7 @@ import { createSequenceEditorBridge } from '../src/app/bridges/sequence-editor-b
 import { createDecorEditorBridge } from '../src/app/bridges/decor-editor-bridge'
 import { EditorPlayerCommandFacade } from '../src/app/commands/editor-player-command-facade'
 import type { EditorPlayerCommand } from '../src/app/commands/editor-player-command-facade'
+import { setRootPlacementMode } from '../src/app/commands/root-placement-commands'
 
 /** Creates the V2 position scene used by the real bridge integration. */
 function scene() {
@@ -177,6 +178,28 @@ describe('V2 editor position seek integration', () => {
     root = undefined
     frames.clear()
     document.head.querySelectorAll('[data-style-default-test]').forEach((element) => element.remove())
+  })
+
+  it('keeps the scene frame at 16:9 while root placement switches between free and grid', async () => {
+    actor = createActor(controllerMachine)
+    actor.start()
+    actor.send({ type: 'SCENE_LOADED', scene: setRootPlacementMode(scene(), { mode: 'fine-grid' }) })
+    coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
+    root = document.createElement('div')
+    Object.defineProperty(root, 'getBoundingClientRect', {
+      value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }),
+    })
+    document.body.append(root)
+    sceneBridge = createScenePlayerBridge(root, actor, coordination)
+    await waitTurns(32)
+
+    expect(root.style.aspectRatio).toBe('16 / 9')
+
+    actor.send({ type: 'SCENE_LOADED', scene: setRootPlacementMode(scene(), { mode: 'transform' }) })
+    await waitTurns(32)
+
+    expect(actor.getSnapshot().context.scene?.rootCapsule?.grid).toEqual({ rows: 1, cols: 1 })
+    expect(root.style.aspectRatio).toBe('16 / 9')
   })
 
   it('plays, seeks back, plays again, then seeks again without freezing the scene', async () => {
@@ -608,6 +631,56 @@ describe('V2 editor position seek integration', () => {
     await waitTurns(24)
     expect(actor.getSnapshot().value).toBe('playing')
     expect(root.querySelector<HTMLElement>('[data-item-id="story-main:item"]')).toBe(committedNode)
+  })
+
+  it('rebuilds the rendered sibling order after an attachItem reorder', async () => {
+    actor = createActor(controllerMachine)
+    actor.start()
+    const currentScene = scene()
+    currentScene.items.push({
+      ...currentScene.items[0]!,
+      id: 'item-back',
+      order: 'b',
+      contentId: 'content-back',
+      initialDecorId: 'decor-back',
+      keyframes: [],
+    })
+    currentScene.contents['content-back'] = { id: 'content-back', type: 'text', text: 'back item' }
+    currentScene.decors['decor-back'] = {
+      id: 'decor-back',
+      offset: { translate: { x: 10, y: 10 }, width: 20, height: 20 },
+      style: { 'background-color': '#00ff00' },
+    }
+    actor.send({ type: 'SCENE_LOADED', scene: currentScene })
+    coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
+    root = document.createElement('div')
+    Object.defineProperty(root, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }),
+    })
+    document.body.append(root)
+    sceneBridge = createScenePlayerBridge(root, actor, coordination)
+    await waitTurns(24)
+
+    const initialFront = root.querySelector<HTMLElement>('[data-item-id="story-main:item"]')
+    const initialBack = root.querySelector<HTMLElement>('[data-item-id="story-main:item-back"]')
+    expect(initialFront).not.toBeNull()
+    expect(initialBack).not.toBeNull()
+    actor.send({
+      type: 'RUN_COMMAND',
+      command: { name: 'attachItem', args: { itemId: 'item', parentId: null, afterItemId: 'item-back' } },
+    })
+    await waitTurns(24)
+
+    const committedFront = root.querySelector<HTMLElement>('[data-item-id="story-main:item"]')
+    const committedBack = root.querySelector<HTMLElement>('[data-item-id="story-main:item-back"]')
+    expect(committedFront).not.toBeNull()
+    expect(committedBack).not.toBeNull()
+    expect(committedFront).not.toBe(initialFront)
+    expect(committedBack).not.toBe(initialBack)
+    expect(committedBack!.classList.contains('editor-stack-0')).toBe(true)
+    expect(committedFront!.classList.contains('editor-stack-1')).toBe(true)
+    expect(committedBack!.compareDocumentPosition(committedFront!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('creates the bridge instance when a destination-only style property is present', async () => {

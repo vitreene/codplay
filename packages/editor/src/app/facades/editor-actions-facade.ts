@@ -31,10 +31,23 @@ export class EditorActionsFacade {
     this.controller.send({ type: 'RUN_COMMAND', command })
   }
 
-  /** Enters the existing creation gesture with one of the root placement modes. */
-  beginBlockCreation(placementMode: RootPlacementMode): void {
-    if (placementMode !== 'transform') return
-    this.controller.send({ type: 'CREATE_MODE_ENTER', itemType: 'bloc', placementMode })
+  /** Enters the existing Selection Frame creation gesture for one authoring item type. */
+  beginItemCreation(itemType: 'bloc' | 'capsule', placementMode: RootPlacementMode): void {
+    this.controller.send({ type: 'CREATE_MODE_ENTER', itemType, placementMode })
+  }
+
+  /** Commits one traced item, selects it, and closes creation through the central actor path. */
+  commitItemCreation(commands: Command[]): string | null {
+    const beforeItemIds = new Set(this.controller.getSnapshot().context.scene?.items.map((item) => item.id) ?? [])
+    this.runTransaction(commands)
+    const itemId = this.controller.getSnapshot().context.scene?.items.find((item) => !beforeItemIds.has(item.id))?.id
+    if (itemId === undefined) {
+      this.cancelCreation()
+      return null
+    }
+    this.selectItem([itemId])
+    this.controller.send({ type: 'CREATE_COMMIT' })
+    return itemId
   }
 
   /** Leaves the current creation gesture without changing the document. */

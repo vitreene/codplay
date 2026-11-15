@@ -3,17 +3,38 @@
 Mémoire de travail unique. Les contrats vérifiés sont dans les specs Editor ;
 ce document ne répète que les décisions ou portes qui restent ouvertes.
 
+**Décision acceptée — dépôt dans l’espace avant la première piste :** déposer un
+item dans la zone vide de `.seq-labels` située au-dessus de la première ligne
+d’item le place avant le premier frère racine. Le geste réutilise
+`resolveTrackDrop` → `TRACK.MOVE` → `attachItem` ; il ne crée pas un circuit de
+réorganisation séparé. Les tests de `tree-reorder.spec.ts` couvrent le drop
+sur l’espace vide et les ancres de tête ; Safari MCP confirme le nouvel ordre,
+le rendu et la sauvegarde SQLite.
+
+**En cours :** raccorder l’espace de tête à la commande existante, vérifier le
+rebuild visuel et sauvegarder/recharger l’ordre dans l’unique onglet Safari.
+
 ## 1. Terminer l’intégration des zones et blocs
+
+**Décision acceptée — surface de scène indépendante du placement :** le cadre
+de scène est défini par le document et garde le même périmètre quel que soit le
+choix `Libre` ou `Grille`. Pendant l’élaboration, ce cadre garde un ratio 16:9 ;
+le choix ne règle que le placement racine. L’interface future de configuration
+du document proposera le réglage de ce ratio par scène.
+
+**À faire dans la configuration future du document :** ajouter le réglage
+persistant du ratio de scène, l’appliquer au cadre, puis retirer la constante
+temporaire 16:9 de `scene-player-bridge.ts`. Le test d’intégration actuel vérifie
+que `Libre` et `Grille` gardent ce cadre 16:9 sans changer leurs grilles de
+placement respectives.
 
 **Décision acceptée.** La capsule porte sa grille. La grille racine fine
 (`90 × 160`) rend le placement responsive et proche du libre. Une zone est une
 entité distincte d’un bloc ; sa géométrie est une aire CSS Grid (`row`, `col`,
-`rowSpan`, `colSpan`). Le parcours par défaut est : déclarer une zone, la
-sélectionner, puis créer un bloc qui référence son `Zone.id`. Le tracé de bloc
-ne crée jamais de zone. Dans ce parcours Zone, l’emprise de `Decor.zoneId` est
-la base de position et de taille ; le positionnement absolu précédemment
-développé reste disponible dans le modèle, mais l’éditeur Zone ne l’utilise pas.
-Le mode spécial de décalage relatif à la zone est distinct.
+`rowSpan`, `colSpan`). L’éditeur Zone déclare et modifie ces zones sans les
+confondre avec les blocs. Un item placé dans une zone déjà existante référence
+son `Zone.id` par `Decor.zoneId` ; l’emprise de la zone devient sa base de
+position et de taille. Le mode spécial de décalage relatif à la zone est distinct.
 
 Dans une même capsule, déposer un item dans une autre zone change
 `Decor.zoneId` au KF pose ; le Builder émet le `move` existant et le player
@@ -39,11 +60,60 @@ L’acceptation couvre le choix du type, l’édition visuelle de la grille, la
 création de zones, leur utilisation pour créer des blocs, la redistribution et
 la persistance/historique Editor.
 
+**Décision acceptée — retour du parcours de création :** l’entrée en tracé doit
+donner un curseur en croix ; la création, la sélection du nouvel item et la
+sortie du mode de tracé passent par `EditorActionsFacade`. Le rendu Decor du
+nouvel item doit correspondre au fond présenté dans la scène.
+
+**En cours — raccord du tracé et de Décor :** le curseur en croix apparaît sur
+la surface active ; `EditorMenuRegion` ouvre le geste, `EditorActionsFacade`
+regroupe la transaction, la sélection et la fin du geste. Les tests du tracé
+vérifient le fond transparent initial et la valeur native après commit/seek.
+Safari confirme le curseur en croix et la synchronisation du panneau Décor avec
+l’item sélectionné dans la timeline, y compris l’affichage en damier d’un fond
+absent. Il reste à accepter visuellement le tracé complet et la sélection du
+nouveau bloc après commit.
+
+**Décision acceptée — création sur la grille racine fine :** en mode racine
+`fine-grid`, l’auteur trace directement le bloc sur les pistes ; ses limites
+s’accrochent aux cellules et déterminent `row`, `col`, `rowSpan` et `colSpan`.
+La transaction crée la zone racine correspondant à cette aire puis le bloc qui
+la référence par `Decor.zoneId`. Aucune sélection de zone préalable n’est
+requise. Le même chemin de tracé accepte le mode `transform` avec une géométrie
+libre en `cqw`.
+
+**En cours — validation du flux de création :** `EditorMenuRegion` ouvre le
+tracé, le Selection Frame choisit l’accrochage selon le mode racine, et
+`EditorActionsFacade` committe la zone et le bloc ensemble puis sélectionne le
+bloc et ferme le mode. `block-creation-v2.spec.ts` couvre les deux modes,
+l’emprise, le décor, Undo et Redo ; l’acceptation visuelle dans l’application
+Editor reste à faire.
+
 **En cours — CapsuleDef :** l’onglet Capsule, les commandes centralisées, la
 surface de zones imbriquées et la projection des gouttières sont raccordés ;
 build et typecheck passent. Le parcours navigateur, Undo/Redo et la restauration
 SQLite restent à accepter avant de déplacer le comportement vérifié dans une
 spec.
+
+**Décision acceptée — création d’une capsule dans l’interface :** le bouton
+ouvre le tracé sur la scène via le flux de création Selection Frame existant.
+En mode `fine-grid`, la transaction crée la zone racine et la capsule qui la
+référence ; en mode `transform`, elle passe le rectangle converti en `cqw`.
+La capsule reprend le type et la distribution de `rootCapsule`, sans recopier
+sa grille racine ; Capsule Automation fournit les dimensions initiales de la
+grille selon le type. La création sélectionne la capsule. Déposer au centre de
+sa ligne un item existant le rattache comme enfant via `TRACK.MOVE` →
+`attachItem`.
+
+**En cours :** le bouton et le tracé réutilisent le flux Selection Frame et la
+façade centrale ; `createCapsule` transmet maintenant `zoneId` au décor initial.
+Les tests couvrent les modes `transform` et `fine-grid`, la sélection,
+Undo/Redo et le dépôt enfant vers `attachItem` ; le build Editor passe. Il reste
+à valider visuellement le tracé, le dépôt enfant et la restauration SQLite dans
+Safari. Après rechargement, l’onglet MCP expose le nouveau bouton mais
+`document.visibilityState` vaut `hidden` et `document.hasFocus()` `false` ; la
+capture Safari est noire. Aucune action sur le document n’a été faite dans cet
+état.
 
 **Décision acceptée — cible et déplacement dans le test Zone :** sélection
 implicite et active par défaut ; Zone/Bloc choisit exclusivement le type de
@@ -112,7 +182,11 @@ démonstration ne sera créé pour ce parcours.
 
 ## 6. Simplifier l’interface de l’application Editor
 
-**Décision acceptée :** garder le layout courant. Undo/Redo et les commandes de
+**Décision acceptée :** garder le layout courant, en faisant occuper à la scène
+sa taille maximale selon son ratio avant d’allouer le reliquat vertical à
+l’éditeur de pistes. Un séparateur horizontal permet à l’utilisateur de régler
+la hauteur de cette zone ; la valeur est mémorisée comme préférence locale
+Editor, hors document et hors Undo/Redo. Les outils Undo/Redo et les commandes de
 scène sont iconiques ; la scène reste choisissable dans le catalogue. Les outils
 de création `Bloc` et `Texte` sont iconiques, avec des noms accessibles, et
 gardent les commandes centrales existantes. Sans item sélectionné, Décor montre
@@ -137,6 +211,39 @@ conflit de révision et garde de dernière scène.
 
 ## 2. Fermer les portes mouvement V2
 
+### Editor vers le player — synchronisation décor/projection et rotation
+
+**Statut : A relire.** L’implémentation est suspendue pendant la revue.
+Le [plan d’exécution détaillé](./2026-09-02-motion-editor-v2-plan.md) porte
+le périmètre, les propriétaires, les étapes, les portes de passage, les fixtures,
+les commandes de validation et le parcours MCP pour l’agent chargé de l’exécuter.
+L’[analyse](./notes/2026-10-29-editor-path-playback-analysis.md) conserve le
+raisonnement architectural.
+
+**Contraintes utilisateur à préserver :** couplage immédiat du décor et de ses
+projections, quelle que soit l’entrée ; un seul circuit existant ; rotation
+au degré entier ; calcul dans les capsules tournées et imbriquées ; aucune
+modification de CodPlay. L’interface de trajectoire fonctionne et constitue
+la référence de non-régression. La rotation est le défaut à corriger en priorité.
+
+Le plan impose une référence de trajectoire avant modification, puis une
+correction de rotation avant le renforcement des autres entrées. La seule
+convergence des fonctions ne prouve pas la conservation du comportement.
+Les gestes, le rendu, les callbacks de fin, l’écriture et le cycle player doivent
+rester corrects. Les modifications de code restent conditionnées à la validation
+du plan ; aucun comportement proposé n’est déclaré vérifié dans les specs.
+
+**Décision acceptée — déplacement d’une borne de capsule :** le drag d’un
+losange de borne déplace uniquement le KF ciblé ; il conserve l’autre borne et
+ne crée pas de KF supplémentaire. Le tracé d’une plage reste réservé au fond
+de ligne de capsule, hors des poignées de KF.
+
+**En cours — validation dans Editor :** le routage protège les poignées de KF
+du tracé de plage ; le test DOM et le test machine vérifient le KF ciblé et
+l’unique commande de déplacement. Il reste à accepter le drag natif dans
+l’application Editor sur une capsule de test. Contrat et preuves automatisées :
+[intégration V2](../specs/editor-v2-integration-spec.md#interaction-des-bornes-de-capsule).
+
 - **P2-F :** aucun défaut de ghost n’est reproduit dans une scène valide.
   Ne pas modifier la géométrie sans reproduction. Quatre écritures historiques
   ont un corps inaccessible ; qualifier la porte d’absence d’écriture sur une
@@ -153,10 +260,6 @@ conflit de révision et garde de dernière scène.
   contre `1160`) et l’icône active a un orange plus marqué ; valider son ciblage
   et son contraste dans l’application avant d’actualiser la preuve de la spec
   d’orientation.
-- **Rotation :** l’angle de l’item est normalisé modulo 360 dans le Builder et
-  dans les gestes du CS ; valider le geste, son commit et le seek dans
-  l’application avant d’actualiser la preuve de présentation.
-
 Les comportements déjà vérifiés sont spécifiés dans les specs
 [d’intégration](../specs/editor-v2-integration-spec.md),
 [de présentation](../specs/item-presentation-spec.md) et
@@ -213,3 +316,23 @@ reste la référence hors du périmètre Editor.
   Aucune refonte du Builder ne commence avant validation explicite de son
   modèle, de ses frontières et de son chemin d’acceptation. Les correctifs
   vérifiés restent décrits dans les specs existantes.
+
+## 7. Visibilité des items dans Editor
+
+**Décision acceptée :** `visible: false` retire l’item de la compilation Editor ;
+le document auteur et sa valeur `visible` restent persistés. Le Builder ne doit
+plus produire `EDITOR_V2_ITEM_VISIBILITY_UNSUPPORTED`. Une capsule masquée retire
+aussi ses descendants : aucun perso enfant ne peut être compilé sans le perso
+parent qui porte leur contenu.
+
+**Actions après décision :** étendre le filtrage dans le Builder Editor existant,
+ajouter la régression à ses tests, puis valider le build Editor, la bascule et
+Undo/Redo dans l’application, ainsi que la persistance SQLite. Mettre à jour la
+spec du modèle et celle d’intégration V2 après vérification.
+
+**En cours :** le Builder omet l’item masqué et le sous-arbre d’une capsule
+masquée ; deux régressions vérifient aussi le résultat par `CodPlay.build()`.
+Le test Builder ciblé (23 tests), les tests de commande et persistance SQLite
+(25 tests), le typecheck et le build Editor passent. La bascule dans
+l’application avec Undo/Redo et restauration SQLite reste à accepter ; ne pas
+fermer cet item avant cette validation.

@@ -1,3 +1,4 @@
+import './decor-editor.css'
 import { createDecorEditorPalette } from './render'
 import type { DecorEditorController } from './controller'
 

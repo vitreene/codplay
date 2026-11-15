@@ -91,11 +91,12 @@ describe('block creation V2 through Editor commands and player bridge', () => {
     const decorPanel = document.createElement('div')
     document.body.append(sceneRoot, decorPanel)
     playerBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, actions)
     await waitTurns()
 
-    actions.beginBlockCreation(mode)
+    actions.beginItemCreation('bloc', mode)
     const surface = sceneRoot.querySelector<HTMLElement>('[data-selection-frame-creation="v2"]')!
+    expect(surface.style.cursor).toBe('crosshair')
     surface.dispatchEvent(pointerEvent('pointerdown', startX, startY))
     surface.dispatchEvent(pointerEvent('pointermove', endX, endY))
     surface.dispatchEvent(pointerEvent('pointerup', endX, endY))
@@ -108,6 +109,8 @@ describe('block creation V2 through Editor commands and player bridge', () => {
     expect(actor.getSnapshot().context.selection.itemIds).toEqual([item.id])
     expect(decorPanel.querySelector('[data-decor-property-path="style.background-color"]')).not.toBeNull()
     expect(decorPanel.querySelector('[data-decor-property-path="style.font-size"]')).toBeNull()
+    expect(decorPanel.querySelector<HTMLInputElement>('input[type="color"]')?.dataset.colorState).toBe('unset')
+    expect(sceneRoot.querySelector<HTMLElement>(`[data-editor-visual-for="${item.id}"]`)?.style.backgroundColor).toBe('')
 
     if (mode === 'transform') {
       expect(createdScene.zones).toEqual({})
@@ -118,6 +121,88 @@ describe('block creation V2 through Editor commands and player bridge', () => {
       })
     }
     if (mode === 'fine-grid') {
+      expect(decor.zoneId).toBeDefined()
+      expect(createdScene.zones[decor.zoneId!]).toMatchObject({
+        capsuleId: null,
+        surfaces: {
+          landscape: { row: 7, col: 9, rowSpan: 12, colSpan: 16 },
+          portrait: { row: 7, col: 9, rowSpan: 12, colSpan: 16 },
+        },
+      })
+    }
+
+    actions.undo()
+    expect(actor.getSnapshot().context.scene?.items).toHaveLength(0)
+    expect(actor.getSnapshot().context.scene?.zones).toEqual({})
+    actions.redo()
+    expect(actor.getSnapshot().context.scene?.items).toHaveLength(1)
+    expect(actor.getSnapshot().context.scene?.zones).toEqual(mode === 'transform' ? {} : createdScene.zones)
+  })
+
+  it.each([
+    { mode: 'transform' as const, startX: 80, startY: 60, endX: 240, endY: 180 },
+    { mode: 'fine-grid' as const, startX: 40, startY: 30, endX: 120, endY: 90 },
+  ])('creates and selects a capsule through the same traced item path in $mode mode', async ({ mode, startX, startY, endX, endY }) => {
+    originalResizeObserver = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class {
+      observe(): void {}
+      disconnect(): void {}
+    } as unknown as typeof ResizeObserver
+
+    actor = createActor(controllerMachine)
+    actor.start()
+    const scene = createEmptyEditorScene('Capsule de test')
+    const grid = ROOT_PLACEMENT_GRID[mode]
+    actor.send({ type: 'SCENE_LOADED', scene: { ...scene, rootCapsule: { ...scene.rootCapsule!, grid } } })
+    actions = new EditorActionsFacade(actor)
+    playerFacade = new EditorPlayerCommandFacade()
+    coordination = new EditorCoordinationBridge(actor, playerFacade)
+
+    const sceneRoot = document.createElement('div')
+    Object.defineProperties(sceneRoot, {
+      clientWidth: { configurable: true, value: 800 },
+      clientHeight: { configurable: true, value: 450 },
+    })
+    const decorPanel = document.createElement('div')
+    document.body.append(sceneRoot, decorPanel)
+    playerBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, actions)
+    await waitTurns()
+
+    actions.beginItemCreation('capsule', mode)
+    const surface = sceneRoot.querySelector<HTMLElement>('[data-selection-frame-creation="v2"]')!
+    expect(surface.style.cursor).toBe('crosshair')
+    surface.dispatchEvent(pointerEvent('pointerdown', startX, startY))
+    surface.dispatchEvent(pointerEvent('pointermove', endX, endY))
+    surface.dispatchEvent(pointerEvent('pointerup', endX, endY))
+    await waitTurns()
+
+    const createdScene = actor.getSnapshot().context.scene!
+    const capsule = createdScene.items[0]!
+    const decor = createdScene.decors[capsule.initialDecorId]!
+    expect(capsule).toMatchObject({
+      type: 'capsule',
+      parentId: null,
+      contentId: null,
+      capsule: {
+        kind: scene.rootCapsule?.kind,
+        distribution: scene.rootCapsule?.distribution,
+      },
+    })
+    expect(actor.getSnapshot().context.selection.itemIds).toEqual([capsule.id])
+    expect(decorPanel.querySelector('#capsule-definition-editor')).not.toBeNull()
+
+    if (mode === 'transform') {
+      expect(createdScene.zones).toEqual({})
+      expect(decor.offset).toEqual({
+        translate: { x: 10, y: 7.5 },
+        width: 20,
+        height: 15,
+      })
+      expect(decor.zoneId).toBeUndefined()
+    }
+    if (mode === 'fine-grid') {
+      expect(decor.offset).toBeUndefined()
       expect(decor.zoneId).toBeDefined()
       expect(createdScene.zones[decor.zoneId!]).toMatchObject({
         capsuleId: null,

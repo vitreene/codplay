@@ -8,6 +8,7 @@ export function createKeyframeHandle(
   rowHeight: number,
   profile: LayoutProfile,
   centerY = rowHeight / 2,
+  boundary?: 'intro' | 'outro',
 ): SVGGElement {
   const size = profile.keyframeHandleSizePx
   const half = size / 2
@@ -17,20 +18,28 @@ export function createKeyframeHandle(
   g.classList.add('seq-kf')
   g.dataset.kfId = kf.id
   if (kf.channel !== undefined) g.dataset.channel = kf.channel
-  if (kf.name) g.dataset.kfName = kf.name
+  const keyframeLabel = kf.name === 'intro' || kf.name === 'outro' ? undefined : kf.name
+  if (keyframeLabel) g.dataset.kfName = keyframeLabel
+
+  if (boundary) g.classList.add(`seq-kf--${boundary}`)
 
   const diamond = document.createElementNS(SVG_NS, 'polygon')
-  diamond.setAttribute('points', `${x},${cy - half} ${x + half},${cy} ${x},${cy + half} ${x - half},${cy}`)
+  const points = boundary === 'intro'
+    ? `${x},${cy - half} ${x + half},${cy} ${x},${cy + half}`
+    : boundary === 'outro'
+      ? `${x},${cy - half} ${x},${cy + half} ${x - half},${cy}`
+      : `${x},${cy - half} ${x + half},${cy} ${x},${cy + half} ${x - half},${cy}`
+  diamond.setAttribute('points', points)
   diamond.classList.add('seq-kf__diamond')
 
   g.appendChild(diamond)
 
-  if (kf.name) {
+  if (keyframeLabel) {
     const label = document.createElementNS(SVG_NS, 'text')
     label.setAttribute('x', String(x))
     label.setAttribute('y', String(cy - half - 2))
     label.classList.add('seq-kf__label')
-    label.textContent = kf.name
+    label.textContent = keyframeLabel
     g.appendChild(label)
   }
 

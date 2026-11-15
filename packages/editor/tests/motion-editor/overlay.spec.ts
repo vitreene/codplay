@@ -126,7 +126,7 @@ describe('motion overlay', () => {
     expect(button.hasAttribute('data-editor-overlay')).toBe(true)
     expect(button.getAttribute('aria-label')).toBe('Aligner sur la tangente')
     expect(button.parentElement).toBe(host)
-    expect(button.style.zIndex).toBe('1102')
+    expect(button.style.zIndex).toBe('1161')
     expect(button.textContent).toBe('')
     expect(button.querySelector('#editor-motion-path-tangent-icon')).not.toBeNull()
     overlay.setSegment({ ...segment, path: 'M 0 0 A 0.5 0.5 0 0 1 1 0' })
@@ -154,6 +154,7 @@ describe('motion overlay', () => {
     const control = host.querySelector<HTMLElement>('[data-motion-path-control]')!
 
     expect(control.parentElement).toBe(host)
+    expect(control.dataset.editorOverlay).toBe('motion-control')
     expect(control.style.pointerEvents).toBe('auto')
     expect(control.style.zIndex).toBe('1101')
     overlay.destroy()

@@ -38,6 +38,17 @@ describe('orderKeyBetween', () => {
     expect(key < 'mmn').toBe(true)
   })
 
+  it('returns a key before a prefixed upper bound without colliding with it', () => {
+    const key = orderKeyBetween('mmo', 'mmom')
+    expect(key).toBe('mmog')
+    expect(key > 'mmo').toBe(true)
+    expect(key < 'mmom').toBe(true)
+  })
+
+  it('reports a truly exhausted interval between a key and its immediate extension', () => {
+    expect(() => orderKeyBetween('mmo', 'mmoa')).toThrow(OrderKeyHardBoundaryError)
+  })
+
   it('rejects bounds given out of order', () => {
     expect(() => orderKeyBetween('mmn', 'mmm')).toThrow()
   })
@@ -93,6 +104,13 @@ describe('rebalanceOrderKeys', () => {
   it('returns as many keys as requested, in increasing order', () => {
     const keys = rebalanceOrderKeys(5)
     expect(keys).toHaveLength(5)
+    expect([...keys].sort()).toEqual(keys)
+  })
+
+  it('keeps a full editor-sized sibling set unique when rebalancing', () => {
+    const keys = rebalanceOrderKeys(100)
+    expect(keys).toHaveLength(100)
+    expect(new Set(keys).size).toBe(100)
     expect([...keys].sort()).toEqual(keys)
   })
 

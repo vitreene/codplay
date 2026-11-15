@@ -9,6 +9,9 @@ import type { controllerMachine } from '../controller/controller-machine'
 import type { BridgeHandle } from './types'
 import type { EditorCoordinationBridge } from './editor-coordination-bridge'
 
+// Temporary until document settings persist a configurable scene aspect ratio.
+const TEMP_SCENE_ASPECT_RATIO = '16 / 9'
+
 /** Seeks the staged native instance to each requested item pose and captures its CSS defaults. */
 async function measureInitialStyleDefaults(
   instance: CodPlayInstance,
@@ -230,7 +233,7 @@ export function createScenePlayerBridge(
       return
     }
 
-    const { styleSheet, rootGrid, preRollMs, durationMs } = result
+    const { styleSheet, preRollMs, durationMs } = result
 
     const stagedRoot = document.createElement('div')
     stagedRoot.className = 'editor-v2-instance-root'
@@ -269,7 +272,7 @@ export function createScenePlayerBridge(
     activeStyleSheet = styleSheet
     activeScene = scene
     activePreRollMs = preRollMs
-    mountTarget.style.aspectRatio = `${rootGrid.cols} / ${rootGrid.rows}`
+    mountTarget.style.aspectRatio = TEMP_SCENE_ASPECT_RATIO
     coordination.bindStyleDefaults(scene, styleDefaultsByItem)
     coordination.bindPlayer(nextInstance, preRollMs, durationMs)
     // A seek still attached to the discarded instance cannot hand off the new binding; the

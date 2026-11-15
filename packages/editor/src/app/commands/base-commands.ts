@@ -6,7 +6,7 @@
  */
 
 import type { CapsuleDef, Content, Decor, EditorScene, Item, ItemType, OffsetData } from './types'
-import { nextOrderKey } from './order-key'
+import { nextOrderKey, OrderKeyHardBoundaryError, orderKeyBetween, rebalanceOrderKeys } from './order-key'
 import { DEFAULT_DECOR_PRESET } from './default-decor-presets'
 import { hasExplicitPlacementGeometry, missingZoneFillStyle } from './offset-placement'
 import { capsuleGridForScene, clampZoneRectToGrid, isManualCapsuleType } from '../../capsule-editor/capsule-grid'
@@ -122,11 +122,63 @@ export function assignContent(scene: EditorScene, args: { itemId: string; conten
   }
 }
 
-/** Change le parent et/ou la clé d'ordre d'un item. `order` explicite si fourni, sinon calculée en fin de fratrie du nouveau parent. */
-export function attachItem(scene: EditorScene, args: { itemId: string; parentId: string | null; order?: string }): EditorScene {
-  requireItem(scene, args.itemId)
-  const order = args.order ?? nextOrderKey(childrenOf(scene, args.parentId).map((i) => i.order))
-  return updateItem(scene, args.itemId, (i) => ({ ...i, parentId: args.parentId, order }))
+/** Changes an item's parent and sibling order, rejecting cycles in the hierarchy. */
+export function attachItem(
+  scene: EditorScene,
+  args: { itemId: string; parentId: string | null; order?: string; beforeItemId?: string; afterItemId?: string },
+): EditorScene {
+  const item = requireItem(scene, args.itemId)
+  if (args.parentId !== null && collectDescendantIds(scene, item.id).has(args.parentId)) {
+    throw new Error(`cannot attach item '${item.id}' to itself or one of its descendants`)
+  }
+
+  const siblings = childrenOf(scene, args.parentId)
+    .filter((sibling) => sibling.id !== item.id)
+    .sort((left, right) => left.order < right.order ? -1 : left.order > right.order ? 1 : left.id.localeCompare(right.id))
+  const explicitOrder = args.order
+  if (explicitOrder !== undefined) {
+    return updateItem(scene, args.itemId, (current) => ({ ...current, parentId: args.parentId, order: explicitOrder }))
+  }
+  if (args.beforeItemId === undefined && args.afterItemId === undefined) {
+    return updateItem(scene, args.itemId, (current) => ({
+      ...current,
+      parentId: args.parentId,
+      order: nextOrderKey(siblings.map((sibling) => sibling.order)),
+    }))
+  }
+
+  const beforeIndex = args.beforeItemId === undefined
+    ? -1
+    : siblings.findIndex((sibling) => sibling.id === args.beforeItemId)
+  const afterIndex = args.afterItemId === undefined
+    ? -1
+    : siblings.findIndex((sibling) => sibling.id === args.afterItemId)
+  if ((args.beforeItemId !== undefined && beforeIndex < 0)
+    || (args.afterItemId !== undefined && afterIndex < 0)
+    || (args.beforeItemId !== undefined && args.afterItemId !== undefined && beforeIndex !== afterIndex + 1)) {
+    throw new Error('attachItem insertion anchors must be adjacent siblings of the destination parent')
+  }
+
+  const insertionIndex = args.beforeItemId === undefined ? afterIndex + 1 : beforeIndex
+  const before = siblings[insertionIndex - 1]
+  const after = siblings[insertionIndex]
+  let order: string
+  try {
+    order = orderKeyBetween(before?.order ?? null, after?.order ?? null)
+  } catch (error) {
+    if (!(error instanceof OrderKeyHardBoundaryError)) throw error
+    const reordered = [...siblings]
+    reordered.splice(insertionIndex, 0, { ...item, parentId: args.parentId })
+    const keys = rebalanceOrderKeys(reordered.length)
+    const orderById = new Map(reordered.map((sibling, index) => [sibling.id, keys[index]!]))
+    return {
+      ...scene,
+      items: scene.items.map((current) => orderById.has(current.id)
+        ? { ...current, parentId: args.parentId, order: orderById.get(current.id)! }
+        : current),
+    }
+  }
+  return updateItem(scene, args.itemId, (current) => ({ ...current, parentId: args.parentId, order }))
 }
 
 /** Applique un patch sur un décor existant (style/classes/offset/zone) — fusion superficielle, pas de remplacement total. */
@@ -179,9 +231,9 @@ export function createKeyframe(scene: EditorScene, args: { itemId: string; timeM
 /** Crée un item capsule avec son `CapsuleDef` (statique, défini une fois — pas reconfigurable en cours de vie). */
 export function createCapsule(
   scene: EditorScene,
-  args: { geometry: OffsetData; capsuleDef: CapsuleDef; parentId?: string | null },
+  args: { geometry: OffsetData; capsuleDef: CapsuleDef; parentId?: string | null; zoneId?: string },
 ): { scene: EditorScene; itemId: string } {
-  const created = createItem(scene, { geometry: args.geometry, parentId: args.parentId })
+  const created = createItem(scene, { geometry: args.geometry, parentId: args.parentId, zoneId: args.zoneId })
   const withType = assignType(created.scene, { itemId: created.itemId, type: 'capsule' })
   const withCapsule = updateItem(withType, created.itemId, (i) => ({ ...i, capsule: args.capsuleDef }))
   return { scene: withCapsule, itemId: created.itemId }

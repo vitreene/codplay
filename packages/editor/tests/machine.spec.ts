@@ -161,8 +161,8 @@ describe('clip draw', () => {
     expect(batches).toEqual([[
       { name: 'deleteKeyframe', args: { itemId: 'track-01', keyframeId: 'kf-01' } },
       { name: 'deleteKeyframe', args: { itemId: 'track-01', keyframeId: 'kf-03' } },
-      { name: 'createNamedKeyframe', args: { itemId: 'track-01', keyframeId: 'new-intro', timeMs: 1000, name: 'intro' } },
-      { name: 'createNamedKeyframe', args: { itemId: 'track-01', keyframeId: 'new-outro', timeMs: 3000, name: 'outro' } },
+      { name: 'createNamedKeyframe', args: { itemId: 'track-01', keyframeId: 'new-intro', timeMs: 1000 } },
+      { name: 'createNamedKeyframe', args: { itemId: 'track-01', keyframeId: 'new-outro', timeMs: 3000 } },
     ]])
     actor.stop()
   })
@@ -173,8 +173,10 @@ describe('clip draw', () => {
     actor.send({ type: 'CLIP.START_DRAW', trackId: 'track-01', pointerMs: 4000, introId: 'rev-i', outroId: 'rev-o' })
     actor.send({ type: 'CLIP.DRAW_MOVE', pointerMs: 2000 })
     actor.send({ type: 'CLIP.DRAW_END' })
-    expect(batches[0]!.find(c => c.name === 'createNamedKeyframe' && c.args.name === 'intro')).toMatchObject({ args: { timeMs: 2000 } })
-    expect(batches[0]!.find(c => c.name === 'createNamedKeyframe' && c.args.name === 'outro')).toMatchObject({ args: { timeMs: 4000 } })
+    expect(batches[0]?.filter(c => c.name === 'createNamedKeyframe')).toEqual([
+      { name: 'createNamedKeyframe', args: { itemId: 'track-01', keyframeId: 'rev-i', timeMs: 2000 } },
+      { name: 'createNamedKeyframe', args: { itemId: 'track-01', keyframeId: 'rev-o', timeMs: 4000 } },
+    ])
     actor.stop()
   })
 })

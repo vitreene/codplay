@@ -351,9 +351,14 @@ export class SequenceEditorController {
     this.send({ type: 'TRACK.REMOVE', trackId })
   }
 
-  /** Change le parent et/ou l'ordre d'un item — remplace l'ancien `moveTrack(trackId, afterId, parentId?)` (position relative dans un tableau `children`), plus de sens dans le modèle plat. */
-  moveTrack(trackId: string, parentId: string | null, order?: string): void {
-    this.send({ type: 'TRACK.MOVE', trackId, parentId, order })
+  /** Changes an item's parent and position relative to siblings through the central attachItem command. */
+  moveTrack(
+    trackId: string,
+    parentId: string | null,
+    order?: string,
+    placement?: Readonly<{ beforeItemId?: string; afterItemId?: string }>,
+  ): void {
+    this.send({ type: 'TRACK.MOVE', trackId, parentId, order, ...placement })
   }
 
   toggleVisibility(trackId: string): void {

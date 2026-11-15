@@ -33,7 +33,7 @@ function sceneWithRootSingleKeyframe(): EditorScene {
       visible: true,
       contentId: null,
       initialDecorId: 'decor-1',
-      keyframes: [{ id: 'kf-1', timeMs: 1000, decorId: 'decor-1' }],
+      keyframes: [{ id: 'kf-1', timeMs: 1000, decorId: 'decor-1', name: 'outro' }],
     }],
     contents: {},
     decors: { 'decor-1': { id: 'decor-1' } },
@@ -71,7 +71,7 @@ describe('sequence-editor — bornes virtuelles de la capsule racine', () => {
     document.body.replaceChildren()
   })
 
-  it('affiche la sortie virtuelle et ne l’écrit qu’après une action explicite', () => {
+  it('affiche une intro et une outro sans répéter les noms sur les keyframes', () => {
     controller = new SequenceEditorController(sceneWithRootSingleKeyframe())
     const batches: Array<Array<{ name: string; args: Record<string, unknown> }>> = []
     controller.onCommand((commands) => batches.push(commands as Array<{ name: string; args: Record<string, unknown> }>))
@@ -83,6 +83,14 @@ describe('sequence-editor — bornes virtuelles de la capsule racine', () => {
     let virtual = container.querySelector<SVGGElement>('[data-kf-id="vkf-item-1-outro"]')
     expect(virtual).not.toBeNull()
     expect(virtual?.classList.contains('seq-kf--virtual')).toBe(true)
+    const row = container.querySelector<HTMLElement>('.seq-row')
+    expect(row?.querySelectorAll('.seq-kf--intro')).toHaveLength(1)
+    expect(row?.querySelectorAll('.seq-kf--outro')).toHaveLength(1)
+    expect(row?.querySelector('.seq-kf--intro')?.dataset.kfName).toBeUndefined()
+    expect(row?.querySelector('.seq-kf--intro .seq-kf__label')).toBeNull()
+    expect(row?.querySelector('.seq-kf--outro .seq-kf__label')).toBeNull()
+    expect(row?.querySelector('.seq-kf--intro .seq-kf__diamond')?.getAttribute('points')?.split(' ')).toHaveLength(3)
+    expect(row?.querySelector('.seq-kf--outro .seq-kf__diamond')?.getAttribute('points')?.split(' ')).toHaveLength(3)
     expect(batches).toHaveLength(0)
 
     controller.seek(3000)
@@ -92,14 +100,10 @@ describe('sequence-editor — bornes virtuelles de la capsule racine', () => {
     virtual = container.querySelector<SVGGElement>('[data-kf-id="vkf-item-1-outro"]')
     expect(virtual).not.toBeNull()
     virtual!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, detail: 2 }))
-    expect(batches).toHaveLength(2)
+    expect(batches).toHaveLength(1)
     expect(batches[0]?.[0]).toMatchObject({
       name: 'createNamedKeyframe',
       args: { itemId: 'item-1', timeMs: 5000, decorId: 'decor-1' },
-    })
-    expect(batches[1]?.[0]).toMatchObject({
-      name: 'renameKeyframe',
-      args: { itemId: 'item-1', name: 'outro' },
     })
   })
 
@@ -120,7 +124,7 @@ describe('sequence-editor — bornes virtuelles de la capsule racine', () => {
       name: 'createNamedKeyframe',
       args: { itemId: 'item-1', timeMs: 0, decorId: 'decor-1' },
     })
-    expect(batches[1]?.[0]).toMatchObject({ name: 'renameKeyframe', args: { itemId: 'item-1', name: 'intro' } })
+    expect(batches).toHaveLength(1)
   })
 
   it('déplace une borne virtuelle par glisser-déposer et respecte Échap', () => {
@@ -142,7 +146,7 @@ describe('sequence-editor — bornes virtuelles de la capsule racine', () => {
       name: 'createNamedKeyframe',
       args: { itemId: 'item-1', timeMs: 2500, decorId: 'decor-1' },
     })
-    expect(batches[1]?.[0]).toMatchObject({ name: 'renameKeyframe', args: { itemId: 'item-1', name: 'outro' } })
+    expect(batches).toHaveLength(1)
 
     batches.length = 0
     const freshVirtual = container.querySelector<SVGGElement>('[data-kf-id="vkf-item-1-outro"]')

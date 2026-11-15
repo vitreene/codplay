@@ -40,6 +40,11 @@ Le **document** que l'app manipule — sa structure de données, et ses concepts
 
 Le document est **un arbre d'items** (`tracks`) plus des **tables référencées** (contenus, décors, zones), le tout sur une **durée** de scène. L'arbre porte la structure et l'imbrication ; les tables portent les données. Chaque item vit sur **deux axes** : où il est (espace) et quand il existe (temps).
 
+`Item.visible` reste une donnée du document auteur. `false` exclut l'item de la
+compilation Editor ; si l'item est une capsule, ses descendants sont également
+exclus. La projection de compilation ne retire ni ne modifie ces items dans le
+document sauvegardé.
+
 ---
 
 ## Légende — l'item : spatial et temporel
@@ -235,8 +240,9 @@ Item {
                                        //   badge de type pour une capsule) plutôt que d'afficher un
                                        //   vide. Ajouté 2026-07-13, migration sequence-editor.
   parentId: string | null             // null = enfant de la capsule racine
-  order: string                       // clé textuelle fractionnaire ("a","b","ab"…)
-  visible: boolean                    // affichage dans l'éditeur (pas de rendu)
+  order: string                       // clé lexicale fractionnaire parmi les frères ("a","b","ab"…)
+  visible: boolean                    // inclusion dans la compilation Editor ;
+                                      // masque aussi les descendants d'une capsule
   contentId: string | null            // → contents ; null si bloc vide ou capsule (enfants = contenu)
   initialDecorId: string              // → decors — décor de base OBLIGATOIRE (état « intro terminée »)
   keyframes: Keyframe[]               // canaux pose/decor et vie dans le temps
@@ -352,6 +358,14 @@ Cue {                                 // repère temporel PONCTUEL, aimanté
 ```
 
 **Points de forme à noter dans ces types** :
+- **`Item.order`** définit l'ordre de ses frères par comparaison lexicale. Un
+  déplacement calcule une clé strictement comprise entre ses voisins sans
+  renuméroter la fratrie ; si aucune chaîne ne peut tenir dans l'intervalle,
+  seule cette fratrie est rebalancée avec des clés toutes distinctes. La
+  projection de cet ordre dans la pile visuelle appartient au Builder Editor.
+  [`order-key.spec.ts`](../tests/commands/order-key.spec.ts) couvre les clés
+  préfixées, les intervalles épuisés et le rebalancement d'une fratrie de
+  100 items.
 - **`Decor.style` reste une carte ouverte** de valeurs CSS finales ; le modèle ne type **pas** les propriétés CSS une par une (dedit décide des props gérées vs `custom`). Stockage BDD = opaque ; runtime = `Record` structuré ; le Builder convertit.
 - **`Content.cues` vs `EditorScene`** : les cues vivent dans le **content** du média (c'est la transcription de *cette* source) — il n'y a **pas** de table cues séparée dans `EditorScene`. Le `masterItemId` désigne quel item média porte le rythme ; ses cues sont dans son content.
 - **Ce que Decor NE contient PAS (nettoyé, 2026-07-12)** : ni `text`, ni `capsule`. Decor est l'**aspect variable** d'un item (par keyframe) — style/classes/position/zone et, en V2, le `path` segment-local ; le path ne devient pas une propriété de capsule ou de visibilité.

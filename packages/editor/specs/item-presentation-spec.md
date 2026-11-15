@@ -54,6 +54,16 @@ Il ne déduit pas ces dimensions de la taille interpolée du cadre motion.
 Les endpoints auteur et leur indépendance aux visites sont décrits dans la
 [spécification d’orientation](./path-tangent-orientation-spec.md).
 
+Les gestes de rotation du Selection Frame modifient le canal pose. L’angle de
+rotation est exprimé en degrés ; l’origine de rotation est une paire de
+fractions `(fx, fy)`, avec `(0.5, 0.5)` comme origine par défaut. Le delta de
+pivot fournit la cible absolue : l’éditeur la compare à l’origine du début du
+geste pour détecter un changement. Les fractions `(0, 0)` constituent une cible
+valide et sont commitées. Preview et commit réutilisent la projection et le
+circuit pose existants. Le test d’intégration
+[`decor-editor-bridge-integration-v2.spec.ts`](../tests/decor-editor-bridge-integration-v2.spec.ts)
+vérifie la rotation, la cible pivot `(0, 0)` et son commit.
+
 ## Présentation et preview
 
 Le composant applique la géométrie auteur dans une règle CSS privée, formatée

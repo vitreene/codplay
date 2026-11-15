@@ -274,7 +274,17 @@ function renderColorField(
 
     const applyResolvedValue = (): void => {
       const state = controller.resolveField<string | undefined>(path)
+      const hasColor = state.kind === 'uniform' && state.value !== undefined
       const hex = state.kind === 'uniform' && state.value !== undefined ? toHexForPicker(state.value) : '#808080'
+      input.dataset.colorState = state.kind === 'mixed' ? 'mixed' : hasColor ? 'set' : 'unset'
+      input.title = state.kind === 'mixed'
+        ? `Couleurs différentes — ${field.label}`
+        : hasColor
+          ? field.label
+          : path === 'style.background-color'
+            ? 'Aucun fond (transparent)'
+            : 'Aucune couleur définie dans Decor'
+      input.setAttribute('aria-label', input.title)
       if (input.value.toLowerCase() !== hex.toLowerCase()) input.value = hex
       control.parentElement?.classList.toggle('dedit-field--mixed', state.kind === 'mixed')
     }

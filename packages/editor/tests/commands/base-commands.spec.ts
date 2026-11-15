@@ -136,6 +136,82 @@ describe('attachItem', () => {
     const next = commands.attachItem(created.scene, { itemId: created.itemId, parentId: 'capsule-2' })
     expect(next.items.find((i) => i.id === created.itemId)?.parentId).toBe('capsule-2')
   })
+
+  it('inserts between adjacent siblings without changing their order keys', () => {
+    const source = commands.createItem(emptyScene(), { geometry: {} })
+    const first = commands.createItem(source.scene, { geometry: {} })
+    const second = commands.createItem(first.scene, { geometry: {} })
+    const firstOrder = first.scene.items.find((item) => item.id === first.itemId)?.order
+    const secondOrder = second.scene.items.find((item) => item.id === second.itemId)?.order
+    const next = commands.attachItem(second.scene, {
+      itemId: source.itemId,
+      parentId: null,
+      afterItemId: first.itemId,
+      beforeItemId: second.itemId,
+    })
+
+    const ordered = [...next.items].sort((left, right) => left.order.localeCompare(right.order))
+    expect(ordered.map((item) => item.id)).toEqual([first.itemId, source.itemId, second.itemId])
+    expect(next.items.find((item) => item.id === first.itemId)?.order).toBe(firstOrder)
+    expect(next.items.find((item) => item.id === second.itemId)?.order).toBe(secondOrder)
+  })
+
+  it('chooses a unique key when adjacent sibling keys share a prefix', () => {
+    const scene = {
+      ...emptyScene(),
+      items: ['back', 'front', 'moving'].map((id, index) => ({
+        id,
+        type: 'text' as const,
+        parentId: null,
+        order: ['mmo', 'mmom', 'mmp'][index]!,
+        visible: true,
+        contentId: null,
+        initialDecorId: `decor-${id}`,
+        keyframes: [],
+      })),
+    }
+    const next = commands.attachItem(scene, {
+      itemId: 'moving',
+      parentId: null,
+      afterItemId: 'back',
+      beforeItemId: 'front',
+    })
+    const orders = next.items.map((item) => item.order)
+
+    expect(orders).toContain('mmog')
+    expect(new Set(orders).size).toBe(orders.length)
+    expect([...next.items].sort((left, right) => left.order.localeCompare(right.order)).map((item) => item.id))
+      .toEqual(['back', 'moving', 'front'])
+  })
+
+  it('rejects a parent change that would create a capsule cycle', () => {
+    const capsuleDef = { kind: 'rangee' as const, distribution: { mode: 'sequential' as const } }
+    const outer = commands.createCapsule(emptyScene(), { geometry: {}, capsuleDef })
+    const inner = commands.createCapsule(outer.scene, { geometry: {}, capsuleDef, parentId: outer.itemId })
+
+    expect(() => commands.attachItem(inner.scene, {
+      itemId: outer.itemId,
+      parentId: inner.itemId,
+    })).toThrow(/descendants/)
+  })
+
+  it('rebalances a sibling set when an insertion reaches an order-key boundary', () => {
+    const created = commands.createItem(emptyScene(), { geometry: {} })
+    const target = commands.createItem(created.scene, { geometry: {} })
+    const boundaryScene = {
+      ...target.scene,
+      items: target.scene.items.map((item) => item.id === target.itemId ? { ...item, order: 'aaa' } : item),
+    }
+    const next = commands.attachItem(boundaryScene, {
+      itemId: created.itemId,
+      parentId: null,
+      beforeItemId: target.itemId,
+    })
+
+    const ordered = [...next.items].sort((left, right) => left.order.localeCompare(right.order))
+    expect(ordered.map((item) => item.id)).toEqual([created.itemId, target.itemId])
+    expect(ordered.every((item) => item.order !== 'aaa')).toBe(true)
+  })
 })
 
 describe('setDecor', () => {

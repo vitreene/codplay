@@ -32,11 +32,12 @@ import {
 } from '../../decor-editor/modified-properties'
 import type { DecorModificationMap } from '../../decor-editor/modified-properties'
 import { resolveKeyframeChannel } from '../commands/types'
-import type { Content, Decor, EditorScene, Item, ItemType, OffsetData, Orientation, RootPlacementMode } from '../commands/types'
+import type { CapsuleDef, Content, Decor, EditorScene, Item, ItemType, OffsetData, Orientation, RootPlacementMode } from '../commands/types'
 import { ROOT_PLACEMENT_GRID, rootPlacementModeForScene } from '../commands/root-placement-commands'
 import type { Command, Selection } from '../controller/types'
 import type { controllerMachine } from '../controller/controller-machine'
 import type { BridgeHandle } from './types'
+import type { EditorActionsFacade } from '../facades/editor-actions-facade'
 import { mergePatch } from '../../decor-editor/merge'
 import { cqwToPx, offsetValuesPxToPatch, pxToCqw, OFFSET_STYLE_PROPERTIES } from '../../decor-editor/units'
 import { clearOffsetPlacementGeometry, hasExplicitPlacementGeometry, missingZoneFillStyle } from '../commands/offset-placement'
@@ -617,7 +618,7 @@ function materializeZoneFillStyle(base: DecorPatch, patch: DecorPatch): DecorPat
  */
 export function applyFrameDelta(base: SelectionFrameValue, delta: SelectionFrameDelta): SelectionFrameValue {
   if (delta.kind === 'move') return { ...base, x: base.x + delta.dx, y: base.y + delta.dy }
-  if (delta.kind === 'rotate') return { ...base, rotate: normalizeAngleDegrees((base.rotate ?? 0) + delta.dr) }
+  if (delta.kind === 'rotate') return { ...base, rotate: normalizeAngleDegrees(Math.round((base.rotate ?? 0) + delta.dr)) }
   if (delta.kind === 'pivot') return applyRotationOriginDelta(base, delta.fx, delta.fy)
 
   const minSize = 4
@@ -719,6 +720,7 @@ export function createDecorEditorBridge(
   container: HTMLElement,
   machine: Actor<typeof controllerMachine>,
   coordination: import('./editor-coordination-bridge').EditorCoordinationBridge,
+  actions?: EditorActionsFacade,
 ): BridgeHandle {
   const catalogs: DecorEditorCatalogs = { presets: DEFAULT_PRESETS, cards: [], palette: DEFAULT_PALETTE }
   const controller = new DecorEditorController(catalogs)
@@ -759,6 +761,7 @@ export function createDecorEditorBridge(
   let frameGestureCancelled = false
   /** Authored rotation offset paired with the displayed frame captured at gesture start. */
   let frameGestureBaseAuthorRotate: number | null = null
+  let frameGestureBaseAuthorFrame: SelectionFrameValue | null = null
   let blockMoveGestureActive = false
   /** Keeps a just-released CS pose authoritative while the player presentation catches up. */
   let frameCommitCandidatePx: SelectionFrameValue | null = null
@@ -1862,12 +1865,16 @@ export function createDecorEditorBridge(
     }
   }
 
-  /** Stores the authored tangent-relative offset while keeping the CS value in presentation space. */
-  function authorFrameForGesture(displayedFrame: SelectionFrameValue, authoredRotate: number): SelectionFrameValue {
+  /** Stores the authored tangent-relative offset while keeping its gesture path anchor fixed. */
+  function authorFrameForGesture(
+    displayedFrame: SelectionFrameValue,
+    authoredRotate: number,
+    pathAnchor = motionPathAnchorForFrame(displayedFrame, frameBorderInsetsPx),
+  ): SelectionFrameValue {
     return frameWithRotationAtPathAnchor(
       displayedFrame,
       normalizeAngleDegrees(authoredRotate),
-      motionPathAnchorForFrame(displayedFrame, frameBorderInsetsPx),
+      pathAnchor,
       frameBorderInsetsPx,
     )
   }
@@ -2056,29 +2063,57 @@ export function createDecorEditorBridge(
       frameGestureBaseAuthorRotate = scene === null
         ? authorFramePx?.rotate ?? base.rotate ?? 0
         : authoredRotationAtGestureStart(scene, target, base)
+      frameGestureBaseAuthorFrame = scene === null || authorFramePx === null
+        ? null
+        : target.isTemporary
+          ? authorFrameForGesture(base, frameGestureBaseAuthorRotate)
+          : { ...authorFramePx, rotationOrigin: authorFramePx.rotationOrigin === undefined ? undefined : { ...authorFramePx.rotationOrigin } }
     }
+    const displayedBase = frameGestureBasePx
     frameGestureHasNetDelta = delta.kind === 'rotate'
       ? delta.dr !== 0
+        && normalizeAngleDegrees(Math.round((displayedBase.rotate ?? 0) + delta.dr))
+          !== normalizeAngleDegrees(displayedBase.rotate ?? 0)
       : delta.kind === 'pivot'
-        ? delta.fx !== 0 || delta.fy !== 0
+        ? delta.fx !== (displayedBase.rotationOrigin?.fx ?? 0.5)
+          || delta.fy !== (displayedBase.rotationOrigin?.fy ?? 0.5)
         : delta.dx !== 0 || delta.dy !== 0
-    const displayedBase = frameGestureBasePx
     const authoredBaseRotate = frameGestureBaseAuthorRotate ?? authorFramePx?.rotate ?? displayedBase.rotate ?? 0
     const tangentMotion = !zoneOffsetGesture && scene !== null && targetUsesTangent(scene, target)
     const rawCandidate = applyFrameDelta(displayedBase, delta)
-    const candidateAuthorFrame = tangentMotion
-      ? authorFrameForGesture(rawCandidate, authoredBaseRotate + (delta.kind === 'rotate' ? delta.dr : 0))
-      : rawCandidate
-    const candidate = tangentMotion && scene !== null
-      ? displayFrameForAuthorFrame(scene, target, candidateAuthorFrame)
-      : rawCandidate
+    const tangentRotation = tangentMotion && delta.kind === 'rotate'
+    const authoredBase = frameGestureBaseAuthorFrame
+      ?? (tangentMotion ? authorFrameForGesture(displayedBase, authoredBaseRotate) : displayedBase)
+    const rotationDelta = normalizeAngleDegrees((rawCandidate.rotate ?? 0) - (displayedBase.rotate ?? 0))
+    const candidateAuthorFrame = tangentRotation
+      ? frameWithRotationAtPathAnchor(
+        authoredBase,
+        normalizeAngleDegrees(authoredBaseRotate + rotationDelta),
+        motionPathAnchorForFrame(authoredBase, frameBorderInsetsPx),
+        frameBorderInsetsPx,
+      )
+      : tangentMotion
+        ? authorFrameForGesture(rawCandidate, authoredBaseRotate)
+        : rawCandidate
+    const candidate = tangentRotation
+      ? frameWithRotationAtPathAnchor(
+        displayedBase,
+        rawCandidate.rotate ?? 0,
+        motionPathAnchorForFrame(displayedBase, frameBorderInsetsPx),
+        frameBorderInsetsPx,
+      )
+      : tangentMotion && scene !== null
+        ? displayFrameForAuthorFrame(scene, target, candidateAuthorFrame)
+        : rawCandidate
     lastPreviewAccepted = false
     const framePatch = zoneOffsetGesture && scene !== null
       ? zoneOffsetPatchForFrameGesture(delta, displayedBase, candidateAuthorFrame, rootWidth, scene, target)
       : modificationsToDecorPatch(modificationsFromDecorPatch(
         {
           offset: frameToOffsetPatch(
-            tangentMotion ? authorFrameForGesture(displayedBase, authoredBaseRotate) : displayedBase,
+            tangentRotation
+              ? authoredBase
+              : tangentMotion ? authorFrameForGesture(displayedBase, authoredBaseRotate) : displayedBase,
             rootWidth,
           ),
         },
@@ -2223,7 +2258,9 @@ export function createDecorEditorBridge(
         ? authoredRotationAtGestureStart(beforeFlush.scene, gestureTarget, drop.sourceFrame)
         : authorFramePx?.rotate ?? drop.sourceFrame.rotate ?? 0)
     const sourceDocumentFrame = convertDisplayedFrames
-      ? authorFrameForGesture(drop.sourceFrame, gestureAuthorRotate)
+      ? frameGestureKind === 'rotate' && frameGestureBaseAuthorFrame !== null
+        ? frameGestureBaseAuthorFrame
+        : authorFrameForGesture(drop.sourceFrame, gestureAuthorRotate)
       : drop.sourceFrame
     const requestedTargetDocumentFrame = convertDisplayedFrames
       ? frameGestureBasePx !== null && authorFramePx !== null
@@ -2650,6 +2687,7 @@ export function createDecorEditorBridge(
       frameGestureHasNetDelta = false
       frameGestureBaseDecorState = null
       frameGestureBaseAuthorRotate = null
+      frameGestureBaseAuthorFrame = null
       frameCommitCandidatePx = null
       frameGestureCancelled = false
       controller.notifyInteractionEnd()
@@ -2662,6 +2700,7 @@ export function createDecorEditorBridge(
       frameGestureHasNetDelta = false
       frameGestureBaseDecorState = null
       frameGestureBaseAuthorRotate = null
+      frameGestureBaseAuthorFrame = null
       frameCommitCandidatePx = null
       controller.notifyInteractionEnd()
       return
@@ -2674,6 +2713,7 @@ export function createDecorEditorBridge(
       frameGestureHasNetDelta = false
       frameGestureBaseDecorState = null
       frameGestureBaseAuthorRotate = null
+      frameGestureBaseAuthorFrame = null
       controller.notifyInteractionEnd()
       return
     }
@@ -2711,6 +2751,7 @@ export function createDecorEditorBridge(
       frameGestureHasNetDelta = false
       frameGestureBaseDecorState = null
       frameGestureBaseAuthorRotate = null
+      frameGestureBaseAuthorFrame = null
       frameGestureCancelled = false
     }
     controller.notifyInteractionEnd()
@@ -2930,10 +2971,11 @@ export function createDecorEditorBridge(
         frameGestureHasNetDelta = false
         frameGestureBaseDecorState = null
         frameGestureBaseAuthorRotate = null
+        frameGestureBaseAuthorFrame = null
         frameGestureCancelled = false
         abortPhase()
       },
-      creation: { onCreate: commitBlockCreation },
+      creation: { onCreate: commitItemCreation },
     })
     blockMoveControl = createBlockMoveControl({
       sceneRoot: host,
@@ -3061,39 +3103,54 @@ export function createDecorEditorBridge(
     }
   }
 
-  /** Converts one creation trace into the existing command/facade document path. */
-  function commitBlockCreation(result: SelectionFrameV2CreationResult): void {
+  /** Converts one traced block or capsule into the existing command/facade document path. */
+  function commitItemCreation(result: SelectionFrameV2CreationResult): void {
     const { scene, creatingType, creatingPlacementMode } = machine.getSnapshot().context
     if (
       scene === null
-      || creatingType !== 'bloc'
-      || creatingPlacementMode !== 'transform'
-      || rootPlacementModeForScene(scene) !== 'transform'
-      || result.kind !== 'rect'
+      || creatingType !== 'bloc' && creatingType !== 'capsule'
+      || creatingPlacementMode === null
+      || creatingPlacementMode !== rootPlacementModeForScene(scene)
       || sceneHost === null
     ) return
 
-    const beforeItemIds = new Set(scene.items.map((item) => item.id))
-    const rootWidth = sceneHost.clientWidth
-    if (rootWidth <= 0) return
-    const geometry: OffsetData = offsetValuesPxToPatch({
-      x: result.rect.x,
-      y: result.rect.y,
-      width: result.rect.width,
-      height: result.rect.height,
-    }, rootWidth)
-    const commands: Command[] = [{ name: 'createItem', args: { geometry } }]
-
-    machine.send({ type: 'RUN_TRANSACTION', commands })
-    const createdItem = machine.getSnapshot().context.scene?.items.find((item) => !beforeItemIds.has(item.id))
-    if (createdItem === undefined) return
-    machine.send({ type: 'SELECT_ITEM', itemIds: [createdItem.id] })
-    machine.send({ type: 'CREATE_COMMIT' })
+    if (actions === undefined) throw new Error('EditorActionsFacade is required to commit item creation.')
+    const commands: Command[] = []
+    const capsuleDef: CapsuleDef = {
+      kind: scene.rootCapsule?.kind ?? 'card',
+      distribution: scene.rootCapsule?.distribution ?? { mode: 'stagger', staggerInMs: 0, staggerOutMs: 0 },
+    }
+    /** Builds the document command matching the active item type and trace result. */
+    const createItemCommand = (geometry: OffsetData, zoneId?: string): Command => creatingType === 'capsule'
+      ? { name: 'createCapsule', args: { geometry, capsuleDef, ...(zoneId === undefined ? {} : { zoneId }) } }
+      : { name: 'createItem', args: { geometry, ...(zoneId === undefined ? {} : { zoneId }) } }
+    if (creatingPlacementMode === 'transform' && result.kind === 'rect') {
+      const rootWidth = sceneHost.clientWidth
+      if (rootWidth <= 0) return
+      const geometry: OffsetData = offsetValuesPxToPatch({
+        x: result.rect.x,
+        y: result.rect.y,
+        width: result.rect.width,
+        height: result.rect.height,
+      }, rootWidth)
+      commands.push(createItemCommand(geometry))
+    }
+    if (creatingPlacementMode === 'fine-grid' && result.kind === 'cell-area') {
+      const zoneId = `zone-${crypto.randomUUID()}`
+      commands.push(
+        { name: 'createRootZone', args: { zoneId, area: result.area } },
+        createItemCommand({}, zoneId),
+      )
+    }
+    if (commands.length === 0) return
+    actions.commitItemCreation(commands)
   }
 
   /** Maps the persisted root placement mode to the selection-frame V2 drawing mode. */
   function selectionModeFor() {
-    return { kind: 'free' as const }
+    return activeCreationMode?.placementMode === 'fine-grid'
+      ? { kind: 'grid' as const, ...ROOT_PLACEMENT_GRID['fine-grid'] }
+      : { kind: 'free' as const }
   }
 
   /** Removes the frame and root observer when the scene host is unavailable. */
@@ -3126,6 +3183,7 @@ export function createDecorEditorBridge(
     frameGestureHasNetDelta = false
     frameGestureBaseDecorState = null
     frameGestureBaseAuthorRotate = null
+    frameGestureBaseAuthorFrame = null
     frameCommitCandidatePx = null
     frameBorderInsetsPx = ZERO_CONTENT_BOX_INSETS_PX
     previewContentFrameOverride = null
@@ -3149,6 +3207,7 @@ export function createDecorEditorBridge(
       frameGestureHasNetDelta = false
       frameGestureBaseDecorState = null
       frameGestureBaseAuthorRotate = null
+      frameGestureBaseAuthorFrame = null
       frameCommitCandidatePx = null
       frameBorderInsetsPx = ZERO_CONTENT_BOX_INSETS_PX
       previewContentFrameOverride = null
@@ -3262,6 +3321,7 @@ export function createDecorEditorBridge(
     frameGestureHasNetDelta = false
     frameGestureBaseDecorState = null
     frameGestureBaseAuthorRotate = null
+    frameGestureBaseAuthorFrame = null
     controller.attachItems([
       {
         itemId: target.itemId,
@@ -3606,6 +3666,7 @@ export function createDecorEditorBridge(
       frameGestureHasNetDelta = false
       frameGestureBaseDecorState = null
       frameGestureBaseAuthorRotate = null
+      frameGestureBaseAuthorFrame = null
       frameCommitCandidatePx = null
       snapshotCommitAwaitingPresentation = false
       controller.destroy()
