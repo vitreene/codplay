@@ -8,6 +8,7 @@ import { LearningBdcCommandService } from './learning-bdc-command-service'
 import { LearningMediaCommandService } from './learning-media-command-service'
 import { LearningPageCommandService } from './learning-page-command-service'
 import { LearningRevelationCommandService } from './learning-revelation-command-service'
+import { ListReferenceService } from '../../../resources/list/domain/list-reference-service'
 import {
   addCustomAppearanceColor,
   resetAppearanceProperty,
@@ -18,6 +19,7 @@ import {
 
 /** Dispatches Learning document commands through their owning domain services. */
 export class LearningDocumentCommandService {
+  private readonly listReferenceService = new ListReferenceService()
   private readonly documentService: LearningDocumentService
   private readonly resources: LearningCommandResourceServices
   private readonly pageCommands: LearningPageCommandService
@@ -52,8 +54,9 @@ export class LearningDocumentCommandService {
       ?? this.mediaCommands.apply(document, command)
       ?? this.revelationCommands.apply(document, command)
       ?? this.applyDocumentCommand(document, command)
-    this.assertDocumentInvariants(updated)
-    return updated
+    const reconciled = this.reconcileListBdcReferences(updated)
+    this.assertDocumentInvariants(reconciled)
+    return reconciled
   }
 
   /** Verifies the full invariant chain with the resource services in this composition. */
@@ -97,5 +100,12 @@ export class LearningDocumentCommandService {
     } catch {
       return false
     }
+  }
+
+  /** Removes embedded List BDCs whose rich-text reference was deleted. */
+  private reconcileListBdcReferences(document: LearningDocument): LearningDocument {
+    const referencedBdcIds = new Set(this.listReferenceService.referencesIn(document.bdcs).map((reference) => reference.bdcId))
+    const bdcs = document.bdcs.filter((bdc) => bdc.type !== 'list' || referencedBdcIds.has(bdc.id))
+    return bdcs.length === document.bdcs.length ? document : new LearningDocument({ ...document.data, bdcs })
   }
 }

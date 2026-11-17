@@ -19,8 +19,6 @@ import { createCarouselBdcCommand } from '../../../resources/bdcs/carousel/autho
 import { createSectionBdcCommand } from '../../../resources/bdcs/section/authoring/section-command-factory'
 import { createSummaryBdcCommand } from '../../../resources/bdcs/summary/authoring/summary-bdc-command-factory'
 import { createStandaloneCardBdcCommand } from '../../../resources/bdcs/card/authoring/card-command-factory'
-import { CARD_PRESET_ID } from '../../../resources/bdcs/card/card-config'
-import { ListService } from '../../../resources/list/domain/list-service'
 import {
   createStatisticalGraphBdcCommand,
   createStatisticalGraphCarouselBdcCommand,
@@ -62,6 +60,8 @@ import type { StatisticalGraphEditorActions } from '../../../resources/bdcs/stat
 import { CoreEditorFacade, runProjectOperationAndWait } from '../../../core/authoring/core-editor-facade'
 import { LearningAuthoringService } from './learning-authoring-service'
 import type { ElceTextValue } from '../../../resources/document/rich-text-types'
+import type { RichTextDocument } from '../../../resources/document/rich-text-types'
+import type { ListContent } from '../../../resources/list/domain/list-types'
 
 /** Composes Learning document intentions with reusable resource authoring facades. */
 export class LearningEditorFacade {
@@ -108,12 +108,14 @@ export class LearningEditorFacade {
       }) },
     })
     this.cardFacade = new ElceCardFacade({
-      dispatch,
+      dispatch: (command) => dispatch(command),
+      insertListBdc: (command) => dispatch(command),
       getCard,
       importMedia: importCardMedia,
     })
     this.carouselFacade = new ElceCarouselFacade({
       dispatch,
+      insertListBdc: (command) => dispatch(command),
       getCard,
       selectCard: (bdcId) => this.selectCard(bdcId),
       importMedia: importCardMedia,
@@ -281,12 +283,6 @@ export class LearningEditorFacade {
     this.apply(createStandaloneCardBdcCommand(createStableId('bdc-card'), pageId))
   }
 
-  /** Creates a standalone Card that hosts a new reusable List module. */
-  public createStandaloneListCard(pageId: PageId): void {
-    const list = new ListService().createDefault(createStableId('list-row'))
-    this.apply(createStandaloneCardBdcCommand(createStableId('bdc-card'), pageId, CARD_PRESET_ID.LIST, undefined, list))
-  }
-
   /** Creates a Statistical Graph BDC at its ordered page position. */
   public createStatisticalGraph(pageId: PageId, index: number): void {
     this.apply(createStatisticalGraphBdcCommand(createStableId('bdc-statistical-graph'), pageId, index))
@@ -449,6 +445,22 @@ export class LearningEditorFacade {
   /** Creates Card editor callbacks backed by the current document getter. */
   public createCardEditorActions(): ElceCardEditorActions {
     return this.cardFacade.createEditorActions()
+  }
+
+  /** Inserts one List BDC into a Card Message or Section rich-text field. */
+  public insertListBdc(
+    ownerBdcId: BdcId,
+    bdcId: BdcId,
+    content: RichTextDocument,
+    list: ListContent,
+    markup?: string,
+  ): void {
+    this.apply({ type: 'bdc.list.insert', ownerBdcId, bdcId, content, list, ...(markup === undefined ? {} : { markup }) })
+  }
+
+  /** Updates one existing embedded List BDC payload. */
+  public updateListBdc(bdcId: BdcId, list: ListContent): void {
+    this.apply({ type: 'bdc.list.update', bdcId, list })
   }
 
   /** Creates Carousel editor callbacks from its current content and Cards. */

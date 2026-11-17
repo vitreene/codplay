@@ -12,7 +12,6 @@ import type { RevelationTransitionDefaults } from '../../../revelation/revelatio
 import { ElceMediaResourceService } from '../../../../domain/media/media-resource-service'
 import { ElceCarouselService } from '../domain/carousel-service'
 import { ElceCardFacade } from '../../card/authoring/card-facade'
-import { ListService } from '../../../list/domain/list-service'
 
 /** Routes Carousel and Card authoring intents through métier services and XState commands. */
 export class ElceCarouselFacade {
@@ -108,12 +107,6 @@ export class ElceCarouselFacade {
           previousCardLayoutId,
           initialCardOptions,
         ))
-        this.selectCard(cardBdcId)
-      },
-      addList: () => {
-        const cardBdcId = createStableId('bdc-card')
-        const list = new ListService().createDefault(createStableId('list-row'))
-        this.dispatch(createCardBdcCommand(cardBdcId, bdcId, content.cards.length, CARD_PRESET_ID.LIST, undefined, list))
         this.selectCard(cardBdcId)
       },
       addStatisticalGraph: () => {

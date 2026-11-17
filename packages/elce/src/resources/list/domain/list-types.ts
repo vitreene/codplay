@@ -1,3 +1,5 @@
+import type { RevelationTransition } from '../../revelation/revelation-types'
+
 /** Stable authoring choice projected to semantic list markup and CSS. */
 export type ListPrefix = 'none' | 'disc' | 'square' | 'dash' | 'lower-alpha' | 'decimal' | 'lower-roman' | 'custom'
 
@@ -5,7 +7,7 @@ export type ListPrefix = 'none' | 'disc' | 'square' | 'dash' | 'lower-alpha' | '
 export interface ListRow {
   readonly id: string
   readonly text: string
-  /** Null follows the Card interval, except the first row which starts immediately. */
+  /** Null follows the shared interval, including before the first row. */
   readonly delayMs: number | null
 }
 
@@ -13,6 +15,7 @@ export interface ListRow {
 export interface ListContent {
   readonly rows: readonly ListRow[]
   readonly prefix: ListPrefix
+  readonly transition: RevelationTransition
   readonly intervalMs: number
   readonly start: number
   readonly customMarker: string

@@ -33,6 +33,8 @@ import { appearanceClassNameForBdc, appearanceClassNameForPage } from '../../../
 import { authoredTextToPlainText } from '../../../core/document/rich-text-utils'
 import { wrapResourceInlineTextSceneParts } from '../../document/resource-inline-text-feature'
 import type { ResourceSectionInlineLinkProjection } from '../../document/resource-inline-text-feature'
+import { DEFAULT_CARD_ANCHOR_PLACEMENT, cardAnchorFrameStyleFor, cardAnchorSlotStyleFor } from '../../anchoring/card-placement/card-anchor-placement'
+import { ListReferenceService } from '../../list/domain/list-reference-service'
 
 type FluxBdcMount = Readonly<{
   readonly bdc: ResourceBdc
@@ -52,6 +54,7 @@ type FluxBdcMount = Readonly<{
 
 const anchorRatioService = new ElceAnchorRatioService()
 const statisticalGraphSceneBuilder = new ElceStatisticalGraphSceneBuilder()
+const listReferenceService: ListReferenceService = new ListReferenceService()
 
 /** Builds an Elcé Flux scene from the métier page without creating a player circuit. */
 export function buildFluxScene(
@@ -80,10 +83,10 @@ function buildFluxPageScene(page: ContentPage, bdcs: readonly ResourceBdc[], opt
   }
   const pageContents = pageBdcs.filter((bdc): bdc is ResourceBdc => bdc !== undefined)
   const anchorTargets = readAnchorTargets(pageContents, bdcs)
-  const mounts = pageContents.map((bdc) => createBdcMount(page, bdc, bdcs, options))
+  const scrollPortId = `${page.id}-scrollport`
+  const mounts = pageContents.map((bdc) => createBdcMount(page, bdc, bdcs, options, scrollPortId))
   const cardBuilds = mounts.flatMap((mount) => mount.cardBuild === undefined ? [] : [mount.cardBuild])
 
-  const scrollPortId = `${page.id}-scrollport`
   const articleId = `${page.id}-article`
   const pageAppearanceClass = appearanceClassNameForPage(page.id, options.appearanceClassNamesByTarget)
   const bottomMarkerId = `${page.id}-bottom-marker`
@@ -142,6 +145,9 @@ function buildFluxPageScene(page: ContentPage, bdcs: readonly ResourceBdc[], opt
   })
   const cardStraps = Object.assign({}, ...cardBuilds.map((cardBuild) => cardBuild.straps))
   const cardListen = cardBuilds.flatMap((cardBuild) => cardBuild.listen)
+  const sectionListProjections = mounts.flatMap((mount) => mount.sectionLinkProjection === undefined ? [] : [mount.sectionLinkProjection])
+  const sectionListStraps = Object.assign({}, ...sectionListProjections.map((projection) => projection.listStraps))
+  const sectionListListen = sectionListProjections.flatMap((projection) => projection.listListen)
 
   const pageStory: StoryDoc<string> = {
     id: `${page.id}-page`,
@@ -163,10 +169,14 @@ function buildFluxPageScene(page: ContentPage, bdcs: readonly ResourceBdc[], opt
           move: { target: scrollPortId },
           className: `elce-flux-article ${pageAppearanceClass}`,
           markup: articleMarkup,
-          flowReservations: anchorTargets.map((target) => ({
-            partId: target.partId,
-            blockSize: anchorFlowBlockSizeFor(target.paddingBottom, target.layoutId),
-          })),
+          flowReservations: anchorTargets.flatMap((target) => {
+            const illustration = bdcs.find((candidate) => candidate.id === target.bdcId)
+            if (illustration?.type !== STATISTICAL_GRAPH_BDC_TYPE) return []
+            return [{
+              partId: target.partId,
+              blockSize: anchorFlowBlockSizeFor(target.paddingBottom, target.layoutId),
+            }]
+          }),
         },
       },
       createPageBottomMarkerPerso({
@@ -178,9 +188,10 @@ function buildFluxPageScene(page: ContentPage, bdcs: readonly ResourceBdc[], opt
       }),
       ...pageMediaPersos,
       ...anchoredIllustrationPersos,
+      ...sectionListProjections.flatMap((projection) => projection.listPersos),
     ],
-    straps: cardStraps,
-    listen: cardListen,
+    straps: Object.assign(cardStraps, sectionListStraps),
+    listen: [...cardListen, ...sectionListListen],
   }
 
   const stories: Readonly<Record<string, StoryDoc<string>>> = {
@@ -192,12 +203,20 @@ function buildFluxPageScene(page: ContentPage, bdcs: readonly ResourceBdc[], opt
         mount.bdc,
         mount.zonePartIds.title ?? `${mount.partId}:title`,
         options.inlineTextSceneFeature,
-        mount.sectionLinkProjection?.persos ?? [],
+        mount.sectionLinkProjection,
       ),
     ])),
     ...Object.fromEntries(mounts.filter((mount) => mount.bdc.type === QUESTION_BDC_TYPE).map((mount) => [
       `${page.id}-${mount.bdc.id}`,
-      buildQuestionBdcStory(page.id, mount.bdc, mount.zonePartIds, undefined, undefined, options.inlineTextSceneFeature),
+      buildQuestionBdcStory(
+        page.id,
+        mount.bdc,
+        mount.zonePartIds,
+        undefined,
+        undefined,
+        options.inlineTextSceneFeature,
+        options.evaluationQuestionMode,
+      ),
     ])),
     ...Object.fromEntries(mounts.flatMap((mount) => mount.additionalStories === undefined
       ? []
@@ -238,37 +257,49 @@ function createFluxAnchorStyleSheet(
 ): string {
   const rules = targets.flatMap((target) => {
     const slotClassName = sceneStyleClassName('flow-slot', target.partId)
-    const slotRule = sceneClassRule(slotClassName, {
-      [ANCHOR.PADDING_VARIABLE]: target.paddingBottom,
-      paddingBottom: anchorReservationFor(target.paddingBottom),
-      anchorName: anchorNameFor(target.partId),
-    })
     const bdc = bdcs.find((candidate) => candidate.id === target.bdcId)
     if (bdc === undefined) throw new Error(`Le BDC ancré ${target.bdcId} est introuvable.`)
 
     if (bdc.type === CARD_BDC_TYPE) {
       const mediaId = bdc.card?.mediaId
       const mediaType = mediaId == null ? undefined : options.mediaTypes?.[mediaId]
+      const placement = {
+        width: target.placementWidth ?? DEFAULT_CARD_ANCHOR_PLACEMENT.width,
+        side: target.placementSide ?? DEFAULT_CARD_ANCHOR_PLACEMENT.side,
+      } as const
       const aspectRatio = mediaType === MEDIA_TYPE.VIDEO
         ? '16 / 9'
         : anchorRatioService.imageAspectRatio(target.paddingBottom)
+      const fixedBlockSize = target.layoutId === CARD_PRESET_ID.PHOTO
+        ? null
+        : anchorIllustrationBlockSizeFor(target.layoutId, target.paddingBottom)
+      const slotRule = sceneClassRule(slotClassName, {
+        ...cardAnchorSlotStyleFor(
+          placement,
+          target.layoutId === CARD_PRESET_ID.PHOTO ? aspectRatio : null,
+          fixedBlockSize,
+        ),
+        anchorName: anchorNameFor(target.partId),
+      })
       const declarations = {
-        position: 'absolute',
+        ...cardAnchorFrameStyleFor(
+          placement,
+          target.layoutId === CARD_PRESET_ID.PHOTO ? aspectRatio : null,
+          fixedBlockSize,
+        ),
         zIndex: '1',
         positionAnchor: anchorNameFor(target.partId),
-        insetInlineStart: '0',
-        insetInlineEnd: '0',
-        insetBlockStart: `calc(anchor(top) + ${ANCHOR.DEFAULT_BDC_MARGIN_TOP})`,
-        width: '100%',
-        ...(target.layoutId === CARD_PRESET_ID.PHOTO
-          ? { aspectRatio, height: 'auto' }
-          : { height: anchorIllustrationBlockSizeFor(target.layoutId, target.paddingBottom) }),
       }
       const cardId = `${page.id}-${bdc.id}-card`
       return [slotRule, sceneClassRule(sceneStyleClassName('flux-anchor-illustration', cardId), declarations)]
     }
 
     if (bdc.type === STATISTICAL_GRAPH_BDC_TYPE && bdc.statisticalGraph != null) {
+      const slotRule = sceneClassRule(slotClassName, {
+        [ANCHOR.PADDING_VARIABLE]: target.paddingBottom,
+        paddingBottom: anchorReservationFor(target.paddingBottom),
+        anchorName: anchorNameFor(target.partId),
+      })
       const graphId = `${page.id}-${bdc.id}-graph`
       const declarations = {
         position: 'absolute',
@@ -294,6 +325,7 @@ function createBdcMount(
   bdc: ResourceBdc,
   allBdcs: readonly ResourceBdc[],
   options: FluxSceneBuildOptions,
+  scrollPortId: string,
 ): FluxBdcMount {
   const additionalBuild = options.buildAdditionalBdc?.(page, bdc)
   if (additionalBuild !== null && additionalBuild !== undefined) {
@@ -312,7 +344,12 @@ function createBdcMount(
       const sectionId = `${page.id}-${bdc.id}`
       const sectionLinkProjection = bdc.section == null
         ? undefined
-        : options.inlineTextSceneFeature.projectSectionLinks(bdc.section.markup, bdc.section.content.content, bdc.id)
+        : options.inlineTextSceneFeature.projectSectionLinks(
+          bdc.section.markup,
+          bdc.section.content.content,
+          bdc.id,
+          { scrollPortId, observationZone: options.editorSettings.revelation.cardObservationZone },
+        )
       const sectionPlayerMarkup = omitEmptySectionTextBlocks(sectionLinkProjection?.markup ?? bdc.section?.markup ?? '')
       const card = options.presetBuilder.build(
         bdc.presetId,
@@ -501,14 +538,16 @@ function createMediaPersos(
 
 /** Builds a Card and its media/text persos in the Flux page's authored layout. */
 function buildFluxCard(page: ContentPage, containerBdcId: BdcId, bdc: ResourceBdc, options: FluxSceneBuildOptions): CardBdcSceneBuild {
+  const hasEmbeddedList = listReferenceService.referencesIn([bdc]).length > 0
   return options.cardBdcSceneBuilder.build({
     pageId: page.id,
     containerBdcId,
     bdc,
     mediaSources: options.mediaSources ?? {},
     mediaTypes: options.mediaTypes ?? {},
-    ...(bdc.presetId === CARD_PRESET_ID.LIST ? {
+    ...(bdc.presetId === CARD_PRESET_ID.LIST || hasEmbeddedList ? {
       entryEventName: `${page.id}-${bdc.id}-card:enter`,
+      entryTriggerMode: 'live',
       exitEventName: `${page.id}-${bdc.id}-card:leave`,
     } : {}),
     appearanceClassNamesByTarget: options.appearanceClassNamesByTarget,
@@ -544,7 +583,7 @@ function createFluxCardPersos(
     emit: {
       observe: {
         root: scrollPortId,
-        ...(bdc.presetId === CARD_PRESET_ID.LIST ? { initial: 'enter' as const } : {}),
+        ...(bdc.presetId === CARD_PRESET_ID.LIST || listReferenceService.referencesIn([bdc]).length > 0 ? { initial: 'enter' as const } : {}),
         zone: options.editorSettings.revelation.cardObservationZone,
         enter: [{ name: enterEvent }],
         leave: [{ name: leaveEvent }],
@@ -660,7 +699,7 @@ function createSectionStory(
   bdc: ResourceBdc,
   articlePartId: string,
   inlineTextSceneFeature: FluxSceneBuildOptions['inlineTextSceneFeature'],
-  sectionLinkPersos: readonly PersoDoc<string>[],
+  sectionLinkProjection: ResourceSectionInlineLinkProjection | undefined,
 ): StoryDoc<string> {
   const headingId = `${page.id}-${bdc.id}-title`
   const section = bdc.section
@@ -691,7 +730,7 @@ function createSectionStory(
     id: `${page.id}-${bdc.id}`,
     persos: [
       ...headingPersos,
-      ...sectionLinkPersos,
+      ...(sectionLinkProjection?.persos ?? []),
     ],
   }
 }

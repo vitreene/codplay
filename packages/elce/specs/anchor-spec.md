@@ -176,14 +176,23 @@ de la Section, l’image ou la vidéo apparaît dans le même DOM ProseMirror, s
 remonter l’éditeur.
 
 Dans l’éditeur Remix, l’action « Modifier le bloc illustratif ancré » ouvre
-l’éditeur partagé du même BDC. Un conteneur de positionnement couvre la largeur
-de la ligne et laisse passer les pointeurs ; seul le bouton de `2.5rem` est
-interactif. Le SVG décoratif ne capte pas lui-même le pointeur, qui arrive donc
-sur le bouton. Le panneau est ancré au cadre média par CSS Anchor Positioning et
+l’éditeur partagé du même BDC. Le conteneur du bouton d’édition suit le cadre
+média par CSS Anchor Positioning et `anchor-size(width)` ; il couvre ainsi la
+largeur du cadre (égale à celle de la ligne en placement pleine largeur) et
+laisse passer les pointeurs. Seul le bouton de `2.5rem` est interactif. Le SVG
+décoratif ne capte pas lui-même le pointeur, qui arrive donc sur le bouton. Le
+panneau d’édition partagé suit aussi le cadre média avec
 `anchor-size(width/height)` : il occupe exactement le rectangle réservé à
 l’image ou à la vidéo, au même emplacement que le BDC sélectionné, au lieu de
 s’ajouter après tout le texte de la Section. Le clic fait défiler ce cadre dans
 la zone visible avec `scrollIntoView({ block: 'nearest' })`.
+
+Les choix de largeur et de côté du placement appartiennent à la Carte ancrée et
+sont présentés dans l’éditeur partagé de cette Carte. La NodeView de l’ancre ne
+présente aucun contrôle de placement sur le cadre média. L’éditeur expose
+« Pleine largeur », « Moitié » et « Tiers », ainsi que « Gauche » et « Droite » ;
+le côté est désactivé en pleine largeur. Les valeurs éditables sont propres à
+chaque ancre.
 
 Le gestionnaire DOM du plugin intercepte les dépôts de fichiers dans la Section
 avant le traitement de position par ProseMirror, puis empêche l’ouverture du

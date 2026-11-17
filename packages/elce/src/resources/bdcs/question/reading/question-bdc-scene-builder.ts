@@ -80,6 +80,7 @@ export function buildQuestionBdcStory(
   completionEventName?: string,
   completionEventData?: CompiledRecord,
   inlineTextSceneFeature?: ResourceInlineTextSceneFeature,
+  evaluationMode = false,
 ): StoryDoc<string> {
   const question = bdc.question
   if (question === null) throw new Error(`Le bdc Question ${bdc.id} n’a pas de contenu.`)
@@ -124,6 +125,7 @@ export function buildQuestionBdcStory(
         answerLabels: question.answers.map((answer) => answer.label),
         correctAnswerIds: question.answers.filter((answer) => answer.correct).map((answer) => answer.id),
         selection: QUESTION_TYPE_CONFIG[question.type].selection,
+        ...(evaluationMode ? { evaluationMode: true } : {}),
         ...(completionEventName === undefined ? {} : { completionEventName }),
         ...(completionEventData === undefined ? {} : { completionEventData }),
       },
@@ -216,6 +218,22 @@ function createQuestionAnswerPerso(
       [`${prefix}:answer:${answer.id}:reset`]: {
         selectedAnswerIds: [], correctAnswerIds: [], checked: false, disabled: false,
         disableAnswers: false, showCorrection: false, visualState: 'idle',
+      },
+      [`${prefix}:answer:${answer.id}:submitted-selected`]: {
+        selectedAnswerIds: [answer.id], correctAnswerIds: [], checked: true, disabled: true,
+        disableAnswers: true, showCorrection: false, visualState: 'selected',
+      },
+      [`${prefix}:answer:${answer.id}:submitted-idle`]: {
+        selectedAnswerIds: [], correctAnswerIds: [], checked: false, disabled: true,
+        disableAnswers: true, showCorrection: false, visualState: 'disabled',
+      },
+      [`${prefix}:answer:${answer.id}:restored-selected`]: {
+        selectedAnswerIds: [answer.id], correctAnswerIds: [], checked: true, disabled: true,
+        disableAnswers: true, showCorrection: false, visualState: 'selected',
+      },
+      [`${prefix}:answer:${answer.id}:restored-idle`]: {
+        selectedAnswerIds: [], correctAnswerIds: [], checked: false, disabled: true,
+        disableAnswers: true, showCorrection: false, visualState: 'disabled',
       },
       [`${prefix}:answer:${answer.id}:revealed-correct`]: {
         selectedAnswerIds: [answer.id], correctAnswerIds, checked: true, disabled: true,

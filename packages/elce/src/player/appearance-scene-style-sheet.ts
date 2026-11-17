@@ -3,6 +3,7 @@ import type { AppearanceDensity } from '../config/appearance/appearance-types'
 import type { LearningBdc, LearningPage } from '../mods/learning/document/learning-document-types'
 import type { LearningDocument } from '../mods/learning/document/learning-document'
 import { BDC_TYPE } from '../mods/learning/learning-definition'
+import { LIST_BDC_TYPE } from '../resources/list/list-config'
 import {
   appearanceScopeClassName,
   appearanceSurfaceRoleForTarget,
@@ -85,7 +86,7 @@ function appearanceTargetsForDocument(document: LearningDocument): readonly Appe
 function pageAppearanceTargets(page: LearningPage, bdcs: readonly LearningBdc[]): readonly AppearanceTarget[] {
   return [
     { kind: 'page', pageId: page.id },
-    ...bdcs.flatMap((bdc) => bdc.pageId === page.id || bdc.parentBdcId !== null
+    ...bdcs.flatMap((bdc) => bdc.type !== LIST_BDC_TYPE && (bdc.pageId === page.id || bdc.parentBdcId !== null)
       ? [{ kind: 'bdc' as const, bdcId: bdc.id }]
       : []),
   ]

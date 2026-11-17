@@ -11,7 +11,7 @@ type InlineTextSegment = Readonly<{ html: string }>
 export function createQuizHuntInlineTextSceneFeature(): ResourceInlineTextSceneFeature {
   return {
     build: buildInlineTextParts,
-    projectSectionLinks: (markup) => ({ markup, persos: [] }),
+    projectSectionLinks: (markup) => ({ markup, persos: [], listPersos: [], listStraps: {}, listListen: [] }),
   }
 }
 

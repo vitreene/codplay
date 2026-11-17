@@ -3,6 +3,7 @@ import type { ElceCardPresetBuilder } from '../../../core/presets/card-preset-bu
 import type { ElceAnchorDropTarget, ElceAnchorCardPreview, ElceCatalogDropTarget } from '../domain/anchor-types'
 import type { ElceCatalogReference } from '../../../core/catalog/catalog-types'
 import type { AuthoredTextValue } from '../../../core/document/rich-text-types'
+import type { CardAnchorSide, CardAnchorWidth } from '../card-placement/card-anchor-placement'
 
 export type { ElceAnchorCardPreview, ElceAnchorDropTarget, ElceCatalogDropTarget } from '../domain/anchor-types'
 
@@ -10,6 +11,8 @@ export interface ElceAnchorAttributes {
   readonly bdcId: BdcId
   readonly partId: string
   readonly paddingBottom: string
+  readonly placementWidth: CardAnchorWidth
+  readonly placementSide: CardAnchorSide
 }
 
 export type ElceAnchorTransaction =
@@ -28,5 +31,6 @@ export interface ElceAnchorExtensionOptions {
   readonly createCatalogDropTarget?: (reference: ElceCatalogReference) => ElceCatalogDropTarget | null
   readonly resolveCard?: (bdcId: BdcId) => ElceAnchorCardPreview | null
   readonly onEditCard?: (bdcId: BdcId) => void
+  readonly getEditingAnchorCardState?: (bdcId: BdcId) => Readonly<{ blockSize: number | null }> | null
   readonly registerNodeViewRefresh?: (bdcId: BdcId, refresh: () => void) => () => void
 }

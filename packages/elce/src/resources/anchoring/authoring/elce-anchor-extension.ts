@@ -20,10 +20,19 @@ import type {
   ElceAnchorExtensionOptions,
   ElceAnchorTransaction,
 } from './anchor-types'
-import { anchorEditorBlockPositionFor, anchorEditorReservationFor, anchorNameFor, statisticalGraphAnchorPaddingBottom } from '../domain/anchor-position'
+import { anchorEditorBlockPositionFor, anchorEditorReservationFor, anchorIllustrationBlockSizeFor, anchorNameFor, statisticalGraphAnchorPaddingBottom } from '../domain/anchor-position'
 import { ElceAnchorRatioService } from '../domain/anchor-ratio-service'
 import { ElceStatisticalGraphSceneBuilder } from '../../bdcs/statistical-graph/reading/statistical-graph-scene-builder'
 import { authoredTextToPlainText } from '../../../core/document/rich-text-utils'
+import {
+  CARD_ANCHOR_WIDTH,
+  DEFAULT_CARD_ANCHOR_PLACEMENT,
+  cardAnchorFrameStyleFor,
+  cardAnchorSideFrom,
+  cardAnchorSlotStyleFor,
+  cardAnchorWidthFrom,
+} from '../card-placement/card-anchor-placement'
+import type { CardAnchorSide, CardAnchorWidth } from '../card-placement/card-anchor-placement'
 
 export const ELCE_ANCHOR_TRANSACTION_META = 'elceAnchorAction'
 
@@ -40,8 +49,10 @@ export function createElceAnchorAttributes(
   bdcId: BdcId,
   partId: string,
   paddingBottom: string = ANCHOR.DEFAULT_PADDING_BOTTOM,
+  placementWidth: CardAnchorWidth = DEFAULT_CARD_ANCHOR_PLACEMENT.width,
+  placementSide: CardAnchorSide = DEFAULT_CARD_ANCHOR_PLACEMENT.side,
 ): ElceAnchorAttributes {
-  return { bdcId, partId, paddingBottom }
+  return { bdcId, partId, paddingBottom, placementWidth, placementSide }
 }
 
 /** Renders a Card's existing layout and fields inside its authoring anchor. */
@@ -168,6 +179,8 @@ const ElceAnchorNode = Node.create<ElceAnchorExtensionRuntimeOptions>({
       bdcId: { default: null },
       partId: { default: null },
       paddingBottom: { default: ANCHOR.DEFAULT_PADDING_BOTTOM },
+      placementWidth: { default: DEFAULT_CARD_ANCHOR_PLACEMENT.width },
+      placementSide: { default: DEFAULT_CARD_ANCHOR_PLACEMENT.side },
     }
   },
 
@@ -180,13 +193,15 @@ const ElceAnchorNode = Node.create<ElceAnchorExtensionRuntimeOptions>({
           bdcId: element.getAttribute('data-bdc-id'),
           partId: element.getAttribute('data-part'),
           paddingBottom: element.style.getPropertyValue(ANCHOR.PADDING_VARIABLE).trim() || element.style.paddingBottom || ANCHOR.DEFAULT_PADDING_BOTTOM,
+          placementWidth: cardAnchorWidthFrom(element.dataset.elceAnchorWidth),
+          placementSide: cardAnchorSideFrom(element.dataset.elceAnchorSide),
         }
       },
     }]
   },
 
   renderHTML({ HTMLAttributes }) {
-    const { bdcId, partId, paddingBottom, ...editableAttributes } = HTMLAttributes
+    const { bdcId, partId, paddingBottom, placementWidth, placementSide, ...editableAttributes } = HTMLAttributes
     const resolvedPartId = String(partId ?? '')
     const anchorName = anchorNameFor(resolvedPartId)
     const configuredPadding = String(paddingBottom ?? ANCHOR.DEFAULT_PADDING_BOTTOM)
@@ -197,8 +212,10 @@ const ElceAnchorNode = Node.create<ElceAnchorExtensionRuntimeOptions>({
         [ANCHOR.DATA_ATTRIBUTE]: 'true',
         'data-bdc-id': String(bdcId ?? ''),
         'data-part': resolvedPartId,
+        'data-elce-anchor-width': cardAnchorWidthFrom(placementWidth),
+        'data-elce-anchor-side': cardAnchorSideFrom(placementSide),
         class: ANCHOR.CLASS_NAME,
-        style: `display:inline-block;width:0;position:static;vertical-align:top;${ANCHOR.PADDING_VARIABLE}:${configuredPadding};padding-bottom:${anchorEditorReservationFor(configuredPadding)};anchor-name:${anchorName};`,
+        style: `display:inline-block;width:0;position:static;vertical-align:top;${ANCHOR.PADDING_VARIABLE}:${configuredPadding};anchor-name:${anchorName};`,
       }),
     ]
   },
@@ -233,30 +250,72 @@ const ElceAnchorNode = Node.create<ElceAnchorExtensionRuntimeOptions>({
       bdc.style.setProperty('inset-inline-end', '0')
       bdc.style.setProperty('inset-block-start', anchorEditorBlockPositionFor())
       bdc.style.width = '100%'
+
       let renderedCard = ''
       /** Renders the selected Card layout while retaining the text-flow anchor DOM. */
       const renderCard = () => {
         const configuredPadding = String(currentNode.attrs.paddingBottom ?? ANCHOR.DEFAULT_PADDING_BOTTOM)
+        const placement = {
+          width: cardAnchorWidthFrom(currentNode.attrs.placementWidth),
+          side: cardAnchorSideFrom(currentNode.attrs.placementSide),
+        } as const
         const currentBdcId = String(currentNode.attrs.bdcId ?? '')
         const card = this.options.resolveCard?.(currentBdcId) ?? null
         const layoutId = card?.layoutId ?? CARD_PRESET_ID.PHOTO
         const mediaType = card === null || card.kind === 'statistical-graph' ? null : card.media?.type ?? null
+        const isGraph = card?.kind === 'statistical-graph'
         const reservationPadding = card?.kind === 'statistical-graph'
           ? statisticalGraphAnchorPaddingBottom(card.content.rendering)
           : mediaType === MEDIA_TYPE.VIDEO && layoutId === CARD_PRESET_ID.PHOTO
             ? ANCHOR.VIDEO_BLOCK_SIZE
             : configuredPadding
-        const signature = JSON.stringify([configuredPadding, card])
+        const aspectRatio = mediaType === MEDIA_TYPE.VIDEO && layoutId === CARD_PRESET_ID.PHOTO
+          ? '16 / 9'
+          : anchorRatioService.imageAspectRatio(reservationPadding)
+        const fixedBlockSize = layoutId === CARD_PRESET_ID.PHOTO
+          ? null
+          : anchorIllustrationBlockSizeFor(layoutId, reservationPadding)
+        const signature = JSON.stringify([configuredPadding, placement, card])
         dom.id = String(currentNode.attrs.partId ?? '')
         dom.dataset.bdcId = currentBdcId
         dom.dataset.part = String(currentNode.attrs.partId ?? '')
         dom.style.setProperty(ANCHOR.PADDING_VARIABLE, reservationPadding)
-        dom.style.paddingBottom = anchorEditorReservationFor(reservationPadding, layoutId)
         dom.style.setProperty('anchor-name', anchorNameFor(String(currentNode.attrs.partId ?? '')))
         bdc.id = `${currentBdcId}-editor-bdc`
         bdc.dataset.bdcId = currentBdcId
         bdc.dataset.cardLayout = layoutId
         bdc.style.setProperty('anchor-name', anchorNameFor(`${String(currentNode.attrs.partId ?? '')}-editor-frame`))
+        if (isGraph) {
+          dom.style.display = 'inline-block'
+          dom.style.float = 'none'
+          dom.style.width = '0px'
+          dom.style.height = '0px'
+          dom.style.paddingBottom = anchorEditorReservationFor(reservationPadding, layoutId)
+        } else {
+          dom.dataset.elceAnchorWidth = placement.width
+          dom.dataset.elceAnchorSide = placement.side
+          Object.assign(dom.style, cardAnchorSlotStyleFor(
+            placement,
+            layoutId === CARD_PRESET_ID.PHOTO ? aspectRatio : null,
+            fixedBlockSize,
+          ))
+          Object.assign(bdc.style, cardAnchorFrameStyleFor(
+            placement,
+            layoutId === CARD_PRESET_ID.PHOTO ? aspectRatio : null,
+            fixedBlockSize,
+          ))
+          bdc.style.setProperty('position-anchor', anchorNameFor(String(currentNode.attrs.partId ?? '')))
+          const editingState = this.options.getEditingAnchorCardState?.(currentBdcId)
+          if (editingState === undefined || editingState === null) delete bdc.dataset.editingCard
+          else bdc.dataset.editingCard = 'true'
+          if (editingState !== undefined && editingState !== null) {
+            Object.assign(dom.style, cardAnchorSlotStyleFor(
+              { ...placement, width: CARD_ANCHOR_WIDTH.FULL },
+              editingState.blockSize === null && layoutId === CARD_PRESET_ID.PHOTO ? aspectRatio : null,
+              editingState.blockSize === null ? fixedBlockSize : `${editingState.blockSize}px`,
+            ))
+          }
+        }
         if (mediaType === null) delete bdc.dataset.mediaType
         else bdc.dataset.mediaType = mediaType
         bdc.setAttribute('aria-label', 'Aperçu du bloc illustratif ancré')
@@ -265,12 +324,11 @@ const ElceAnchorNode = Node.create<ElceAnchorExtensionRuntimeOptions>({
           if (card.content.rendering === STATISTICAL_GRAPH_RENDERING.TABLE) bdc.style.removeProperty('aspect-ratio')
           else bdc.style.aspectRatio = '16 / 9'
         } else if (layoutId === CARD_PRESET_ID.PHOTO) {
-          bdc.style.height = 'auto'
           bdc.style.aspectRatio = mediaType === 'video'
             ? '16 / 9'
             : anchorRatioService.imageAspectRatio(configuredPadding)
         } else {
-          bdc.style.height = ANCHOR.TEXT_CARD_BLOCK_SIZE
+          bdc.style.height = fixedBlockSize ?? ANCHOR.TEXT_CARD_BLOCK_SIZE
           bdc.style.removeProperty('aspect-ratio')
         }
         if (mediaType === MEDIA_TYPE.VIDEO && layoutId === CARD_PRESET_ID.PHOTO && configuredPadding !== ANCHOR.VIDEO_BLOCK_SIZE) {
@@ -313,13 +371,21 @@ const ElceAnchorNode = Node.create<ElceAnchorExtensionRuntimeOptions>({
       handle.setAttribute('aria-label', 'Déplacer le bloc de contenu')
       handle.style.setProperty('position-anchor', anchorNameFor(String(node.attrs.partId ?? '')))
       handle.textContent = '↕'
+      // Selects this anchor before ProseMirror serializes its native drag.
+      handle.addEventListener('dragstart', () => {
+        const position = getPos()
+        if (typeof position !== 'number') return
+        const draggedNode = view.state.doc.nodeAt(position)
+        if (draggedNode?.type.name !== ANCHOR.NODE_NAME) return
+        view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, position)))
+      }, { capture: true })
       const editPosition = document.createElement('span')
       editPosition.className = 'elce-anchor-edit-position'
       editPosition.id = `${bdcId}-anchor-edit-position`
       editPosition.contentEditable = 'false'
-      editPosition.style.setProperty('position-anchor', anchorNameFor(String(node.attrs.partId ?? '')))
+      editPosition.style.setProperty('position-anchor', anchorNameFor(`${String(node.attrs.partId ?? '')}-editor-frame`))
       const editButton = document.createElement('button')
-      editButton.className = 'elce-anchor-edit'
+      editButton.className = 'elce-bdc-mode-toggle elce-anchor-edit'
       editButton.type = 'button'
       editButton.draggable = false
       editButton.contentEditable = 'false'
@@ -519,7 +585,8 @@ function updateAnchorPadding(
   if (currentNode === null || currentNode.type.name !== ANCHOR.NODE_NAME) return
   if (layoutId !== CARD_PRESET_ID.PHOTO) return
   anchor.style.setProperty(ANCHOR.PADDING_VARIABLE, paddingBottom)
-  anchor.style.paddingBottom = anchorEditorReservationFor(paddingBottom, layoutId)
+  if (anchor.dataset.elceAnchorWidth !== undefined) anchor.style.aspectRatio = aspectRatio
+  else anchor.style.paddingBottom = anchorEditorReservationFor(paddingBottom, layoutId)
   bdc.style.aspectRatio = aspectRatio
   if (currentNode.attrs.paddingBottom === paddingBottom) return
 

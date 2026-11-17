@@ -37,6 +37,8 @@ import { createSqliteDatabase } from 'remix/data-table/sqlite'
 import type { SqliteDatabase } from 'remix/data-table/sqlite'
 import type { RichTextDocument } from '../../../../../resources/document/rich-text-types'
 import { createAvatarDocumentFixture } from '../../../integration/fixtures/avatar-document-fixture'
+import { createStandaloneCardBdcCommand } from '../../../../../resources/bdcs/card/authoring/card-command-factory'
+import { ListService } from '../../../../../resources/list/domain/list-service'
 import { QuizHuntDocumentService } from '../../../../quiz-hunt/document/quiz-hunt-document-service'
 import { writeQuizHuntDocument } from '../../../../quiz-hunt/persistence/quiz-hunt-document-codec'
 
@@ -797,6 +799,7 @@ describe('SQLite project persistence through the Remix API', () => {
           resolve()
         })
       })
+
       const address = server.address() as AddressInfo
       const origin = `http://127.0.0.1:${address.port}`
 
@@ -950,6 +953,47 @@ describe('SQLite project persistence through the Remix API', () => {
 
     const remainingFiles = await createMediaFileStorage(mediaDirectory).list({ prefix: 'media/' })
     expect(remainingFiles.files).toEqual([])
+  })
+
+  it('reads and writes version 16 documents with standalone List BDC details', async () => {
+    database = await openProjectDatabase(':memory:')
+    const persistence = new LearningSqliteProjectPersistence(database)
+    const router = createLearningApiRouter(persistence)
+    const ownerBdcId = 'card-list-owner'
+    const listBdcId = 'list-bdc-test'
+    const content = {
+      type: 'doc',
+      content: [{
+        type: 'paragraph',
+        content: [
+          { type: 'text', text: 'Avant ' },
+          { type: 'listBdc', attrs: { bdcId: listBdcId } },
+          { type: 'text', text: ' après' },
+        ],
+      }],
+    } as const
+    let document = applyDocumentCommand(
+      learningDocumentService.createInitialDocument(),
+      createStandaloneCardBdcCommand(ownerBdcId, 'page-a', DEFAULT_PRESET_ID.TEXT_SHORT),
+    )
+    document = applyDocumentCommand(document, {
+      type: 'bdc.list.insert',
+      bdcId: listBdcId,
+      ownerBdcId,
+      content,
+      list: new ListService().createDefault('list-row-test'),
+    })
+
+    expect(document.data.version).toBe(16)
+    expect((await router.fetch(jsonRequest('POST', '/api/projects', document.toJSON()))).status).toBe(201)
+    const opened = await router.fetch(new Request(`http://elce.test/api/projects/${document.id}`))
+    expect(opened.status).toBe(200)
+    const body = await opened.json() as { document: ReturnType<LearningDocument['toJSON']> }
+    const restored = LearningDocument.fromJSON(body.document)
+
+    expect(restored.data.version).toBe(ELCE_DOCUMENT_VERSION)
+    expect(restored.bdcs.toSorted(compareById)).toEqual(document.bdcs.toSorted(compareById))
+    expect(restored.bdcs.find((bdc) => bdc.id === listBdcId)?.list).toEqual(document.bdcs.find((bdc) => bdc.id === listBdcId)?.list)
   })
 
   it('rejects an upload whose bytes would duplicate a different media resource', async () => {

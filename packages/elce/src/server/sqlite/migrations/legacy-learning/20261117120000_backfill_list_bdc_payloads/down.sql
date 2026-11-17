@@ -1,0 +1,1 @@
+-- Keep copied list payloads on rollback; deleting them could discard edits made after migration.

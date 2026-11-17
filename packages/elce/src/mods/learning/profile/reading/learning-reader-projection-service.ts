@@ -7,6 +7,7 @@ import type { ScenarioEntry } from '../../organization/learning-scenario-entry-t
 import type { ProfileProperty, ProfileValue } from '../domain/learning-profile-types'
 import { learningProfileService } from '../domain/learning-profile-service'
 import { parseInlineTextTokens } from '../../inline-text/learning-inline-text-value'
+import { ListReferenceService } from '../../../../resources/list/domain/list-reference-service'
 
 interface ReaderTextProjectionContext {
   readonly values: Readonly<Record<string, ProfileValue>>
@@ -17,6 +18,8 @@ interface ReaderTextProjectionContext {
 }
 
 export class LearningReaderProjectionService {
+  private readonly listReferenceService = new ListReferenceService()
+
   /** Builds the immutable document projection consumed by the Elcé reader. */
   public projectReaderDocument(
     document: LearningDocument,
@@ -32,6 +35,11 @@ export class LearningReaderProjectionService {
       .map((bdc) => bdc.id))
     const retainedBdcIds = new Set<string>()
     const projectedById = new Map<string, LearningBdc>()
+    const listBdcIdsByOwner = new Map<string, string[]>()
+    for (const reference of this.listReferenceService.referencesIn(document.bdcs)) {
+      const bdcIds = listBdcIdsByOwner.get(reference.ownerBdcId) ?? []
+      listBdcIdsByOwner.set(reference.ownerBdcId, [...bdcIds, reference.bdcId])
+    }
 
     /** Projects one visible scenario BDC and its only authored child shapes. */
     const projectBdc = (bdcId: string): LearningBdc | undefined => {
@@ -57,16 +65,35 @@ export class LearningReaderProjectionService {
           for (const anchorId of anchors) {
             if (projectBdc(anchorId) !== undefined) retainedAnchors.add(anchorId)
           }
+          const retainedLists = new Set((listBdcIdsByOwner.get(bdcId) ?? []).flatMap((listBdcId) =>
+            projectBdc(listBdcId) === undefined ? [] : [listBdcId]))
           const section = bdc.section === null ? null : {
             ...bdc.section,
             title: bdc.section.title,
             content: {
               ...bdc.section.content,
-              content: this.projectRichTextNodes(bdc.section.content.content, retainedAnchors),
+              content: this.projectRichTextNodes(bdc.section.content.content, retainedAnchors, retainedLists),
             },
-            markup: this.projectAnchorMarkup(bdc.section.markup, retainedAnchors),
+            markup: this.projectListMarkup(this.projectAnchorMarkup(bdc.section.markup, retainedAnchors), retainedLists),
           }
           const projected = { ...bdc, section }
+          projectedById.set(bdcId, projected)
+          retainedBdcIds.add(bdcId)
+          return projected
+        }
+        case BDC_TYPE.CARD: {
+          const retainedLists = new Set((listBdcIdsByOwner.get(bdcId) ?? []).flatMap((listBdcId) =>
+            projectBdc(listBdcId) === undefined ? [] : [listBdcId]))
+          const card = bdc.card === null || bdc.card === undefined ? bdc.card : {
+            ...bdc.card,
+            message: typeof bdc.card.message === 'string'
+              ? bdc.card.message
+              : {
+                ...bdc.card.message,
+                content: projectListReferenceNodes(bdc.card.message.content, retainedLists),
+              },
+          }
+          const projected: LearningBdc = { ...bdc, card }
           projectedById.set(bdcId, projected)
           retainedBdcIds.add(bdcId)
           return projected
@@ -403,10 +430,23 @@ export class LearningReaderProjectionService {
   }
 
   /** Removes only anchor nodes whose corresponding media BDC was filtered out. */
-  private projectRichTextNodes(nodes: readonly RichTextNode[], retainedAnchors: ReadonlySet<string>): readonly RichTextNode[] {
+  private projectRichTextNodes(
+    nodes: readonly RichTextNode[],
+    retainedAnchors: ReadonlySet<string>,
+    retainedLists: ReadonlySet<string>,
+  ): readonly RichTextNode[] {
     return nodes.flatMap((node) => {
       if (node.type === 'elceAnchor' && typeof node.attrs?.bdcId === 'string' && !retainedAnchors.has(node.attrs.bdcId)) return []
-      return [{ ...node, ...(node.content === undefined ? {} : { content: this.projectRichTextNodes(node.content, retainedAnchors) }) }]
+      if (node.type === 'listBdc' && typeof node.attrs?.bdcId === 'string' && !retainedLists.has(node.attrs.bdcId)) return []
+      return [{ ...node, ...(node.content === undefined ? {} : { content: this.projectRichTextNodes(node.content, retainedAnchors, retainedLists) }) }]
+    })
+  }
+
+  /** Removes Section List placeholders whose child BDCs are excluded from the reader projection. */
+  private projectListMarkup(markup: string, retainedLists: ReadonlySet<string>): string {
+    return markup.replace(/<div\b(?=[^>]*\bdata-elce-list-bdc\b)[^>]*>[\s\S]*?<\/div>/gi, (placeholder) => {
+      const id = /\bbdcid\s*=\s*(["'])(.*?)\1/i.exec(placeholder)?.[2]
+      return id !== undefined && retainedLists.has(id) ? placeholder : ''
     })
   }
 
@@ -463,3 +503,14 @@ function isTextBlock(node: RichTextNode): boolean {
 }
 
 export const learningReaderProjectionService = new LearningReaderProjectionService()
+
+/** Removes List block references whose child BDCs are excluded from the reader projection. */
+function projectListReferenceNodes(nodes: readonly RichTextNode[], retainedListBdcIds: ReadonlySet<string>): readonly RichTextNode[] {
+  return nodes.flatMap((node) => {
+    if (node.type === 'listBdc') {
+      const listBdcId = node.attrs?.bdcId
+      return typeof listBdcId === 'string' && retainedListBdcIds.has(listBdcId) ? [node] : []
+    }
+    return [{ ...node, ...(node.content === undefined ? {} : { content: projectListReferenceNodes(node.content, retainedListBdcIds) }) }]
+  })
+}

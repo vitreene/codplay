@@ -24,6 +24,44 @@
   color: #8d3b35;
 }
 
+.elce-bdc-mode-toggle {
+  position: relative;
+  display: grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: none;
+  place-items: center;
+  box-sizing: border-box;
+  padding: 0;
+  color: #315d56;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.elce-bdc-mode-toggle::before {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 50%;
+  width: 1.4rem;
+  height: 1.4rem;
+  background: #fffdf8;
+  border: 1px solid #46726b;
+  border-radius: 50%;
+  content: '';
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.elce-bdc-mode-toggle > .elce-ui-icon {
+  position: relative;
+  width: 0.7rem;
+  height: 0.7rem;
+  box-sizing: border-box;
+  padding: 0;
+  pointer-events: none;
+}
+
 .elce-bdc-icon-button.elce-page-bdc__drag {
   color: #8a9088;
   cursor: grab;

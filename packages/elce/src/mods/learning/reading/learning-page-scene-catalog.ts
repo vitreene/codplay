@@ -24,7 +24,7 @@ export class LearningPageSceneCatalog {
     mediaSources: LearningPlayerOptions['mediaSources'],
     cache?: PageSceneCache,
   ): Readonly<{ scenes: Readonly<Record<string, SightySceneSourceValue>> }> {
-  const sceneBuilders = createLearningSceneBuilders()
+  const sceneBuilders = createLearningSceneBuilders(document.bdcs)
   const pageIds = scenarioPageIds(document)
   const activePageIds = new Set(pageIds)
   for (const cachedPageId of cache?.keys() ?? []) {
@@ -106,6 +106,7 @@ export class LearningPageSceneCatalog {
       mediaTypes: pageMediaTypes,
       editorSettings,
       appearanceClassNamesByTarget,
+      evaluationQuestionMode: sceneChapterType === CHAPTER_TYPE.EVALUATION,
       ...sceneBuilders,
       buildAdditionalBdc: createLearningAdditionalBdcBuilder(
         document,

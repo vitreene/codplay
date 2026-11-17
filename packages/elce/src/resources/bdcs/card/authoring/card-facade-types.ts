@@ -8,9 +8,11 @@ import type { ElceMediaImport } from '../../../../domain/media/media-resource-ty
 import type { ElceTextValue } from '../../../document/rich-text-types'
 import type { RevelationTransitionOverrides } from '../../../revelation/revelation-types'
 import type { ListContent } from '../../../list/domain/list-types'
+import type { ListCommand } from '../../../list/authoring/list-command-types'
 
 export interface ElceCardFacadeOptions {
   readonly dispatch: (command: CardEditCommand) => void
+  readonly insertListBdc?: (command: ListCommand) => void
   readonly getCard: (bdcId: BdcId) => CardContent | null
   readonly importMedia: (bdcId: BdcId, mediaImport: ElceMediaImport) => void
 }
@@ -23,6 +25,8 @@ export interface ElceCardEditorActions {
   readonly setImageFit: (bdcId: BdcId, imageFit: CardImageFit) => void
   readonly setRevelation: (bdcId: BdcId, revelation: RevelationTransitionOverrides) => void
   readonly setList: (bdcId: BdcId, list: ListContent) => void
+  readonly insertListBdc?: (bdcId: BdcId, listBdcId: BdcId, message: import('../../../document/rich-text-types').RichTextDocument, list: ListContent) => void
+  readonly updateListBdc?: (bdcId: BdcId, list: ListContent) => void
   readonly attachCatalogReference: (bdcId: BdcId, reference: ElceCatalogReference) => void
   readonly importMediaFile: (bdcId: BdcId, file: File) => void
   readonly clearMedia: (bdcId: BdcId) => void

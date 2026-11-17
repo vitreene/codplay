@@ -4,8 +4,9 @@
 
 **En cours — modèle, édition, projection CodPlay et Quiz simple sont couverts
 par tests et un essai Safari. La sélection et le montage de l’issue du BDC
-Résultat sont vérifiés ; le raccord de Recommencer/Relire et de l’affichage des
-réponses de Question à la machine reste à réaliser.**
+Résultat sont vérifiés. Le raccord de Recommencer/Relire et la visibilité des
+réponses d’Évaluation sont vérifiés dans le player ; le parcours navigateur de
+bout en bout reste à valider.**
 
 ## Contrat auteur
 
@@ -121,20 +122,23 @@ l’ensemble des identifiants marqués justes. Avant validation, aucune correcti
 n’est affichée. Dans le parcours Quiz simple, la validation affiche le résultat
 et les corrections directement dans la liste, verrouille les contrôles et
 transmet le booléen de résultat au scénario Sighty. Cette révélation après
-réponse reprend la démo 5. Dans un chapitre Évaluation, la machine métier garde
-les corrections cachées après un échec et pendant la reprise ; seules les
-Questions fausses ou absentes peuvent être reprises si cette portée est
-choisie. Après une réussite, l’action de relecture choisie dans la branche
-Réussite du BDC Résultat ouvre toutes les Questions avec leurs réponses
-sélectionnées et attendues. Ce contrat est détaillé dans la
+réponse reprend la démo 5. Dans un chapitre Évaluation, le builder active le
+mode Évaluation de la Question : la validation publie le même résultat au
+scénario mais masque le retour et les marqueurs de correction. Sighty conserve
+les réponses dans son contexte et utilise `EvaluationMachine.shouldRevealAnswers`
+lors de leur restitution. La reprise efface les réponses des Questions actives
+pour les rendre à nouveau éditables ; les réponses conservées par la portée
+« incorrectes seulement » restent verrouillées sans correction visible. Après
+une réussite, l’action Relire choisie dans la branche Réussite restaure les
+réponses de toutes les Questions et révèle les corrections pendant l’état
+`reviewing`. Ce contrat est détaillé dans la
 [spécification de la machine d’Évaluation](evaluation-machine-spec.md). À
 l’entrée d’une page qui porte le BDC Résultat, l’action de route Sighty lit
 l’issue de la machine dans son contexte et envoie l’événement de scène qui
-monte la story Réussite ou Échec à l’ancre du BDC. Le rendu des Questions ne
-consomme pas encore `shouldRevealAnswers` pour masquer les corrections pendant
-l’échec/la reprise ou les révéler lors d’une relecture. Les actions
-Recommencer/Relire du BDC ne sont pas encore raccordées aux transitions de la
-machine ; ces parcours restent à valider après leur intégration.
+monte la story Réussite ou Échec à l’ancre du BDC. Les actions Recommencer et
+Relire du BDC envoient leurs événements publics ; la vue Sighty vérifie la
+branche et l’état courant, route vers la première Question et applique la
+transition métier existante.
 
 Pour une page Flux avec Question, Sighty autorise « Suivant » seulement après
 le repère bas et la validation de la réponse ; la réponse peut être fausse.
@@ -157,6 +161,9 @@ test initial.
 - [`elce-player-composition.test.ts`](../src/mods/learning/reading/learning-player.test.ts)
   vérifie en Flux et Diapo la réutilisation d’une source, la restitution de deux
   réponses, leur suppression, l’absence de nouvelle validation et le seek.
+  Le même fichier vérifie dans le player réel que l’évaluation cache les
+  corrections après validation, que Recommencer rouvre les réponses et que
+  Relire après réussite restaure les réponses avec corrections visibles.
   Safari a aussi affiché une réponse enregistrée dans une preview réseau sur
   une base temporaire ; ce contrôle ne couvre pas la réutilisation du cache.
 - [`popup-player-cache-integration.test.tsx`](../src/mods/learning/integration/learning-preview-session.test.tsx)

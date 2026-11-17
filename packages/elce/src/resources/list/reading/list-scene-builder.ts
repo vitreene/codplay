@@ -1,7 +1,9 @@
 import type { AuthorStrapCollection, PersoDoc, SceneListenRule } from 'codplay/scene/types'
 import type { StrapFunction } from 'codplay/runtime/player'
+import { EVENT_ACTION } from '@codplay/capsule-automation'
 import type { ListContent, ListPrefix } from '../domain/list-types'
 import { ListService } from '../domain/list-service'
+import { createRevelationAction, createRevelationInitialStyle, createRevelationStartStyle } from '../../revelation/revelation-action'
 
 export type ListEntryTriggerMode = 'live' | 'compiled-eventime'
 
@@ -22,8 +24,6 @@ export interface ListSceneBuild {
   readonly listen: readonly SceneListenRule[]
   readonly revealEventimes: readonly Readonly<{ name: string; startAt: number }>[]
 }
-
-const LIST_ROW_REVEAL_DURATION_MS = 200
 
 const CLASS_BY_PREFIX: Readonly<Record<ListPrefix, string>> = {
   none: 'none',
@@ -55,8 +55,8 @@ export class ListSceneBuilder {
     ].join(' ')
     let elapsedMs = 0
     const visibleRows = list.rows.filter((row) => row.text.trim().length > 0)
-    const revealRows = visibleRows.map((row, index) => {
-      elapsedMs += row.delayMs ?? (index === 0 ? 0 : list.intervalMs)
+    const revealRows = visibleRows.map((row) => {
+      elapsedMs += row.delayMs ?? list.intervalMs
       return {
         row,
         offsetMs: elapsedMs,
@@ -64,26 +64,28 @@ export class ListSceneBuilder {
         hideEventName: `${input.idPrefix}:list:row:${row.id}:hide`,
       }
     })
+    const rowStartStyle = { ...createRevelationStartStyle(list.transition), opacity: 0 }
+    const rowVisibleStyle = { ...createRevelationInitialStyle(list.transition), opacity: 1 }
+    const configuredRevealAction = createRevelationAction(list.transition, EVENT_ACTION.intro)
+    const revealAction = Object.keys(configuredRevealAction).length === 0
+      ? { style: rowVisibleStyle }
+      : configuredRevealAction
     const persos = revealRows.map(({ row, revealEventName, hideEventName }): PersoDoc<string> => {
       const initial = {
         tag: 'li',
         content: row.text,
         ...(list.prefix === 'custom' ? { attr: { 'data-marker': list.customMarker } } : {}),
-        ...(input.entryEventName === undefined ? {} : { style: { opacity: input.initiallyVisible === true ? 1 : 0 } }),
+        ...(input.entryEventName === undefined ? {} : { style: input.initiallyVisible === true ? rowVisibleStyle : rowStartStyle }),
         move: { target: input.partId },
       }
       const actions = {
         ...(input.entryEventName === undefined ? {} : {
-          [input.entryEventName]: { style: { opacity: 0 } },
-          [revealEventName]: {
-            duration: LIST_ROW_REVEAL_DURATION_MS,
-            ease: 'linear',
-            fn: resolveListRowRevealFrame,
-          },
+          [input.entryEventName]: { style: rowStartStyle },
+          [revealEventName]: revealAction,
         }),
         ...(input.exitEventName === undefined ? {} : {
-          [input.exitEventName]: { style: { opacity: 0 } },
-          [hideEventName]: { style: { opacity: 0 } },
+          [input.exitEventName]: { style: rowStartStyle },
+          [hideEventName]: { style: rowStartStyle },
         }),
       }
       return { id: `${input.idPrefix}-row-${row.id}`, type: 'tag', initial, ...(Object.keys(actions).length === 0 ? {} : { actions }) }
@@ -103,11 +105,6 @@ export class ListSceneBuilder {
     const revealEventimes = revealRows.map((row) => ({ name: row.revealEventName, startAt: row.offsetMs }))
     return { markup: `<${tag} ${attrs}></${tag}>`, persos, straps, listen, revealEventimes }
   }
-}
-
-/** Resolves the CodPlay opacity frame for one revealed List row. */
-function resolveListRowRevealFrame(input: Readonly<{ progress: number }>) {
-  return { style: { opacity: input.progress } }
 }
 
 /** Schedules row reveals and repairs outstanding events when the List is re-entered. */

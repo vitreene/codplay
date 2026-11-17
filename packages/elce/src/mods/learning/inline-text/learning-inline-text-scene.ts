@@ -1,39 +1,62 @@
-import type { PersoDoc } from 'codplay/scene/types'
+import type { AuthorStrapCollection, PersoDoc, SceneListenRule } from 'codplay/scene/types'
 import { ELCE_EVENTS } from '../reading/learning-reading-events'
 import type { RichTextDocument, RichTextNode } from '../../../core/document/rich-text-types'
+import type { ResourceBdc } from '../../../resources/document/resource-document-types'
+import { ListSceneBuilder } from '../../../resources/list/reading/list-scene-builder'
+import type { ListContent } from '../../../resources/list/domain/list-types'
 import {
   wrapResourceInlineTextSceneParts,
+  type ResourceInlineTextSceneBuildOptions,
   type ResourceInlineTextSceneFeature,
+  type ResourceInlineTextSceneParts,
+  type ResourceSectionInlineLinkProjectionOptions,
   type ResourceSectionInlineLinkProjection,
 } from '../../../resources/document/resource-inline-text-feature'
 
-export interface InlineTextSceneParts {
-  readonly markup: string
-  readonly persos: readonly PersoDoc<string>[]
-}
+export interface InlineTextSceneParts extends ResourceInlineTextSceneParts {}
+
+const listSceneBuilder: ListSceneBuilder = new ListSceneBuilder()
 
 /** Creates the Learning renderer supplied to generic resource scene builders. */
-export function createLearningInlineTextSceneFeature(): ResourceInlineTextSceneFeature {
+export function createLearningInlineTextSceneFeature(bdcs: readonly ResourceBdc[] = []): ResourceInlineTextSceneFeature {
+  const listById = new Map(bdcs.flatMap((bdc) => bdc.type === 'list' && bdc.list != null ? [[bdc.id, bdc.list] as const] : []))
   return {
-    build: createInlineTextSceneParts,
-    projectSectionLinks: createSectionPageLinkProjection,
+    build: (document, idPrefix, options) => createInlineTextSceneParts(document, idPrefix, options, listById),
+    projectSectionLinks: (markup, nodes, bdcId, options) => createSectionPageLinkProjection(markup, nodes, bdcId, listById, options),
   }
 }
 
 type InlineSegment =
   | Readonly<{ kind: 'text'; html: string }>
   | Readonly<{ kind: 'link'; pageId: string; label: string; presentation: 'text' | 'button'; marks: readonly string[] }>
+  | Readonly<{ kind: 'list'; bdcId: string }>
 
 /** Creates ordered CodPlay markers and safe inline persos for a promoted text value. */
 export function createInlineTextSceneParts(
   document: RichTextDocument,
   idPrefix: string,
+  options?: ResourceInlineTextSceneBuildOptions,
+  listById: ReadonlyMap<string, ListContent> = new Map(),
 ): InlineTextSceneParts {
   const segments = inlineSegments(document.content)
-  const markers = segments.map((_segment, index) => `<!-- data-part="${escapeAttribute(`${idPrefix}:${index}`)}" -->`).join('')
+  const listBuilds = segments.flatMap((segment, index) => {
+    if (segment.kind !== 'list') return []
+    const list = listById.get(segment.bdcId)
+    if (list === undefined) throw new Error(`La Liste ${segment.bdcId} du champ riche est introuvable.`)
+    return [{ index, build: listSceneBuilder.build({
+      list,
+      idPrefix: `${idPrefix}-list-${segment.bdcId}`,
+      partId: `${idPrefix}:${index}`,
+      ...options,
+    }) }]
+  })
+  const markers = segments.map((segment, index) => segment.kind === 'list'
+    ? listBuilds.find((entry) => entry.index === index)?.build.markup ?? ''
+    : `<!-- data-part="${escapeAttribute(`${idPrefix}:${index}`)}" -->`).join('')
   const persos = segments.flatMap((segment, index) => {
     const id = `${idPrefix}-segment-${index}`
     const move = { target: `${idPrefix}:${index}` }
+    if (segment.kind === 'list') return []
     if (segment.kind === 'text') {
       return segment.html.length === 0 ? [] : [{
         id,
@@ -68,7 +91,14 @@ export function createInlineTextSceneParts(
       },
     } satisfies PersoDoc<string>]
   })
-  return { markup: markers, persos }
+  return {
+    markup: markers,
+    persos: [...persos, ...listBuilds.flatMap((entry) => entry.build.persos)],
+    ...(listBuilds.length > 0 ? { hasBlockContent: true } : {}),
+    straps: Object.assign({}, ...listBuilds.map((entry) => entry.build.straps)),
+    listen: listBuilds.flatMap((entry) => entry.build.listen),
+    revealEventimes: listBuilds.flatMap((entry) => entry.build.revealEventimes),
+  }
 }
 
 /** Wraps ordered segment markers in a semantic authored-content element. */
@@ -87,8 +117,13 @@ function inlineSegments(nodes: readonly RichTextNode[]): readonly InlineSegment[
   let hasBlock = false
   for (const node of nodes) {
     if (node.type === 'paragraph' || node.type === 'heading') {
-      if (hasBlock) appendText(output, '<br>', [])
+      if (hasBlock && output.at(-1)?.kind !== 'list') appendText(output, '<br>', [])
       output.push(...inlineSegments(node.content ?? []))
+      hasBlock = true
+      continue
+    }
+    if (node.type === 'listBdc') {
+      output.push({ kind: 'list', bdcId: String(node.attrs?.bdcId ?? '') })
       hasBlock = true
       continue
     }
@@ -146,11 +181,16 @@ function createSectionPageLinkProjection(
   markup: string,
   nodes: readonly RichTextNode[],
   bdcId: string,
+  listById: ReadonlyMap<string, ListContent>,
+  options?: ResourceSectionInlineLinkProjectionOptions,
 ): ResourceSectionInlineLinkProjection {
   const links = collectSectionPageLinkNodes(nodes)
   const persos: PersoDoc<string>[] = []
+  const listPersos: PersoDoc<string>[] = []
+  const listStraps: AuthorStrapCollection = {}
+  const listListen: SceneListenRule[] = []
   let linkIndex = 0
-  const projectedMarkup = markup.replace(
+  const projectedLinkMarkup = markup.replace(
     /<span\b(?=[^>]*\bdata-elce-page-id\s*=)[^>]*>[\s\S]*?<\/span>/gi,
     (span) => {
       const index = linkIndex
@@ -185,7 +225,54 @@ function createSectionPageLinkProjection(
       return `<!-- data-part="${escapeAttribute(target)}" -->`
     },
   )
-  return { markup: projectedMarkup, persos }
+  const projectedMarkup = projectedLinkMarkup.replace(
+    /<div\b(?=[^>]*\bdata-elce-list-bdc\b)[^>]*>[\s\S]*?<\/div>/gi,
+    (placeholder) => {
+      const listBdcId = /\bbdcid\s*=\s*(["'])(.*?)\1/i.exec(placeholder)?.[2]
+      if (listBdcId === undefined) return ''
+      const list = listById.get(listBdcId)
+      if (list === undefined) throw new Error(`La Liste ${listBdcId} du contenu de Section ${bdcId} est introuvable.`)
+      const partId = `${bdcId}:section:list:${listBdcId}`
+      const observerMountPartId = `${partId}:observer-mount`
+      const entryEventName = `${partId}:enter`
+      const exitEventName = `${partId}:leave`
+      const build = listSceneBuilder.build({
+        list,
+        idPrefix: partId,
+        partId,
+        ...(options === undefined ? {} : { entryEventName, exitEventName }),
+      })
+      listPersos.push(...build.persos)
+      Object.assign(listStraps, build.straps)
+      listListen.push(...build.listen)
+      if (options === undefined) return build.markup
+      listPersos.push({
+        id: `${partId}-observer`,
+        type: 'layout',
+        initial: {
+          move: { target: observerMountPartId },
+          markup: `<div id="${partId}-observer-root">${build.markup}</div>`,
+        },
+        emit: {
+          observe: {
+            root: options.scrollPortId,
+            initial: 'enter',
+            zone: options.observationZone,
+            enter: [{ name: entryEventName }],
+            leave: [{ name: exitEventName }],
+          },
+        },
+      })
+      return `<!-- data-part="${observerMountPartId}" -->`
+    },
+  )
+  return {
+    markup: projectedMarkup,
+    persos,
+    listPersos,
+    listStraps,
+    listListen,
+  }
 }
 
 /** Recursively collects page-link nodes nested in Section blocks. */

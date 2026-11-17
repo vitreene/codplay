@@ -1,0 +1,1 @@
+-- Keep the extra JSON property when downgrading; older readers ignore it.

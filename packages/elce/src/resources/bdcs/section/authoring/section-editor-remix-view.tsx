@@ -1,12 +1,21 @@
-import { Bold, Italic, Underline, Subscript, Superscript, Pilcrow, Ellipsis, AlignLeft, AlignCenter, AlignRight, AlignJustify, Heading1, Heading2, Heading3, Heading4, Heading5, Heading6, X } from 'lucide-static'
+import { Bold, Italic, Underline, Subscript, Superscript, Pilcrow, Ellipsis, AlignLeft, AlignCenter, AlignRight, AlignJustify, Heading1, Heading2, Heading3, List, PanelLeft, PanelRight, Settings2 } from 'lucide-static'
 import { on, ref, type RemixNode } from 'remix/component'
 
 import { ANCHOR } from '../../../anchoring/anchor-config'
-import { SECTION_EDITOR_HEADING_LEVELS } from '../section-config'
+import { SECTION_EDITOR_HEADING_TOOLBAR_LEVELS } from '../section-config'
 import { SECTION_BDC_TYPE } from '../section-config'
 import { CARD_BDC_TYPE, CARD_PRESET_ID } from '../../card/card-config'
 import { STATISTICAL_GRAPH_BDC_TYPE } from '../../statistical-graph/statistical-graph-config'
 import type { CardLayoutId } from '../../card/card-config'
+import { cardLayoutAcceptsMedia } from '../../card/authoring/card-editor-rules'
+import {
+  CARD_ANCHOR_SIDE,
+  CARD_ANCHOR_WIDTH,
+  DEFAULT_CARD_ANCHOR_PLACEMENT,
+  cardAnchorSideFrom,
+  cardAnchorWidthFrom,
+} from '../../../anchoring/card-placement/card-anchor-placement'
+import type { CardAnchorPlacement, CardAnchorSide, CardAnchorWidth } from '../../../anchoring/card-placement/card-anchor-placement'
 import type { ResourceBdc, ResourceDocumentData } from '../../../document/resource-document-types'
 import type { ContentPage, PageId } from '../../../../core/document/content-document-types'
 import type { RichTextNode } from '../domain/section-types'
@@ -15,6 +24,7 @@ import type { ElceSectionChange } from '../../../anchoring/domain/anchor-types'
 import type { ElceCatalogDropTarget, ElceCatalogReference } from '../../../../core/catalog/catalog-types'
 import type { AppearanceTarget } from '../../../../domain/appearance/appearance-target-types'
 import { mediaTypeFromMimeType } from '../../../../domain/media/media-resource-service'
+import { MEDIA_TYPE } from '../../../../core/media/media-config'
 import type { MediaType } from '../../../../core/media/media-config'
 import type { ElceCardPresetBuilder } from '../../../../core/presets/card-preset-builder'
 import type { ElceCardEditorActions } from '../../card/authoring/card-facade-types'
@@ -97,9 +107,13 @@ export function renderRemixSectionEditor(
   const anchorIllustrations = data.document.bdcs.filter((candidate) => candidate.parentBdcId === bdc.id
     && (candidate.type === CARD_BDC_TYPE || candidate.type === STATISTICAL_GRAPH_BDC_TYPE))
   const editingAnchorBdc = anchorIllustrations.find((illustration) => illustration.id === state.selectedAnchorBdcId)
-  const editingAnchorPartId = editingAnchorBdc === undefined
+  const editingAnchor = editingAnchorBdc === undefined
     ? null
-    : findAnchorPartId(section.content.content, editingAnchorBdc.id)
+    : findAnchorData(section.content.content, editingAnchorBdc.id)
+  const listBdcContents = new Map(data.document.bdcs.flatMap((candidate) =>
+    candidate.type === 'list' && candidate.list != null && candidate.parentBdcId === bdc.id
+      ? [[candidate.id, candidate.list] as const]
+      : []))
   const cardActions = actions.createCardEditorActions()
   const toolbarState = state.session.toolbarStates.get(bdc.id) ?? EMPTY_SECTION_TOOLBAR_STATE
   const handle = state.handle
@@ -139,7 +153,7 @@ export function renderRemixSectionEditor(
           })}
         </div>
       </div>
-    {renderSectionEditorToolbar(bdc.id, toolbarState, state.session.adapters, handle)}
+    {renderSectionEditorToolbar(bdc.id, toolbarState, state.session.adapters, handle, state.textFeature)}
     </div>
     <div
       key={bdc.id}
@@ -150,7 +164,9 @@ export function renderRemixSectionEditor(
         const adapter = new SectionTiptapAdapter(host as HTMLElement, {
           bdcId: bdc.id,
           section,
+          editingAnchorCardId: state.selectedAnchorBdcId,
           textFeature: state.textFeature,
+          listBdcContents,
           anchorOptions: {
             presetBuilder: state.presetBuilder,
             toPlainText: state.textFieldFeature.toPlainText,
@@ -163,7 +179,10 @@ export function renderRemixSectionEditor(
               bdc.id,
             ),
             resolveCard: (anchorBdcId) => resolveAnchorCard(current.data, anchorBdcId, state.appearanceForBdc),
-            onEditCard: state.onEditAnchorBdc,
+            onEditCard: (anchorBdcId) => {
+              state.session.adapters.get(bdc.id)?.setEditingAnchorCard(anchorBdcId)
+              state.onEditAnchorBdc(anchorBdcId)
+            },
           },
           onChange: (change, selection) => actions.submitSectionChange(bdc.id, change, selection),
           onToolbarState: (next) => {
@@ -188,9 +207,14 @@ export function renderRemixSectionEditor(
         editingAnchorBdc,
         data,
         cardActions,
-        state.onCloseAnchorBdc,
+        () => {
+          state.session.adapters.get(bdc.id)?.setEditingAnchorCard(null)
+          state.onCloseAnchorBdc()
+        },
         actions,
-        editingAnchorPartId,
+        editingAnchor,
+        (width, side) => state.session.adapters.get(bdc.id)?.updateAnchorPlacement(editingAnchorBdc.id, width, side),
+        (anchorBdcId, blockSize) => state.session.adapters.get(bdc.id)?.setEditingAnchorCard(anchorBdcId, blockSize),
         state.onOpenAppearanceTarget,
         state.textFieldAttributes,
       )}
@@ -203,6 +227,7 @@ export function renderSectionEditorToolbar(
   state: SectionToolbarState,
   adapters: Map<string, SectionTiptapAdapter>,
   handle: RemixRenderHandle,
+  textFeature?: SectionTextFeature,
 ): RemixNode {
   const buttons = [
     { suffix: 'bold', label: 'Gras', icon: Bold, active: state.bold, run: (editor: SectionTiptapAdapter['editor']) => editor.chain().toggleBold().run() },
@@ -210,15 +235,22 @@ export function renderSectionEditorToolbar(
     { suffix: 'underline', label: 'Souligné', icon: Underline, active: state.underline, run: (editor: SectionTiptapAdapter['editor']) => editor.chain().toggleUnderline().run() },
     { suffix: 'subscript', label: 'Indice', icon: Subscript, active: state.subscript, run: (editor: SectionTiptapAdapter['editor']) => editor.chain().toggleSubscript().run() },
     { suffix: 'superscript', label: 'Exposant', icon: Superscript, active: state.superscript, run: (editor: SectionTiptapAdapter['editor']) => editor.chain().toggleSuperscript().run() },
-    ...SECTION_EDITOR_HEADING_LEVELS.map((level) => ({
+    ...SECTION_EDITOR_HEADING_TOOLBAR_LEVELS.map((level) => ({
       suffix: `heading-${level}`,
       label: `Titre H${level}`,
-      icon: [Heading1, Heading2, Heading3, Heading4, Heading5, Heading6][level - 1]!,
+      icon: [Heading1, Heading2, Heading3][level - 1]!,
       active: state.headingLevel === level,
       run: (editor: SectionTiptapAdapter['editor']) => editor.chain().toggleHeading({ level }).run(),
     })),
     { suffix: 'paragraph', label: 'Paragraphe', icon: Pilcrow, active: state.paragraph, run: (editor: SectionTiptapAdapter['editor']) => editor.chain().setParagraph().run() },
     { suffix: 'dot-leader', label: 'Points de suite', icon: Ellipsis, active: state.dotLeader, run: (editor: SectionTiptapAdapter['editor']) => editor.chain().toggleDotLeader().run() },
+    ...(textFeature?.onInsertListBdc === undefined ? [] : [{
+      suffix: 'insert-list',
+      label: 'Insérer une liste à points',
+      icon: List,
+      active: false,
+      run: () => adapters.get(bdcId)?.insertListBdc(),
+    }]),
     { suffix: 'align-left', label: 'Aligner à gauche', icon: AlignLeft, active: state.textAlign === 'left', run: (editor: SectionTiptapAdapter['editor']) => editor.chain().setTextAlign('left').run() },
     { suffix: 'align-center', label: 'Centrer', icon: AlignCenter, active: state.textAlign === 'center', run: (editor: SectionTiptapAdapter['editor']) => editor.chain().setTextAlign('center').run() },
     { suffix: 'align-right', label: 'Aligner à droite', icon: AlignRight, active: state.textAlign === 'right', run: (editor: SectionTiptapAdapter['editor']) => editor.chain().setTextAlign('right').run() },
@@ -260,23 +292,30 @@ function renderAnchorCardEditor(
   cardActions: ElceCardEditorActions,
   close: () => void,
   editorActions: SectionEditorActions,
-  anchorPartId: string | null,
+  anchor: Readonly<{ partId: string; placement: CardAnchorPlacement }> | null,
+  onPlacementChange: (width: CardAnchorWidth, side: CardAnchorSide) => void,
+  onEditorBlockSizeChange: (bdcId: string, blockSize: number) => void,
   onOpenAppearanceTarget: (target: AppearanceTarget, triggerId: string) => void,
   textFieldAttributes?: Readonly<Record<string, string>>,
 ): RemixNode {
-  const positionStyle = anchorPartId === null ? undefined : {
+  const positionStyle = anchor === null ? undefined : {
     position: 'absolute' as const,
-    positionAnchor: anchorNameFor(`${anchorPartId}-editor-frame`),
+    positionAnchor: anchorNameFor(`${anchor.partId}-editor-frame`),
     insetInlineStart: 'anchor(left)',
     insetBlockStart: 'anchor(top)',
     marginBlockStart: 0,
     zIndex: 4,
   }
+  const cardPositionStyle = positionStyle === undefined ? undefined : {
+    ...positionStyle,
+    insetInlineStart: '0',
+    insetInlineEnd: '0',
+  }
   if (card.type === STATISTICAL_GRAPH_BDC_TYPE && card.statisticalGraph != null) {
     return <section
       id={`elce-anchor-card-editor-${card.id}`}
       className="elce-anchor-card-editor"
-      data-anchor-part-id={anchorPartId ?? undefined}
+      data-anchor-part-id={anchor?.partId}
       style={positionStyle}
       aria-label="Modifier le graphe ancré"
     >
@@ -284,6 +323,16 @@ function renderAnchorCardEditor(
         id={`elce-anchor-card-editor-header-${card.id}`}
         className="elce-anchor-card-editor__header"
       >
+        <button
+          id={`elce-anchor-card-editor-close-${card.id}`}
+          className="elce-bdc-icon-button elce-anchor-card-editor__view-mode"
+          type="button"
+          aria-label="Passer en mode vue"
+          title="Mode vue"
+          mix={on<HTMLButtonElement, 'click'>('click', close)}
+        >
+          {renderLucideIcon(Settings2, `elce-anchor-card-editor-close-icon-${card.id}`)}
+        </button>
         <h3
           id={`elce-anchor-card-editor-title-${card.id}`}
         >
@@ -296,16 +345,6 @@ function renderAnchorCardEditor(
           onOpen: onOpenAppearanceTarget,
           className: 'elce-appearance-trigger elce-anchor-appearance-trigger',
         })}
-        <button
-          id={`elce-anchor-card-editor-close-${card.id}`}
-          className="elce-bdc-icon-button"
-          type="button"
-          aria-label="Fermer l’édition du graphe"
-          title="Fermer"
-          mix={on<HTMLButtonElement, 'click'>('click', close)}
-        >
-          {renderLucideIcon(X, `elce-anchor-card-editor-close-icon-${card.id}`)}
-        </button>
       </header>
       {renderRemixStatisticalGraphEditor(
         card,
@@ -317,17 +356,38 @@ function renderAnchorCardEditor(
       )}
     </section>
   }
+  const canConfigureMediaPlacement = card.card !== null && card.card !== undefined && (
+    cardLayoutAcceptsMedia(card.presetId as CardLayoutId, MEDIA_TYPE.IMAGE)
+    || cardLayoutAcceptsMedia(card.presetId as CardLayoutId, MEDIA_TYPE.VIDEO)
+  )
   return <section
     id={`elce-anchor-card-editor-${card.id}`}
     className="elce-anchor-card-editor"
-    data-anchor-part-id={anchorPartId ?? undefined}
-    style={positionStyle}
+    data-anchor-kind="card"
+    data-anchor-part-id={anchor?.partId}
+    style={cardPositionStyle}
+    mix={anchor === null ? undefined : ref((element, signal) => {
+      if (!(element instanceof HTMLElement)) return
+      const observer = new ResizeObserver(() => onEditorBlockSizeChange(card.id, element.getBoundingClientRect().height))
+      observer.observe(element)
+      signal.addEventListener('abort', () => observer.disconnect(), { once: true })
+    })}
     aria-label="Modifier la carte ancrée"
   >
     <header
       id={`elce-anchor-card-editor-header-${card.id}`}
       className="elce-anchor-card-editor__header"
     >
+      <button
+        id={`elce-anchor-card-editor-close-${card.id}`}
+        className="elce-bdc-icon-button elce-anchor-card-editor__view-mode"
+        type="button"
+        aria-label="Passer en mode vue"
+        title="Mode vue"
+        mix={on<HTMLButtonElement, 'click'>('click', close)}
+      >
+        {renderLucideIcon(Settings2, `elce-anchor-card-editor-close-icon-${card.id}`)}
+      </button>
       <h3
         id={`elce-anchor-card-editor-title-${card.id}`}
       >
@@ -340,16 +400,6 @@ function renderAnchorCardEditor(
         onOpen: onOpenAppearanceTarget,
         className: 'elce-appearance-trigger elce-anchor-appearance-trigger',
       })}
-      <button
-        id={`elce-anchor-card-editor-close-${card.id}`}
-        className="elce-bdc-icon-button"
-        type="button"
-        aria-label="Fermer l’édition de la carte"
-        title="Fermer"
-        mix={on<HTMLButtonElement, 'click'>('click', close)}
-      >
-        {renderLucideIcon(X, `elce-anchor-card-editor-close-icon-${card.id}`)}
-      </button>
     </header>
     <RemixCardEditorFields
       bdc={card}
@@ -358,18 +408,119 @@ function renderAnchorCardEditor(
       textFieldAttributes={textFieldAttributes}
       idPrefix="elce-anchor-card"
       imageAspectRatio={null}
+      presentationSettingsBelowToolbar={anchor !== null && canConfigureMediaPlacement}
+      belowToolbarContent={anchor === null || !canConfigureMediaPlacement
+        ? null
+        : renderAnchorCardPlacement(card.id, anchor.placement, onPlacementChange)}
     />
   </section>
 }
 
-/** Finds the selected BDC's saved insertion point in the Section rich-text tree. */
-function findAnchorPartId(nodes: readonly RichTextNode[], bdcId: string): string | null {
+/** Renders placement controls as properties of the selected anchored Card. */
+function renderAnchorCardPlacement(
+  bdcId: string,
+  placement: CardAnchorPlacement,
+  onChange: (width: CardAnchorWidth, side: CardAnchorSide) => void,
+): RemixNode {
+  const id = `elce-anchor-card-placement-${bdcId}`
+  const widthOptions = [
+    { value: CARD_ANCHOR_WIDTH.FULL, label: 'Pleine largeur' },
+    { value: CARD_ANCHOR_WIDTH.HALF, label: 'Moitié' },
+    { value: CARD_ANCHOR_WIDTH.THIRD, label: 'Tiers' },
+    { value: CARD_ANCHOR_WIDTH.QUARTER, label: 'Quart' },
+  ] as const
+  const widthStep = widthOptions.findIndex(({ value }) => value === placement.width)
+  return <div
+    id={id}
+    className="elce-anchor-card-placement"
+    aria-label="Placement de la carte"
+  >
+    <label
+      id={`${id}-width-field`}
+      className="elce-anchor-card-placement__field elce-anchor-card-placement__width-field"
+    >
+      <span id={`${id}-width-label`}>Taille</span>
+      <div
+        id={`${id}-width-control`}
+        className="elce-anchor-card-placement__width-control"
+      >
+        <input
+          id={`${id}-width`}
+          type="range"
+          min="0"
+          max={widthOptions.length - 1}
+          step="1"
+          value={widthStep}
+          aria-label="Taille"
+          aria-valuetext={widthOptions[widthStep]?.label}
+          mix={on<HTMLInputElement, 'input'>('input', (event) => onChange(
+            widthOptions[event.currentTarget.valueAsNumber]?.value ?? CARD_ANCHOR_WIDTH.FULL,
+            placement.side,
+          ))}
+        />
+        <div
+          id={`${id}-width-steps`}
+          className="elce-anchor-card-placement__width-steps"
+          aria-hidden="true"
+        >
+          {widthOptions.map(({ value, label }) => <span
+            id={`${id}-width-step-${value}`}
+            key={value}
+          >
+            {label}
+          </span>)}
+        </div>
+      </div>
+    </label>
+    <div
+      id={`${id}-side-field`}
+      className="elce-anchor-card-placement__field elce-anchor-card-placement__side-field"
+    >
+      <span id={`${id}-side-label`}>Position</span>
+      <div
+        id={`${id}-side`}
+        className="elce-anchor-card-placement__side-options"
+        role="group"
+        aria-labelledby={`${id}-side-label`}
+      >
+        {[CARD_ANCHOR_SIDE.LEFT, CARD_ANCHOR_SIDE.RIGHT].map((value) => <button
+          id={`${id}-side-option-${value}`}
+          key={value}
+          className="elce-bdc-icon-button elce-anchor-card-placement__side-option"
+          type="button"
+          aria-label={`Placer à ${value === CARD_ANCHOR_SIDE.LEFT ? 'gauche' : 'droite'}`}
+          title={value === CARD_ANCHOR_SIDE.LEFT ? 'Gauche' : 'Droite'}
+          aria-pressed={value === placement.side}
+          disabled={placement.width === CARD_ANCHOR_WIDTH.FULL}
+          mix={on<HTMLButtonElement, 'click'>('click', () => onChange(placement.width, value))}
+        >
+          {renderLucideIcon(
+            value === CARD_ANCHOR_SIDE.LEFT ? PanelLeft : PanelRight,
+            `${id}-side-icon-${value}`,
+          )}
+        </button>)}
+      </div>
+    </div>
+  </div>
+}
+
+/** Finds the selected anchor's saved identity and placement in Section content. */
+function findAnchorData(
+  nodes: readonly RichTextNode[],
+  bdcId: string,
+): Readonly<{ partId: string; placement: CardAnchorPlacement }> | null {
   for (const node of nodes) {
     if (node.type === ANCHOR.NODE_NAME && node.attrs?.bdcId === bdcId && typeof node.attrs.partId === 'string') {
-      return node.attrs.partId
+      return {
+        partId: node.attrs.partId,
+        placement: {
+          width: cardAnchorWidthFrom(node.attrs.placementWidth ?? DEFAULT_CARD_ANCHOR_PLACEMENT.width),
+          side: cardAnchorSideFrom(node.attrs.placementSide ?? DEFAULT_CARD_ANCHOR_PLACEMENT.side),
+        },
+      }
     }
-    const nestedPartId = node.content === undefined ? null : findAnchorPartId(node.content, bdcId)
-    if (nestedPartId !== null) return nestedPartId
+    const nestedAnchor = node.content === undefined ? null : findAnchorData(node.content, bdcId)
+    if (nestedAnchor !== null) return nestedAnchor
   }
   return null
 }

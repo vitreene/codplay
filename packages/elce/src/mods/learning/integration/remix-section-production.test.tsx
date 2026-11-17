@@ -426,8 +426,8 @@ describe('Remix production Section editor', () => {
     expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' })
     expect((scrollIntoView.mock.contexts[0] as HTMLElement).id).toBe(`elce-anchor-card-editor-${anchorCard.id}`)
     expect((rendered.$(`#elce-anchor-card-card-layout-${anchorCard.id}`) as HTMLSelectElement).value).toBe('photo-basic')
-    expect((rendered.$(`#elce-anchor-card-image-fit-${anchorCard.id}`) as HTMLSelectElement).value).toBe('cover')
-    expect(rendered.$(`#elce-anchor-card-editor-close-icon-${anchorCard.id}`)?.classList.contains('lucide-x')).toBe(true)
+    expect(rendered.$(`#elce-anchor-card-image-fit-option-${anchorCard.id}-cover`)?.getAttribute('aria-pressed')).toBe('true')
+    expect(rendered.$(`#elce-anchor-card-editor-close-icon-${anchorCard.id}`)?.classList.contains('lucide-settings-2')).toBe(true)
     expect(rendered.$(`#elce-anchor-card-media-clear-icon-${anchorCard.id}`)?.classList.contains('lucide-trash-2')).toBe(true)
 
     const subscription = subscribeSpy.mock.results[0]?.value

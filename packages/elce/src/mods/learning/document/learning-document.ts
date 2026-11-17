@@ -6,7 +6,7 @@ import { migrateLegacyCarouselCueDurations } from '../../../resources/bdcs/carou
 import type { LegacyCarouselContent } from '../../../resources/bdcs/carousel/domain/carousel-service'
 import { scenarioPageIdsInOrder } from '../organization/learning-scenario-tree'
 
-export const ELCE_DOCUMENT_VERSION = 15 as const
+export const ELCE_DOCUMENT_VERSION = 16 as const
 
 /** Owns the serializable Learning document value and its versioned codec. */
 export class LearningDocument {
@@ -52,7 +52,8 @@ export class LearningDocument {
   /** Rehydrates legacy documents, including Carousel timing and custom palette formats. */
   public static fromJSON(value: unknown): LearningDocument {
     if (!isRecord(value) || (value.version !== 7 && value.version !== 8 && value.version !== 9 && value.version !== 10
-      && value.version !== 11 && value.version !== 12 && value.version !== 13 && value.version !== 14 && value.version !== ELCE_DOCUMENT_VERSION)) {
+      && value.version !== 11 && value.version !== 12 && value.version !== 13 && value.version !== 14
+      && value.version !== 15 && value.version !== ELCE_DOCUMENT_VERSION)) {
       const version = isRecord(value) ? value.version : undefined
       throw new Error(`Version de document Elcé non supportée : ${String(version)}`)
     }
@@ -66,9 +67,12 @@ export class LearningDocument {
     const currentData = v11Data.version === 11 ? migrateV11Document(v11Data) : v11Data
     const v12Data = currentData.version === 12 ? migrateV12Document(currentData) : currentData
     const v14Data = v12Data.version === 13 ? migrateV13Document(v12Data) : v12Data
-    const data = v14Data.version === 14
+    const v15Data = v14Data.version === 14
       ? migrateV14Document(v14Data)
       : v14Data as unknown as LearningDocumentData
+    const data = v15Data.version === 15
+      ? migrateV15Document(v15Data as Record<string, unknown>)
+      : v15Data as unknown as LearningDocumentData
     return new LearningDocument(normalizeQuestionAnswerLabels(data))
   }
 }
@@ -151,15 +155,20 @@ function migrateV13Document(value: Record<string, unknown>): Record<string, unkn
 }
 
 /** Adds the optional Card-hosted List payload to the v15 document shape. */
-function migrateV14Document(value: Record<string, unknown>): LearningDocumentData {
+function migrateV14Document(value: Record<string, unknown>): Record<string, unknown> {
   return {
     ...value,
-    version: ELCE_DOCUMENT_VERSION,
+    version: 15,
     bdcs: mapRecords(value.bdcs, (bdc) => {
       if (!isRecord(bdc.card) || bdc.card.list !== undefined) return bdc
       return { ...bdc, card: { ...bdc.card, list: null } }
     }),
-  } as unknown as LearningDocumentData
+  }
+}
+
+/** Adds the standalone List BDC payload slot to the current document shape. */
+function migrateV15Document(value: Record<string, unknown>): LearningDocumentData {
+  return { ...value, version: ELCE_DOCUMENT_VERSION } as unknown as LearningDocumentData
 }
 
 /** Promotes legacy inline text tokens in the authored fields of one BDC. */

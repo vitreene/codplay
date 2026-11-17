@@ -23,6 +23,7 @@ export type DiapoSceneBuildOptions = Readonly<{
   readonly carouselSceneBuilder: ElceCarouselSceneBuilder
   readonly inlineTextSceneFeature: ResourceInlineTextSceneFeature
   readonly buildAdditionalBdc?: BuildAdditionalBdc
+  readonly evaluationQuestionMode?: boolean
 }>
 
 export interface DiapoSceneBuild {

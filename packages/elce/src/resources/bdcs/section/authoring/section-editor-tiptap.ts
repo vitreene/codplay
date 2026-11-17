@@ -3,7 +3,7 @@ import StarterKit from '@tiptap/starter-kit'
 import TextAlign from '@tiptap/extension-text-align'
 import Subscript from '@tiptap/extension-subscript'
 import Superscript from '@tiptap/extension-superscript'
-import { SECTION_EDITOR_HEADING_LEVELS } from '../section-config'
+import { SECTION_EDITOR_HEADING_LEVELS, SECTION_EDITOR_HEADING_TOOLBAR_LEVELS } from '../section-config'
 import type { RichTextDocument } from '../domain/section-types'
 import type { ElceSectionChange } from '../../../anchoring/domain/anchor-types'
 import { ELCE_ANCHOR_TRANSACTION_META } from '../../../anchoring/authoring/elce-anchor-extension'
@@ -103,7 +103,7 @@ export function sectionChangeFromTransaction(editor: Editor, transaction: { getM
 
 /** Reads every active toolbar command from the current Tiptap selection. */
 export function readSectionToolbarState(editor: Editor): SectionToolbarState {
-  const headingLevel = SECTION_EDITOR_HEADING_LEVELS.find((level) => editor.isActive('heading', { level })) ?? null
+  const headingLevel = SECTION_EDITOR_HEADING_TOOLBAR_LEVELS.find((level) => editor.isActive('heading', { level })) ?? null
   return {
     bold: editor.isActive('bold'),
     italic: editor.isActive('italic'),

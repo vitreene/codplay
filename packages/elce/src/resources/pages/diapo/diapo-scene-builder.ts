@@ -151,6 +151,7 @@ export function buildDiapoScene(
           PAGE_FINISHED_EVENT,
           { pageId: page.id },
           options.inlineTextSceneFeature,
+          options.evaluationQuestionMode,
         )
         childStories = { [questionStory.id]: questionStory }
         const resetEventName = QUESTION_EVENTS.RESET

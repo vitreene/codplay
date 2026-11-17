@@ -172,6 +172,11 @@ complet du Graphe dans `content_json` ; les tables `graph_categories`,
 les tables `questions` et `question_answers`. Les colonnes `summary_json` et
 `profile_json` enregistrent les réglages du Sommaire et du profil. La table
 `project_test_states` conserve séparément le JSON de test auteur et sa révision.
+Les détails des BDC Liste sont stockés dans `list_bdcs`. La migration
+`20261117120000_backfill_list_bdc_payloads` récupère le payload des anciennes
+Listes référencées qui n’ont pas encore de détail dédié, depuis le
+`cards.list_json` de leur Carte parente, sans supprimer ni modifier cette valeur
+historique.
 Les colonnes `appearance_json` de `projects`, `pages` et `content_blocks`
 enregistrent les réglages d’apparence facultatifs correspondants. La migration
 `20261024190000_flatten_demo5_local_appearance_presets` convertit les presets

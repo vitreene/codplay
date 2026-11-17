@@ -5,6 +5,7 @@ import type { ProfileConstraint, ProfileProperty, ReadingConstraint, SummarySett
 import type { ProjectTestState } from './learning-test-state-types'
 import type { SummaryEntry } from '../organization/reading/learning-summary-scene-builder'
 import type { ScenarioEntry } from '../organization/learning-scenario-entry-types'
+import type { EvaluationResultAction } from '../evaluation/learning-evaluation-config'
 
 export type ElceSceneKey =
   | typeof ELCE_SCENARIO.LAYOUT_SCENE
@@ -50,6 +51,10 @@ export type ElceRuntimeData = Readonly<{
   questionBdcByPage: Readonly<Record<string, string>>
   previewStartPageId: string
   evaluationResultPageIds: readonly string[]
+  evaluationResultActions: Readonly<Record<string, Readonly<{
+    success: EvaluationResultAction | null
+    failure: EvaluationResultAction | null
+  }>>>
   chapterIds: readonly string[]
   scenarioEntries: readonly ScenarioEntry[]
   pages: Readonly<Record<string, Readonly<{ chapterId: string | null; bdcIds: readonly string[] }>>>

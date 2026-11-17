@@ -101,9 +101,6 @@ export function renderLearningContentCatalogPanel(props: LearningContentCatalogP
       aria-labelledby="elce-side-panel-tab-variables"
       hidden={props.sidePanelTab !== 'variables'}
     >
-      <header id="elce-variables-heading" className="elce-properties-heading">
-        <h1 id="elce-variables-title">Variables</h1>
-      </header>
       {profileTokenTargetId === null
         ? <p id="elce-variables-empty" className="elce-muted">
           Sélectionner un champ de texte pour afficher ses variables.
@@ -136,9 +133,9 @@ export function renderLearningContentCatalogPanel(props: LearningContentCatalogP
 function rightPanelLabelId(tab: LearningContentCatalogPanelProps['sidePanelTab']): string {
   switch (tab) {
     case 'clipboard':
-      return 'elce-clipboard-title'
+      return 'elce-side-panel-tab-clipboard'
     case 'variables':
-      return 'elce-variables-title'
+      return 'elce-side-panel-tab-variables'
     case 'style':
       return 'elce-appearance-title'
   }

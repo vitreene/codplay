@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { BDC_TYPE, DEFAULT_PRESET_ID, PAGE_TYPE } from '../learning-definition'
 import { CAROUSEL_PLAYBACK_MODE } from '../../../resources/bdcs/carousel/carousel-config'
 import { CHAPTER_TYPE } from '../organization/learning-organization-config'
+import { EVALUATION_RESULT_ACTION } from '../evaluation/learning-evaluation-config'
 import { ELCE_EVENTS } from './learning-reading-events'
 import { PAGE_LOCATION } from '../organization/learning-page-placement'
 import { QUESTION_TYPE } from '../../../resources/bdcs/question/question-config'
@@ -1926,6 +1927,83 @@ describe('Elcé player composition', () => {
     expect(resultCard?.querySelector('.elce-evaluation-result__branch--success')).toBeNull()
     expect(resultCard?.closest('.elce-flux-article')).not.toBeNull()
     expect(resultCard?.textContent).toContain('Évaluation à reprendre.')
+  })
+
+  it('retries and replays an Evaluation through its configured Result actions', async () => {
+    const pendingFrames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      pendingFrames.push(callback)
+      return pendingFrames.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    vi.stubGlobal('IntersectionObserver', ControlledIntersectionObserver)
+    const fixture = createEvaluationQuestionPages()
+    const documentModel = applyDocumentCommand(fixture.documentModel, {
+      type: 'bdc.evaluation-result.update',
+      bdcId: 'bdc-result-g',
+      evaluationResult: {
+        success: { message: 'Évaluation réussie.', action: EVALUATION_RESULT_ACTION.REPLAY },
+        failure: { message: 'Évaluation à reprendre.', action: EVALUATION_RESULT_ACTION.RETRY },
+      },
+    })
+    const stage = document.createElement('div')
+    document.body.append(stage)
+    composition = new LearningPlayer({ stage, document: documentModel })
+    await composition.initialize()
+    await flushCompositionFrames(pendingFrames)
+
+    const finishCurrentPage = async (pageId: string) => {
+      const marker = stage.querySelector(`#${pageId}-bottom-marker`)
+      const observer = ControlledIntersectionObserver.instances.find((candidate) => candidate.targets.has(marker as Element))
+      observer?.deliver({ target: marker as Element, intersectionRatio: 1, isIntersecting: true })
+      await flushCompositionFrames(pendingFrames)
+    }
+    const moveNext = async () => {
+      stage.querySelector<HTMLButtonElement>('.elce-player-navigation__button--next')?.click()
+      await flushCompositionFrames(pendingFrames)
+    }
+
+    await finishCurrentPage('page-a')
+    await moveNext()
+    expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Page F')
+    const inputs = Array.from(stage.querySelectorAll<HTMLInputElement>('.elce-card--question input[type="radio"]'))
+    const validateButton = stage.querySelector<HTMLButtonElement>('.elce-question-validate')
+    expect(inputs).toHaveLength(2)
+    inputs[1]?.click()
+    await flushCompositionFrames(pendingFrames)
+    validateButton?.click()
+    await flushCompositionFrames(pendingFrames)
+    expect(inputs.every((input) => input.disabled)).toBe(true)
+    expectQuestionCorrectionHidden(stage)
+    expect(stage.querySelector('.elce-question-feedback')?.hasAttribute('hidden')).toBe(true)
+
+    await finishCurrentPage(fixture.pageFId)
+    await moveNext()
+    expect(stage.querySelector('.elce-evaluation-result__branch--failure')).not.toBeNull()
+    stage.querySelector<HTMLButtonElement>('.elce-evaluation-result__branch--failure button')?.click()
+    await flushCompositionFrames(pendingFrames)
+    expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Page F')
+    expect(Array.from(stage.querySelectorAll<HTMLInputElement>('.elce-card--question input')).every((input) => !input.disabled)).toBe(true)
+    expectQuestionCorrectionHidden(stage)
+
+    const questionPage = documentModel.pages.find((page) => page.id === fixture.pageFId)
+    const question = documentModel.bdcs.find((bdc) => bdc.type === BDC_TYPE.QUESTION && questionPage?.bdcIds.includes(bdc.id))?.question
+    const correctAnswerId = question?.answers.find((answer) => answer.correct)?.id
+    const correctInput = Array.from(stage.querySelectorAll<HTMLInputElement>('.elce-card--question input'))
+      .find((input) => input.value === correctAnswerId)
+    correctInput?.click()
+    await flushCompositionFrames(pendingFrames)
+    stage.querySelector<HTMLButtonElement>('.elce-question-validate')?.click()
+    await flushCompositionFrames(pendingFrames)
+    expectQuestionCorrectionHidden(stage)
+    await finishCurrentPage(fixture.pageFId)
+    await moveNext()
+    expect(stage.querySelector('.elce-evaluation-result__branch--success')).not.toBeNull()
+    stage.querySelector<HTMLButtonElement>('.elce-evaluation-result__branch--success button')?.click()
+    await flushCompositionFrames(pendingFrames)
+    expect(stage.querySelector('.elce-player-title')?.textContent).toBe('Page F')
+    expect(stage.querySelector('.elce-question-feedback')?.textContent).toContain('Bonne réponse.')
+    expect(stage.querySelector('.input__correction-icon.is-correct')).not.toBeNull()
   })
 
   it('validates a wrong Question answer in CodPlay, then requires scroll-end before Next', async () => {
