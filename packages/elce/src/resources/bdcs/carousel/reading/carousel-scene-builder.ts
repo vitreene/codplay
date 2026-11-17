@@ -29,9 +29,11 @@ import { ELCE_CAROUSEL_RUNTIME_KEY, selectCarouselCardStrap } from '../../../../
 import { appendClassToMarkupElement, sceneClassRule, sceneStyleClassName } from '../../../../builders/scene-style/scene-style-classes'
 import { appearanceClassNameForBdc } from '../../../../builders/scene-style/appearance-class-names'
 import type { ResourceInlineTextSceneFeature } from '../../../document/resource-inline-text-feature'
+import { ListReferenceService } from '../../../list/domain/list-reference-service'
 import { resolveCarouselViewStarts } from '../domain/carousel-service'
 
 const statisticalGraphSceneBuilder = new ElceStatisticalGraphSceneBuilder()
+const listReferenceService: ListReferenceService = new ListReferenceService()
 
 type CarouselViewBuild = Readonly<{
   readonly markup: string
@@ -315,7 +317,8 @@ function buildView(
   entryTriggerMode: NonNullable<CardBdcSceneBuildInput['entryTriggerMode']>,
 ): CarouselViewBuild {
   switch (bdc.type) {
-    case CARD_BDC_TYPE:
+    case CARD_BDC_TYPE: {
+      const hasEmbeddedList = listReferenceService.referencesIn([bdc]).length > 0
       return cardBdcSceneBuilder.build({
         pageId: input.pageId,
         containerBdcId: input.bdcId,
@@ -323,9 +326,10 @@ function buildView(
         mediaSources: input.mediaSources,
         mediaTypes: input.mediaTypes,
         photoMediaRoot,
-        ...(bdc.presetId === CARD_PRESET_ID.LIST ? { entryEventName, entryTriggerMode, exitEventName, initiallyVisible } : {}),
+        ...(bdc.presetId === CARD_PRESET_ID.LIST || hasEmbeddedList ? { entryEventName, entryTriggerMode, exitEventName, initiallyVisible } : {}),
         appearanceClassNamesByTarget: input.appearanceClassNamesByTarget,
       })
+    }
     case STATISTICAL_GRAPH_BDC_TYPE:
       return {
         ...statisticalGraphSceneBuilder.build(

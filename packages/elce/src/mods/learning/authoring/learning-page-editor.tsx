@@ -112,7 +112,10 @@ export function LearningPageEditor(handle: Handle<LearningPageEditorProps>) {
       if (page !== undefined) {
         for (const bdc of current.view.selectedPageBdcs) {
           if (bdc.type === BDC_TYPE.SECTION && bdc.section !== null) {
-            sectionSession.updateSection(bdc.id, bdc.section)
+            sectionSession.updateSection(bdc.id, bdc.section, new Map(nextView.documentModel.bdcs.flatMap((candidate) =>
+              candidate.type === BDC_TYPE.LIST && candidate.list != null && candidate.parentBdcId === bdc.id
+                ? [[candidate.id, candidate.list] as const]
+                : [])))
           }
         }
       }
@@ -229,10 +232,6 @@ function renderPageEditor(view: EditorViewModel, actions: LearningEditorFacade, 
     if (page !== undefined && availability.canCreateStandaloneCard) actions.createStandaloneCard(page.id)
     state.updateAddContentMenuOpen(false)
   }
-  const addListCard = (): void => {
-    if (page !== undefined && availability.canCreateStandaloneCard) actions.createStandaloneListCard(page.id)
-    state.updateAddContentMenuOpen(false)
-  }
   const addStatisticalGraph = (): void => {
     if (page !== undefined && availability.canCreateStatisticalGraph) {
       actions.createStatisticalGraph(page.id, page.bdcIds.length)
@@ -259,7 +258,6 @@ function renderPageEditor(view: EditorViewModel, actions: LearningEditorFacade, 
       renderCreateButton('elce-avatar-create', 'Ajouter un Avatar', 'Avatar', UserRound, !availability.canCreateAvatar, () => { if (page !== undefined && availability.canCreateAvatar) actions.createAvatar(page.id, page.bdcIds.length); state.updateAddContentMenuOpen(false) }),
       renderCreateButton('elce-carousel-create', 'Ajouter un bloc Carousel', 'Carousel', Images, !availability.canCreateCarousel, addCarousel),
       page === undefined ? null : renderCreateButton('elce-card-create', 'Ajouter une carte', 'Carte', RectangleHorizontal, !availability.canCreateStandaloneCard, addStandaloneCard),
-      page === undefined ? null : renderCreateButton('elce-list-card-create', 'Ajouter une carte Liste à points', 'Liste à points', List, !availability.canCreateStandaloneCard, addListCard),
       page === undefined ? null : renderCreateButton('elce-statistical-graph-create', 'Ajouter un graphe', 'Graphe', Activity, !availability.canCreateStatisticalGraph, addStatisticalGraph),
       availability.canCreateEvaluationResult
         ? renderCreateButton('elce-evaluation-result-create', 'Ajouter un bloc résultat', 'Résultat', BadgeCheck, false, addEvaluationResult)
@@ -401,6 +399,11 @@ function renderBdcEditor(
     const candidate = view.documentModel.pages.find((entry) => entry.id === pageId)
     return candidate === undefined ? [] : [candidate]
   })
+  const listBdcs = view.documentModel.bdcs.filter((candidate) => candidate.type === BDC_TYPE.LIST)
+  const listBdcContents = Object.fromEntries(view.documentModel.bdcs.flatMap((candidate) =>
+    candidate.type === BDC_TYPE.LIST && candidate.list != null && candidate.parentBdcId === bdc.id
+      ? [[candidate.id, candidate.list] as const]
+      : []))
   switch (bdc.type) {
     case BDC_TYPE.AVATAR:
       return bdc.avatar == null ? null : <RemixAvatarEditor
@@ -417,7 +420,10 @@ function renderBdcEditor(
         onEditAnchorBdc: state.setEditingAnchorBdc,
         onCloseAnchorBdc: () => state.setEditingAnchorBdc(null),
         onOpenAppearanceTarget: state.onOpenAppearanceTarget,
-        textFeature: createLearningSectionTextFeature(view.documentModel.data.profile.properties, linkablePages),
+        textFeature: createLearningSectionTextFeature(view.documentModel.data.profile.properties, linkablePages, {
+          onInsertListBdc: (listBdcId, content, markup, list) => actions.insertListBdc(bdc.id, listBdcId, content, list, markup),
+          onUpdateListBdc: (listBdcId, list) => actions.updateListBdc(listBdcId, list),
+        }),
         textFieldFeature,
         textFieldAttributes: LEARNING_PROFILE_TEXT_FIELD_ATTRIBUTES,
         presetBuilder: state.presetBuilder,
@@ -488,6 +494,7 @@ function renderBdcEditor(
         mediaById={view.mediaById}
         textFieldAttributes={LEARNING_PROFILE_TEXT_FIELD_ATTRIBUTES}
         textFieldFeature={textFieldFeature}
+        listBdcs={listBdcs}
         onOpenAppearanceTarget={state.onOpenAppearanceTarget}
         createStatisticalGraphActions={(childBdcId, graph) => actions.createStatisticalGraphEditorActions(childBdcId, graph)}
         actions={actions.createCarouselEditorActions(
@@ -507,6 +514,7 @@ function renderBdcEditor(
         state.onOpenAppearanceTarget,
         LEARNING_PROFILE_TEXT_FIELD_ATTRIBUTES,
         textFieldFeature,
+        listBdcContents,
       )
     case BDC_TYPE.STATISTICAL_GRAPH:
       if (bdc.statisticalGraph == null) return null

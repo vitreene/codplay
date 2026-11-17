@@ -1,4 +1,4 @@
-import { ImagePlus, Trash2 } from 'lucide-static'
+import { ImagePlus, Maximize2, Minimize2, Trash2 } from 'lucide-static'
 import { on, type Handle, type RemixNode } from 'remix/component'
 
 import {
@@ -25,6 +25,10 @@ import { renderLucideIcon } from '../../../../core/authoring/lucide-static-icon'
 import { countAuthoredTextCharacters } from '../../../../core/document/rich-text-utils'
 import { renderListEditor } from '../../../list/authoring/list-editor'
 import { createStableId } from '../../../../core/document/stable-id'
+import { ListService } from '../../../list/domain/list-service'
+import type { ListContent } from '../../../list/domain/list-types'
+
+const listService = new ListService()
 
 export interface RemixCardEditorFieldsProps {
   readonly bdc: ResourceBdc
@@ -37,14 +41,16 @@ export interface RemixCardEditorFieldsProps {
   readonly importMediaFiles?: (bdcId: BdcId, files: readonly File[]) => void
   readonly toolbarContent?: RemixNode
   readonly belowToolbarContent?: RemixNode
+  readonly presentationSettingsBelowToolbar?: boolean
   readonly toolbarEnd?: RemixNode
   readonly textFieldFeature?: ResourceTextFieldFeature
+  readonly listBdcContents?: Readonly<Record<string, ListContent>>
 }
 
 /** Renders the shared Card fields in the Remix runtime. */
 export function RemixCardEditorFields(handle: Handle<RemixCardEditorFieldsProps>) {
   return () => {
-    const { bdc, mediaById, actions, idPrefix, imageAspectRatio, allowMultipleMediaFiles, importMediaFiles, toolbarContent, belowToolbarContent, toolbarEnd, textFieldAttributes, textFieldFeature } = handle.props
+    const { bdc, mediaById, actions, idPrefix, imageAspectRatio, allowMultipleMediaFiles, importMediaFiles, toolbarContent, belowToolbarContent, presentationSettingsBelowToolbar, toolbarEnd, textFieldAttributes, textFieldFeature, listBdcContents } = handle.props
     switch (bdc.type) {
       case CARD_BDC_TYPE:
         switch (bdc.card) {
@@ -64,9 +70,11 @@ export function RemixCardEditorFields(handle: Handle<RemixCardEditorFieldsProps>
               importMediaFiles,
               toolbarContent,
               belowToolbarContent,
+              presentationSettingsBelowToolbar === true,
               toolbarEnd,
               textFieldAttributes,
               textFieldFeature,
+              listBdcContents,
             )
         }
       default:
@@ -88,10 +96,13 @@ function renderCardFields(
   importMediaFiles: RemixCardEditorFieldsProps['importMediaFiles'],
   toolbarContent: RemixCardEditorFieldsProps['toolbarContent'],
   belowToolbarContent: RemixCardEditorFieldsProps['belowToolbarContent'],
+  presentationSettingsBelowToolbar: boolean,
   toolbarEnd: RemixCardEditorFieldsProps['toolbarEnd'],
   textFieldAttributes: RemixCardEditorFieldsProps['textFieldAttributes'],
   textFieldFeature: ResourceTextFieldFeature | undefined,
+  listBdcContents?: RemixCardEditorFieldsProps['listBdcContents'],
 ): RemixNode {
+  const presentationSettings = renderCardPresentationSettings(bdcId, presetId, card, mediaById, actions, idPrefix)
   return <div
     id={`${idPrefix}-card-fields-${bdcId}`}
   >
@@ -103,12 +114,20 @@ function renderCardFields(
         renderCardLayoutSelect(bdcId, presetId, card, actions, idPrefix),
         renderCardTransitionSetting(bdcId, card, actions, idPrefix),
         toolbarContent,
-        ...renderCardPresentationSettings(bdcId, presetId, card, mediaById, actions, idPrefix),
+        ...(presentationSettingsBelowToolbar ? [] : presentationSettings),
         toolbarEnd,
       ]}
     </div>
-    {belowToolbarContent}
-    {renderCardContent(bdcId, presetId, card, mediaById, actions, idPrefix, imageAspectRatio, allowMultipleMediaFiles, importMediaFiles, textFieldAttributes, textFieldFeature)}
+    {presentationSettingsBelowToolbar
+      ? <div
+        id={`${idPrefix}-card-media-settings-${bdcId}`}
+        className="elce-anchor-card-media-settings"
+      >
+        {belowToolbarContent}
+        {presentationSettings}
+      </div>
+      : belowToolbarContent}
+    {renderCardContent(bdcId, presetId, card, mediaById, actions, idPrefix, imageAspectRatio, allowMultipleMediaFiles, importMediaFiles, textFieldAttributes, textFieldFeature, listBdcContents)}
   </div>
 }
 
@@ -187,7 +206,7 @@ function renderCardLayoutSelect(bdcId: BdcId, presetId: string, card: CardConten
       id={`${idPrefix}-card-layout-${bdcId}`}
       mix={on<HTMLSelectElement, 'change'>('change', (event) => actions.setCardLayout(bdcId, event.currentTarget.value as CardLayoutId))}
     >
-      {[...CARD_LAYOUT_OPTIONS, ...(card.list === null ? [] : [CARD_LIST_LAYOUT_OPTION])].map((option) => <option
+      {[...CARD_LAYOUT_OPTIONS, ...(card.list === null || presetId !== CARD_PRESET_ID.LIST ? [] : [CARD_LIST_LAYOUT_OPTION])].map((option) => <option
         id={`${idPrefix}-card-layout-option-${bdcId}-${option.value}`}
         key={option.value}
         value={option.value}
@@ -236,30 +255,41 @@ function renderCardPresentationSettings(
 
 /** Renders the image-fit control shared by image layouts. */
 function renderImageFitSetting(bdcId: BdcId, card: CardContent, actions: ElceCardEditorActions, idPrefix: string): RemixNode {
-  return <label
+  const imageFitIcons = {
+    [CARD_IMAGE_FIT.CONTAIN]: Minimize2,
+    [CARD_IMAGE_FIT.COVER]: Maximize2,
+  }
+  return <div
     id={`${idPrefix}-image-fit-label-${bdcId}`}
     className="elce-carousel-editor__setting elce-carousel-editor__setting--image-fit"
   >
     <span
       id={`${idPrefix}-image-fit-caption-${bdcId}`}
     >
-      Ajustement de l’image
+      Ajustement
     </span>
-    <select
+    <div
       id={`${idPrefix}-image-fit-${bdcId}`}
-      aria-label="Ajustement de l’image"
-      mix={on<HTMLSelectElement, 'change'>('change', (event) => actions.setImageFit(bdcId, event.currentTarget.value as typeof card.imageFit))}
+      className="elce-card-image-fit-options"
+      role="group"
+      aria-labelledby={`${idPrefix}-image-fit-caption-${bdcId}`}
     >
-      {CARD_IMAGE_FIT_OPTIONS.map((option) => <option
+      {CARD_IMAGE_FIT_OPTIONS.map((option) => <button
         id={`${idPrefix}-image-fit-option-${bdcId}-${option.value}`}
         key={option.value}
-        value={option.value}
-        selected={option.value === card.imageFit}
+        className="elce-bdc-icon-button elce-card-image-fit-option"
+        type="button"
+        aria-label={option.value === CARD_IMAGE_FIT.CONTAIN
+          ? 'Contenir toute l’image dans le cadre'
+          : 'Couvrir le cadre avec l’image'}
+        title={option.label}
+        aria-pressed={option.value === card.imageFit}
+        mix={on<HTMLButtonElement, 'click'>('click', () => actions.setImageFit(bdcId, option.value))}
       >
-        {option.label}
-      </option>)}
-    </select>
-  </label>
+        {renderLucideIcon(imageFitIcons[option.value], `${idPrefix}-image-fit-icon-${bdcId}-${option.value}`)}
+      </button>)}
+    </div>
+  </div>
 }
 
 /** Renders the image-position control used by the Text with image layout. */
@@ -303,10 +333,11 @@ function renderCardContent(
   importMediaFiles: RemixCardEditorFieldsProps['importMediaFiles'],
   textFieldAttributes: RemixCardEditorFieldsProps['textFieldAttributes'],
   textFieldFeature: ResourceTextFieldFeature | undefined,
+  listBdcContents?: RemixCardEditorFieldsProps['listBdcContents'],
 ): RemixNode {
   switch (presetId) {
     case CARD_PRESET_ID.TEXT_SHORT:
-      return renderShortTextFields(bdcId, card, actions, idPrefix, textFieldAttributes, textFieldFeature)
+      return renderShortTextFields(bdcId, card, actions, idPrefix, textFieldAttributes, textFieldFeature, listBdcContents)
     case CARD_PRESET_ID.LIST:
       if (card.list === null) throw new Error(`La Carte Liste ${bdcId} ne contient pas son sous-module.`)
       return <div id={`${idPrefix}-list-card-fields-${bdcId}`} className="elce-carousel-text-fields elce-card-list-editor-fields">
@@ -315,7 +346,7 @@ function renderCardContent(
           idPrefix: `${idPrefix}-card-list-${bdcId}`,
           createId: () => createStableId('list-row'),
           onChange: (list) => actions.setList(bdcId, list),
-        }))}
+        }), listBdcContents, false)}
       </div>
     case CARD_PRESET_ID.PHOTO:
       return renderCardMediaEditor(bdcId, presetId, card, mediaById, actions, idPrefix, imageAspectRatio, allowMultipleMediaFiles, importMediaFiles)
@@ -341,7 +372,7 @@ function renderCardContent(
         className={`elce-carousel-text-image-fields elce-carousel-text-image-fields--image-${card.imagePosition}`}
       >
         {renderCardMediaEditor(bdcId, presetId, card, mediaById, actions, idPrefix, imageAspectRatio, allowMultipleMediaFiles, importMediaFiles)}
-        {renderShortTextFields(bdcId, card, actions, idPrefix, textFieldAttributes, textFieldFeature)}
+        {renderShortTextFields(bdcId, card, actions, idPrefix, textFieldAttributes, textFieldFeature, listBdcContents)}
       </div>
     default:
       throw new Error(`Représentation de carte inconnue : ${presetId}`)
@@ -356,8 +387,9 @@ function renderShortTextFields(
   idPrefix: string,
   textFieldAttributes: RemixCardEditorFieldsProps['textFieldAttributes'],
   textFieldFeature: ResourceTextFieldFeature | undefined,
+  listBdcContents?: RemixCardEditorFieldsProps['listBdcContents'],
 ): RemixNode {
-  return renderCardTextFields(bdcId, card, actions, idPrefix, textFieldAttributes, textFieldFeature, false)
+  return renderCardTextFields(bdcId, card, actions, idPrefix, textFieldAttributes, textFieldFeature, false, undefined, listBdcContents)
 }
 
 /** Renders the requested shared Card text fields for Short Text and List layouts. */
@@ -370,6 +402,8 @@ function renderCardTextFields(
   textFieldFeature: ResourceTextFieldFeature | undefined,
   includeCaption: boolean,
   inlineListEditor?: RemixNode,
+  listBdcContents?: RemixCardEditorFieldsProps['listBdcContents'],
+  allowListBdc = true,
 ): RemixNode {
   const fields: readonly Readonly<{ field: CardTextField; label: string }>[] = [
     { field: 'overline', label: 'Surtitre' },
@@ -395,6 +429,8 @@ function renderCardTextFields(
           textFieldFeature,
           field === 'message',
           textFieldAttributes,
+          listBdcContents,
+          allowListBdc,
         ),
         ...(field === 'message' && inlineListEditor !== undefined ? [inlineListEditor] : []),
       ]),
@@ -418,6 +454,8 @@ function renderCardTextField(
   feature: ResourceTextFieldFeature | undefined,
   multiline: boolean,
   textFieldAttributes: RemixCardEditorFieldsProps['textFieldAttributes'],
+  listBdcContents?: RemixCardEditorFieldsProps['listBdcContents'],
+  allowListBdc = true,
 ): RemixNode {
   const id = `${idPrefix}-${field}-${bdcId}`
   const maxLength = field === 'message' ? CAROUSEL_CONFIG.textShortMessageMaxLength : undefined
@@ -430,6 +468,19 @@ function renderCardTextField(
       placeholder: label,
       multiline,
       allowBoldItalic: field === 'message',
+      allowListBdc: allowListBdc && field === 'message' && actions.insertListBdc !== undefined,
+      ...(allowListBdc && field === 'message' && actions.insertListBdc !== undefined ? {
+        onInsertListBdc: (listBdcId, message) => actions.insertListBdc?.(
+          bdcId,
+          listBdcId,
+          message,
+          listService.createDefault(createStableId('list-row')),
+        ),
+      } : {}),
+      ...(allowListBdc && field === 'message' && listBdcContents !== undefined ? {
+        listBdcContents,
+        onUpdateListBdc: (listBdcId, list) => actions.updateListBdc?.(listBdcId, list),
+      } : {}),
       maxLength,
       onChange: update,
     })

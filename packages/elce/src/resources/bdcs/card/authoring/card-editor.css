@@ -31,3 +31,20 @@
   background: #fff;
   cursor: pointer;
 }
+
+.elce-card-image-fit-options {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.elce-card-image-fit-options > .elce-card-image-fit-option > .elce-ui-icon {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.elce-card-image-fit-option[aria-pressed='true'] {
+  color: #fffdf8;
+  background: #52776f;
+  border-color: #52776f;
+}

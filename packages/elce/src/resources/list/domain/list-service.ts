@@ -1,4 +1,5 @@
 import type { ListContent, ListPrefix, ListRow } from './list-types'
+import { CAROUSEL_TRANSITION_OPTIONS } from '../../revelation/revelation-config'
 
 /** Owns List defaults, immutable row operations and module invariants. */
 export class ListService {
@@ -7,6 +8,7 @@ export class ListService {
     return {
       rows: [{ id: rowId, text: '', delayMs: null }],
       prefix: 'disc',
+      transition: 'fade',
       intervalMs: 0,
       start: 1,
       customMarker: '•',
@@ -14,7 +16,7 @@ export class ListService {
   }
 
   /** Changes a List-wide presentation value without altering rows. */
-  public setPresentation(list: ListContent, values: Partial<Pick<ListContent, 'prefix' | 'intervalMs' | 'start' | 'customMarker'>>): ListContent {
+  public setPresentation(list: ListContent, values: Partial<Pick<ListContent, 'prefix' | 'transition' | 'intervalMs' | 'start' | 'customMarker'>>): ListContent {
     return { ...list, ...values }
   }
 
@@ -71,6 +73,9 @@ export class ListService {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Objet Liste attendu.')
     const list = value as Record<string, unknown>
     if (typeof list.prefix !== 'string' || !prefixes.includes(list.prefix as ListPrefix)) throw new Error(`Préfixe de Liste inconnu : ${String(list.prefix)}`)
+    if (typeof list.transition !== 'string' || !CAROUSEL_TRANSITION_OPTIONS.some((option) => option.value === list.transition)) {
+      throw new Error(`Transition de Liste inconnue : ${String(list.transition)}`)
+    }
     if (typeof list.intervalMs !== 'number' || !Number.isFinite(list.intervalMs) || list.intervalMs < 0) {
       throw new Error('L’intervalle de Liste doit être positif ou nul.')
     }

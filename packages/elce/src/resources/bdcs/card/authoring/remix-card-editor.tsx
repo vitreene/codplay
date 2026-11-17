@@ -20,6 +20,7 @@ export function renderRemixCardEditor(
   onOpenAppearanceTarget?: (target: AppearanceTarget, triggerId: string) => void,
   textFieldAttributes?: Readonly<Record<string, string>>,
   textFieldFeature?: ResourceTextFieldFeature,
+  listBdcContents?: Readonly<Record<string, import('../../../list/domain/list-types').ListContent>>,
 ): RemixNode {
   if (bdc.type !== 'card' || bdc.card == null) return null
   return <section
@@ -67,6 +68,7 @@ export function renderRemixCardEditor(
       imageAspectRatio={null}
       textFieldAttributes={textFieldAttributes}
       textFieldFeature={textFieldFeature}
+      listBdcContents={listBdcContents}
     />
   </section>
 }

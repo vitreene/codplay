@@ -9,6 +9,7 @@ import { FLUX_PAGE_TYPE } from '../../resources/pages/flux/flux-config'
 import { EVALUATION_RESULT_BDC_TYPE, EVALUATION_RESULT_PRESET_ID } from './evaluation/learning-evaluation-config'
 
 import { AVATAR_BDC_TYPE, AVATAR_PRESET_ID } from '../../resources/bdcs/avatar/avatar-config'
+import { LIST_BDC_TYPE, LIST_PRESET_ID } from '../../resources/list/list-config'
 
 export const BDC_TYPE = {
   AVATAR: AVATAR_BDC_TYPE,
@@ -19,6 +20,7 @@ export const BDC_TYPE = {
   CARD: CARD_BDC_TYPE,
   STATISTICAL_GRAPH: STATISTICAL_GRAPH_BDC_TYPE,
   SUMMARY: SUMMARY_BDC_TYPE,
+  LIST: LIST_BDC_TYPE,
 } as const
 
 export const PAGE_TYPE = {
@@ -40,6 +42,7 @@ export const DEFAULT_PRESET_ID = {
   STATISTICAL_GRAPH_ABOVE_TEXT: STATISTICAL_GRAPH_PRESET_ID.ABOVE_TEXT,
   STATISTICAL_GRAPH_SIDE_BY_SIDE: STATISTICAL_GRAPH_PRESET_ID.SIDE_BY_SIDE,
   SUMMARY: SUMMARY_PRESET_ID,
+  LIST: LIST_PRESET_ID,
 } as const
 
 export const LEARNING_DEFINITION = {

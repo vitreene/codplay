@@ -229,20 +229,19 @@ function leaveScenarioTarget(event: DragEvent, targetId: string, props: Scenario
   if (props.workspace.dropTarget === targetId) props.onSetDropTarget(null)
 }
 
-/** Renders the existing page catalog list for the floating catalog palette. */
+/** Renders the available page drop list inside the clipboard tab. */
 export function renderScenarioPageCatalog(props: ScenarioPanelProps): RemixNode {
   const { view } = props.workspace
   const selectedPageId = view.selectedChapter === undefined ? view.selectedPage?.id : undefined
   return <section
     id="elce-catalog-pages"
     className="elce-outline-group"
+    aria-label="Pages disponibles"
   >
-    <h2 id="elce-catalog-pages-title">Catalogue de pages</h2>
     {renderPageList(
       props,
       'elce-catalog-page-list',
       view.documentModel.data.catalogPageIds,
-      'Déposer une page ici',
       () => ({ kind: PAGE_LOCATION.CATALOG }),
       selectedPageId,
     )}
@@ -381,7 +380,6 @@ function renderPageList(
   props: ScenarioPanelProps,
   id: string,
   pageIds: readonly string[],
-  emptyLabel: string,
   placementAt: (index: number) => PagePlacement,
   selectedPageId: string | undefined,
   showDelete = true,
@@ -403,7 +401,6 @@ function renderPageList(
     onDragOverPage,
     onDragLeave,
     (event) => onDropPage(event, placementAt(pageIds.length)),
-    pageIds.length === 0 ? emptyLabel : undefined,
   ))
   return <ul
     id={id}

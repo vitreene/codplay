@@ -2,6 +2,7 @@ import { applyAvatarCommand } from './operations/avatar-commands'
 import type { LearningDocument } from '../document/learning-document'
 import type { LearningDocumentCommand } from './learning-document-command-types'
 import type { LearningCommandResourceServices } from './learning-command-resource-services'
+import { insertListBdc, updateListBdc } from './operations/list-commands'
 import {
   createBdc,
   deleteBdc,
@@ -42,6 +43,10 @@ export class LearningBdcCommandService {
   /** Applies a BDC command when this service owns its event. */
   public apply(document: LearningDocument, command: LearningDocumentCommand): LearningDocument | null {
     switch (command.type) {
+      case 'bdc.list.insert':
+        return insertListBdc(document, command, this.resources)
+      case 'bdc.list.update':
+        return updateListBdc(document, command)
       case 'bdc.create':
         return this.create(document, command)
       case 'bdc.avatar.update':

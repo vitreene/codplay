@@ -21,11 +21,32 @@ mutation documentaire.
 
 La surface Tiptap propose dans le POC :
 
-- les paragraphes et les niveaux de titre `h1` à `h6` ;
+- les paragraphes et les commandes de titre `h1` à `h3` dans la barre ; le
+  schéma Tiptap garde la lecture des niveaux `h1` à `h6` pour préserver les
+  contenus existants ;
 - gras, italique, souligné, indice et exposant ;
 - alignements gauche, centré, droite et justifié ;
 - [points de suite](./section-dot-leader-spec.md) : commande « … » appliquée
   au paragraphe entier, avec deux zones de texte et un filet extensible ;
+- insertion du BDC Liste à points par un bouton placé près de cette commande ;
+  le NodeView du bloc reste au point d’insertion et présente par défaut le rendu
+  de la Liste. Le bouton circulaire Settings2 ouvre l’éditeur Liste partagé au
+  même emplacement ; son bouton « Mode vue » revient au rendu. Un contour
+  tireté gris clair `#9da9a5` de `2px` identifie le BDC dans les deux modes ;
+  la bascule reste locale à l’éditeur et ne modifie pas le document. Le cadre
+  suit la largeur disponible du flux et ne passe pas sous une Carte ancrée qui
+  flotte à côté du texte. En mode édition, le cadre réserve `1rem` de padding ;
+  Préfixe, Départ conditionnel et Intervalle (s) restent sur une seule rangée
+  flex, qui défile horizontalement si nécessaire. Les options de Préfixe
+  montrent les marqueurs avec « Exemple ». Les durées de ligne et l’intervalle
+  sont repliés derrière Clock ; l’icône les ouvre sur leur champ numérique.
+  Après validation avec Entrée ou lorsque le focus quitte le champ, la saisie
+  se replie. Le titre de l’icône affiche alors la durée en secondes au format
+  français ; pour une ligne qui hérite de l’intervalle, le titre indique aussi
+  cette valeur héritée.
+  Les commandes Clock partagent le même bouton `1.7rem` et la même icône SVG
+  `0.75rem`, quelle que soit la taille de police héritée du libellé.
+  Ajouter une ligne utilise le même bouton carré que la poignée de réordonnancement ;
 - une barre de commandes compacte en icônes Lucide, avec `aria-label` et
   infobulle pour chaque commande. Les boutons exposent l’état actif de la
   sélection courante via Tiptap (`aria-pressed` et `data-active`) ; un titre H3

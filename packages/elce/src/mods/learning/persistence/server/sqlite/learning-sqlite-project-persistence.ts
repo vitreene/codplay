@@ -10,6 +10,7 @@ import {
 } from '../../../evaluation/learning-evaluation-config'
 import type { LearningBdc, LearningChapter, LearningDocumentData, LearningPage } from '../../../document/learning-document-types'
 import type { MediaMetadata } from '../../../../../core/document/content-document-types'
+import type { ListContent } from '../../../../../resources/list/domain/list-types'
 import { CONTENT_BLOCKS_SQLITE_SELECT, CONTENT_BLOCK_PLACEMENTS_SQLITE_SELECT, contentBlockFromSqliteRows, prepareContentBlockInsert, prepareContentBlockPlacementInsert } from '../../../../../resources/document/persistence/sqlite/content-block-queries'
 import { decodeSqliteText as decodeSqlText, encodeNullableSqliteText as nullableSerializedText } from '../../../../../resources/document/persistence/sqlite/sqlite-text-values'
 import type { SqliteQuery, SqliteRow } from '../../../../../core/persistence/sqlite/sqlite-query-types'
@@ -28,7 +29,7 @@ import { INITIAL_PROJECT_TEST_STATE, type ProjectTestState, type VersionedProjec
 import type { AppearanceSettings } from '../../../../../config/appearance/appearance-types'
 import type { ScenarioEntry } from '../../../organization/learning-scenario-entry-types'
 import { learningDocumentCommandService } from '../../../commands/learning-command-composition'
-import { LearningDocument } from '../../../document/learning-document'
+import { ELCE_DOCUMENT_VERSION, LearningDocument } from '../../../document/learning-document'
 import type { AcquireProjectEditResult, DeleteProjectResult, EditProjectResult, ProjectEditGrant, ProjectPersistence, ProjectSummary, StoredProject } from '../../../../../core/server/projects/project-persistence'
 import type {
   CreateProjectResult,
@@ -314,7 +315,7 @@ async function readStoredProject(database: ProjectDatabase, projectId: string): 
 
   const projectRow = projectRows[0]!
   const version = numberValue(projectRow, 'format_version')
-  if (version !== 7 && version !== 8 && version !== 9 && version !== 10 && version !== 11 && version !== 12 && version !== 13 && version !== 14 && version !== 15) {
+  if (version < 7 || version > ELCE_DOCUMENT_VERSION) {
     throw new Error(`Version documentaire SQLite non prise en charge : ${String(projectRow.format_version)}`)
   }
   const document = await readDocument(database, projectRow)
@@ -328,7 +329,7 @@ async function readStoredProject(database: ProjectDatabase, projectId: string): 
 async function readDocument(database: ProjectDatabase, projectRow: SqlRow): Promise<LearningDocument> {
   const projectId = stringValue(projectRow, 'project_id')
   const [chapterRows, pageRows, scenarioRows, catalogPageRows, mediaRows, blockRows, placementRows,
-    avatarRows, sectionRows, questionRows, answerRows, resultRows, carouselRows, cardRows,
+    avatarRows, listRows, sectionRows, questionRows, answerRows, resultRows, carouselRows, cardRows,
     statisticalGraphRows] = await Promise.all([
     queryRows(database, 'SELECT * FROM chapters WHERE project_id = ?', [projectId]),
     queryRows(database, 'SELECT * FROM pages WHERE project_id = ?', [projectId]),
@@ -338,6 +339,7 @@ async function readDocument(database: ProjectDatabase, projectRow: SqlRow): Prom
     queryRows(database, CONTENT_BLOCKS_SQLITE_SELECT, [projectId]),
     queryRows(database, CONTENT_BLOCK_PLACEMENTS_SQLITE_SELECT, [projectId]),
     queryRows(database, 'SELECT content_block_id, content_json FROM avatars WHERE project_id = ?', [projectId]),
+    queryRows(database, 'SELECT content_block_id, content_json FROM list_bdcs WHERE project_id = ?', [projectId]),
     queryRows(database, SECTION_SQLITE_SELECT, [projectId]),
     queryRows(database, QUESTION_SQLITE_SELECT, [projectId]),
     queryRows(database, QUESTION_ANSWERS_SQLITE_SELECT, [projectId]),
@@ -349,6 +351,7 @@ async function readDocument(database: ProjectDatabase, projectRow: SqlRow): Prom
 
   const placementsByBlock = new Map(placementRows.map((row) => [stringValue(row, 'content_block_id'), row]))
   const avatarsByBlock = new Map(avatarRows.map((row) => [stringValue(row, 'content_block_id'), row]))
+  const listsByBlock = new Map(listRows.map((row) => [stringValue(row, 'content_block_id'), row]))
   const sectionsByBlock = new Map(sectionRows.map((row) => [stringValue(row, 'content_block_id'), row]))
   const questionsByBlock = new Map(questionRows.map((row) => [stringValue(row, 'content_block_id'), row]))
   const carouselsByBlock = new Map(carouselRows.map((row) => [stringValue(row, 'content_block_id'), row]))
@@ -361,6 +364,7 @@ async function readDocument(database: ProjectDatabase, projectRow: SqlRow): Prom
     row,
     placementsByBlock,
     avatarsByBlock,
+    listsByBlock,
     sectionsByBlock,
     questionsByBlock,
     answerRows,
@@ -459,6 +463,7 @@ function bdcFromRows(
   row: SqlRow,
   placementsByBlock: ReadonlyMap<string, SqlRow>,
   avatarsByBlock: ReadonlyMap<string, SqlRow>,
+  listsByBlock: ReadonlyMap<string, SqlRow>,
   sectionsByBlock: ReadonlyMap<string, SqlRow>,
   questionsByBlock: ReadonlyMap<string, SqlRow>,
   answerRows: readonly SqlRow[],
@@ -471,6 +476,7 @@ function bdcFromRows(
   const id = stringValue(row, 'content_block_id')
   const placement = placementsByBlock.get(id) ?? {}
   const avatar = avatarsByBlock.get(id)
+  const list = listsByBlock.get(id)
   const section = sectionsByBlock.get(id)
   const question = questionsByBlock.get(id)
   const carousel = carouselsByBlock.get(id)
@@ -481,12 +487,15 @@ function bdcFromRows(
     ...contentBlockFromSqliteRows(row, placement),
     type: stringValue(row, 'content_block_type') as LearningBdc['type'],
     ...(avatar === undefined ? {} : { avatar: JSON.parse(stringValue(avatar, 'content_json')) as NonNullable<LearningBdc['avatar']> }),
+    ...(list === undefined ? {} : { list: JSON.parse(stringValue(list, 'content_json')) as ListContent }),
     section: section === undefined ? null : sectionContentFromSqliteRow(section),
     question: question === undefined ? null : questionContentFromSqliteRows(question, answerRows),
     evaluationResult: resultContentFromRows(id, resultRows),
     carousel: carousel === undefined ? null : carouselContentFromSqliteRows(carousel, allPlacementRows),
     card: card === undefined ? null : cardContentFromSqliteRow(card),
-    ...(statisticalGraph === undefined ? {} : { statisticalGraph: statisticalGraphContentFromSqliteRow(statisticalGraph) }),
+    ...(statisticalGraph === undefined
+      ? stringValue(row, 'content_block_type') === BDC_TYPE.LIST ? { statisticalGraph: null } : {}
+      : { statisticalGraph: statisticalGraphContentFromSqliteRow(statisticalGraph) }),
   }
 }
 
@@ -711,6 +720,9 @@ function normalizePlacement(document: LearningDocument, bdc: LearningBdc): Norma
 /** Inserts the detail row matching one BDC type. */
 async function insertBdcDetail(database: ProjectDatabase, projectId: string, bdc: LearningBdc): Promise<void> {
   switch (bdc.type) {
+    case BDC_TYPE.LIST:
+      await queryRows(database, 'INSERT INTO list_bdcs (project_id, content_block_id, content_json) VALUES (?, ?, ?)', [projectId, bdc.id, JSON.stringify(requireValue(bdc.list, `Liste manquante : ${bdc.id}`))])
+      return
     case BDC_TYPE.AVATAR:
       await queryRows(database, 'INSERT INTO avatars (project_id, content_block_id, content_json) VALUES (?, ?, ?)', [projectId, bdc.id, JSON.stringify(requireValue(bdc.avatar, `Avatar manquant : ${bdc.id}`))])
       return

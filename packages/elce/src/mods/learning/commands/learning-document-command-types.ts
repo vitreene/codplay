@@ -18,6 +18,8 @@ import type { AnchorCommand } from '../../../resources/anchoring/authoring/ancho
 import type { AppearanceProperty, AppearanceTarget, AppearanceTargetForProperty } from '../../../domain/appearance/appearance-target-types'
 import type { AuthoredTextValue } from '../../../core/document/rich-text-types'
 import type { SummaryBdcCommand } from '../../../resources/bdcs/summary/authoring/summary-bdc-command-types'
+import type { ListCommand } from '../../../resources/list/authoring/list-command-types'
+
 
 export type { AppearanceProperty, AppearanceTarget, AppearanceTargetForProperty } from '../../../domain/appearance/appearance-target-types'
 
@@ -51,6 +53,7 @@ export type CreatePageCommandInput = Readonly<{
 import type { AvatarCommand } from '../../../resources/bdcs/avatar/authoring/avatar-command-types'
 
 export type LearningDocumentCommand =
+  | ListCommand
   | AvatarCommand
   | Readonly<{
       type: 'chapter.create'

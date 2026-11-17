@@ -475,7 +475,7 @@ describe('Remix project application', () => {
     expect(rendered.$('#elce-work-area-title')).not.toBeNull()
     expect(rendered.$('#elce-remix-section-editor-host-bdc-section-1')).not.toBeNull()
     expect(rendered.$(`#elce-question-editor-${questionId}`)).not.toBeNull()
-    expect(rendered.$('#elce-clipboard-title')?.textContent).toBe('Presse-papiers')
+    expect(rendered.$('#elce-clipboard-title')).toBeNull()
     expect(rendered.$('#elce-catalog-palette-toggle')).toBeNull()
     expect(rendered.$('#elce-clipboard-tabpanel')).not.toBeNull()
 

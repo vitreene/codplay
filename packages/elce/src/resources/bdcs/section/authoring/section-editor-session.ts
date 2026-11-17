@@ -2,6 +2,7 @@ import type { SectionContent } from '../domain/section-types'
 import type { SectionSelection } from './section-selection-types'
 import type { SectionTiptapAdapter } from './section-editor-tiptap-adapter'
 import type { SectionToolbarState } from './section-editor-tiptap'
+import type { ListContent } from '../../../list/domain/list-types'
 
 /** Owns Section editor instances and history selections for one Remix page editor. */
 export class SectionEditorSession {
@@ -16,8 +17,8 @@ export class SectionEditorSession {
   }
 
   /** Updates mounted Section NodeViews from the latest accepted document value. */
-  public updateSection(bdcId: string, section: SectionContent): void {
-    this.adapters.get(bdcId)?.updateSection(section)
+  public updateSection(bdcId: string, section: SectionContent, listBdcContents: ReadonlyMap<string, ListContent> = new Map()): void {
+    this.adapters.get(bdcId)?.updateSection(section, listBdcContents)
   }
 
   /** Restores the history selection after its matching editor has rendered. */

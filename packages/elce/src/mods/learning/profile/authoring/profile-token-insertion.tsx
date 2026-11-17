@@ -27,8 +27,7 @@ export function renderProfileTokenInsertion(
 ): RemixNode {
   const pageLinksAllowed = targetAllowsPageLinks(targetId)
   const activeSelection = selectedLabel?.targetId === targetId ? selectedLabel : null
-  return <section id={id} className="elce-inline-text-catalog" aria-labelledby={`${id}-title`}>
-    <h2 id={`${id}-title`}>Variables et liens</h2>
+  return <section id={id} className="elce-inline-text-catalog" aria-label="Catalogue d’insertion">
     {activeSelection === null ? null : renderSelectedLabelTabs(id)}
     <section
       id={`${id}-create-panel`}

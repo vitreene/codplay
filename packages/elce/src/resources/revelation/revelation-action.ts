@@ -21,6 +21,16 @@ export function createRevelationInitialStyle(
     .map(([property, tween]) => [property, tween.to]))
 }
 
+/** Returns the starting style for a configured introduction transition. */
+export function createRevelationStartStyle(reference: RevelationTransitionRef): Record<string, string | number> {
+  const definition = REVELATION_EVENT_DEFINITIONS[reference]
+  if (definition === undefined) throw new Error(`Référence de révélation inconnue : ${reference}`)
+  const properties = definition.style?.[EVENT_ACTION.intro]
+  if (properties === undefined) return {}
+  return Object.fromEntries(Object.entries(properties)
+    .flatMap(([property, tween]) => tween.from === undefined ? [] : [[property, tween.from]]))
+}
+
 /** Builds a CodPlay action from one configured reveal transition. */
 export function createRevelationAction(
   reference: RevelationTransitionRef,

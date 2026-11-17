@@ -6,7 +6,7 @@ import type {
 } from '@codplay/sighty'
 import type { SightySceneSourceValue } from '@codplay/sighty'
 import { ELCE_EVENTS, ELCE_SCENARIO, ELCE_SCENARIO_HANDLERS } from './learning-reading-events'
-import { SCENARIO_ENTRY_KIND } from '../organization/learning-organization-config'
+import { CHAPTER_TYPE, SCENARIO_ENTRY_KIND } from '../organization/learning-organization-config'
 import {
   scenarioChapterAncestors,
   scenarioChapterIdsInOrder,
@@ -16,6 +16,7 @@ import {
 import type { LearningDocument } from '../document/learning-document'
 import { authoredTextToPlainText } from '../../../core/document/rich-text-utils'
 import { BDC_TYPE } from '../learning-definition'
+import { EVALUATION_RESULT_ACTION } from '../evaluation/learning-evaluation-config'
 import type { ScenarioEntry } from '../organization/learning-scenario-entry-types'
 import { INITIAL_PROJECT_TEST_STATE } from './learning-test-state-types'
 import { findChapter, findPage } from '../../../core/document/content-placement-service'
@@ -91,6 +92,12 @@ export class LearningScenarioBuilder {
       questionBdcByPage,
       previewStartPageId: firstPageId,
       evaluationResultPageIds: [...evaluationResultPageIds],
+      evaluationResultActions: Object.fromEntries(document.bdcs.flatMap((bdc) => bdc.evaluationResult == null
+        ? []
+        : [[bdc.id, {
+          success: bdc.evaluationResult.success.action,
+          failure: bdc.evaluationResult.failure.action,
+        }]])),
     })
     const playerSettings = editorSettingsResolver.resolvePlayer()
     const sceneCatalog: Record<string, SightySceneSourceValue> = {
@@ -166,6 +173,7 @@ export class LearningScenarioBuilder {
     questionBdcByPage: Readonly<Record<string, string>>
     previewStartPageId: string
     evaluationResultPageIds: readonly string[]
+    evaluationResultActions: ElceRuntimeData['evaluationResultActions']
   }>): ElceRuntimeData {
     const { document } = input
     return {
@@ -178,6 +186,7 @@ export class LearningScenarioBuilder {
       questionBdcByPage: input.questionBdcByPage,
       previewStartPageId: input.previewStartPageId,
       evaluationResultPageIds: input.evaluationResultPageIds,
+      evaluationResultActions: input.evaluationResultActions,
       chapterIds: scenarioChapterIdsInOrder(document.data),
       scenarioEntries: document.data.scenarioEntries,
       pages: Object.fromEntries(document.pages.map((page) => [page.id, {
@@ -427,6 +436,7 @@ export class LearningScenarioBuilder {
         ? `${ELCE_SCENARIO.ROOT_VIEW}/${scenarioEntryViewIdForPage(document, pageId)}/${ELCE_SCENARIO.CONTENT_SLOT}/${ELCE_SCENARIO.SUMMARY_ENTRY_VIEW}`
         : undefined
       : pagePath(document, previousPageId)
+    const evaluationResultActions = this.evaluationResultActionRoutes(document, pageId)
     return {
       [ELCE_EVENTS.NAVIGATION_NEXT]: nextPath === undefined ? {} : {
         go: { path: nextPath },
@@ -436,6 +446,45 @@ export class LearningScenarioBuilder {
         go: { path: previousPath },
         action: ELCE_SCENARIO_HANDLERS.REFRESH_EVALUATION_RESULT,
       },
+      ...evaluationResultActions,
+    }
+  }
+
+  /** Routes configured Result actions back through the Evaluation chapter's Question pages. */
+  private evaluationResultActionRoutes(
+    document: LearningDocument,
+    pageId: string,
+  ): Readonly<Record<string, SightyViewAction<ElceSceneKey, ElceSlotName>>> {
+    const page = document.pages.find((candidate) => candidate.id === pageId)
+    const chapter = page?.chapterId == null
+      ? undefined
+      : document.chapters.find((candidate) => candidate.id === page.chapterId)
+    if (page === undefined || chapter?.type !== CHAPTER_TYPE.EVALUATION) return {}
+    const resultBdc = page.bdcIds.flatMap((bdcId) => document.bdcs.find((candidate) => candidate.id === bdcId) ?? [])
+      .find((bdc) => bdc.type === BDC_TYPE.EVALUATION_RESULT && bdc.evaluationResult !== null)
+    if (resultBdc?.evaluationResult == null) return {}
+    const firstQuestionPageId = chapter.pageIds.find((chapterPageId) => {
+      const questionPage = document.pages.find((candidate) => candidate.id === chapterPageId)
+      return questionPage?.bdcIds.some((bdcId) => document.bdcs.some((bdc) => bdc.id === bdcId && bdc.type === BDC_TYPE.QUESTION))
+    })
+    if (firstQuestionPageId === undefined) return {}
+    const go = { path: pagePath(document, firstQuestionPageId) }
+    const reset = ['quiz']
+    return {
+      ...(resultBdc.evaluationResult.failure.action === EVALUATION_RESULT_ACTION.RETRY ? {
+        [ELCE_EVENTS.EVALUATION_RESULT_RETRY]: {
+          go,
+          reset,
+          action: ELCE_SCENARIO_HANDLERS.APPLY_EVALUATION_RESULT_ACTION,
+        },
+      } : {}),
+      ...(resultBdc.evaluationResult.success.action === EVALUATION_RESULT_ACTION.REPLAY ? {
+        [ELCE_EVENTS.EVALUATION_RESULT_REPLAY]: {
+          go,
+          reset,
+          action: ELCE_SCENARIO_HANDLERS.APPLY_EVALUATION_RESULT_ACTION,
+        },
+      } : {}),
     }
   }
 

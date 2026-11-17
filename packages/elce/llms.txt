@@ -1,0 +1,77 @@
+# Elcé
+
+> Elcé sert à composer des projets de lecture avec des pages, du texte riche, des médias et des questions. Ce guide décrit les parcours auteur disponibles dans l’application Learning.
+
+## Organiser un projet
+
+- Un projet contient un scénario ordonné : des pages autonomes et des chapitres peuvent alterner à la racine ; chaque chapitre contient ses propres pages ordonnées.
+- Une page Flux peut réunir plusieurs blocs de contenu (BDC), ordonnés dans la page. Une page Diapo n’accueille qu’un BDC direct.
+- Le catalogue conserve les blocs rendus disponibles et les ressources média réutilisables. Le catalogue n’est pas une étape du scénario : placez un bloc sur une page pour l’inclure dans la lecture.
+- Pour construire un parcours courant, créez un chapitre standard, ajoutez-y des pages Flux, puis répartissez le contenu dans l’ordre de lecture. Gardez une page autonome à la racine si elle doit se lire hors d’un chapitre.
+
+## Rédiger et répartir le texte
+
+1. Ajoutez un bloc **Texte** à une page Flux. Le bloc Section fournit un éditeur riche avec titres, paragraphes, gras, italique, souligné, indice, exposant et alignements.
+2. Utilisez son champ de titre facultatif pour nommer la section ; rédigez le corps dans l’éditeur.
+3. Ajoutez et réordonnez plusieurs Sections pour séparer les idées et contrôler leur ordre de lecture. Le titre de page et le titre du chapitre servent à organiser et repérer le parcours ; le texte détaillé reste dans les Sections.
+4. Insérez une Carte ou un Graphe dans le texte lorsque l’élément doit apparaître à un endroit précis du flux. Cette insertion est ancrée dans le texte et reste un BDC distinct, rattaché à la Section.
+
+## Ajouter des médias
+
+- Ouvrez **Contenus → Médias** pour réutiliser une ressource déjà importée.
+- Déposez un fichier dans une Section pour créer une Carte ancrée à cet endroit. L’image ou la vidéo reste une ressource séparée, réutilisable par d’autres blocs.
+- Choisissez un BDC Carte lorsque le média doit constituer un contenu visuel autonome ou une vue de Carousel. Les layouts Carte disponibles comprennent Texte court, Texte avec image, Photo ou vidéo plein cadre, Image avec légende et Titre sur image. Tous les layouts n’acceptent pas les mêmes médias.
+- Une Question peut aussi référencer une image ou une vidéo dans sa zone Illustration ; cet usage ne crée pas un BDC média supplémentaire.
+- Supprimer un bloc ou une ancre ne signifie pas nécessairement supprimer la ressource média : les médias du catalogue sont gérés indépendamment et peuvent être réutilisés.
+
+## Construire un quiz
+
+### Quiz simple
+
+1. Dans une page Flux, ajoutez un bloc **Quiz**. Le bloc Question est unique par page dans le parcours Learning actuel.
+2. Choisissez **Vrai/Faux**, **Choix** ou **Choix multiple**, puis renseignez l’énoncé, les réponses et la correction. Le titre et l’illustration sont facultatifs.
+3. À la lecture, l’apprenant doit valider sa réponse avant de poursuivre. Le résultat et la correction apparaissent après validation ; une réponse fausse n’empêche pas à elle seule de passer à la page suivante.
+
+### Évaluation sur plusieurs pages
+
+1. Créez un chapitre **Évaluation**, puis ajoutez-y des pages Flux. Chaque page reçoit une Question par défaut ; vous pouvez aussi ajouter des blocs Texte.
+2. Réglez la limite d’essais (illimitée par défaut) et la portée de reprise (toutes les Questions par défaut, ou seulement les réponses fausses ou absentes). Le seuil auteur du POC est de 80 %.
+3. Ajoutez un bloc **Résultat** sur une page du chapitre pour configurer les branches Réussite et Échec.
+
+## Exemple de composition
+
+```text
+Chapitre « Découvrir le sujet »
+  Page Flux « Introduction »
+    Section : contexte et objectifs
+    Carte ancrée : image d’ouverture
+  Page Flux « Comprendre »
+    Section : explication
+    Carte ancrée : schéma ou illustration
+
+Chapitre « Vérifier les acquis » (Évaluation)
+  Page Flux « Question 1 »
+    Question : choix multiple
+  Page Flux « Question 2 »
+    Question : vrai/faux
+    Texte : consigne de fin
+  Page Flux « Résultat »
+    Résultat : contenu des branches Réussite et Échec
+```
+
+## Références
+
+- [Modèle de document et placements](./specs/document-model-spec.md)
+- [Organisation des pages et des chapitres](./specs/organization-editor-spec.md)
+- [Édition du texte d’une Section](./specs/section-editor-spec.md)
+- [Insertion de Cartes et de Graphes dans le texte](./specs/anchor-spec.md)
+- [Question et quiz simple](./specs/question-bdc-spec.md)
+- [Chapitre Évaluation et bloc Résultat](./specs/chapter-evaluation-spec.md)
+- [Layouts Carte et Carousel](./specs/carousel-bdc-spec.md)
+- [Médias et ressources projet](./specs/project-api-spec.md#fichiers-média)
+
+## Pour les assistants
+
+- Présentez les pages et chapitres comme la structure du parcours, les BDC comme son contenu, et les médias comme des ressources réutilisables référencées par ces blocs.
+- Une page Évaluation reste une page Flux ; le type Évaluation appartient au chapitre.
+- Pour les comportements détaillés, suivez les spécifications liées ci-dessus, qui décrivent les contrats Elcé.

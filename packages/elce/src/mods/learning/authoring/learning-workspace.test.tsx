@@ -158,7 +158,7 @@ describe('Remix editor workspace', () => {
     await rendered.act(() => rendered.$('#elce-scenario-summary-page')?.dispatchEvent(new Event('click', { bubbles: true })))
     rendered.cleanup()
     rendered = mount()
-    expect(rendered.$('#elce-variables-title')?.textContent).toBe('Variables')
+    expect(rendered.$('#elce-variables-title')).toBeNull()
     expect(rendered.$('#elce-workspace-profile-token-insertion')).toBeNull()
     expect(rendered.$('#elce-profile-token-insertion')).toBeNull()
     setProfileTokenTargetId('elce-test-profile-target')

@@ -1,5 +1,7 @@
 import type { RemixNode } from 'remix/component'
 import type { AuthoredTextValue } from '../document/rich-text-types'
+import type { RichTextDocument } from '../document/rich-text-types'
+import type { ListContent } from '../../resources/list/domain/list-types'
 
 export interface ResourceTextFieldOptions {
   readonly id: string
@@ -12,6 +14,10 @@ export interface ResourceTextFieldOptions {
   readonly required?: boolean
   readonly allowPageLinks?: boolean
   readonly allowBoldItalic?: boolean
+  readonly allowListBdc?: boolean
+  readonly onInsertListBdc?: (bdcId: string, message: RichTextDocument) => void
+  readonly listBdcContents?: Readonly<Record<string, ListContent>>
+  readonly onUpdateListBdc?: (bdcId: string, list: ListContent) => void
   readonly maxLength?: number
   readonly onFocus?: () => void
   readonly onKeyDown?: (event: KeyboardEvent) => void

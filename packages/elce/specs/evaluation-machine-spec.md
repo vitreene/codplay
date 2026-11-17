@@ -2,9 +2,9 @@
 
 ## Statut
 
-**Machine métier implémentée et vérifiée. Le calcul de l’issue et le montage
-de la branche correspondante sont raccordés au player ; les actions des BDC
-Résultat et la visibilité des réponses de Question restent à réaliser.**
+**Machine métier implémentée et vérifiée. Le calcul de l’issue, les actions du
+BDC Résultat et la politique de visibilité des réponses sont raccordés au
+player ; le parcours navigateur de bout en bout reste à valider.**
 
 ## Contrat
 
@@ -53,10 +53,19 @@ La machine expose ce contrat métier. Dans le player, Sighty conserve les
 réponses validées dans son contexte, termine la machine après l’admission de la
 page de résultat et envoie l’événement de branche correspondant à la scène ; la
 story CodPlay de cette branche monte le BDC à son repère dans l’article. Les
-événements de bouton Recommencer/Relire ne sont pas encore consommés par le
-player, et `shouldRevealAnswers` ne pilote pas encore le rendu des Questions.
-Ces deux raccords restent requis pour intégrer entièrement les tentatives et
-la relecture.
+événements publics Recommencer et Relire sont associés aux actions configurées
+des branches Échec et Réussite. La vue Sighty accepte ces événements seulement
+depuis le BDC Résultat de la page et du chapitre concernés, avec l’état métier
+attendu. Elle route vers la première Question, réinitialise les réponses de la
+portée active puis applique `RETRY` ou `SUCCESS.REPLAY`. À la fin de la dernière
+Question relue, le marqueur de page applique `REPLAY.COMPLETE`.
+
+Le builder Question reçoit le mode Évaluation depuis le type de chapitre. La
+validation y publie le résultat à Sighty tout en gardant le retour et les
+marqueurs de correction cachés. Lors de la restitution d’une réponse, le player
+appelle `shouldRevealAnswers` de la machine pour choisir entre une restauration
+verrouillée sans correction et une restauration avec correction. En Quiz
+simple, la validation garde la révélation immédiate habituelle.
 
 ## Preuves
 
@@ -64,6 +73,9 @@ la relecture.
 vérifie la reprise globale, la reprise des seules Questions incorrectes, la
 visibilité des réponses selon l’issue, le retour après relecture, la limite
 d’essais et la restauration depuis un état JSON-sérialisé.
+[`learning-player.test.ts`](../src/mods/learning/reading/learning-player.test.ts)
+vérifie le parcours intégré Échec → Recommencer → Réussite → Relire dans le
+player et la visibilité correspondante des corrections.
 Le transfert des métadonnées depuis l’événement Sighty et une Question jouée
 par le player réel est vérifié dans
 [`scenario-builder.test.ts`](../src/builders/scenario/scenario-builder.test.ts)

@@ -1,20 +1,20 @@
-import { GripVertical, Plus, Trash2 } from 'lucide-static'
+import { Clock, GripVertical, Plus, Settings2, Trash2 } from 'lucide-static'
 import { on, type RemixNode } from 'remix/component'
 import type { ListContent, ListPrefix, ListRow } from '../domain/list-types'
 import { ListService } from '../domain/list-service'
+import { CAROUSEL_TRANSITION_OPTIONS } from '../../revelation/revelation-config'
 import { parseListPaste } from './list-paste-parser'
 import { renderLucideIcon } from '../../../core/authoring/lucide-static-icon'
 
 const ROW_DRAG_MIME_TYPE = 'application/x-elce-list-row+json'
 const PREFIX_OPTIONS: readonly Readonly<{ value: ListPrefix; label: string }>[] = [
-  { value: 'none', label: 'Aucun' },
-  { value: 'disc', label: 'Disque' },
-  { value: 'square', label: 'Carré' },
-  { value: 'dash', label: 'Tiret' },
-  { value: 'lower-alpha', label: 'Lettre (a.)' },
-  { value: 'decimal', label: 'Numéro arabe' },
-  { value: 'lower-roman', label: 'Numéro romain' },
-  { value: 'custom', label: 'Caractère personnalisé' },
+  { value: 'none', label: 'Exemple' },
+  { value: 'disc', label: '• Exemple' },
+  { value: 'square', label: '▪ Exemple' },
+  { value: 'dash', label: '– Exemple' },
+  { value: 'lower-alpha', label: 'a. Exemple' },
+  { value: 'decimal', label: '1. Exemple' },
+  { value: 'lower-roman', label: 'i. Exemple' },
 ]
 
 export interface ListEditorProps {
@@ -22,34 +22,45 @@ export interface ListEditorProps {
   readonly idPrefix: string
   readonly createId: () => string
   readonly onChange: (list: ListContent) => void
+  readonly onShowView?: () => void
 }
 
 /** Renders the reusable List editor without depending on its hosting resource. */
 export function renderListEditor(props: ListEditorProps): RemixNode {
   const service = new ListService()
   const { list } = props
-  return <section id={`${props.idPrefix}-list-editor`} className="elce-list-editor" aria-label="Liste à points">
+  const prefixOptions = [
+    ...PREFIX_OPTIONS,
+    { value: 'custom' as const, label: `${list.customMarker} Exemple personnalisé` },
+  ]
+  const showsStart = isOrderedPrefix(list.prefix)
+  return <section
+    id={`${props.idPrefix}-list-editor`}
+    className={props.onShowView === undefined ? 'elce-list-editor' : 'elce-list-editor elce-list-bdc-frame'}
+    aria-label={props.onShowView === undefined ? 'Liste à points' : 'Liste à points — mode édition'}
+  >
+    {props.onShowView === undefined ? null : renderListModeHeader(props.idPrefix, 'Passer en mode vue', 'Mode vue', props.onShowView)}
     <div id={`${props.idPrefix}-list-settings`} className="elce-list-editor__settings">
       <label id={`${props.idPrefix}-list-prefix-label`} className="elce-list-editor__setting">
         <span id={`${props.idPrefix}-list-prefix-caption`}>Préfixe</span>
         <select
           id={`${props.idPrefix}-list-prefix`}
-          aria-label="Préfixe des lignes"
+          aria-label="Exemple de préfixe"
           mix={on<HTMLSelectElement, 'change'>('change', (event) => props.onChange(service.setPresentation(list, { prefix: event.currentTarget.value as ListPrefix })))}
         >
-          {PREFIX_OPTIONS.map((option) => <option id={`${props.idPrefix}-list-prefix-${option.value}`} key={option.value} value={option.value} selected={option.value === list.prefix}>{option.label}</option>)}
+          {prefixOptions.map((option) => <option id={`${props.idPrefix}-list-prefix-${option.value}`} key={option.value} value={option.value} selected={option.value === list.prefix}>{option.label}</option>)}
         </select>
       </label>
-      {list.prefix === 'decimal' || list.prefix === 'lower-roman'
+      {showsStart
         ? <label id={`${props.idPrefix}-list-start-label`} className="elce-list-editor__setting">
-          <span id={`${props.idPrefix}-list-start-caption`}>Début</span>
+          <span id={`${props.idPrefix}-list-start-caption`}>Départ</span>
           <input
             id={`${props.idPrefix}-list-start`}
             type="number"
             min={1}
             step={1}
             value={list.start}
-            aria-label="Début de la numérotation"
+            aria-label="Numéro de départ"
             mix={on<HTMLInputElement, 'input'>('input', (event) => {
               const start = Number(event.currentTarget.value)
               if (Number.isInteger(start) && start >= 1) props.onChange(service.setPresentation(list, { start }))
@@ -59,7 +70,7 @@ export function renderListEditor(props: ListEditorProps): RemixNode {
         : null}
       {list.prefix === 'custom'
         ? <label id={`${props.idPrefix}-list-marker-label`} className="elce-list-editor__setting">
-          <span id={`${props.idPrefix}-list-marker-caption`}>Caractère de puce</span>
+          <span id={`${props.idPrefix}-list-marker-caption`}>Marqueur</span>
           <input
             id={`${props.idPrefix}-list-marker`}
             type="text"
@@ -82,37 +93,143 @@ export function renderListEditor(props: ListEditorProps): RemixNode {
           />
         </label>
         : null}
-      <label id={`${props.idPrefix}-list-interval-label`} className="elce-list-editor__setting">
-        <span id={`${props.idPrefix}-list-interval-caption`}>Intervalle entre les lignes (s)</span>
-        <input
-          id={`${props.idPrefix}-list-interval`}
-          type="number"
-          min={0}
-          step={0.1}
-          value={list.intervalMs / 1000}
-          aria-label="Intervalle entre les lignes en secondes"
-          mix={on<HTMLInputElement, 'input'>('input', (event) => {
-            const intervalMs = Number(event.currentTarget.value) * 1000
-            if (Number.isFinite(intervalMs) && intervalMs >= 0) props.onChange(service.setPresentation(list, { intervalMs }))
-          })}
-        />
+      <label id={`${props.idPrefix}-list-transition-label`} className="elce-list-editor__setting">
+        <span id={`${props.idPrefix}-list-transition-caption`}>Transition</span>
+        <select
+          id={`${props.idPrefix}-list-transition`}
+          aria-label="Transition d’apparition des items"
+          mix={on<HTMLSelectElement, 'change'>('change', (event) => props.onChange(service.setPresentation(list, { transition: event.currentTarget.value as ListContent['transition'] })))}
+        >
+          {CAROUSEL_TRANSITION_OPTIONS.map((option) => <option
+            id={`${props.idPrefix}-list-transition-option-${option.value}`}
+            key={option.value}
+            value={option.value}
+            selected={option.value === list.transition}
+          >{option.label}</option>)}
+        </select>
       </label>
+      <div id={`${props.idPrefix}-list-interval-label`} className="elce-list-editor__setting elce-list-editor__setting--interval">
+        <span id={`${props.idPrefix}-list-interval-caption`}>Intervalle (s)</span>
+        <details id={`${props.idPrefix}-list-interval-details`} className="elce-list-editor__timing">
+          <summary
+            id={`${props.idPrefix}-list-interval-toggle`}
+            className="elce-bdc-icon-button elce-list-editor__clock"
+            data-customized={list.intervalMs !== 0}
+            aria-label="Afficher l’intervalle"
+            title={`Intervalle : ${formatSeconds(list.intervalMs)} s`}
+          >{renderLucideIcon(Clock, `${props.idPrefix}-list-interval-icon`)}</summary>
+          <input
+            id={`${props.idPrefix}-list-interval`}
+            type="number"
+            min={0}
+            step={0.1}
+            value={list.intervalMs / 1000}
+            aria-label="Intervalle entre les lignes en secondes"
+            mix={[
+              on<HTMLInputElement, 'input'>('input', (event) => {
+                const intervalMs = Number(event.currentTarget.value) * 1000
+                if (Number.isFinite(intervalMs) && intervalMs >= 0) props.onChange(service.setPresentation(list, { intervalMs }))
+              }),
+              on<HTMLInputElement, 'blur'>('blur', (event) => closeTimingInputOnBlur(event.currentTarget, event.relatedTarget)),
+              on<HTMLInputElement, 'keydown'>('keydown', (event) => {
+                if (event.key !== 'Enter') return
+                event.preventDefault()
+                event.currentTarget.blur()
+              }),
+            ]}
+          />
+        </details>
+      </div>
     </div>
     <ol id={`${props.idPrefix}-list-rows`} className="elce-list-editor__rows">
       {list.rows.map((row, index) => renderListRow(row, index, props, service))}
     </ol>
     <button
       id={`${props.idPrefix}-list-add-row`}
-      className="elce-list-editor__add elce-add-content-action"
+      className="elce-list-editor__add elce-bdc-icon-button"
       type="button"
       aria-label="Ajouter une ligne"
       title="Ajouter une ligne"
       mix={on<HTMLButtonElement, 'click'>('click', () => props.onChange(service.addRow(list, props.createId())))}
     >
       {renderLucideIcon(Plus, `${props.idPrefix}-list-add-icon`)}
-      <span id={`${props.idPrefix}-list-add-label`} className="elce-add-content-action__label">Ligne</span>
     </button>
   </section>
+}
+
+/** Renders the authored List in place without exposing its configuration controls. */
+export function renderListView(
+  list: ListContent,
+  idPrefix: string,
+  onEdit: () => void,
+): RemixNode {
+  const ordered = isOrderedPrefix(list.prefix)
+  const ListTag = ordered ? 'ol' : 'ul'
+  const listStyleType = ordered
+    ? list.prefix === 'lower-alpha' ? 'lower-alpha' : list.prefix === 'lower-roman' ? 'lower-roman' : 'decimal'
+    : list.prefix === 'disc' || list.prefix === 'square' ? list.prefix : 'none'
+  const orderedType = list.prefix === 'lower-alpha' ? 'a' : list.prefix === 'lower-roman' ? 'i' : '1'
+  return <section
+    id={`${idPrefix}-list-view`}
+    className="elce-list-bdc-frame elce-list-bdc-view"
+    aria-label="Liste à points — mode affichage"
+  >
+    {renderListModeHeader(idPrefix, 'Modifier la liste à points', 'Modifier', onEdit)}
+    <ListTag
+      id={`${idPrefix}-list-preview`}
+      className={`elce-list-bdc-view__rows elce-list-bdc-view__rows--${list.prefix}`}
+      start={ordered ? list.start : undefined}
+      type={ordered ? orderedType : undefined}
+      style={{ listStyleType }}
+    >
+      {list.rows.map((row) => <li
+        id={`${idPrefix}-list-preview-row-${row.id}`}
+        key={row.id}
+        className="elce-list-bdc-view__row"
+      >
+        {list.prefix === 'dash' || list.prefix === 'custom'
+          ? <>
+            <span id={`${idPrefix}-list-preview-marker-${row.id}`} className="elce-list-bdc-view__marker" aria-hidden="true">
+              {list.prefix === 'dash' ? '–' : list.customMarker}
+            </span>
+            <span id={`${idPrefix}-list-preview-text-${row.id}`}>{row.text}</span>
+          </>
+          : row.text}
+      </li>)}
+    </ListTag>
+  </section>
+}
+
+/** Identifies prefixes whose marker is an ordered numeral or letter. */
+function isOrderedPrefix(prefix: ListPrefix): boolean {
+  return prefix === 'lower-alpha' || prefix === 'decimal' || prefix === 'lower-roman'
+}
+
+/** Formats a millisecond value as a concise French-localized seconds label. */
+function formatSeconds(milliseconds: number): string {
+  return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 3, useGrouping: false }).format(milliseconds / 1000)
+}
+
+/** Closes a timing disclosure when focus leaves it, while preserving focus within its controls. */
+function closeTimingInputOnBlur(input: HTMLInputElement, nextFocusedTarget: EventTarget | null): void {
+  const details = input.closest('details')
+  if (details === null) return
+  if (nextFocusedTarget instanceof Node && details.contains(nextFocusedTarget)) return
+  details.open = false
+}
+
+/** Places the shared circular mode button in the List BDC header. */
+function renderListModeHeader(idPrefix: string, label: string, title: string, onClick: () => void): RemixNode {
+  return <div id={`${idPrefix}-list-mode-header`} className="elce-list-bdc-frame__header">
+    <button
+      id={`${idPrefix}-list-mode-toggle`}
+      className="elce-bdc-mode-toggle"
+      type="button"
+      aria-label={label}
+      title={title}
+      mix={on<HTMLButtonElement, 'click'>('click', onClick)}
+    >{renderLucideIcon(Settings2, `${idPrefix}-list-mode-icon`)}</button>
+  </div>
 }
 
 /** Renders an editable row with stable identity, optional delay and reorder controls. */
@@ -165,21 +282,39 @@ function renderListRow(row: ListRow, index: number, props: ListEditorProps, serv
         }),
       ]}
     />
-    <input
-      id={`${props.idPrefix}-list-row-delay-${row.id}`}
-      className="elce-list-editor__delay"
-      type="number"
-      min={0}
-      step={0.1}
-      value={row.delayMs === null ? '' : row.delayMs / 1000}
-      aria-label={`Délai avant la ligne ${rowNumber} en secondes, vide pour le comportement par défaut`}
-      title={rowNumber === 1 ? 'Délai (s). Vide : la première ligne apparaît à l’entrée.' : 'Délai (s). Vide : utilise l’intervalle commun.'}
-      mix={on<HTMLInputElement, 'input'>('input', (event) => {
-        const value = event.currentTarget.value
-        const delayMs = value === '' ? null : Number(value) * 1000
-        if (delayMs === null || Number.isFinite(delayMs) && delayMs >= 0) props.onChange(service.setRowDelay(props.list, row.id, delayMs))
-      })}
-    />
+    <details id={`${props.idPrefix}-list-row-delay-details-${row.id}`} className="elce-list-editor__timing">
+      <summary
+        id={`${props.idPrefix}-list-row-delay-toggle-${row.id}`}
+        className="elce-bdc-icon-button elce-list-editor__clock"
+        data-customized={row.delayMs !== null}
+        aria-label={`Afficher le délai de la ligne ${rowNumber}`}
+        title={row.delayMs === null
+          ? `Ligne ${rowNumber} : intervalle (${formatSeconds(props.list.intervalMs)} s)`
+          : `Délai ligne ${rowNumber} : ${formatSeconds(row.delayMs)} s`}
+      >{renderLucideIcon(Clock, `${props.idPrefix}-list-row-delay-icon-${row.id}`)}</summary>
+      <input
+        id={`${props.idPrefix}-list-row-delay-${row.id}`}
+        className="elce-list-editor__delay"
+        type="number"
+        min={0}
+        step={0.1}
+        value={row.delayMs === null ? '' : row.delayMs / 1000}
+        aria-label={`Délai avant la ligne ${rowNumber} en secondes, vide pour le comportement par défaut`}
+        mix={[
+          on<HTMLInputElement, 'input'>('input', (event) => {
+            const value = event.currentTarget.value
+            const delayMs = value === '' ? null : Number(value) * 1000
+            if (delayMs === null || Number.isFinite(delayMs) && delayMs >= 0) props.onChange(service.setRowDelay(props.list, row.id, delayMs))
+          }),
+          on<HTMLInputElement, 'blur'>('blur', (event) => closeTimingInputOnBlur(event.currentTarget, event.relatedTarget)),
+          on<HTMLInputElement, 'keydown'>('keydown', (event) => {
+            if (event.key !== 'Enter') return
+            event.preventDefault()
+            event.currentTarget.blur()
+          }),
+        ]}
+      />
+    </details>
     <button
       id={`${props.idPrefix}-list-row-delete-${row.id}`}
       className="elce-list-editor__delete elce-bdc-icon-button elce-bdc-icon-button--danger"

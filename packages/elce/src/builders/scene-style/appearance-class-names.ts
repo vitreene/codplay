@@ -9,6 +9,7 @@ import { QUESTION_BDC_TYPE } from '../../resources/bdcs/question/question-config
 import { SECTION_BDC_TYPE } from '../../resources/bdcs/section/section-config'
 import { STATISTICAL_GRAPH_BDC_TYPE } from '../../resources/bdcs/statistical-graph/statistical-graph-config'
 import { SUMMARY_BDC_TYPE } from '../../resources/bdcs/summary/summary-config'
+import { LIST_BDC_TYPE } from '../../resources/list/list-config'
 import { FLUX_PAGE_TYPE } from '../../resources/pages/flux/flux-config'
 import { DIAPO_PAGE_TYPE } from '../../resources/pages/diapo/diapo-config'
 import {
@@ -87,6 +88,7 @@ export function pageAppearanceClassNames(
   }
 
   for (const bdc of bdcs) {
+    if (bdc.type === LIST_BDC_TYPE) continue
     if (bdc.pageId !== page.id && bdc.parentBdcId === null) continue
     const target = { kind: 'bdc', bdcId: bdc.id } as const
     classes[`bdc:${bdc.id}`] = appearanceClassNames(

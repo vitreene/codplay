@@ -1,4 +1,4 @@
-import { Bold, Italic } from 'lucide-static'
+import { Bold, Italic, List } from 'lucide-static'
 import { Editor } from '@tiptap/core'
 import { NodeSelection } from '@tiptap/pm/state'
 import StarterKit from '@tiptap/starter-kit'
@@ -19,6 +19,9 @@ import { toTiptapContent } from './learning-tiptap-content'
 import { createProfileLabelExtension } from '../profile/authoring/profile-label-extension'
 import { renderLucideIcon } from '../../../core/authoring/lucide-static-icon'
 import type { ResourceTextFieldFeature } from '../../../core/authoring/resource-text-field-feature'
+import { createListBdcReferenceNode } from '../../../resources/list/authoring/list-bdc-extension'
+import { createStableId } from '../../../core/document/stable-id'
+import type { ListContent } from '../../../resources/list/domain/list-types'
 import {
   INLINE_TEXT_DRAG_TYPE,
   INLINE_TEXT_LABEL_UPDATE_EVENT,
@@ -49,6 +52,10 @@ export interface InlineTextFieldOptions {
   readonly pages?: readonly LearningPage[]
   readonly allowPageLinks?: boolean
   readonly allowBoldItalic?: boolean
+  readonly allowListBdc?: boolean
+  readonly onInsertListBdc?: (bdcId: string, message: RichTextDocument) => void
+  readonly listBdcContents?: Readonly<Record<string, ListContent>>
+  readonly onUpdateListBdc?: (bdcId: string, list: ListContent) => void
   readonly maxLength?: number
   readonly onFocus?: () => void
   readonly onKeyDown?: (event: KeyboardEvent) => void
@@ -71,7 +78,7 @@ export function createLearningTextFieldFeature(
 
 /** Renders a native field until labels or allowed formatting require Tiptap. */
 export function renderInlineTextField(options: InlineTextFieldOptions): RemixNode {
-  reconcileActiveEditor(options.id, options.value)
+  reconcileActiveEditor(options.id, options.value, options.listBdcContents ?? {})
   const contextOptions = {
     ...options,
     profileProperties: options.profileProperties ?? currentProfileProperties,
@@ -181,10 +188,16 @@ function PlainInlineTextField(handle: Handle<PlainInlineTextFieldOptions>) {
         ]}
       />
 
-    if (options.allowBoldItalic !== true) return field
+    if (options.allowBoldItalic !== true && options.allowListBdc !== true) return field
     const toolbar = <div id={`${options.id}-formatting`} className="elce-inline-text-field__toolbar" role="toolbar" aria-label="Mise en forme">
-      {renderFormatButton(options.id, 'bold', 'Gras', (input) => promotePlainField(input, options, 'bold'))}
-      {renderFormatButton(options.id, 'italic', 'Italique', (input) => promotePlainField(input, options, 'italic'))}
+      {options.allowBoldItalic === true ? renderFormatButton(options.id, 'bold', 'Gras', (input) => promotePlainField(input, options, 'bold')) : null}
+      {options.allowBoldItalic === true ? renderFormatButton(options.id, 'italic', 'Italique', (input) => promotePlainField(input, options, 'italic')) : null}
+      {options.allowListBdc === true ? renderListBdcButton(options.id, (input) => {
+        const bdcId = createStableId('bdc-list')
+        options.onInsertListBdc?.(bdcId, insertListReferenceAfterCurrentBlock(
+          createRichTextDocumentFromPlainText(input.value), bdcId,
+        ))
+      }) : null}
     </div>
     return <div id={`${options.id}-field`} className="elce-inline-text-field elce-inline-text-field--plain-rich-capable">
       {toolbar}
@@ -195,10 +208,11 @@ function PlainInlineTextField(handle: Handle<PlainInlineTextFieldOptions>) {
 
 /** Renders a promoted editor host and optional Message formatting controls. */
 function renderRichField(options: RichInlineTextFieldOptions): RemixNode {
-  const toolbar = options.allowBoldItalic === true
+  const toolbar = options.allowBoldItalic === true || options.allowListBdc === true
     ? <div id={`${options.id}-formatting`} className="elce-inline-text-field__toolbar" role="toolbar" aria-label="Mise en forme">
-      {renderFormatButton(options.id, 'bold', 'Gras')}
-      {renderFormatButton(options.id, 'italic', 'Italique')}
+      {options.allowBoldItalic === true ? renderFormatButton(options.id, 'bold', 'Gras') : null}
+      {options.allowBoldItalic === true ? renderFormatButton(options.id, 'italic', 'Italique') : null}
+      {options.allowListBdc === true ? renderListBdcButton(options.id) : null}
     </div>
     : null
   return <div id={`${options.id}-rich-field`} className="elce-inline-text-field">
@@ -248,9 +262,41 @@ function renderFormatButton(
   </button>
 }
 
+/** Inserts a List block from the active rich editor or promotes its native field. */
+function renderListBdcButton(
+  id: string,
+  onPlainInsert?: (field: HTMLInputElement | HTMLTextAreaElement) => void,
+): RemixNode {
+  return <button
+    id={`${id}-insert-list-bdc`}
+    type="button"
+    aria-label="Insérer une liste à points"
+    title="Insérer une liste à points"
+    mix={[
+      on<HTMLButtonElement, 'mousedown'>('mousedown', (event) => event.preventDefault()),
+      on<HTMLButtonElement, 'click'>('click', () => {
+        const adapter = activeEditors.get(id)
+        if (adapter !== undefined) {
+          adapter.insertListBdc(createStableId('bdc-list'))
+          return
+        }
+        const field = document.getElementById(id)
+        if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) onPlainInsert?.(field)
+      }),
+    ]}
+  >
+    {renderLucideIcon(List, `${id}-insert-list-bdc-icon`)}
+  </button>
+}
+
 /** Keeps a mounted editor aligned with history or external document updates. */
-function reconcileActiveEditor(id: string, value: ElceTextValue): void {
+function reconcileActiveEditor(
+  id: string,
+  value: ElceTextValue,
+  listBdcContents: Readonly<Record<string, ListContent>>,
+): void {
   activeEditors.get(id)?.updateValue(value)
+  activeEditors.get(id)?.updateListBdcContents(listBdcContents)
 }
 
 /** Owns one promoted Tiptap value while committing changes through its field facade. */
@@ -260,6 +306,11 @@ class InlineTextFieldAdapter {
   private readonly allowBoldItalic: boolean
   private readonly maxLength: number | undefined
   private readonly allowPageLinks: boolean
+  private readonly allowListBdc: boolean
+  private readonly onInsertListBdc: InlineTextFieldOptions['onInsertListBdc']
+  private readonly onUpdateListBdc: InlineTextFieldOptions['onUpdateListBdc']
+  private readonly listBdcContents = new Map<string, ListContent>()
+  private readonly listNodeViewRefreshers = new Set<() => void>()
   private readonly onChange: (value: ElceTextValue) => void
   private lastAcceptedValue: RichTextDocument
   private readonly onLabelInsert = (event: Event): void => {
@@ -309,6 +360,10 @@ class InlineTextFieldAdapter {
     this.allowBoldItalic = options.allowBoldItalic === true
     this.maxLength = options.maxLength
     this.allowPageLinks = options.allowPageLinks !== false
+    this.allowListBdc = options.allowListBdc === true
+    this.onInsertListBdc = options.onInsertListBdc
+    this.onUpdateListBdc = options.onUpdateListBdc
+    this.updateListBdcContents(options.listBdcContents ?? {})
     this.onChange = options.onChange
     this.lastAcceptedValue = options.value
     this.editor = new Editor({
@@ -334,6 +389,15 @@ class InlineTextFieldAdapter {
         createProfileLabelExtension(options.profileProperties ?? []),
         createPageLinkLabelExtension(options.pages ?? []),
         createLocalDateLabelExtension(),
+        ...(this.allowListBdc ? [createListBdcReferenceNode({
+          getListContent: (bdcId) => this.listBdcContents.get(bdcId) ?? null,
+          onUpdateList: (bdcId, list) => this.onUpdateListBdc?.(bdcId, list),
+          createRowId: () => createStableId('list-row'),
+          registerNodeViewRefresh: (refresh) => {
+            this.listNodeViewRefreshers.add(refresh)
+            return () => this.listNodeViewRefreshers.delete(refresh)
+          },
+        })] : []),
       ],
       content: toTiptapContent(options.value),
       editorProps: {
@@ -385,10 +449,32 @@ class InlineTextFieldAdapter {
     this.editor.commands.setContent(toTiptapContent(value), { emitUpdate: false })
   }
 
+  /** Refreshes inline List editors from the latest owning-document snapshot. */
+  public updateListBdcContents(contents: Readonly<Record<string, ListContent>>): void {
+    this.listBdcContents.clear()
+    for (const [bdcId, list] of Object.entries(contents)) this.listBdcContents.set(bdcId, list)
+    for (const refresh of this.listNodeViewRefreshers) refresh()
+  }
+
   /** Toggles one permitted mark and restores editor focus after toolbar use. */
   public toggleMark(mark: 'bold' | 'italic'): void {
     if (!this.allowBoldItalic) return
     this.editor.chain().focus().toggleMark(mark).run()
+  }
+
+  /** Inserts one List block after the paragraph containing the current selection. */
+  public insertListBdc(bdcId: string): void {
+    if (!this.allowListBdc || this.onInsertListBdc === undefined) return
+    const selection = this.editor.state.selection
+    const position = selection.$from.depth > 0 ? selection.$from.after(1) : selection.to
+    const node = this.editor.schema.nodes.listBdc?.create({ bdcId })
+    if (node === undefined) return
+    let transaction = this.editor.state.tr.insert(position, node)
+    if (position === this.editor.state.doc.content.size) {
+      const paragraph = this.editor.schema.nodes.paragraph?.create()
+      if (paragraph !== undefined) transaction = transaction.insert(position + node.nodeSize, paragraph)
+    }
+    this.onInsertListBdc(bdcId, transaction.doc.toJSON() as RichTextDocument)
   }
 
   /** Removes listeners and destroys the ProseMirror view when the field unmounts. */
@@ -397,6 +483,7 @@ class InlineTextFieldAdapter {
     this.editor.view.dom.removeEventListener(INLINE_TEXT_LABEL_UPDATE_EVENT, this.onLabelUpdate)
     this.editor.view.dom.removeEventListener('drop', this.onDrop, true)
     this.editor.destroy()
+    this.listNodeViewRefreshers.clear()
   }
 
   /** Commits a valid rich update or restores the previous value at its selection. */
@@ -512,4 +599,16 @@ function insertDroppedText(input: HTMLInputElement | HTMLTextAreaElement, event:
 function inlineCaretPosition(value: string, offset: number): number {
   const prefix = value.slice(0, offset).replace(/\{\{profile:[^{}]+\}\}|\{\{page-link:[^{}]+\}\}|\{\{local-date:(?:today|time|relative:-?\d+)\}\}/g, 'x')
   return prefix.length + 1
+}
+
+/** Places a List reference after the only paragraph in a native Card Message. */
+function insertListReferenceAfterCurrentBlock(document: RichTextDocument, bdcId: string): RichTextDocument {
+  return {
+    ...document,
+    content: [
+      ...document.content,
+      { type: 'listBdc', attrs: { bdcId } },
+      { type: 'paragraph' },
+    ],
+  }
 }

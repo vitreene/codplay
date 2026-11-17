@@ -4,7 +4,6 @@ import { createActor } from 'xstate'
 
 import { render } from 'remix/component/test'
 import { BDC_TYPE, DEFAULT_PRESET_ID, PAGE_TYPE } from '../learning-definition'
-import { CARD_IMAGE_FIT } from '../../../resources/bdcs/card/card-config'
 import { CAROUSEL_IMAGE_POSITION, CAROUSEL_PLAYBACK_MODE } from '../../../resources/bdcs/carousel/carousel-config'
 import { CAROUSEL_TRANSITION } from '../../../resources/revelation/revelation-config'
 import { CHAPTER_TYPE } from '../organization/learning-organization-config'
@@ -243,8 +242,8 @@ describe('Remix production page editor', () => {
       layout.dispatchEvent(new Event('change', { bubbles: true }))
     })
     await actOnRemix(rendered, () => {
-      const imageFit = rendered.$(`#elce-card-image-fit-${directCardId}`) as HTMLSelectElement
-      expect(imageFit.value).toBe(CARD_IMAGE_FIT.COVER)
+      const imageFit = rendered.$(`#elce-card-image-fit-option-${directCardId}-cover`) as HTMLButtonElement
+      expect(imageFit.getAttribute('aria-pressed')).toBe('true')
       const imagePosition = rendered.$(`#elce-card-image-position-${directCardId}`) as HTMLSelectElement
       imagePosition.value = CAROUSEL_IMAGE_POSITION.RIGHT
       imagePosition.dispatchEvent(new Event('change', { bubbles: true }))
@@ -338,7 +337,7 @@ describe('Remix production page editor', () => {
     expect((rendered.$(`#elce-evaluation-result-action-${resultId}-success`) as HTMLSelectElement).value).toBe('menu')
     expect((rendered.$(`#elce-evaluation-result-action-${resultId}-failure`) as HTMLSelectElement).value).toBe('retry')
     expect((rendered.$(`#elce-card-card-layout-${directCardId}`) as HTMLSelectElement).value).toBe(DEFAULT_PRESET_ID.TEXT_IMAGE)
-    expect((rendered.$(`#elce-card-image-fit-${directCardId}`) as HTMLSelectElement).value).toBe(CARD_IMAGE_FIT.COVER)
+    expect(rendered.$(`#elce-card-image-fit-option-${directCardId}-cover`)?.getAttribute('aria-pressed')).toBe('true')
     expect((rendered.$(`#elce-card-image-position-${directCardId}`) as HTMLSelectElement).value).toBe(CAROUSEL_IMAGE_POSITION.RIGHT)
     expect((rendered.$(`#elce-carousel-playback-${carouselId}`) as HTMLSelectElement).value).toBe(CAROUSEL_PLAYBACK_MODE.MANUAL)
     expect((rendered.$(`#elce-carousel-transition-${carouselId}`) as HTMLSelectElement).value).toBe(CAROUSEL_TRANSITION.SWIPE_RIGHT)

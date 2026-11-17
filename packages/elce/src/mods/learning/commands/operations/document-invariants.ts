@@ -23,6 +23,12 @@ import {
   getAppearancePreset,
 } from '../../../../config/appearance/appearance-config'
 import type { AppearanceColorRole } from '../../../../config/appearance/appearance-types'
+import { ListReferenceService } from '../../../../resources/list/domain/list-reference-service'
+import { ListService } from '../../../../resources/list/domain/list-service'
+import { LIST_PRESET_ID } from '../../../../resources/list/list-config'
+
+const listReferenceService: ListReferenceService = new ListReferenceService()
+const listService: ListService = new ListService()
 
 /** Checks placement and anchor-reference invariants for a document value. */
 export function assertDocumentInvariants(document: LearningDocument, resources: LearningCommandResourceServices): void {
@@ -68,6 +74,23 @@ export function assertDocumentInvariants(document: LearningDocument, resources: 
         fail(`Affectation de BDC illustratif inline incohérente : ${child.id}`)
       }
     }
+  }
+  const listReferences = listReferenceService.referencesIn(document.bdcs)
+  if (new Set(listReferences.map((reference) => reference.bdcId)).size !== listReferences.length) {
+    fail('Une Liste ne peut être référencée qu’une fois dans un champ texte compatible.')
+  }
+  for (const reference of listReferences) {
+    const listBdc = bdcById.get(reference.bdcId)
+    const owner = bdcById.get(reference.ownerBdcId)
+    const ownerMatchesField = reference.field === 'card-message'
+      ? owner?.type === BDC_TYPE.CARD && owner.card != null
+        && (owner.presetId === CARD_PRESET_ID.TEXT_SHORT || owner.presetId === CARD_PRESET_ID.TEXT_IMAGE)
+      : owner?.type === BDC_TYPE.SECTION && owner.section != null
+    if (listBdc === undefined || listBdc.type !== BDC_TYPE.LIST || listBdc.parentBdcId !== reference.ownerBdcId
+      || listBdc.pageId !== null || bdcIds.has(listBdc.id) || !ownerMatchesField) {
+      fail(`Référence de Liste incohérente dans le champ texte ${reference.ownerBdcId} : ${reference.bdcId}`)
+    }
+    bdcIds.add(listBdc.id)
   }
   if (bdcIds.size !== document.bdcs.length) fail('Chaque bdc doit avoir un emplacement unique')
   const chaptersById = new Map(document.chapters.map((chapter) => [chapter.id, chapter]))
@@ -163,6 +186,7 @@ export function assertDocumentInvariants(document: LearningDocument, resources: 
 
   for (const bdc of document.bdcs) {
     if (bdc.type !== BDC_TYPE.AVATAR && bdc.avatar != null) fail(`Payload Avatar inattendu : ${bdc.id}`)
+    if (bdc.type !== BDC_TYPE.LIST && bdc.list != null) fail(`Payload Liste inattendu : ${bdc.id}`)
     switch (bdc.type) {
       case BDC_TYPE.AVATAR: {
         if (bdc.presetId !== AVATAR_PRESET_ID || bdc.avatar == null || bdc.parentBdcId !== null || bdc.section != null || bdc.question != null
@@ -283,6 +307,28 @@ export function assertDocumentInvariants(document: LearningDocument, resources: 
         if (bdc.pageId === null || document.pages.find((candidate) => candidate.id === bdc.pageId) === undefined) {
           fail(`Le BDC Sommaire ${bdc.id} doit appartenir directement à une page.`)
         }
+        break
+      }
+      case BDC_TYPE.LIST: {
+        if (bdc.presetId !== LIST_PRESET_ID || bdc.list == null || bdc.pageId !== null || bdc.parentBdcId === null
+          || bdc.avatar != null || bdc.section != null || bdc.question != null || bdc.carousel != null
+          || bdc.card != null || bdc.statisticalGraph != null || bdc.evaluationResult != null) {
+          fail(`BDC Liste incomplet : ${bdc.id}`)
+        }
+        const reference = listReferences.find((candidate) => candidate.bdcId === bdc.id && candidate.ownerBdcId === bdc.parentBdcId)
+        if (reference === undefined) {
+          fail(`Le BDC Liste ${bdc.id} doit être référencé par le champ texte de son parent.`)
+        }
+        const parent = bdcById.get(bdc.parentBdcId)
+        if (reference.field === 'card-message'
+          && (parent?.type !== BDC_TYPE.CARD || parent.card == null
+            || parent.presetId !== CARD_PRESET_ID.TEXT_SHORT && parent.presetId !== CARD_PRESET_ID.TEXT_IMAGE)) {
+          fail(`Le parent de la Liste ${bdc.id} doit être une Carte texte.`)
+        }
+        if (reference.field === 'section-content' && (parent?.type !== BDC_TYPE.SECTION || parent.section == null)) {
+          fail(`Le parent de la Liste ${bdc.id} doit être une Section.`)
+        }
+        listService.assertValid(bdc.list)
         break
       }
       default:

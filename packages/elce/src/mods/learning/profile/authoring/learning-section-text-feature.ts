@@ -2,6 +2,8 @@ import type { Editor } from '@tiptap/core'
 import type { ProfileProperty } from '../domain/learning-profile-types'
 import type { LearningPage } from '../../document/learning-document-types'
 import type { SectionTextFeature } from '../../../../resources/bdcs/section/authoring/section-editor-tiptap-adapter'
+import type { RichTextDocument } from '../../../../resources/document/rich-text-types'
+import type { ListContent } from '../../../../resources/list/domain/list-types'
 import { createProfileLabelExtension } from './profile-label-extension'
 import { createLocalDateLabelExtension, createPageLinkLabelExtension } from '../../inline-text/learning-inline-label-extensions'
 import {
@@ -18,11 +20,23 @@ import {
 import { NodeSelection } from '@tiptap/pm/state'
 import { LEARNING_PROFILE_TEXT_FIELD_ATTRIBUTES } from './learning-profile-text-field-attributes'
 
-/** Adds Learning profile tokens to a Section editor without coupling the resource to Learning. */
-export function createLearningSectionTextFeature(properties: readonly ProfileProperty[], pages: readonly LearningPage[] = []): SectionTextFeature {
+/** Adds Learning labels and List BDC controls to a Section editor by injection. */
+export function createLearningSectionTextFeature(
+  properties: readonly ProfileProperty[],
+  pages: readonly LearningPage[] = [],
+  listActions?: Readonly<{
+    onInsertListBdc: (bdcId: string, content: RichTextDocument, markup: string, list: ListContent) => void
+    onUpdateListBdc: (bdcId: string, list: ListContent) => void
+  }>,
+): SectionTextFeature {
   return {
-    extensions: [createProfileLabelExtension(properties), createPageLinkLabelExtension(pages), createLocalDateLabelExtension()],
+    extensions: [
+      createProfileLabelExtension(properties),
+      createPageLinkLabelExtension(pages),
+      createLocalDateLabelExtension(),
+    ],
     attributes: LEARNING_PROFILE_TEXT_FIELD_ATTRIBUTES,
+    ...(listActions === undefined ? {} : listActions),
     attach: (editor) => attachProfileTokenListener(editor),
   }
 }

@@ -21,6 +21,7 @@ export type FluxSceneBuildOptions = Readonly<{
   readonly carouselSceneBuilder: ElceCarouselSceneBuilder
   readonly inlineTextSceneFeature: ResourceInlineTextSceneFeature
   readonly buildAdditionalBdc?: BuildAdditionalBdc
+  readonly evaluationQuestionMode?: boolean
 }>
 
 export interface FluxQuestionReset {

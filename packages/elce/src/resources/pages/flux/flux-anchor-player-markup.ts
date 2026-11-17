@@ -1,8 +1,12 @@
 import { ANCHOR } from '../../anchoring/anchor-config'
 import type { FluxAnchorMarkupTarget } from './flux-anchor-player-markup-types'
 import { sceneStyleClassName } from '../../../builders/scene-style/scene-style-classes'
+import {
+  cardAnchorSideFrom,
+  cardAnchorWidthFrom,
+} from '../../anchoring/card-placement/card-anchor-placement'
 
-/** Replaces editor-only anchor markup with a structural CodPlay flow slot. */
+/** Replaces editor-only anchor markup with its reader-side part slot. */
 export function projectFluxPlayerMarkup(markup: string): string {
   const anchorPattern = new RegExp(
     `<span\\b(?=[^>]*\\b${ANCHOR.DATA_ATTRIBUTE}\\s*=\\s*["']true["'])[^>]*>[\\s\\S]*?<\\/span>`,
@@ -11,7 +15,7 @@ export function projectFluxPlayerMarkup(markup: string): string {
   return markup.replace(anchorPattern, createFlowSlotMarkup)
 }
 
-/** Reads the bdc and CodPlay part identifiers exported by Section anchors. */
+/** Reads anchor targets and optional Card placement from Section markup. */
 export function readFluxAnchorTargets(markup: string): readonly FluxAnchorMarkupTarget[] {
   const anchorPattern = new RegExp(
     `<span\\b(?=[^>]*\\b${ANCHOR.DATA_ATTRIBUTE}\\s*=\\s*["']true["'])[^>]*>`,
@@ -21,11 +25,19 @@ export function readFluxAnchorTargets(markup: string): readonly FluxAnchorMarkup
     const tag = match[0] ?? ''
     const bdcId = readMarkupAttribute(tag, 'data-bdc-id')
     const partId = readMarkupAttribute(tag, 'data-part')
-    return bdcId === null || partId === null ? [] : [{ bdcId, partId, paddingBottom: readPaddingBottom(tag) }]
+    const placementWidth = readMarkupAttribute(tag, 'data-elce-anchor-width')
+    const placementSide = readMarkupAttribute(tag, 'data-elce-anchor-side')
+    return bdcId === null || partId === null ? [] : [{
+      bdcId,
+      partId,
+      paddingBottom: readPaddingBottom(tag),
+      ...(placementWidth === null ? {} : { placementWidth: cardAnchorWidthFrom(placementWidth) }),
+      ...(placementSide === null ? {} : { placementSide: cardAnchorSideFrom(placementSide) }),
+    }]
   })
 }
 
-/** Creates the class-based flow reservation that receives the BDC in the player. */
+/** Creates the structural part slot styled by Elcé's optional Card placement. */
 function createFlowSlotMarkup(anchorMarkup: string): string {
   const partId = readMarkupAttribute(anchorMarkup, 'data-part') ?? ''
   const slotId = `${partId}-flow-slot`

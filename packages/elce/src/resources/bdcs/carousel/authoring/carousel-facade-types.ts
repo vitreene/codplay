@@ -13,9 +13,11 @@ import type { ElceMediaImport } from '../../../../domain/media/media-resource-ty
 import type { StatisticalGraphContent } from '../../statistical-graph/domain/statistical-graph-types'
 import type { StatisticalGraphEditorActions } from '../../statistical-graph/authoring/statistical-graph-facade-types'
 import type { ResourceTextFieldFeature } from '../../../../core/authoring/resource-text-field-feature'
+import type { ListCommand } from '../../../list/authoring/list-command-types'
 
 export interface ElceCarouselFacadeOptions {
   readonly dispatch: (command: CardCommand | CarouselCommand | StatisticalGraphCommand) => void
+  readonly insertListBdc?: (command: ListCommand) => void
   readonly getCard: (bdcId: string) => CardContent | null
   readonly selectCard: (bdcId: string | null) => void
   readonly importMedia: (bdcId: string, mediaImport: ElceMediaImport) => void
@@ -24,7 +26,6 @@ export interface ElceCarouselFacadeOptions {
 export interface ElceCarouselEditorActions extends ElceCardEditorActions {
   readonly selectCard: (bdcId: string) => void
   readonly addCard: () => void
-  readonly addList: () => void
   readonly addStatisticalGraph: () => void
   readonly removeCard: (bdcId: string, selectedBdcId: string | null) => void
   readonly removeStatisticalGraph: (bdcId: string, selectedBdcId: string | null) => void
@@ -52,6 +53,7 @@ export interface ElceCarouselEditorProps {
   readonly mediaById: Readonly<Record<string, Readonly<{ name: string; type: MediaType; source: string | null }>>>
   readonly textFieldAttributes?: Readonly<Record<string, string>>
   readonly textFieldFeature?: ResourceTextFieldFeature
+  readonly listBdcs?: readonly ResourceBdc[]
   readonly createStatisticalGraphActions: (bdcId: string, content: StatisticalGraphContent) => StatisticalGraphEditorActions
   readonly actions: ElceCarouselEditorActions
 }

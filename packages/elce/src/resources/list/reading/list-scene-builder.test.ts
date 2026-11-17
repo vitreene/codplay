@@ -4,7 +4,7 @@ import { ListService } from '../domain/list-service'
 import { ListSceneBuilder } from './list-scene-builder'
 
 describe('List scene builder', () => {
-  it('keeps live reveal waits as planned CodPlay events', async () => {
+  it('applies the shared interval before the first row and keeps reveal waits as planned CodPlay events', async () => {
     const list = new ListService().createDefault('row-first')
     const configuredList = {
       ...list,
@@ -29,12 +29,18 @@ describe('List scene builder', () => {
     )
 
     expect(result).toEqual({
-      events: [{ name: 'test:list:row:row-first:reveal' }],
-      updates: [{ 'test:list:pending-reveals': [250] }],
-      planned: [{
-        offsetMs: 250,
-        step: { event: { name: 'test:list:row:row-second:reveal' } },
-      }],
+      events: [],
+      updates: [{ 'test:list:pending-reveals': [250, 500] }],
+      planned: [
+        {
+          offsetMs: 250,
+          step: { event: { name: 'test:list:row:row-first:reveal' } },
+        },
+        {
+          offsetMs: 500,
+          step: { event: { name: 'test:list:row:row-second:reveal' } },
+        },
+      ],
       warnings: [],
       issues: [],
     })

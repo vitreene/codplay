@@ -1,28 +1,130 @@
+.elce-list-bdc-node-view {
+  display: flow-root;
+  min-width: 0;
+}
+
+.elce-list-bdc-frame {
+  box-sizing: border-box;
+  min-width: 0;
+  border: 2px dashed #9da9a5;
+  border-radius: 0.2rem;
+}
+
+.elce-list-bdc-frame__header {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.elce-list-bdc-view__rows {
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  padding-inline-start: 1.25em;
+  overflow-wrap: anywhere;
+}
+
+.elce-list-bdc-view__rows--none,
+.elce-list-bdc-view__rows--dash,
+.elce-list-bdc-view__rows--custom {
+  padding-inline-start: 0;
+}
+
+.elce-list-bdc-view__row {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.elce-list-bdc-view__rows--dash > .elce-list-bdc-view__row,
+.elce-list-bdc-view__rows--custom > .elce-list-bdc-view__row {
+  display: flex;
+  gap: 0.5em;
+}
+
+.elce-list-bdc-view__marker {
+  flex: none;
+}
+
 .elce-list-editor {
   display: grid;
   gap: 0.75rem;
   min-width: 0;
 }
 
+.elce-list-editor.elce-list-bdc-frame {
+  padding: 1rem;
+}
+
 .elce-list-editor__settings {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
-  gap: 0.65rem;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  gap: 0.65rem 1rem;
+  min-width: 0;
+  margin: 0;
+  overflow-x: auto;
 }
 
 .elce-list-editor__setting {
-  display: grid;
-  gap: 0.3rem;
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 0.35rem;
   min-width: 0;
-  font-weight: 600;
+  color: #6b716f;
+  font-size: 0.7rem;
+}
+
+.elce-list-editor__setting--interval {
+  flex: none;
 }
 
 .elce-list-editor__setting select,
 .elce-list-editor__setting input,
-.elce-list-editor__row > input {
+.elce-list-editor__row > input,
+.elce-list-editor__timing input {
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
+  padding: 0.45rem 0.55rem;
+  color: #263b3a;
+  background: #fffdf8;
+  border: 1px solid #d8d5cb;
+  border-radius: 0.35rem;
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.elce-list-editor__timing {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.elce-list-editor__timing > summary {
+  flex: none;
+  list-style: none;
+  cursor: pointer;
+}
+
+.elce-list-editor__timing > summary::-webkit-details-marker {
+  display: none;
+}
+
+.elce-list-editor__clock > .elce-ui-icon {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.elce-list-editor__timing > input {
+  flex: 0 1 5rem;
+  width: 5rem;
+}
+
+.elce-list-editor__clock[data-customized='true'] {
+  color: #fffdf8;
+  background: #46726b;
+  border-color: #46726b;
 }
 
 .elce-list-editor__rows {
@@ -35,7 +137,7 @@
 
 .elce-list-editor__row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) minmax(5rem, 7rem) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   gap: 0.4rem;
   align-items: center;
 }
@@ -47,19 +149,4 @@
 
 .elce-list-editor__add {
   justify-self: start;
-}
-
-@media (max-width: 34rem) {
-  .elce-list-editor__row {
-    grid-template-columns: auto minmax(0, 1fr) auto;
-  }
-
-  .elce-list-editor__delay {
-    grid-column: 2;
-  }
-
-  .elce-list-editor__delete {
-    grid-column: 3;
-    grid-row: 1 / span 2;
-  }
 }

@@ -3,9 +3,9 @@
 ## Statut
 
 **En cours — le calcul, la garde de scénario Sighty, les réglages du chapitre,
-la machine métier, l’édition du BDC Résultat et le montage de son issue dans le
-player sont vérifiés. L’intégration des actions Recommencer/Relire et de la
-visibilité des réponses reste à réaliser.**
+la machine métier, l’édition du BDC Résultat, ses actions Recommencer/Relire et
+la visibilité des réponses sont vérifiés dans le player. Le parcours navigateur
+de bout en bout reste à valider.**
 
 ## Contrat
 
@@ -66,8 +66,11 @@ détachée. Aucune classe `pending` ni règle `display:none` ne choisit la branc
 Le contrat portable des tentatives, de la reprise après échec et de la relecture
 après succès est décrit dans la
 [spécification de la machine d’Évaluation](evaluation-machine-spec.md). Les
-événements des actions Recommencer/Relire et la visibilité des réponses dans
-les Questions ne sont pas encore raccordés à cette machine dans le player.
+actions configurées des branches Échec et Réussite envoient respectivement
+Recommencer et Relire. Sighty valide la source, le BDC, la branche et l’état
+courant avant de router vers la première Question et d’appliquer la transition
+de la machine. La Question masque ses corrections pendant l’Évaluation ; une
+relecture après réussite restaure les sélections avec les corrections visibles.
 
 La story montée contient la section sémantique et le titre de son issue. Un
 paragraphe de message n’est créé que si l’auteur a saisi un message ; un bouton

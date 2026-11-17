@@ -83,24 +83,17 @@ export function renderLearningClipboardPanel(props: LearningClipboardPanelProps)
     className={props.dropTarget === CLIPBOARD_DROP_TARGET
       ? 'elce-clipboard-panel elce-clipboard-panel--drop-target'
       : 'elce-clipboard-panel'}
-    aria-label="Presse-papiers"
     mix={[
       on<HTMLElement, 'dragover'>('dragover', onDragOverClipboard),
       on<HTMLElement, 'dragleave'>('dragleave', onDragLeaveClipboard),
       on<HTMLElement, 'drop'>('drop', onDropClipboard),
     ]}
   >
-    <header
-      id="elce-clipboard-heading"
-      className="elce-clipboard-panel__heading"
-    >
-      <h2 id="elce-clipboard-title">Presse-papiers</h2>
-    </header>
     <div
       id="elce-clipboard-tabs"
       className="elce-clipboard-panel__tabs"
       role="tablist"
-      aria-label="Sous-rubriques du Presse-papiers"
+      aria-label="Catégories"
     >
       <button
         id="elce-clipboard-tab-pages"

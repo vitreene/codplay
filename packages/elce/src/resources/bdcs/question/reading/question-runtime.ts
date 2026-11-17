@@ -18,6 +18,7 @@ export type QuestionRuntimeConfiguration = Readonly<{
   answerLabels: readonly string[]
   correctAnswerIds: readonly string[]
   selection: 'single' | 'multiple'
+  evaluationMode?: boolean
   completionEventName?: string
   completionEventData?: CompiledRecord
 }>
@@ -62,6 +63,40 @@ export function validateQuestionAnswerStrap(input: StrapExecutionInput): StrapRu
   const isCorrect = answerState.isCorrect
   const selected = new Set(selectedAnswerIds)
   const correct = new Set(correctAnswerIds)
+  if (configuration.evaluationMode === true) {
+    return {
+      update: { selectedAnswerIds, submitted: true },
+      events: [
+        { name: `${configuration.prefix}:feedback`, data: { content: '', attr: { hidden: true } } },
+        { name: `${configuration.prefix}:resolved` },
+        ...configuration.answerIds.map((id) => ({
+          name: `${configuration.prefix}:answer:${id}:${selected.has(id) ? 'submitted-selected' : 'submitted-idle'}`,
+        })),
+        {
+          name: QUESTION_EVENTS.ANSWERED,
+          data: {
+            pageId: configuration.pageId,
+            bdcId: configuration.bdcId,
+            questionType: configuration.questionType,
+            isCorrect,
+            answerIds: configuration.answerIds,
+            answerLabels: configuration.answerLabels,
+            selectedAnswerIds,
+            expectedAnswerIds: correctAnswerIds,
+            description: [configuration.title, configuration.prompt]
+              .filter((text) => text.trim().length > 0)
+              .join(' '),
+          },
+          visibility: 'public',
+        },
+        ...(configuration.completionEventName === undefined ? [] : [{
+          name: configuration.completionEventName,
+          ...(configuration.completionEventData === undefined ? {} : { data: configuration.completionEventData }),
+          visibility: 'public' as const,
+        }]),
+      ],
+    }
+  }
   return {
     update: { selectedAnswerIds, submitted: true },
     events: [
@@ -124,6 +159,18 @@ export function restoreQuestionStrap(input: StrapExecutionInput): StrapRuntimeOu
   const configuration = readQuestionConfiguration(input.state)
   const selectedAnswerIds = readQuestionSelection(input.event.data?.selectedAnswerIds)
   if (configuration === undefined || input.state.submitted === true || selectedAnswerIds.length === 0) return undefined
+  if (input.event.data?.showCorrection === false) {
+    const selected = new Set(selectedAnswerIds)
+    return {
+      update: { selectedAnswerIds, submitted: true },
+      events: [
+        { name: `${configuration.prefix}:feedback`, data: { content: '', attr: { hidden: true } } },
+        ...configuration.answerIds.map((id) => ({
+          name: `${configuration.prefix}:answer:${id}:${selected.has(id) ? 'restored-selected' : 'restored-idle'}`,
+        })),
+      ],
+    }
+  }
   const selected = new Set(selectedAnswerIds)
   const correct = new Set(configuration.correctAnswerIds)
   const isCorrect = questionService.sameAnswerSet(configuration.correctAnswerIds, selectedAnswerIds)

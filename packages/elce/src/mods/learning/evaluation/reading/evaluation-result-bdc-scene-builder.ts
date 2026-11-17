@@ -1,6 +1,7 @@
 import type { PersoDoc, StoryDoc } from 'codplay/scene/types'
 import { ELCE_EVENTS } from '../../reading/learning-reading-events'
 import {
+  EVALUATION_RESULT_ACTION,
   EVALUATION_RESULT_BRANCH,
   EVALUATION_RESULT_CONFIG,
 } from '../learning-evaluation-config'
@@ -148,6 +149,11 @@ function createEvaluationResultActionPerso(
   target: string,
   prefix: string,
 ): PersoDoc<string> {
+  const eventName = action === EVALUATION_RESULT_ACTION.RETRY
+    ? ELCE_EVENTS.EVALUATION_RESULT_RETRY
+    : action === EVALUATION_RESULT_ACTION.REPLAY
+      ? ELCE_EVENTS.EVALUATION_RESULT_REPLAY
+      : ELCE_EVENTS.EVALUATION_RESULT_ACTION
   return {
     id: `${bdc.id}-${branch}-action`,
     type: 'tag',
@@ -155,7 +161,7 @@ function createEvaluationResultActionPerso(
     emit: {
       click: {
         event: {
-          name: ELCE_EVENTS.EVALUATION_RESULT_ACTION,
+          name: eventName,
           data: { pageId: page.id, chapterId: page.chapterId, bdcId: bdc.id, branch, action, prefix },
           visibility: 'public',
         },

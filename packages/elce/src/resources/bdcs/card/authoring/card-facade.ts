@@ -13,6 +13,7 @@ import type { ListContent } from '../../../list/domain/list-types'
 /** Routes shared standalone and Carousel Card edits through document commands. */
 export class ElceCardFacade {
   private readonly dispatch: ElceCardFacadeOptions['dispatch']
+  private readonly insertListBdcCommand: ElceCardFacadeOptions['insertListBdc']
   private readonly getCard: ElceCardFacadeOptions['getCard']
   private readonly importMedia: ElceCardFacadeOptions['importMedia']
   private readonly mediaService = new ElceMediaResourceService()
@@ -20,6 +21,7 @@ export class ElceCardFacade {
 
   public constructor(options: ElceCardFacadeOptions) {
     this.dispatch = options.dispatch
+    this.insertListBdcCommand = options.insertListBdc
     this.getCard = options.getCard
     this.importMedia = options.importMedia
   }
@@ -52,6 +54,16 @@ export class ElceCardFacade {
       setList: (targetBdcId, list: ListContent) => {
         updateCard(targetBdcId, (current) => this.cardService.setList(current, list))
       },
+      ...(this.insertListBdcCommand === undefined ? {} : {
+        insertListBdc: (targetBdcId: BdcId, listBdcId: BdcId, message: import('../../../document/rich-text-types').RichTextDocument, list: ListContent) => {
+          this.insertListBdcCommand?.({ type: 'bdc.list.insert', bdcId: listBdcId, ownerBdcId: targetBdcId, content: message, list })
+        },
+      }),
+      ...(this.insertListBdcCommand === undefined ? {} : {
+        updateListBdc: (listBdcId: BdcId, list: ListContent) => {
+          this.insertListBdcCommand?.({ type: 'bdc.list.update', bdcId: listBdcId, list })
+        },
+      }),
       attachCatalogReference: (targetBdcId, reference: ElceCatalogReference) => {
         this.attachCatalogReference(targetBdcId, reference)
       },

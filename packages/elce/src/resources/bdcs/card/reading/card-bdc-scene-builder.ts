@@ -13,6 +13,7 @@ import type { ElceTextValue } from '../../../document/rich-text-types'
 import { authoredTextToPlainText } from '../../../../core/document/rich-text-utils'
 import { wrapResourceInlineTextSceneParts, type ResourceInlineTextSceneFeature } from '../../../document/resource-inline-text-feature'
 import { ListSceneBuilder } from '../../../list/reading/list-scene-builder'
+import { ListReferenceService } from '../../../list/domain/list-reference-service'
 import type { ListEntryTriggerMode } from '../../../list/reading/list-scene-builder'
 
 export interface CardBdcSceneBuildInput {
@@ -94,6 +95,8 @@ export class ElceCardBdcSceneBuilder {
   }
 }
 
+const listReferenceService: ListReferenceService = new ListReferenceService()
+
 /** Uses the existing Photo media wrapper as the Capsule view's visual root. */
 function createPhotoMediaRootMarkup(rootId: string, partId: string): string {
   return `<div id="${rootId}" class="elce-carousel-photo__media"><!-- data-part="${partId}:root" --><!-- data-part="${partId}:media" --></div>`
@@ -124,18 +127,32 @@ function createCardContentProjection(
   if (card == null) throw new Error(`Le bdc Carte ${bdc.id} ne contient pas ses champs.`)
   let markup = layout.markup
   const persos: PersoDoc<string>[] = []
+  const straps: AuthorStrapCollection = {}
+  const listen: SceneListenRule[] = []
+  const revealEventimes: { name: string; startAt: number }[] = []
   const addField = (zone: CardTextZone, tag: string, value: ElceTextValue): void => {
     const target = layout.zonePartIds[zone]
     const className = layout.zoneClassNames[zone]
-    if (target === undefined || authoredTextToPlainText(value).trim().length === 0) return
+    const hasListReference = zone === 'message' && listReferenceService.referencesIn([bdc]).length > 0
+    if (target === undefined || (authoredTextToPlainText(value).trim().length === 0 && !hasListReference)) return
     if (typeof value === 'string') {
       persos.push(...createCardTextPersos(prefix, bdc.id, zone, tag, value, target, className))
       return
     }
     if (inlineTextSceneFeature === undefined) throw new Error(`Le rendu Tiptap de la Carte ${bdc.id} exige une contribution de texte inline.`)
-    const parts = inlineTextSceneFeature.build(value, `${prefix}:card:${bdc.id}:${zone}`)
-    markup = markup.replace(`<!-- data-part="${target}" -->`, wrapResourceInlineTextSceneParts(parts, `${prefix}-card-${bdc.id}-${zone}`, tag, className))
+    const parts = inlineTextSceneFeature.build(
+      value,
+      `${prefix}:card:${bdc.id}:${zone}`,
+      zone === 'message' ? { entryEventName, entryTriggerMode, exitEventName, initiallyVisible } : undefined,
+    )
+    markup = markup.replace(
+      `<!-- data-part="${target}" -->`,
+      wrapResourceInlineTextSceneParts(parts, `${prefix}-card-${bdc.id}-${zone}`, parts.hasBlockContent ? 'div' : tag, className),
+    )
     persos.push(...parts.persos)
+    Object.assign(straps, parts.straps ?? {})
+    listen.push(...parts.listen ?? [])
+    revealEventimes.push(...parts.revealEventimes ?? [])
   }
   switch (bdc.presetId) {
     case CARD_PRESET_ID.TEXT_SHORT:
@@ -145,12 +162,12 @@ function createCardContentProjection(
       addField('description', 'p', card.description)
       addField('message', 'p', card.message)
       addField('note', 'footer', card.note)
-      return { markup, persos, straps: {}, listen: [], revealEventimes: [] }
+      return { markup, persos, straps, listen, revealEventimes }
     case CARD_PRESET_ID.IMAGE_TITLE:
       addField('title', 'h2', card.title)
-      return { markup, persos, straps: {}, listen: [], revealEventimes: [] }
+      return { markup, persos, straps, listen, revealEventimes }
     case CARD_PRESET_ID.PHOTO:
-      return { markup, persos, straps: {}, listen: [], revealEventimes: [] }
+      return { markup, persos, straps, listen, revealEventimes }
     case CARD_PRESET_ID.IMAGE_CAPTION:
       addField('caption', 'p', card.caption)
       return { markup, persos, straps: {}, listen: [], revealEventimes: [] }
@@ -175,12 +192,15 @@ function createCardContentProjection(
       })
       markup = markup.replace(`<!-- data-part="${listPartId}" -->`, listBuild.markup)
       persos.push(...listBuild.persos)
+      Object.assign(straps, listBuild.straps)
+      listen.push(...listBuild.listen)
+      revealEventimes.push(...listBuild.revealEventimes)
       return {
         markup,
         persos,
-        straps: listBuild.straps,
-        listen: listBuild.listen,
-        revealEventimes: listBuild.revealEventimes,
+        straps,
+        listen,
+        revealEventimes,
       }
     }
     default:

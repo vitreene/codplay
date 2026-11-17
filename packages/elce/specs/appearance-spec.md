@@ -177,8 +177,10 @@ documentaires.
 
 ## Projection sur les scènes
 
-Chaque cible document, page ou BDC reçoit une classe de portée propre. Le nom
-est construit par
+Chaque cible document, page ou BDC de surface reçoit une classe de portée
+propre. Une Liste inline reste dans le flux texte de sa Carte ou Section et
+hérite de sa typographie et de sa couleur de texte ; elle n’est pas une surface
+d’apparence indépendante et ne reçoit pas de portée CSS propre. Le nom est construit par
 [`appearanceScopeClassName`](../src/builders/scene-style/appearance-class-names.ts)
 à partir des identifiants encodés ; il permet de poser les variables générées
 sur la racine du rendu concerné sans ajouter d’attribut `style`.

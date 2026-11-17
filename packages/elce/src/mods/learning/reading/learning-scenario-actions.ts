@@ -4,6 +4,8 @@ import { ELCE_EVENTS, ELCE_SCENARIO, ELCE_SCENARIO_HANDLERS } from './learning-r
 import { QUESTION_TYPE } from '../../../resources/bdcs/question/question-config'
 import { BDC_TYPE } from '../learning-definition'
 import { CHAPTER_TYPE } from '../organization/learning-organization-config'
+import { EVALUATION_RESULT_ACTION, EVALUATION_RESULT_BRANCH } from '../evaluation/learning-evaluation-config'
+import type { EvaluationMachineState } from '../evaluation/domain/learning-evaluation-machine-types'
 import { ELCE_SCORM_CHAPTER_CONTEXT_KEY, ELCE_SCORM_PROGRESS_SINK_CONTEXT_KEY } from '../../../scorm/scorm-types'
 import type { ElceScormProgressSink, ScormQuestionInteraction } from '../../../scorm/scorm-types'
 import type { QuestionType } from '../../../resources/bdcs/question/domain/question-types'
@@ -40,6 +42,7 @@ export class LearningScenarioActions {
       [ELCE_SCENARIO_HANDLERS.REFRESH_EVALUATION_RESULT]: onTestStateChange === undefined
         ? refreshEvaluationResultAction
         : this.createRefreshEvaluationResult(onTestStateChange),
+      [ELCE_SCENARIO_HANDLERS.APPLY_EVALUATION_RESULT_ACTION]: this.createApplyEvaluationResultAction(onTestStateChange),
       [ELCE_SCENARIO_HANDLERS.NAVIGATE_SCORM_CHAPTER]: navigateScormChapterAction,
       [ELCE_SCENARIO_HANDLERS.SAVE_PROFILE_VALUES]: onTestStateChange === undefined
         ? saveProfileValuesAction
@@ -159,6 +162,9 @@ export class LearningScenarioActions {
           return learningProgressionService.canLeavePage(runtime, pageId, context, runtime.earlyExitPageIds.includes(pageId))
         case ELCE_EVENTS.MENU_SUMMARY:
           return false
+        case ELCE_EVENTS.EVALUATION_RESULT_RETRY:
+        case ELCE_EVENTS.EVALUATION_RESULT_REPLAY:
+          return this.evaluationResultTransition(runtime, context, event) !== undefined
         default:
           if (event?.name?.startsWith(ELCE_EVENTS.PAGE_LINK_PREFIX) === true) {
             return learningProgressionService.canLeavePage(runtime, pageId, context, runtime.earlyExitPageIds.includes(pageId))
@@ -176,6 +182,9 @@ export class LearningScenarioActions {
         return learningProgressionService.canLeavePage(runtime, pageId, context, runtime.earlyExitPageIds.includes(pageId))
       case ELCE_EVENTS.MENU_SUMMARY:
         return runtime.summary.permanentAccess || learningProgressionService.isPageComplete(pageId, context, runtime.questionBdcByPage)
+      case ELCE_EVENTS.EVALUATION_RESULT_RETRY:
+      case ELCE_EVENTS.EVALUATION_RESULT_REPLAY:
+        return this.evaluationResultTransition(runtime, context, event) !== undefined
       default:
         if (event?.name?.startsWith(ELCE_EVENTS.PAGE_LINK_PREFIX) === true) {
           return learningProgressionService.canLeavePage(runtime, pageId, context, runtime.earlyExitPageIds.includes(pageId))
@@ -207,16 +216,38 @@ export class LearningScenarioActions {
     if (!this.isPageInScormChapter(runtime, context.context, pageId)) return
     const finishedPages = learningTestStateService.readFinishedPages(context.context)
     const nextFinishedPages = finishedPages.includes(pageId) ? finishedPages : [...finishedPages, pageId]
-    if (nextFinishedPages !== finishedPages) {
-      await context.updateContext({ finishedPages: nextFinishedPages })
-      onTestStateChange?.(learningTestStateService.testStateFromScenarioContext(context.context, { finishedPages: nextFinishedPages }))
+    const page = runtime.pages[pageId]
+    const chapter = page?.chapterId === null || page?.chapterId === undefined
+      ? undefined
+      : runtime.chapters[page.chapterId]
+    const evaluationStates = learningTestStateService.readEvaluationStates(context.context)
+    const evaluationState = chapter?.type === CHAPTER_TYPE.EVALUATION
+      ? evaluationStates[chapter.id]
+      : undefined
+    const completedReview = chapter?.type === CHAPTER_TYPE.EVALUATION
+      && evaluationState?.value === 'reviewing'
+      && evaluationState.context.activeQuestionIds.at(-1) === pageId
+      ? learningEvaluationSessionService.createEvaluationMachine(
+        chapter,
+        learningEvaluationSessionService.evaluationQuestionPageIds(runtime, chapter),
+      ).transition(evaluationState, { type: 'REPLAY.COMPLETE' })
+      : undefined
+    const nextEvaluationStates = completedReview === undefined || chapter === undefined
+      ? evaluationStates
+      : { ...evaluationStates, [chapter.id]: completedReview }
+    const patch = {
+      ...(nextFinishedPages === finishedPages ? {} : { finishedPages: nextFinishedPages }),
+      ...(completedReview === undefined ? {} : { evaluationStates: nextEvaluationStates }),
     }
+    if (Object.keys(patch).length > 0) await context.updateContext(patch)
+    const nextTestState = learningTestStateService.testStateFromScenarioContext(context.context, patch)
+    if (Object.keys(patch).length > 0) onTestStateChange?.(nextTestState)
     await this.saveScormReaderState(
       context,
       pageId,
-      learningTestStateService.testStateFromScenarioContext(context.context, { finishedPages: nextFinishedPages }),
+      nextTestState,
     )
-    await this.refreshPresentation(context)
+    await this.refreshPresentation(context, patch)
   }
 
   /** Updates profile values in the shared Sighty context. */
@@ -395,6 +426,52 @@ export class LearningScenarioActions {
     await this.runRefreshEvaluationResult(context)
   }
 
+  /** Keeps evaluation result actions inside the existing Sighty scenario boundary. */
+  private createApplyEvaluationResultAction(onTestStateChange?: ScenarioBuildOptions['onTestStateChange']) {
+    return (context: SightyActionContext<ElceSceneKey, ElceSlotName>): Promise<void> =>
+      this.runApplyEvaluationResultAction(context, onTestStateChange)
+  }
+
+  /** Applies the configured retry or replay transition and restores its Questions. */
+  private async runApplyEvaluationResultAction(
+    context: SightyActionContext<ElceSceneKey, ElceSlotName>,
+    onTestStateChange?: ScenarioBuildOptions['onTestStateChange'],
+  ): Promise<void> {
+    const runtime = this.readScenarioRuntimeData(context.data)
+    const transition = this.evaluationResultTransition(runtime, context.context, context.event)
+    if (transition === undefined) return
+    const evaluationStates = learningTestStateService.readEvaluationStates(context.context)
+    const nextEvaluationStates = { ...evaluationStates, [transition.chapterId]: transition.state }
+    const currentQuestionAnswers = learningTestStateService.readQuestionAnswers(context.context)
+    const retryQuestionIds = transition.action === EVALUATION_RESULT_ACTION.RETRY
+      ? new Set(transition.state.context.activeQuestionIds)
+      : new Set<string>()
+    const questionAnswers = Object.fromEntries(Object.entries(currentQuestionAnswers)
+      .filter(([pageId]) => !retryQuestionIds.has(pageId)))
+    const questionResults = Object.fromEntries(Object.entries(learningTestStateService.readQuestionResults(context.context))
+      .filter(([pageId]) => !retryQuestionIds.has(pageId)))
+    const restorableQuestionPageIds = Object.keys(questionAnswers)
+    await context.updateContext({
+      evaluationStates: nextEvaluationStates,
+      questionAnswers,
+      questionResults,
+      restorableQuestionPageIds,
+    })
+    const nextTestState = learningTestStateService.testStateFromScenarioContext(context.context, {
+      evaluationStates: nextEvaluationStates,
+      questionAnswers,
+      questionResults,
+    })
+    onTestStateChange?.(nextTestState)
+    await this.saveScormReaderState(context, transition.pageId, nextTestState)
+    await this.refreshPresentation(context, {
+      evaluationStates: nextEvaluationStates,
+      questionAnswers,
+      questionResults,
+      restorableQuestionPageIds,
+    })
+  }
+
   /** Persists the current page and requests the adjacent LMS chapter from its leaf navigation action. */
   public async navigateScormChapterAction(
     context: SightyActionContext<ElceSceneKey, ElceSlotName>,
@@ -515,21 +592,39 @@ export class LearningScenarioActions {
   }
 
   /** Refreshes menu, title, and navigation from the active Sighty page. */
-  private async refreshPresentation(context: SightyActionContext<ElceSceneKey, ElceSlotName>): Promise<void> {
+  private async refreshPresentation(
+    context: SightyActionContext<ElceSceneKey, ElceSlotName>,
+    contextPatch: Readonly<Record<string, unknown>> = {},
+  ): Promise<void> {
+    const currentContext = { ...context.context, ...contextPatch }
     const runtime = this.readScenarioRuntimeData(context.data)
-    const activeScene = context.scenarioState.active?.sceneKey
+    const activeScene = context.scenarioState.current
+      .find((selection) => selection.slotName === ELCE_SCENARIO.CONTENT_SLOT)?.sceneKey
     const activePageId = pageIdFromSceneKey(activeScene)
     const questionId = activePageId === undefined ? undefined : runtime.questionBdcByPage[activePageId]
-    const answer = activePageId === undefined ? undefined : learningTestStateService.readQuestionAnswers(context.context)[activePageId]
-    const restorablePageIds = context.context.restorableQuestionPageIds
+    const answer = activePageId === undefined ? undefined : learningTestStateService.readQuestionAnswers(currentContext)[activePageId]
+    const restorablePageIds = currentContext.restorableQuestionPageIds
+    const activePage = activePageId === undefined ? undefined : runtime.pages[activePageId]
+    const activeChapter = activePage?.chapterId === null || activePage?.chapterId === undefined
+      ? undefined
+      : runtime.chapters[activePage.chapterId]
+    const evaluationState = activeChapter?.type === CHAPTER_TYPE.EVALUATION
+      ? learningTestStateService.readEvaluationStates(currentContext)[activeChapter.id]
+      : undefined
+    const showQuestionCorrection = activeChapter?.type !== CHAPTER_TYPE.EVALUATION
+      || (activeChapter !== undefined && evaluationState !== undefined
+        && learningEvaluationSessionService.createEvaluationMachine(
+          activeChapter,
+          learningEvaluationSessionService.evaluationQuestionPageIds(runtime, activeChapter),
+        ).shouldRevealAnswers(evaluationState))
     if (activeScene !== undefined && activePageId !== undefined && questionId !== undefined && answer !== undefined
       && Array.isArray(restorablePageIds) && restorablePageIds.includes(activePageId)) {
       await context.send(activeScene, {
         name: ELCE_EVENTS.QUESTION_RESTORE,
-        data: { selectedAnswerIds: [...answer.selectedAnswerIds] },
+        data: { selectedAnswerIds: [...answer.selectedAnswerIds], showCorrection: showQuestionCorrection },
       }, { scope: 'story', storyId: `${activePageId}-${questionId}` })
     }
-    const presentation = await learningPresentationService.createPresentation(context.scenarioState, runtime, context.context)
+    const presentation = await learningPresentationService.createPresentation(context.scenarioState, runtime, currentContext)
     await context.send(ELCE_SCENARIO.TITLE_SCENE, {
       name: ELCE_EVENTS.PRESENTATION_TITLE,
       data: { content: presentation.title },
@@ -571,8 +666,8 @@ export class LearningScenarioActions {
     const activeContentSceneKey = context.scenarioState.current
       .find((selection) => selection.slotName === ELCE_SCENARIO.CONTENT_SLOT)?.sceneKey
     const activeContentPageId = pageIdFromSceneKey(activeContentSceneKey)
-    const activePage = activeContentPageId === undefined ? undefined : runtime.pages[activeContentPageId]
-    const activeSummaryBdcIds = activePage?.bdcIds.filter((bdcId) => runtime.bdcTypes[bdcId] === BDC_TYPE.SUMMARY) ?? []
+    const activeContentPage = activeContentPageId === undefined ? undefined : runtime.pages[activeContentPageId]
+    const activeSummaryBdcIds = activeContentPage?.bdcIds.filter((bdcId) => runtime.bdcTypes[bdcId] === BDC_TYPE.SUMMARY) ?? []
     if (activeContentSceneKey !== undefined && activeContentPageId !== undefined) {
       for (const bdcId of activeSummaryBdcIds) {
         const storyId = `${activeContentPageId}-${bdcId}-summary`
@@ -613,6 +708,59 @@ export class LearningScenarioActions {
     if (context.event.name === ELCE_EVENTS.MENU_SUMMARY || context.event.name.startsWith(ELCE_EVENTS.MENU_PREFIX)) {
       await this.closeMenuDrawer(context)
     }
+  }
+
+  /** Validates a configured Result button and computes its existing machine transition. */
+  private evaluationResultTransition(
+    runtime: ElceRuntimeData,
+    context: Readonly<Record<string, unknown>>,
+    event: SightyConditionContext<ElceSceneKey>['event'],
+  ): Readonly<{
+    action: typeof EVALUATION_RESULT_ACTION.REPLAY | typeof EVALUATION_RESULT_ACTION.RETRY
+    chapterId: string
+    pageId: string
+    state: EvaluationMachineState
+  }> | undefined {
+    if (event === undefined) return undefined
+    const action = event.name === ELCE_EVENTS.EVALUATION_RESULT_RETRY
+      ? EVALUATION_RESULT_ACTION.RETRY
+      : event.name === ELCE_EVENTS.EVALUATION_RESULT_REPLAY
+        ? EVALUATION_RESULT_ACTION.REPLAY
+        : undefined
+    const branch = action === EVALUATION_RESULT_ACTION.RETRY
+      ? EVALUATION_RESULT_BRANCH.FAILURE
+      : action === EVALUATION_RESULT_ACTION.REPLAY
+        ? EVALUATION_RESULT_BRANCH.SUCCESS
+        : undefined
+    const data = event.data
+    if (action === undefined || branch === undefined || !this.isRecord(data)
+      || typeof data.pageId !== 'string' || typeof data.chapterId !== 'string' || typeof data.bdcId !== 'string'
+      || data.branch !== branch || data.action !== action || pageIdFromSceneKey(event.sourceSceneKey) !== data.pageId) {
+      return undefined
+    }
+    const page = runtime.pages[data.pageId]
+    const chapter = runtime.chapters[data.chapterId]
+    const expectedSourceState = action === EVALUATION_RESULT_ACTION.RETRY ? 'failure' : 'success'
+    const targetState = action === EVALUATION_RESULT_ACTION.RETRY ? 'attempting' : 'reviewing'
+    if (page?.chapterId !== chapter?.id || chapter?.type !== CHAPTER_TYPE.EVALUATION
+      || !page.bdcIds.includes(data.bdcId)
+      || runtime.bdcTypes[data.bdcId] !== BDC_TYPE.EVALUATION_RESULT
+      || runtime.evaluationResultActions[data.bdcId]?.[branch] !== action) {
+      return undefined
+    }
+    const questionIds = learningEvaluationSessionService.evaluationQuestionPageIds(runtime, chapter)
+    const state = learningTestStateService.readEvaluationStates(context)[chapter.id]
+    if (state === undefined || state.value !== expectedSourceState || questionIds.length === 0) return undefined
+    const machine = learningEvaluationSessionService.createEvaluationMachine(
+      chapter,
+      questionIds,
+      this.readScormProgressSink(context)?.getEvaluationThresholdOverride?.(),
+    )
+    const nextState = machine.transition(state, action === EVALUATION_RESULT_ACTION.RETRY
+      ? { type: 'RETRY' }
+      : { type: 'SUCCESS.REPLAY' })
+    if (nextState.value !== targetState) return undefined
+    return { action, chapterId: chapter.id, pageId: data.pageId, state: nextState }
   }
 
   /** Keeps SCORM progress writes inside the chapter of the current SCO. */
