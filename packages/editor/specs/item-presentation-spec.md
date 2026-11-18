@@ -129,6 +129,12 @@ La conversion entre cadre de contenu et boîte de bordure applique les insets
 avec le même linéaire affine et recalcule l’origine projetée après translation.
 La géométrie de trajectoire transforme le point `transform-origin` de la boîte
 de bordure pour produire ensemble l’ancre du chemin, les ghosts et le CS.
+Pour un item animé dont les quatre longueurs de pose libre sont résolues et
+l’origine est exprimée en fractions, `projectItemStyle` place le centre du
+cadre de mouvement sur cet axe. L’ancre privée repositionne le visuel dans le
+cadre et sa projection inclut ce déplacement. Le trajet peut ainsi suivre
+l’axe du visuel avec le contrat du mouvement par le centre. Un premier pivot
+auteur s’interpole depuis le centre par défaut dans l’action de pose.
 Pendant un geste tangent, une modification de dimensions ou de pivot conserve
 l’orientation affine affichée ; un déplacement le long du chemin recalcule la
 tangente, et une rotation explicite applique sa contribution sur la matrice

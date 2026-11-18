@@ -61,7 +61,7 @@ Conclusion:
 
 See:
 
-`docs/formalisation/2026-07-16-rpm-gesture-sources-and-adaptation.md`
+`prospective/rpm-gestures/2026-07-16-rpm-gesture-sources-and-adaptation.md`
 
 It records possible sources for RPM/Mixamo/VRM gestures and the preferred adaptation strategy.
 
@@ -85,7 +85,7 @@ Alternative path:
 ## Key Files
 
 - `docs/formalisation/2026-07-15-avatar3d-semantic-motion-plan.md`
-- `docs/formalisation/2026-07-16-rpm-gesture-sources-and-adaptation.md`
+- `prospective/rpm-gestures/2026-07-16-rpm-gesture-sources-and-adaptation.md`
 - `packages/authoring/components/avatar3d/src/avatar3d-base-component.ts`
 - `packages/authoring/components/avatar3d/src/semantic-runtime/`
 - `packages/authoring/components/avatar3d/src/semantic-motion/avatar3d-motion-catalog.ts`

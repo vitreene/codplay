@@ -97,8 +97,8 @@ export function createItemComponent<Initial extends Record<string, unknown>>(Nat
         }
         : {
           position: 'absolute',
-          left: '0px',
-          top: '0px',
+          left: motionTransformStyle.left ?? '0px',
+          top: motionTransformStyle.top ?? '0px',
           width: '100%',
           height: '100%',
           scale: motionTransformStyle.scale ?? 'none',

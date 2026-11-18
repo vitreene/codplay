@@ -5,8 +5,8 @@ Date : 15 octobre 2026.
 Étude préparatoire consolidée. La destination V2 et la progression générale
 sont retenues ; les solutions techniques et les réalisations restent à
 définir. Compléments : [adaptation Quiz Hunt](2026-10-15-quiz-hunt-adaptation-study.md),
-[note Quest](2026-10-15-quest-mod-note.md) et
-[étude DGS et frontières de la famille](2026-10-20-dgs-mod-study.md).
+[note Quest](../../../../prospective/quest/2026-10-15-quest-mod-note.md) et
+[étude DGS et frontières de la famille](../../../../prospective/sighty-tv/2026-10-20-dgs-mod-study.md).
 
 Le [sujet Mods](../index.md) réunit ces notes. La
 [reconfiguration proposée](2026-10-20-elce-reconfiguration-study.md) décrit
@@ -203,7 +203,7 @@ dévoilement. Leur forme et leurs gestes d’édition restent ouverts.
 
 ## Quatrième mode étudié : DGS
 
-L’[étude DGS](2026-10-20-dgs-mod-study.md), ajoutée le 20 octobre 2026,
+L’[étude DGS](../../../../prospective/sighty-tv/2026-10-20-dgs-mod-study.md), ajoutée le 20 octobre 2026,
 examine DGS comme canal de diffusion collective sur télévision. Le calendrier et les
 séquences programmées y conduisent les passages entre pages et chapitres,
 sans choix du public. Les interludes occupent les intervalles entre émissions.

@@ -1082,11 +1082,12 @@ function buildStyleTransition(
   const interpolated: Record<string, unknown> = {}
   const discrete: Record<string, unknown> = {}
   for (const [property, value] of Object.entries(diff)) {
-    // Missing numeric pose rotation uses the CSS identity angle without densifying source decor.
+    // Missing pose transforms use their CSS defaults without densifying source decor.
     const from = fromStyle[property]
       ?? (poseRotationIdentity && property === 'rotate' && typeof value === 'number' ? 0 : undefined)
       ?? (poseRotationIdentity && (property === 'scaleX' || property === 'scaleY')
         && typeof value === 'number' ? 1 : undefined)
+      ?? (poseRotationIdentity && property === 'transform-origin' ? '50% 50%' : undefined)
     // FIRST precedes this action; LAST includes its resolved pose. Geometry-only assignments
     // therefore belong here even when the style resolver cannot tween the authored pair.
     if (capturesMotionGeometry && OFFSET_STYLE_PROPERTIES.has(property)

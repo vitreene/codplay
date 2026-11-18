@@ -113,10 +113,10 @@ novembre, l’utilisateur a demandé deux modes de captation en direct : Micro
 à la capture et sans réglages visibles. La décision est de ne pas conserver les
 images ; seules la piste audio et sa timeline de tête rejoignent le BDC Avatar.
 Les candidats STT et alignement sont dans
-l’[étude talking-head](../notes/2026-11-04-talking-head-study.md#audit-local-complémentaire-et-recommandations--5-novembre-2026),
+l’[étude des traitements vocaux locaux](../../../prospective/local-voice-processing/2026-11-05-local-voice-processing-study.md#audit-local-complémentaire-et-recommandations--5-novembre-2026),
 à requalifier sur les sons français du Projet 3 avant de finaliser le parcours.
-La référence aux endpoints et à la frontière de clé est dans la même
-[étude](../notes/2026-11-04-talking-head-study.md#référence-api-elevenlabs-du-5-novembre-2026).
+La référence aux endpoints et à la frontière de clé reste dans
+l’[étude Tête parlante](../notes/2026-11-04-talking-head-study.md#référence-api-elevenlabs-du-5-novembre-2026).
 
 1. **Implémentation corrigée ; acceptation ElevenLabs en cours** —
    `packages/authoring/audio-capture/` : reprendre le premier panneau réel
@@ -324,7 +324,7 @@ reste hors de ce parcours ; son usage ultérieur sera cadré séparément.
   (15 formes Oculus) comme piste distincte, sans supposer l’équivalence des
   jeux. HeadAudio/Talking Avatar restent des candidats d’estimation live et
   Rhubarb un témoin A–H/X. Détails et limites dans la
-  [note d’étude](../notes/2026-11-04-talking-head-study.md#audit-local-complémentaire-et-recommandations--5-novembre-2026).
+  [note d’étude](../../../prospective/local-voice-processing/2026-11-05-local-voice-processing-study.md#audit-local-complémentaire-et-recommandations--5-novembre-2026).
 - **T3 :** relever les contraintes de composition Avatar/Carousel et de fin à
   la durée de voix avec le player et le signal public existants. Le modèle de
   widgets sera réexaminé après collecte des contraintes des autres candidats.

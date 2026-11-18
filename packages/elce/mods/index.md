@@ -1,6 +1,7 @@
 # Elcé — sujet Mods
 
-Ce dossier réunit les études et notes sur les mods d’Elcé. Le
+Cet index relie les études et notes sur les mods d’Elcé. Les analyses des
+projets non développés sont regroupées dans [`prospective/`](../../../prospective/). Le
 [plan unique](plan/2026-10-20-elce-mods-reconfiguration-plan.md) conserve
 les conclusions, les décisions retenues et celles qui restent à prendre.
 Le [guide de développement](../src/mods/docs/README.md) donne un exemple concret dans Learning.
@@ -18,14 +19,14 @@ Le [skill partagé](../src/mods/docs/SKILL.md) pilote la réalisation d’un mod
 ## Intérêts prioritaires
 
 - Learning est le nom du mod actuel, précédemment appelé « Général ».
-- [DGS](notes/2026-10-20-dgs-mod-study.md) étudie la diffusion TV collective et autonome.
-- [Sequence et scheduler](notes/2026-10-20-sequence-scheduler-study.md) explore les enchaînements locaux et leur programmation temporelle ; l’autonomie de `sequence` reste ouverte.
-- [Diffusion par destination](notes/2026-10-20-sequence-scheduler-study.md#diffusion-uniforme-et-diffusion-par-destination) étudie l’affectation de plusieurs récepteurs à des schedulers distincts dans un même projet DGS.
+- [DGS](../../../prospective/sighty-tv/2026-10-20-dgs-mod-study.md) étudie la diffusion TV collective et autonome.
+- [Sequence et scheduler](../../../prospective/sighty-tv/2026-10-20-sequence-scheduler-study.md) explore les enchaînements locaux et leur programmation temporelle ; l’autonomie de `sequence` reste ouverte.
+- [Diffusion par destination](../../../prospective/sighty-tv/2026-10-20-sequence-scheduler-study.md#diffusion-uniforme-et-diffusion-par-destination) étudie l’affectation de plusieurs récepteurs à des schedulers distincts dans un même projet DGS.
 
 ## Exemples secondaires
 
 - [Quiz Hunt](notes/2026-10-15-quiz-hunt-adaptation-study.md).
-- [Quest](notes/2026-10-15-quest-mod-note.md).
+- [Quest](../../../prospective/quest/2026-10-15-quest-mod-note.md).
 - [Cours partagé et application de participation](notes/2026-10-15-elce-mods-study.md#autre-exemple-cité--cours-partagé-et-réponses-des-participants).
 
 Ces exemples ne constituent pas des engagements de réalisation.

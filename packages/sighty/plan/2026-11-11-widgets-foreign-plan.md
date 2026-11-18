@@ -13,9 +13,9 @@ présenté comme une illustration et, selon sa configuration, servir de menu
 en émettant des événements vers Sighty. Le Sommaire global de l'aside et le
 Calendrier sont les premiers consommateurs de ce raccord commun.
 
-Le plan prolonge la [décision sur les composants standard](../notes/2026-10-07-composants-standard-scenario.md).
+Le plan prolonge la [décision sur les composants standard](../../../prospective/sighty-widgets/2026-10-07-composants-standard-scenario.md).
 Les recherches propres au renderer Calendrier restent dans
-l'[étude existante](../../elce/mods/notes/2026-10-20-sequence-scheduler-study.md#rendre-le-bdc-calendrier-dans-codplay--étude-du-composant).
+l'[étude existante](../../../prospective/sighty-tv/2026-10-20-sequence-scheduler-study.md#rendre-le-bdc-calendrier-dans-codplay--étude-du-composant).
 Le calendrier métier et les programmes restent dans leur
 [plan Sighty-TV](../../elce/mods/plan/2026-11-11-digital-signage-calendar-program-plan.md).
 

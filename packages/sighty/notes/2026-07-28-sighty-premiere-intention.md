@@ -450,7 +450,7 @@ reste — un `telco:seek`, un `telco:pause` sont des messages parmi d'autres.
 L'effet qui a fait surgir la question — un faux aller-retour de lecture dans
 `mashup-back-and-fore-scene.ts` — est **méta et très limité** : il ne se justifie que dans une démo
 expliquant le fonctionnement de codplay, et n'entame donc pas la prémisse « l'œuvre diffusée se joue en
-avant » (`../../codplay-v2/notes/2026-07-27-emetteurs-et-events-user-complexes.md` §6.3).
+avant » (`../../../prospective/complex-user-events/2026-07-27-emetteurs-et-events-user-complexes.md` §6.3).
 
 La capacité qu'il appelle — la **lecture arrière** — est du ressort de **codplay**, non de
 l'orchestration : [façade CodPlay actuelle](../../codplay/specs/facade-v2-spec.md).

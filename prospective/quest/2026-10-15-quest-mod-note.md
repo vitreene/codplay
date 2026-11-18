@@ -3,8 +3,8 @@
 Date : 15 octobre 2026.
 
 Première idée de mod, sans cahier des charges ni réalisation décidée.
-Le cadre commun et la progression ELcé V2 sont dans l’[étude des mods](2026-10-15-elce-mods-study.md) ;
-le cas concret de comparaison est l’[adaptation Quiz Hunt](2026-10-15-quiz-hunt-adaptation-study.md).
+Le cadre commun et la progression ELcé V2 sont dans l’[étude des mods](../../packages/elce/mods/notes/2026-10-15-elce-mods-study.md) ;
+le cas concret de comparaison est l’[adaptation Quiz Hunt](../../packages/elce/mods/notes/2026-10-15-quiz-hunt-adaptation-study.md).
 
 ## Intention
 
@@ -48,7 +48,7 @@ Le panier à remplacement par couleur de Quiz Hunt n’est pas ce contrat.
 ## Raccord aux capacités existantes
 
 Sighty accepte déjà routes explicites, maps de vues, contexte, actions et
-gardes. Les [conditions de profil ELcé](../../specs/summary-profile-spec.md)
+gardes. Les [conditions de profil ELcé](../../packages/elce/specs/summary-profile-spec.md)
 offrent propriétés typées et ET/OU ; elles ne définissent pas encore les
 événements d’acquisition et de choix de Quest.
 

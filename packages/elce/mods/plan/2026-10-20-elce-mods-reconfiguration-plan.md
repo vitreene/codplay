@@ -461,7 +461,7 @@ Calendrier sont des ressources partagées ; Learning peut recevoir le BDC en
 premier. Le scheduler et les programmes restent dans `digital-signage`.
 Leur extraction ne sera envisagée qu'avec un autre projet consommateur réel.
 
-L'[étude dédiée](../notes/2026-10-20-sequence-scheduler-study.md) conserve
+L'[étude dédiée](../../../../prospective/sighty-tv/2026-10-20-sequence-scheduler-study.md) conserve
 les pistes de diffusion plus larges. Le terme `sequence` des points suivants
 désigne l'exploration des enchaînements aujourd'hui portée par les programmes ;
 ces pistes ne rendent pas leur métier partagé dans le périmètre initial.

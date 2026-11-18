@@ -37,7 +37,7 @@ de lecture sont distinctes. Les builders et contributions Elcé transforment le
 document en scénario Sighty, scènes CodPlay, actions et guards. Les modules
 apportent leurs données et leurs contributions à cette génération ; leurs
 classes métier sont appelées par les actions et guards lorsque la lecture
-l’exige. La [déclinaison sequence/scheduler](2026-10-20-sequence-scheduler-study.md#document-auteur-et-production-du-scénario)
+l’exige. La [déclinaison sequence/scheduler](../../../../prospective/sighty-tv/2026-10-20-sequence-scheduler-study.md#document-auteur-et-production-du-scénario)
 suit cette même chaîne.
 
 ## Classes métier et responsabilités des appelants

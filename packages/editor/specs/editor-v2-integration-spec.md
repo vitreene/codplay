@@ -177,6 +177,9 @@ sont définis dans [`app-layout.css`](../src/app/layout/app-layout.css).
   phase avant d'effacer la sélection. Un réattachement du même ensemble d'items
   conserve le panneau et les réglages actifs. Resize et scroll reprojettent le
   frame depuis la géométrie courante, sans mutation du document.
+- Les items de la scène affichent le curseur de pointage, y compris sur le
+  texte. Le Selection Frame et ses poignées gardent les curseurs de leurs
+  gestes.
 - En mode Bloc, quand le hit-test de scène résout un item, le handler de capture
   Editor consomme son `pointerdown` avant qu'il atteigne la grille Zone superposée.
   Le clic sélectionne donc l'item sans tracer une zone ni committer le document.

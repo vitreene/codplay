@@ -109,7 +109,7 @@ décision métier qui les déclenche.
 
 Le mot « sommaire » désigne ici l’organisation et la présentation du jeu ; il
 n’impose pas le Sommaire Learning ni ses modes de navigation. La
-[note Sighty sur les composants standard](../../../sighty/notes/2026-10-07-composants-standard-scenario.md)
+[note Sighty sur les composants standard](../../../../prospective/sighty-widgets/2026-10-07-composants-standard-scenario.md)
 envisage un sommaire de navigation autonome en contenu foreign. Cette
 orientation ne rend pas ce composant disponible aujourd’hui et ne décide pas
 du support de la grille animée propre à Quiz Hunt.

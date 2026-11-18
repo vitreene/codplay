@@ -226,7 +226,7 @@ Décisions non prises, à affecter à une version avant implémentation :
 - Lecture arrière : arrêter son périmètre et ses interactions avec le rate,
   les médias et RenderSync. La validation du rate positif existant reste en V2.
 - Construction live sans journal : conserver le cadrage exploratoire dans
-  [la note dédiée](./notes/2026-09-23-construction-live-non-reconstructible.md).
+  [la note dédiée](../../../../prospective/live-without-reconstruction/2026-09-23-construction-live-non-reconstructible.md).
   Aucune API, option de scène ni autre politique de Seek n’est décidée.
 - API `live`, répétition conditionnelle ou scheduler de frames pour les straps :
   aucune forme n’est adoptée ; définir le besoin et l’acceptation avant réalisation.
@@ -260,7 +260,7 @@ ressources ; un clone DOM ne certifie pas une représentation native.
   contrôle natif visé avant tout changement. Conserver les usages actuels de
   `focus` sur boutons et conteneurs.
 
-Les [sources utilisateur complexes](./notes/2026-07-27-emetteurs-et-events-user-complexes.md)
+Les [sources utilisateur complexes](../../../../prospective/complex-user-events/2026-07-27-emetteurs-et-events-user-complexes.md)
 restent une exploration sans capacité ni API acceptée.
 
 ## Ressources et formats de diffusion

@@ -68,6 +68,10 @@ body,
   overflow: clip;
 }
 
+#editor-scene-region [data-item-id] {
+  cursor: pointer;
+}
+
 .app-region--panel {
   grid-area: panel;
 }

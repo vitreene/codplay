@@ -2,7 +2,7 @@ import type { CodPlayPresentationPose } from 'codplay'
 import { OFFSET_STYLE_PROPERTIES } from '../decor-editor/units'
 import { resolveContentInsetStyles } from '../motion-editor/border-insets'
 import { contentBoxLayoutDisplacement } from '../motion-editor/content-box'
-import { frameWithRotationAtPathAnchor, motionPathAnchorForFrame } from '../motion-editor/geometry'
+import { frameVisualCenter, frameWithRotationAtPathAnchor, motionPathAnchorForFrame, resolveMotionGeometryPose } from '../motion-editor/geometry'
 import type { SelectionFrameValue } from '../decor-editor/types'
 import type { ContentBoxInsetsPx } from '../motion-editor/content-box'
 import { ITEM_MOTION_REFERENCE_ANGLE, ITEM_MOTION_ROTATION_BASELINE } from './item-motion-reference'
@@ -138,8 +138,8 @@ export function captureItemTransformProjection(
   const translate = style.translate === 'none' ? [] : style.translate.split(/\s+/)
   const translateMatrix = {
     a: 1, b: 0, c: 0, d: 1,
-    e: readTransformLength(translate[0], width),
-    f: readTransformLength(translate[1], height),
+    e: readTransformLength(style.left, width) + readTransformLength(translate[0], width),
+    f: readTransformLength(style.top, height) + readTransformLength(translate[1], height),
   }
   const rotate = style.rotate === 'none' || style.rotate === '' ? 0 : readTransformAngle(style.rotate)
   const cosine = Math.cos(rotate)
@@ -238,23 +238,37 @@ export function projectItemStyle(
   const splitMotionTransform = rotationBaseline !== undefined
   const captureAngle = referenceAngle ?? rotationBaseline
   const captureFrame = captureAngle === undefined ? frame : { ...frame, rotate: captureAngle }
-  /** Resolves a linear length coefficient while retaining the authored path anchor. */
-  function referenceDisplacement(value: SelectionFrameValue, insets: ContentBoxInsetsPx) {
-    if (captureAngle === undefined) return { x: 0, y: 0 }
-    return frameWithRotationAtPathAnchor(value, captureAngle, motionPathAnchorForFrame(value, insets), insets)
+  const centersMotionOnAxis = splitMotionTransform && rotationOrigin !== undefined
+    && (rotationOrigin.fx !== 0.5 || rotationOrigin.fy !== 0.5)
+    && (['x', 'y', 'width', 'height'] as const).every(property => readLength(style[property]) !== null)
+  /** Resolves one length coefficient of the private frame's layout offset. */
+  function captureDisplacement(value: SelectionFrameValue, insets: ContentBoxInsetsPx) {
+    if (centersMotionOnAxis) {
+      const capture = resolveMotionGeometryPose({ ...value, rotate: captureAngle, scaleX: 1, scaleY: 1 }, insets)
+      const center = frameVisualCenter(capture.borderFrame)
+      const axis = motionPathAnchorForFrame(value, insets)
+      // The motion frame follows its center. Make that center the visible item's axis.
+      return {
+        x: axis.x - (center.x - capture.borderFrame.x),
+        y: axis.y - (center.y - capture.borderFrame.y),
+      }
+    }
+    const reference = captureAngle === undefined ? { x: 0, y: 0 }
+      : frameWithRotationAtPathAnchor(value, captureAngle, motionPathAnchorForFrame(value, insets), insets)
+    const { x, y } = contentBoxLayoutDisplacement(captureFrame, insets)
+    return { x: reference.x - x, y: reference.y - y }
   }
   const contributions = Object.entries(insets).filter(([, css]) => css !== '0px').map(([side, css]) => {
     const basis = { top: 0, right: 0, bottom: 0, left: 0, [side]: 1 }
-    const displacement = contentBoxLayoutDisplacement(captureFrame, basis)
-    const reference = referenceDisplacement(frame, basis)
-    return { css, x: reference.x - displacement.x, y: reference.y - displacement.y,
+    const { x, y } = captureDisplacement(frame, basis)
+    return { css, x, y,
       width: side === 'left' || side === 'right' ? 1 : 0,
       height: side === 'top' || side === 'bottom' ? 1 : 0 }
   })
   const referenceLengths = captureAngle === undefined ? [] : (['width', 'height'] as const).flatMap(property => {
     const length = readLength(style[property])
     if (length === null) return []
-    const reference = referenceDisplacement({ ...frame, [property]: 1 }, { top: 0, right: 0, bottom: 0, left: 0 })
+    const reference = captureDisplacement({ ...frame, [property]: 1 }, { top: 0, right: 0, bottom: 0, left: 0 })
     return [{ css: formatLength(length), x: reference.x, y: reference.y, width: 0, height: 0 }]
   })
   const frameStyle: Record<string, unknown> = { position: 'relative', overflow: 'visible' }
@@ -287,6 +301,10 @@ export function projectItemStyle(
     if (style.scale !== undefined) motionTransformStyle.scale = style.scale
     motionTransformStyle['transform-origin'] = typeof style['transform-origin'] === 'string'
       ? style['transform-origin'] : '50% 50%'
+    if (centersMotionOnAxis) {
+      motionTransformStyle.left = `${(0.5 - rotationOrigin.fx) * 100}%`
+      motionTransformStyle.top = `${(0.5 - rotationOrigin.fy) * 100}%`
+    }
     frameStyle.rotate = captureAngle ?? 0
   }
   for (const property of ['x', 'y', 'width', 'height'] as const) {

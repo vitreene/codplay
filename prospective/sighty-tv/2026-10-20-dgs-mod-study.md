@@ -3,9 +3,9 @@
 Date : 20 octobre 2026.
 
 Étude exploratoire du quatrième mode proposé : digital signage, abrégé DGS
-dans cette conversation. Elle prolonge l’[étude des mods](2026-10-15-elce-mods-study.md),
-l’[adaptation Quiz Hunt](2026-10-15-quiz-hunt-adaptation-study.md) et
-la [note Quest](2026-10-15-quest-mod-note.md). Elle ne fixe aucun cahier des
+dans cette conversation. Elle prolonge l’[étude des mods](../../packages/elce/mods/notes/2026-10-15-elce-mods-study.md),
+l’[adaptation Quiz Hunt](../../packages/elce/mods/notes/2026-10-15-quiz-hunt-adaptation-study.md) et
+la [note Quest](../quest/2026-10-15-quest-mod-note.md). Elle ne fixe aucun cahier des
 charges, format documentaire, API ou programme d’implémentation.
 
 DGS fait exception à la destination LMS retenue pour les autres projets
@@ -104,7 +104,7 @@ doit pouvoir présenter un Sommaire, des relations de jeu, un récit ou une
 programmation selon l’expérience choisie. Le sens de chaque état reste propre
 au mode, même si ses moyens d’enregistrement sont partagés.
 
-La [cohérence des interfaces auteur](2026-10-15-elce-mods-study.md#cohérence-des-interfaces-et-continuité-dapprentissage)
+La [cohérence des interfaces auteur](../../packages/elce/mods/notes/2026-10-15-elce-mods-study.md#cohérence-des-interfaces-et-continuité-dapprentissage)
 est une justification centrale des mods. Les repères et gestes appris dans
 les autres modes doivent faciliter la prise en main de DGS. L’auteur retrouve
 les conventions des outils de contenu et apprend les fonctions propres à la
@@ -117,7 +117,7 @@ chapitre suivant. Un ordre interne de présentation peut rester utile sans
 devenir le parcours global de tous les modes.
 
 Cette frontière est une cible d’étude. Le
-[document actuel v5](../../specs/document-model-spec.md) donne effectivement à
+[document actuel v5](../../packages/elce/specs/document-model-spec.md) donne effectivement à
 `scenarioEntries` et aux ordres internes des chapitres le rôle de déterminer
 l’ordre de lecture. Il porte aussi Sommaire et profil. L’Elcé actuel n’est
 donc pas déjà un noyau indépendant des règles du mod Learning. L’extraction étudiée
@@ -126,7 +126,7 @@ au mod Learning. Aucun changement de ce contrat n’est réalisé ici.
 
 ## Réemploi auteur et adaptation des contenus
 
-Le [réemploi entre modes](2026-10-15-elce-mods-study.md#réemploi-auteur-entre-modes)
+Le [réemploi entre modes](../../packages/elce/mods/notes/2026-10-15-elce-mods-study.md#réemploi-auteur-entre-modes)
 signifie récupérer les contenus par copie, puis adapter leur présentation.
 Les BDC de destination sont par défaut des copies indépendantes. L’auteur
 peut les remanier sans modifier les BDC du projet source. Le partage éventuel
@@ -189,7 +189,7 @@ ce circuit de passages automatiques. Le calendrier ne justifie pas un second
 routeur, un catalogue runtime dupliqué ou un accès direct au DOM des médias.
 
 L’orientation demandée pour
-l’[état de lecture](2026-10-16-reading-state-ownership-study.md) reste
+l’[état de lecture](../../packages/elce/mods/notes/2026-10-16-reading-state-ownership-study.md) reste
 pertinente : son pilotage doit se faire au niveau du scénario Sighty, avec
 des modules métier et techniques appelés par ce circuit. Le calendrier auteur
 est une donnée de projet ; la diffusion courante est un état d’exécution.
@@ -198,21 +198,21 @@ La fenêtre d’affichage n’a pas à posséder cette logique. Le raccord des
 
 ## Appuis réels et limites actuelles
 
-La [spécification Sighty](../../../sighty/specs/authoring-library-spec.md)
+La [spécification Sighty](../../packages/sighty/specs/authoring-library-spec.md)
 établit les routes explicites, les actions, le contexte et la réadmission des
 scènes. Ces capacités permettent d’envisager une lecture automatique. Elles
 ne certifient pas un ordonnanceur calendaire. Les transitions concurrentes
 pendant `changing` sont rejetées : une échéance pendant un changement de vue
 demanderait donc une politique explicite, sans file de compensation locale.
 
-Les [builders Diapo](../../specs/diapo-scene-builder-spec.md) signalent notamment
+Les [builders Diapo](../../packages/elce/specs/diapo-scene-builder-spec.md) signalent notamment
 `elce:page:finished` dès l’apparition du marqueur d’une Carte ou à l’apparition
 de la dernière Carte du Carousel. Ce signal
 sert la progression du mod Learning. Il ne mesure pas le temps nécessaire à la
 diffusion complète : la dernière Carte vient seulement d’apparaître. Le
 réutiliser comme échéance DGS écourterait certains contenus.
 
-Le [Carousel](../../specs/carousel-bdc-spec.md) fournit déjà un déroulement
+Le [Carousel](../../packages/elce/specs/carousel-bdc-spec.md) fournit déjà un déroulement
 automatique à durées et répétitions finies. Il constitue un appui réel pour
 le contenu des interludes. Le maintien d’un interlude jusqu’à une échéance,
 son interruption et son éventuelle reprise ne sont pas certifiés par ce seul
@@ -220,15 +220,15 @@ comportement. La séquence DGS peut réutiliser les contenus et mécanismes
 adaptés sans devenir un Carousel de pages.
 
 Les vidéos Elcé utilisent actuellement le
-[mode média indépendant](../../../codplay/specs/media-sync-v2-spec.md) et le
-[STOP de sortie de page](../../specs/player-preview-spec.md#lecture-des-vidéos-et-sortie-de-page).
+[mode média indépendant](../../packages/codplay/specs/media-sync-v2-spec.md) et le
+[STOP de sortie de page](../../packages/elce/specs/player-preview-spec.md#lecture-des-vidéos-et-sortie-de-page).
 Leur temps n’est donc pas la durée de la scène. Le démarrage autonome,
 l’interruption et les répétitions DGS demanderaient leur propre acceptation
 sur le circuit média existant. Si « flux vidéo » désigne un direct, la
-[décision média correspondante](../../../codplay/plan/evolutions/evolution-backlog.md#sources-média-en-direct)
+[décision média correspondante](../../packages/codplay/plan/evolutions/evolution-backlog.md#sources-média-en-direct)
 reste acceptée mais non appliquée. Une vidéo enregistrée ne certifie pas ce cas.
 De même, le callback `schedule` du
-[plan Player](../../../codplay/plan/player-engine-plan.md) ne constitue pas un
+[plan Player](../../packages/codplay/plan/player-engine-plan.md) ne constitue pas un
 calendrier DGS établi.
 
 ## Contraintes qui pèseront sur le rapprochement

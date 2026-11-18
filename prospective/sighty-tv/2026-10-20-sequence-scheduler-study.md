@@ -25,7 +25,7 @@ n'engage pas leur implémentation dans ces deux premiers blocs.
 La création de plusieurs calendriers et l'action « diffusion » qui active
 l'un d'eux sont également reportées à une tranche suivante.
 
-Le [plan calendrier et programmes](../plan/2026-11-11-digital-signage-calendar-program-plan.md)
+Le [plan calendrier et programmes](../../packages/elce/mods/plan/2026-11-11-digital-signage-calendar-program-plan.md)
 prépare ces deux blocs et distingue les décisions retenues des raccords
 encore à arrêter. Les exemples et le raisonnement restent dans cette note.
 
@@ -50,7 +50,7 @@ fonctionnalités ni l'entrée du nouveau mod dans le sélecteur.
 Le BDC réutilise le calcul du moteur, sans dépendre du scheduler ni du mod
 Sighty-TV. Les choix de présentation appartiennent au BDC. Les règles
 d'interlude et d'enchaînement de programmes ne lui sont pas transférées.
-Le [BDC Graphe](../../specs/statistical-graph-spec.md) fournit un exemple
+Le [BDC Graphe](../../packages/elce/specs/statistical-graph-spec.md) fournit un exemple
 vérifié de raccord d'un contenu spécialisé au document, à son édition et
 aux builders de rendu existants ; ce raccord est à réemployer pour le BDC
 Calendrier selon ses placements retenus.
@@ -66,7 +66,7 @@ dans un composant CodPlay. Il peut être une illustration ou un menu dont
 les activations émettent des intentions vers Sighty, sans faire des items
 des persos de scène. Son intégration reçoit aussi les données ou commandes
 de présentation nécessaires. Le raccord des deux usages est porté par le
-[plan distinct des widgets autonomes](../../../sighty/plan/2026-11-11-widgets-foreign-plan.md).
+[plan distinct des widgets autonomes](../../packages/sighty/plan/2026-11-11-widgets-foreign-plan.md).
 Le support de `emit` sur les zones/items appartient au futur composant intégré,
 à préciser d'après les usages observés. Les outils de gestion du calendrier
 ne sont pas prévus dans le rendu diffusé.
@@ -96,13 +96,13 @@ Les études de ce composant et de ses parts sont conservées ci-dessous comme
 évolution ; elles ne sont plus des prérequis de ce premier affichage.
 Aucun rendu Calendrier n'est encore implémenté.
 La normalisation du montage et des échanges avec le Sommaire global relève
-du [plan des widgets foreign](../../../sighty/plan/2026-11-11-widgets-foreign-plan.md).
+du [plan des widgets foreign](../../packages/sighty/plan/2026-11-11-widgets-foreign-plan.md).
 Les développements suivants conservent le raisonnement de l'étude ; les
 actions et critères communs ont leur propriétaire dans ce plan distinct.
 
 #### Première étape — contenu foreign hébergé
 
-Le [contrat du composant `slot`](../../../codplay/specs/slot-component-spec.md)
+Le [contrat du composant `slot`](../../packages/codplay/specs/slot-component-spec.md)
 prévoit une boîte HTML pour un contenu foreign opaque : autre scène,
 iframe, média ou représentation possédée par un fournisseur externe. Sa
 surface `foreignContent` attache et détache des racines, sans en faire des
@@ -144,7 +144,7 @@ déduite automatiquement par le build de scène.
 façade publique `instances.mount` décrite par le contrat monte aujourd'hui
 une autre instance CodPlay. Elle ne constitue pas une API publique déjà
 validée pour un widget DOM arbitraire. Le
-[plan foreign](../../../codplay/plan/foreign-scene-component-plan.md)
+[plan foreign](../../packages/codplay/plan/foreign-scene-component-plan.md)
 garde le raccord générique au propriétaire de représentation à définir.
 Avant de réaliser ce calendrier, arrêter ce raccord minimal en prolongeant
 la surface existante. Sighty ne recherche pas l'hôte par sélecteur et ne
@@ -153,7 +153,7 @@ ne doit être créée pour faire passer le widget pour une scène CodPlay.
 
 #### Échanges applicatifs avec Sighty
 
-Le [contrat d'intégration Sighty](../../../sighty/specs/authoring-library-spec.md#4-api-dintégration-publique)
+Le [contrat d'intégration Sighty](../../packages/sighty/specs/authoring-library-spec.md#4-api-dintégration-publique)
 fournit l'entrée `runtime.dispatch` et la sortie `runtime.events.onEvent`.
 Le raccord extérieur peut transmettre les événements métier du calendrier
 à cette entrée et recevoir les événements publics utiles via l'abonnement,
@@ -171,19 +171,19 @@ d'item émet une intention vers Sighty et ses actions/guards ; elle ne devient
 pas une émission de perso ni une opération directe sur le player.
 
 Le Sommaire dans l'aside fournit un précédent de composition complet. Le
-[layout Elcé](../../src/mods/learning/reading/learning-layout-scene-builder.ts)
+[layout Elcé](../../packages/elce/src/mods/learning/reading/learning-layout-scene-builder.ts)
 déclare la région `aside`, son ancre et le `slot` nommé du menu. Le
-[scénario](../../src/mods/learning/reading/learning-scenario-builder.ts)
+[scénario](../../packages/elce/src/mods/learning/reading/learning-scenario-builder.ts)
 y conserve le Sommaire comme sélection persistante, distincte des pages qui
 changent dans la région de contenu. Le
-[Sommaire Elcé](../../src/mods/learning/organization/reading/learning-summary-scene-builder.ts)
+[Sommaire Elcé](../../packages/elce/src/mods/learning/organization/reading/learning-summary-scene-builder.ts)
 émet des événements publics par ses entrées et les
-[actions de scénario](../../src/mods/learning/reading/learning-scenario-actions.ts)
+[actions de scénario](../../packages/elce/src/mods/learning/reading/learning-scenario-actions.ts)
 lui envoient l'état de présentation : page active, accès et progression.
 Il fournit donc déjà la séparation entre cadre, contenu autonome par rapport
 aux pages et coordination événementielle Sighty.
 
-La [décision Sighty sur les composants standard](../../../sighty/notes/2026-10-07-composants-standard-scenario.md)
+La [décision Sighty sur les composants standard](../sighty-widgets/2026-10-07-composants-standard-scenario.md)
 prévoit en outre de remplacer Sommaire et commandes de navigation par des
 composants JavaScript autonomes, facultatifs, hébergés comme contenu foreign.
 Elle conserve ouverts leur fourniture, leur alimentation et leur cycle de
@@ -208,20 +208,20 @@ suivantes.
 
 #### Circuit existant à reprendre — composant intégré ultérieur
 
-Le [contrat de matérialisation](../../../codplay/specs/component-materialization-v2-spec.md)
+Le [contrat de matérialisation](../../packages/codplay/specs/component-materialization-v2-spec.md)
 sépare le composant de son rendu HTML. Un `layout` fournit un template ;
 `tag` reçoit notamment texte, attributs, classes et style. Le
-[contrat de layout](../../../codplay/specs/layout-component-spec.md)
+[contrat de layout](../../packages/codplay/specs/layout-component-spec.md)
 permet d'y monter des persos sur des ancres commentaire, sans conteneur
-supplémentaire. Le [contrat auteur](../../../codplay/specs/scene-authoring-spec.md)
+supplémentaire. Le [contrat auteur](../../packages/codplay/specs/scene-authoring-spec.md)
 conserve ensuite le chemin `SceneDoc → compilation → lecture → matérialisation`.
 
 Le précédent Elcé concret est le
-[builder du BDC Graphe](../../src/resources/bdcs/statistical-graph/reading/statistical-graph-scene-builder.ts).
+[builder du BDC Graphe](../../packages/elce/src/resources/bdcs/statistical-graph/reading/statistical-graph-scene-builder.ts).
 Il produit markup, feuille de style et persos éventuels. Les
-[builders Diapo](../../src/resources/pages/diapo/diapo-scene-builder.ts),
-[Flux](../../src/resources/pages/flux/flux-scene-builder.ts) et
-[Carousel](../../src/resources/bdcs/carousel/reading/carousel-scene-builder.ts)
+[builders Diapo](../../packages/elce/src/resources/pages/diapo/diapo-scene-builder.ts),
+[Flux](../../packages/elce/src/resources/pages/flux/flux-scene-builder.ts) et
+[Carousel](../../packages/elce/src/resources/bdcs/carousel/reading/carousel-scene-builder.ts)
 intègrent cette contribution dans leurs scènes. Ce précédent prouve
 l'existence du raccord, pas la validation d'un futur calendrier dans ces
 placements.
@@ -273,9 +273,9 @@ Pour une action sur un item, conserver l'identité métier de l'occurrence,
 distincte de celle de la série et des identifiants de montage du placement.
 Si un rendez-vous est représenté sur deux jours, ses deux fragments
 renvoient à la même occurrence. Les
-[liens inline existants](../../src/mods/learning/inline-text/learning-inline-text-scene.ts)
+[liens inline existants](../../packages/elce/src/mods/learning/inline-text/learning-inline-text-scene.ts)
 montrent le montage d'un perso interactif sur une ancre commentaire ; la
-[source HTML de Perso.emit](../../../codplay/specs/perso-emit-v2-spec.md)
+[source HTML de Perso.emit](../../packages/codplay/specs/perso-emit-v2-spec.md)
 fournit le circuit d'entrée. Le choix des actions proposées et de leur
 portée reste à définir pour le BDC, sans importer les liens ou les événements
 propres à Learning. Un affichage statique n'exige aucun événement ; un clic
@@ -291,7 +291,7 @@ facultatif ne devient pas une source continue.
 | EventCalendar derrière le composant externe | Réemploie ses vues en sélectionnant les plugins utiles. Son état DOM, ses styles, son horloge interne et ses callbacks demandent un raccord explicite ; ses outils d'édition restent désactivés en diffusion. |
 
 Le `layout` lit son markup initial dans
-[`render()`](../../../codplay/src/runtime/components/layout/layout-component.ts) ;
+[`render()`](../../packages/codplay/src/runtime/components/layout/layout-component.ts) ;
 son `update()` applique classes, styles et attributs. Il ne fournit pas une
 action de remplacement du calendrier complet. La composition proposée
 convient donc à une période et à un jeu d'occurrences préparés pour la scène ;
@@ -299,7 +299,7 @@ elle ne prouve pas un renouvellement à minuit, un changement de semaine en
 lecture ou une actualisation d'abonnement dans une scène conservée.
 
 Pour le composant externe étudié, la frontière existante
-[`BaseHTMLComponent`](../../../codplay/src/runtime/components/base-html-component.ts)
+[`BaseHTMLComponent`](../../packages/codplay/src/runtime/components/base-html-component.ts)
 fournit une racine HTML matérialisée. Le composant reste une présentation :
 calcul des récurrences, connecteurs et scheduler gardent leurs propriétaires.
 La différence avec la composition `layout` est l'encapsulation des vues et
@@ -372,7 +372,7 @@ de déplacement et de redimensionnement des items.
 
 #### Préparation de la bibliothèque et propriété du DOM
 
-Le [contrat de préparation tierce](../../../codplay/specs/third-party-library-spec.md)
+Le [contrat de préparation tierce](../../packages/codplay/specs/third-party-library-spec.md)
 possède déjà le raccord : l'intégration déclare un `RuntimeLibraryDefinition`
 et la définition du composant référence son ID dans `libraries`.
 Le build dérive le requirement ; la préparation précède l'initialisation.
@@ -417,7 +417,7 @@ Son chargement, son isolation sous la racine et son inclusion dans la
 publication doivent être explicites. Le seul requirement de bibliothèque
 JavaScript ne garantit pas sa livraison. Les styles partagés ne sont pas
 retirés à la destruction d'un seul widget si un autre les utilise. Le
-[contrat d'export existant](../../../codplay/specs/scene-package-export-v1-spec.md)
+[contrat d'export existant](../../packages/codplay/specs/scene-package-export-v1-spec.md)
 sépare le paquet scène et l'intégration du site ; il faut vérifier ce vrai
 parcours avec les styles et la bibliothèque retenus. La préparation reste
 interne au raccord : une scène unique utilise le chargement public habituel,
@@ -458,11 +458,11 @@ rendu n'exclut pas ces interactions.
 `eventClick` fournit l'événement du widget, son élément et l'événement natif.
 `dateClick` fournit la date ou l'horaire d'une zone de grille. Ces callbacks
 ne fournissent pas automatiquement un événement CodPlay. Le circuit ordinaire
-[`Perso.emit`](../../../codplay/specs/perso-emit-v2-spec.md)
+[`Perso.emit`](../../packages/codplay/specs/perso-emit-v2-spec.md)
 ne déduit pas une identité d'occurrence depuis des cellules créées après
 la matérialisation. La traduction de cette activation doit être définie.
 L'extension de source HTML déjà employée par
-[`scroll-container`](../../../codplay/specs/scroll-container-spec.md)
+[`scroll-container`](../../packages/codplay/specs/scroll-container-spec.md)
 offre un raccord à étudier, avec `HtmlSourceAdapterContext.commands.emit`
 vers le dispatcher existant, ses règles de lecture/pause et son cycle Seek.
 Elle ne justifie pas un second bus ni deux émissions pour le même clic.
@@ -479,10 +479,10 @@ des occurrences et leurs révisions, sans fetch ou synchronisation propres.
 #### Accueillir d'autres persos dans des `data-part`
 
 Le mécanisme n'est pas réservé à `layout`. La
-[matérialisation HTML](../../../codplay/src/runtime/runner-html/component-materializer.ts)
+[matérialisation HTML](../../packages/codplay/src/runtime/runner-html/component-materializer.ts)
 lit le résultat de `render()` de tout `BaseHTMLComponent`, découvre ses parts
 et sélectionne celles rendues publiques par sa définition. Le
-[catalogue](../../../codplay/src/runtime/catalog/runtime-capability-catalog.ts)
+[catalogue](../../packages/codplay/src/runtime/catalog/runtime-capability-catalog.ts)
 prévoit `mountableParts` et `mountablePartResolver`, avec le module `markup`.
 `InputComponent` exerce déjà la séparation entre parts internes et cibles
 publiques pour ses icônes. Le composant Calendrier peut employer cette même
@@ -531,7 +531,7 @@ si cette composition interne est retenue.
 Écrire `data-part` dans un `eventContent` construit après `initialize()` ne
 suffit pas. Le chemin actuel découvre les parts lors de
 `materializeTemplateString(component.render())` ;
-[`BaseHTMLComponent`](../../../codplay/src/runtime/components/base-html-component.ts)
+[`BaseHTMLComponent`](../../packages/codplay/src/runtime/components/base-html-component.ts)
 conserve ensuite les références reçues par `_materialize()`. Le
 `mountablePartResolver` sélectionne les IDs publiables au montage ; il ne
 surveille pas les futurs nœuds ajoutés par le widget. Aucun scan permanent,
@@ -1176,17 +1176,17 @@ soumettre pour le scheduler. Les sujets distincts encore à examiner sont :
 
 ### Appuis vérifiés et frontières de conception
 
-Le [mod Quiz Hunt](../../specs/quiz-hunt-mod-spec.md) montre un document et des
+Le [mod Quiz Hunt](../../packages/elce/specs/quiz-hunt-mod-spec.md) montre un document et des
 compositions propres au mod utilisant les ressources partagées. L'édition du
 calendrier et des programmes devra rejoindre le circuit documentaire et son
-[historique commun](../../specs/document-history-spec.md), avec un geste
+[historique commun](../../packages/elce/specs/document-history-spec.md), avec un geste
 cohérent pour une copie ou un déplacement ; aucun historique parallèle n'est
 nécessaire au seul motif d'introduire le scheduler.
 
-Le [contrat Sighty](../../../sighty/specs/authoring-library-spec.md) possède
+Le [contrat Sighty](../../packages/sighty/specs/authoring-library-spec.md) possède
 déjà les graphes de vues, leur composition par slots, les actions et guards,
 et l'admission des intentions par `runtime.dispatch`. Le
-[contrat du slot CodPlay](../../../codplay/specs/slot-component-spec.md)
+[contrat du slot CodPlay](../../packages/codplay/specs/slot-component-spec.md)
 possède le montage d'une scène enfant, sans décider de sa lecture ni de sa
 durée. Ce sont les circuits à prolonger, pas un scheduler calendaire ou un
 créateur de programmes déjà disponibles.
@@ -1200,14 +1200,14 @@ aucune extension du core CodPlay n'est déduite de cette discussion.
 ## Exploration initiale et pistes ultérieures
 
 Cette étude prolonge l’[intention DGS](2026-10-20-dgs-mod-study.md) et la
-[composition des modules](2026-10-20-mod-composition-internal-api-study.md).
+[composition des modules](../../packages/elce/mods/notes/2026-10-20-mod-composition-internal-api-study.md).
 L’utilisateur distingue un module `sequence`, qui représente des boucles de
 lecture locales et leurs règles d’enchaînement, et un module `scheduler`, qui
 en donne une projection temporelle. Cette distinction constitue le point de
 départ. Les structures et responsabilités proposées ci-dessous servent à la
 discussion ; elles ne définissent aucune API disponible ni format persistant.
 Les décisions ouvertes sont centralisées dans
-le [plan des mods](../plan/2026-10-20-elce-mods-reconfiguration-plan.md#sequence-et-scheduler).
+le [plan des mods](../../packages/elce/mods/plan/2026-10-20-elce-mods-reconfiguration-plan.md#sequence-et-scheduler).
 
 ## Deux questions métier différentes
 
@@ -1279,7 +1279,7 @@ enregistrable, puis Elcé la transforme pour produire la lecture.
 
 La forme documentaire et sa projection vers les tables doivent être définies
 pour la persistance. La forme des objets attendus par Sighty appartient à la
-génération. Le [contrat actuel des projets](../../specs/project-api-spec.md)
+génération. Le [contrat actuel des projets](../../packages/elce/specs/project-api-spec.md)
 distingue déjà le document structuré échangé et sa projection relationnelle ;
 le format DGS reste à définir.
 
@@ -1326,7 +1326,7 @@ doit rester représentable sans deviner cette répartition.
 ### Fin collective dans un layout à plusieurs zones
 
 L’utilisateur rappelle un cas déjà décrit dans la
-[première intention Sighty, §6.1](../../../sighty/notes/2026-07-28-sighty-premiere-intention.md#61-affichage-dynamique-digital-signage) :
+[première intention Sighty, §6.1](../../packages/sighty/notes/2026-07-28-sighty-premiere-intention.md#61-affichage-dynamique-digital-signage) :
 un layout est divisé en zones, chacune présentant une scène. Dans ce cas,
 la fin naturelle de la séquence attend le signal de fin de chacune des scènes.
 La séquence doit donc aussi représenter cette composition parallèle ; le
@@ -1347,7 +1347,7 @@ Une même occurrence terminée ne compte qu’une fois ; une fin d’un cycle
 précédent ne satisfait pas le cycle suivant. Ces faits sont un état de lecture,
 distinct du document auteur ; leur pilotage reste au niveau du scénario Sighty.
 
-Le [contrat Sighty actuel](../../../sighty/specs/authoring-library-spec.md)
+Le [contrat Sighty actuel](../../packages/sighty/specs/authoring-library-spec.md)
 permet de faire remonter `scene:end` sans quitter la vue ni libérer la scène.
 Les actions du scénario produit seraient raccordées à ces signaux ; lorsqu’un
 changement de vue doit suivre la fin collective, il passe par l’admission
@@ -1394,7 +1394,7 @@ horaires en occurrences datées.
 
 Les builders et contributions du mod transforment les données auteur en
 scénario Sighty et scènes CodPlay, avec les actions et guards associés.
-Le [builder Diapo actuel](../../specs/diapo-scene-builder-spec.md#fin-fonctionnelle-de-diapo)
+Le [builder Diapo actuel](../../packages/elce/specs/diapo-scene-builder-spec.md#fin-fonctionnelle-de-diapo)
 illustre déjà cette chaîne : il produit la scène et son signal public ;
 `buildScenario` raccorde ce signal à une action Sighty.
 
@@ -1413,7 +1413,7 @@ Les builders doivent établir les références entre contenus auteur et élémen
 produits ; leur correspondance exacte reste à définir.
 
 Preview et player exporté doivent partager cette génération et les mêmes
-règles de lecture. La [forme auteur Sighty](../../../sighty/specs/authoring-library-spec.md#33-scénario-et-fonctions-dauteur)
+règles de lecture. La [forme auteur Sighty](../../packages/sighty/specs/authoring-library-spec.md#33-scénario-et-fonctions-dauteur)
 peut contenir des fonctions ; leur conditionnement pour l’export est une
 frontière distincte, qui ne fixe pas le schéma BDD du projet Elcé.
 
@@ -1684,13 +1684,13 @@ sa remplaçante. Les ressources restent attachées au cycle de vie qui les poss�
 
 | Référence relue | Appui et limite pour cette étude |
 | --- | --- |
-| [Document](../../specs/document-model-spec.md) et [historique](../../specs/document-history-spec.md) | Un document, commandes pures et un commit ordonné. Le v5 reste un document Learning, pas un format DGS déjà disponible. |
-| [API projets](../../specs/project-api-spec.md) | Persistance explicite des données ; ajouter un champ TypeScript ne suffit pas à le conserver dans SQLite. |
-| [Carousel](../../specs/carousel-bdc-spec.md) | Circuit automatique interne aux BDC Carte/Graphe. Ses enfants et son placement ne représentent pas une liste de pages/chapitres. Le contenu reste réemployable, sans étendre son rôle par analogie. |
-| [Diapo](../../specs/diapo-scene-builder-spec.md#fin-fonctionnelle-de-diapo) | `elce:page:finished` correspond notamment à l’apparition de la dernière Carte, pas à sa durée complète d’exposition. Le contrat de fin de présentation DGS manque. |
-| [Preview et vidéos](../../specs/player-preview-spec.md#lecture-des-vidéos-et-sortie-de-page) | Médias indépendants et STOP de sortie réels. Démarrage autonome, répétition et interruption DGS restent à éprouver ; aucune commande DOM n’est déduite de ce besoin. |
-| [Sighty](../../../sighty/specs/authoring-library-spec.md) | Actions, routes, événements et admission existants. `scene:end` est une fin fonctionnelle sans navigation implicite ; `sequence:end` termine la séquence technique du player. Aucune agrégation des fins par zones, aucun scheduler calendaire ni restauration complète sérialisée ne sont acquis. |
-| [État de lecture](2026-10-16-reading-state-ownership-study.md) | Pilotage demandé au niveau du scénario ; raccord de restauration et de persistance encore à appliquer. |
+| [Document](../../packages/elce/specs/document-model-spec.md) et [historique](../../packages/elce/specs/document-history-spec.md) | Un document, commandes pures et un commit ordonné. Le v5 reste un document Learning, pas un format DGS déjà disponible. |
+| [API projets](../../packages/elce/specs/project-api-spec.md) | Persistance explicite des données ; ajouter un champ TypeScript ne suffit pas à le conserver dans SQLite. |
+| [Carousel](../../packages/elce/specs/carousel-bdc-spec.md) | Circuit automatique interne aux BDC Carte/Graphe. Ses enfants et son placement ne représentent pas une liste de pages/chapitres. Le contenu reste réemployable, sans étendre son rôle par analogie. |
+| [Diapo](../../packages/elce/specs/diapo-scene-builder-spec.md#fin-fonctionnelle-de-diapo) | `elce:page:finished` correspond notamment à l’apparition de la dernière Carte, pas à sa durée complète d’exposition. Le contrat de fin de présentation DGS manque. |
+| [Preview et vidéos](../../packages/elce/specs/player-preview-spec.md#lecture-des-vidéos-et-sortie-de-page) | Médias indépendants et STOP de sortie réels. Démarrage autonome, répétition et interruption DGS restent à éprouver ; aucune commande DOM n’est déduite de ce besoin. |
+| [Sighty](../../packages/sighty/specs/authoring-library-spec.md) | Actions, routes, événements et admission existants. `scene:end` est une fin fonctionnelle sans navigation implicite ; `sequence:end` termine la séquence technique du player. Aucune agrégation des fins par zones, aucun scheduler calendaire ni restauration complète sérialisée ne sont acquis. |
+| [État de lecture](../../packages/elce/mods/notes/2026-10-16-reading-state-ownership-study.md) | Pilotage demandé au niveau du scénario ; raccord de restauration et de persistance encore à appliquer. |
 
 Le module proposé concerne les passages de pages et chapitres ainsi que les
 compositions par zones. Il ne remplace ni les séquences techniques CodPlay ni
@@ -1707,7 +1707,7 @@ ou validé par sa rédaction.
 
 Les pistes ci-dessous conservent le détail de l’exploration. Les décisions
 ouvertes correspondantes sont regroupées sous les mêmes références dans
-le [plan des mods](../plan/2026-10-20-elce-mods-reconfiguration-plan.md#sequence-et-scheduler).
+le [plan des mods](../../packages/elce/mods/plan/2026-10-20-elce-mods-reconfiguration-plan.md#sequence-et-scheduler).
 
 | Réf. | Piste discutée | Exemple pour préciser le comportement |
 | --- | --- | --- |
