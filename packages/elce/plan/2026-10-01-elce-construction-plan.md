@@ -663,6 +663,27 @@ Safari MCP, le 25 octobre 2026, avait confirmé que les SVG du marqueur de chapi
 Les SVG Lucide de l’interface utilisent `.elce-ui-icon` avec `block-size: 1.4cap` et une largeur automatique. Le renderer retire les attributs SVG `width`/`height` ; l’icône d’ancre réutilise la même classe. La flèche de sélection CSS suit aussi `1cap`. Les dimensions des boutons restent propres à leur rôle, avec le padding de 2 px et l’écart de 4 px déjà définis. Les SVG de graphe et d’illustration gardent leur contrat de rendu.
 
 Safari MCP, le 25 octobre 2026, avait vérifié la prise en charge de `1cap` et l’absence de taille fixe sur les 78 icônes d’éditeur présentes. La règle `1.4cap` reste à vérifier visuellement ; les feuilles du popup utilisent la même règle.
+### Reflow de la grille du player sous 800 px — appliqué et vérifié
+
+- [x] Dans `learning-layout-style.ts`, donner au sélecteur du reflow mobile une
+  spécificité suffisante pour battre la règle de base placée dans `@scope` ;
+  aucun changement de CodPlay core. Brave vérifie les colonnes attendues à
+  `801`, `800`, `442`
+  et `1200` px après plusieurs allers-retours. À `800` et `442` px, le contenu
+  commence à `x=0`; le document et le scrollport n’ont aucun débordement
+  horizontal. Pendant cette séquence, `scrollTop` reste à `0`. Console sans
+  erreur ; typecheck, test ciblé du player (`60/60`) et build réussis.
+
+- [x] À 605 px, les règles de base scoped masquaient le bouton (`display: none`)
+  et laissaient le tiroir en `display: contents`, avec une boîte de 0 × 0. Dans
+  `learning-layout-style.ts`, renforcer les sélecteurs mobiles du bouton, du
+  bouton de fermeture et du tiroir, uniquement quand le menu existe. Brave MCP
+  vérifie à `605` px le titre et le bouton visibles, l’ouverture du tiroir
+  (`605 × 952`) avec son titre et ses pages, puis Échap et le retour du focus.
+  À `800` px, le titre et le bouton sont encore visibles ; à `801` px, le titre
+  et le menu latéral restent visibles et le bouton mobile est masqué. Console
+  sans erreur.
+
 ### Sommaire responsive du player — décision acceptée, défaut détecté à la frontière
 
 - **Régression confirmée le 26 octobre 2026 — En cours ; décision utilisateur

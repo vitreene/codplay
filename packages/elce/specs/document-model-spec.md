@@ -160,8 +160,15 @@ métier.
 
 `LearningDocument.toJSON()` fournit la valeur structurée enregistrable en
 version 16. Le payload des Listes est stocké dans la table SQLite `list_bdcs`,
-liée au BDC commun par son identifiant ; les octets des médias sont conservés à
-part par la frontière IndexedDB.
+liée au BDC commun par son identifiant. Il porte la transition d’apparition
+partagée des items, avec `fade` par défaut ; les références valides sont celles
+du registre Révélation Elcé, comme le déclarent
+[`list-types.ts`](../src/resources/list/domain/list-types.ts) et
+[`list-service.ts`](../src/resources/list/domain/list-service.ts). La migration
+SQLite [`add_list_transition`](../src/server/sqlite/migrations/legacy-learning/20261117150000_add_list_transition/up.sql)
+ajoute `fade` aux payloads Liste plus anciens qui ne possèdent pas encore cette
+propriété. Les octets des médias sont conservés à part par la frontière
+IndexedDB.
 
 Les types communs ne contiennent pas les payloads Learning : les services
 d’ancre, d’apparence et de réglages de lecture consultent `ResourceDocumentData`

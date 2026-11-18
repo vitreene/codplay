@@ -1,13 +1,7 @@
 # Elcé — édition d’une Section
 
-## Statut
-
-**Contrat de la ressource vérifié le 28 octobre 2026.** L’éditeur WYSIWYG,
-les ancres et la suppression passent par la ressource Section et l’acteur
-Learning existant. Le cadre auteur Learning reste suivi dans le plan Mods.
-
-Cette tranche couvre l’édition et la suppression d’une Section Flux. Les
-parcours d’ancrage sont décrits dans la [spécification des ancres](./anchor-spec.md).
+Cette spécification décrit l’édition d’une Section Flux. Les parcours
+d’ancrage sont décrits dans la [spécification des ancres](./anchor-spec.md).
 
 ## Contrat
 
@@ -33,20 +27,44 @@ La surface Tiptap propose dans le POC :
   de la Liste. Le bouton circulaire Settings2 ouvre l’éditeur Liste partagé au
   même emplacement ; son bouton « Mode vue » revient au rendu. Un contour
   tireté gris clair `#9da9a5` de `2px` identifie le BDC dans les deux modes ;
-  la bascule reste locale à l’éditeur et ne modifie pas le document. Le cadre
-  suit la largeur disponible du flux et ne passe pas sous une Carte ancrée qui
+  la bascule reste locale à l’éditeur et ne modifie pas le document. Le bouton
+  de mode garde une zone de `2.5rem`, un cercle de `1.4rem` et une icône de
+  `0.7rem`. La poignée de déplacement mesure également `1.4rem`. Les deux
+  cercles reprennent les positions symétriques des contrôles du cadre image :
+  ils occupent les angles supérieurs gauche et droit, avec un retrait de
+  `0.5rem` au bord extérieur du cadre. Le placement est relatif au cadre et
+  indépendant du padding du contenu ; les coordonnées corrigent l’épaisseur de
+  bordure de `2px` de la Liste.
+  La poignée `↕` déplace le bloc dans le même éditeur Tiptap. Un dépôt dans un
+  paragraphe le place après le paragraphe entier, sans scinder son texte ni
+  dupliquer le BDC.
+  Le conteneur de flux du NodeView garde une marge basse de `0.35rem`, comme
+  les paragraphes de Section, pour séparer la Liste du contenu suivant.
+  L’en-tête conserve sa place dans le flux. En mode vue, l’espace sous le bouton
+  d’édition est réduit de `0.5rem`
+  et les items successifs sont séparés par `0.5rem`. Le cadre suit la largeur disponible du
+  flux et ne passe pas sous une Carte ancrée qui
   flotte à côté du texte. En mode édition, le cadre réserve `1rem` de padding ;
-  Préfixe, Départ conditionnel et Intervalle (s) restent sur une seule rangée
-  flex, qui défile horizontalement si nécessaire. Les options de Préfixe
-  montrent les marqueurs avec « Exemple ». Les durées de ligne et l’intervalle
-  sont repliés derrière Clock ; l’icône les ouvre sur leur champ numérique.
-  Après validation avec Entrée ou lorsque le focus quitte le champ, la saisie
-  se replie. Le titre de l’icône affiche alors la durée en secondes au format
-  français ; pour une ligne qui hérite de l’intervalle, le titre indique aussi
-  cette valeur héritée.
+  Préfixe, Départ pour les préfixes ordonnés, Transition et Délai
+  restent sur une seule rangée flex, qui défile horizontalement si nécessaire.
+  Le champ Départ utilise une base flex dimensionnée pour afficher trois
+  chiffres.
+  Préfixe montre les marqueurs
+  directement (`•`, `▪`, `–`, `a.`, `1.`, `i.`) ; le choix sans marqueur
+  s’intitule « Aucun » et un marqueur personnalisé est suivi de
+  « Personnalisé ». Transition choisit l’apparition des items du BDC Liste et
+  Fondu est la valeur initiale. Le délai commun, libellé « Délai », reste
+  toujours visible ; seuls les délais propres aux lignes sont repliés derrière
+  Clock. Après validation avec Entrée ou dès que le champ numérique perd le
+  focus, la saisie de ligne se replie, y compris si le focus passe à l’icône
+  Clock. Son titre affiche la durée en secondes au format français ; pour une
+  ligne qui hérite du délai commun, le titre indique aussi cette valeur héritée.
   Les commandes Clock partagent le même bouton `1.7rem` et la même icône SVG
   `0.75rem`, quelle que soit la taille de police héritée du libellé.
-  Ajouter une ligne utilise le même bouton carré que la poignée de réordonnancement ;
+  Le glisser-déposer affiche un filet de `2px` au-dessus ou au-dessous de la
+  ligne visée selon la position du pointeur ; avant la première et après la
+  dernière ligne, ce filet marque les extrémités de la Liste. Ajouter une ligne
+  utilise le même bouton carré que la poignée de réordonnancement ;
 - une barre de commandes compacte en icônes Lucide, avec `aria-label` et
   infobulle pour chaque commande. Les boutons exposent l’état actif de la
   sélection courante via Tiptap (`aria-pressed` et `data-active`) ; un titre H3
@@ -67,6 +85,7 @@ L’adaptateur fonctionne sans cette contribution ; Learning fournit
 champ. La ressource Section ne lit donc pas la définition du profil. Les
 projections auteur et lecteur injectées par chaque composition suivent le
 [contrat de projection du texte riche](./resource-text-projection-spec.md).
+La lecture de la page suit la [spécification du lecteur](./player-preview-spec.md).
 `SectionEditorSession` possède les adaptateurs et barres d’outils montés ; la
 vue lui délègue leur actualisation, la restauration du caret et leur destruction.
 
@@ -100,7 +119,7 @@ phase de propagation : elle laisse ProseMirror et les sélecteurs média traiter
 leurs événements, puis annule le défaut navigateur si aucune cible n’a accepté
 le fichier.
 
-## Preuves
+## Tests de référence
 
 - [`section-editor-tiptap-adapter.test.ts`](../src/resources/bdcs/section/authoring/section-editor-tiptap-adapter.test.ts)
   vérifie l’adaptateur sans contribution de texte, puis l’attachement et le
@@ -120,28 +139,6 @@ le fichier.
   vérifie les gestes auteur de placement et de suppression des BDC.
 - [`flux-scene-builder.test.ts`](../src/mods/learning/integration/flux-scene-builder.test.ts)
   vérifie que le builder porte le markup statique dans la scène Flux.
-- Le 8 octobre, Brave DevTools dépose un fichier PNG synthétique sur la Section
-  Tiptap de la page Remix de production. La commande XState crée une Carte
-  ancrée et son image s’affiche dans le même éditeur depuis l’URL média serveur
-  après confirmation du transfert. Le parcours de preview est décrit dans la
-  [spécification du lecteur](./player-preview-spec.md).
-- Le 28 octobre, Safari MCP sur `http://localhost:5175/` modifie le contenu
-  d’une Section et constate `PUT /document` `200` (révision 15). Le dépôt des
-  références catalogue de Carte et Graphe dans cette même Section enregistre
-  les révisions 16 et 18 ; le serveur conserve les mêmes BDC sous
-  `parentBdcId: bdc-section-1` et vide le catalogue. Dans le même projet
-  temporaire, un PNG de 169 octets déposé par `DataTransfer` synthétique sur le
-  vrai éditeur ProseMirror crée une ancre persistée (révision 27), puis son
-  média est chargé (`PUT` `201`, `GET` `200`). La preview réelle Sighty/CodPlay
-  affiche l’image API décodée en `2 × 2 px` sans ancre d’édition. Le MCP valide
-  le gestionnaire réel du navigateur, pas un glisser physique depuis Finder.
-  Le test Remix/XState ci-dessus couvre l’import et la conservation de
-  l’Editor pendant l’actualisation de sa source média.
-- Le 28 octobre, Safari MCP (`5175`) exerce la cible image de la Carte ancrée
-  sur Page D MCP : le même identifiant Card est conservé et l’état revient à
-  l’image originale après le contrôle Undo/Redo. Un dépôt sans position
-  ProseMirror ou sur le fond de la page est consommé sans navigation ni
-  sauvegarde documentaire.
 
 ## Limites de la tranche
 

@@ -34,15 +34,33 @@ suite ».
   ouvre l’éditeur partagé au même emplacement ; le bouton de l’éditeur revient
   au mode vue. Un contour tireté gris clair `#9da9a5` de `2px` identifie le
   BDC dans les deux modes. Cet état reste local à l’éditeur et ne modifie pas
-  le document.
+  le document. En mode vue, réduire de `0.5rem` l’espace après le bouton
+  d’édition et séparer les items successifs par `0.5rem`. Le bouton de mode
+  garde la même taille et se centre symétriquement avec la poignée de
+  déplacement dans les angles supérieurs, comme sur le cadre image, en mode vue
+  comme en mode édition. Son placement est relatif au cadre et indépendant du
+  padding du contenu ; l’en-tête réserve sa place dans le flux pour éviter le
+  chevauchement avec la Liste.
 - **Décision d’interface acceptée — éditeur Liste compact :** les paramètres
   restent sur une ligne flex sans retour, avec défilement horizontal si leur
   contenu dépasse, libellés courts et harmonisés à la taille de réglage Elcé,
-  et `1rem` de padding intérieur du cadre. Le préfixe se choisit par un exemple
-  de marqueur avec « Exemple ». Les réglages de délai sont repliés derrière des
-  icônes Clock ; une valeur distincte de l’héritage ou du défaut teinte son
-  icône comme les boutons actifs Elcé. L’ajout de ligne reprend le bouton
-  carré d’icône partagé des poignées.
+  et `1rem` de padding intérieur du cadre. Départ garde une base flex ajustée
+  pour afficher trois chiffres. Le select Préfixe affiche directement
+  chaque marqueur, sans le mot « Exemple » ; « Aucun » désigne l’absence de
+  marqueur et le marqueur personnalisé est suivi de « Personnalisé ». Le délai
+  commun est toujours affiché ; seuls les délais propres aux items sont repliés
+  derrière Clock. Une valeur distincte de l’héritage ou du défaut teinte l’icône
+  Clock de l’item comme les boutons actifs Elcé. L’éditeur masque le délai de
+  l’item dès son blur ou la validation par Entrée, et le titre de Clock conserve
+  la durée formatée. Le glisser-déposer marque le slot avant ou
+  après la ligne visée, avec des cibles visibles avant la première et après la
+  dernière ligne. L’ajout de ligne reprend le bouton carré d’icône partagé des
+  poignées.
+- **Décision de déplacement acceptée — Liste inline :** le BDC Liste reçoit la
+  poignée circulaire `↕` déjà utilisée par une Carte ancrée. Elle déplace le
+  nœud Tiptap bloc dans le même champ de texte, sans le sortir du flux ni créer
+  une copie. Si le dépôt tombe dans un paragraphe, le nœud est inséré après ce
+  paragraphe pour ne pas couper un mot.
 - **Décision lecteur acceptée — apparence Liste inline :** une Liste est
   projetée dans le flux texte de sa Carte ou Section et hérite visuellement de
   son hôte. Elle ne constitue pas une surface d’apparence BDC indépendante.
@@ -71,18 +89,6 @@ suite ».
 - La migration de document conserve les anciennes données Card `list-basic`.
   Ne pas convertir ni supprimer ces données sans une stratégie non destructive
   définie.
-
-## Point restant
-
-- Les BDC Liste déjà enregistrés avant la création de `list_bdcs` peuvent ne
-  pas avoir de détail dédié. La migration de rattrapage copie le JSON encore
-  présent dans `cards.list_json` sans retirer cette valeur historique.
-- Le rendu Section projette la Liste dans son texte, mais le builder Section ne
-  fournit pas encore de signal d’entrée/sortie au `ListSceneBuilder`. Monter
-  l’observateur Liste, les items et le strap dans la story de page Flux, où se
-  trouve le scrollport observé ; CodPlay refuse un `emit.observe.root` dans une
-  autre story. Réutiliser le mécanisme `emit.observe` des Cartes sans créer un
-  observateur Section parallèle.
 
 ## Actions et critères d’acceptation
 
@@ -115,16 +121,16 @@ suite ».
    Brave MCP confirme le contour tireté et la bascule sans changement de document ; les
    vérifications complètes de l’aller-retour restent à l’action 6. Contrats
    consignés dans les spécifications Document et Section.
-10. [ ] Compacter les paramètres sur une ligne, illustrer les préfixes,
-    dévoiler les saisies de durée par icône Clock et harmoniser l’ajout de ligne
-    avec la poignée ; vérifier Card et Section dans le navigateur connecté,
-    puis mettre à jour les spécifications d’interface. La rangée, le padding,
-    les exemples, les boutons Clock et l’ajout sont vérifiés dans Section ; les
-    icônes Clock utilisent maintenant la même taille explicite de `0.75rem`.
-    En Section, Entrée et la perte de focus replient aussi les champs ; le titre
-    de chaque horloge affiche la durée formatée et les lignes héritées affichent
-    l’intervalle courant. Le parcours Card et la teinte d’une durée personnalisée
-    restent à vérifier.
+10. [ ] Terminer l’éditeur Liste partagé dans Card et Section : garder les
+    paramètres sur une seule ligne flex, afficher directement les marqueurs
+    sans le mot « Exemple », garder le délai commun visible et laisser repliés
+    les seuls délais d’item, marquer le slot de dépôt avant ou après la ligne
+    visée (y compris les extrémités), et masquer le délai d’item dès le blur ou
+    Entrée en conservant sa valeur dans le titre de Clock. Dimensionner Départ à
+    trois chiffres par flex-basis. Réutiliser les tailles
+    d’icônes et de boutons existantes. La vérification MCP de Section couvre
+    les libellés, les deux extrémités du dépôt, le blur vers Clock et l’icône
+    personnalisée ; vérifier encore le parcours Card.
 11. [x] Exclure les BDC Liste inline du calcul des surfaces d’apparence. Brave
    vérifie que la preview de « Présentation du module » affiche le contenu
    complet et la Liste dans le flux, sans erreur console ni fallback de rôle.
@@ -140,14 +146,41 @@ suite ».
     indépendants de la Carte hôte. Rétablir les états initiaux à la sortie et
     lors du replay, et traiter « Aucune » comme une apparition instantanée.
     Rétro-remplir en SQLite les payloads Liste existants avec Fondu. Pour les
-    Sections, monter observer, items et strap dans la story de page Flux ;
+    Sections, monter observateur, items et strap dans la story de page Flux ;
     observer la racine Liste dans le scrollport par `emit.observe` et transmettre
     entrée/sortie au strap List existant.
     Accepter chaque option, les délais du
-    premier item et des suivants, sortie/replay, Section et relecture SQLite.
-    La preview qui réutilise une API démarrée avant cette migration échoue
-    encore sur un payload sans `transition` ; reprendre la validation navigateur
-    après redémarrage de l’API et application de la migration.
+    premier item et des suivants, sortie/replay, Card et Section, et relecture
+    SQLite. Le contrôle Transition, le défaut Fondu et la migration sont
+    vérifiés ; la preview Section rend la Liste sans erreur de scène ni console.
+    Le parcours des transitions et du replay reste à vérifier.
+14. [ ] Appliquer l’espacement du mode vue dans `resources/list/authoring/list-editor.css` :
+    réduire de `0.5rem` l’espace entre le bouton d’édition et la Liste, puis
+    séparer les items successifs de `0.5rem`. Vérifier le mode vue de Section
+    et Carte dans Brave MCP, sans modifier le contenu. Section est vérifiée ;
+    la Carte reste à contrôler.
+15. [x] Harmoniser les deux commandes de coin dans
+    `resources/list/authoring/list-editor.css` avec le cadre image : garder les
+    boutons et icônes partagés, aligner les cercles sur les mêmes retraits de
+    cadre dans les modes vue et édition, et compenser la bordure du cadre Liste
+    dans les coordonnées absolues. Garder le padding du contenu indépendant et
+    réserver l’espace du bouton mode dans l’en-tête. Brave vérifie les deux
+    modes de Liste et l’image : les cercles partagent le diamètre `22.4px`, le
+    retrait du bord supérieur vaut `8px` et leurs retraits aux bords horizontaux
+    sont égaux. Le navigateur est revenu au mode vue et à l’onglet Presse-papiers.
+16. [x] Dans `list-bdc-extension.ts`, `list-editor.tsx` et les styles auteur
+    partagés, ajouter la poignée circulaire `↕` en haut à gauche, le déplacement
+    natif du seul nœud Liste et son insertion après le paragraphe ciblé.
+    L’identité BDC reste celle du nœud déplacé.
+17. [ ] Valider le glisser-déposer natif dans les champs Message et Section,
+    la persistance, l’intégrité des mots voisins et l’absence de copie du BDC.
+    La Section passe dans Brave : la Liste est déposée sur un paragraphe, se
+    replace après celui-ci, reste unique et se restaure à sa place après
+    synchronisation et rechargement. Le champ Message de Carte reste à valider.
+18. [x] Séparer le BDC Liste du contenu suivant avec la même marge basse que les
+    paragraphes de Section (`0.35rem`), sur le conteneur de flux du NodeView.
+    Brave confirme `5.6px` pour la marge du NodeView et des paragraphes de
+    Section ; onglet visible et au premier plan, sans modification du contenu.
 
 La tranche reste `En cours` jusqu’à preuve des critères 6 à 8. Une validation
 de type seule ne certifie pas le comportement d’intégration.

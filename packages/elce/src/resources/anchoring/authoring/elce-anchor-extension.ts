@@ -364,7 +364,7 @@ const ElceAnchorNode = Node.create<ElceAnchorExtensionRuntimeOptions>({
       const unregisterRefresh = this.options.registerNodeViewRefresh?.(bdcId, renderCard)
 
       const handle = document.createElement('span')
-      handle.className = 'elce-anchor-handle'
+      handle.className = 'elce-bdc-drag-handle elce-anchor-handle'
       handle.dataset.elceAnchorHandle = 'true'
       handle.draggable = true
       handle.setAttribute('role', 'button')

@@ -63,6 +63,11 @@ dans `title` et dans le nom accessible du bouton. Au-dessus de 800 px, l’icôn
 et le libellé sont visibles ensemble.
 Le bouton « Test auteur » suit la même adaptation : son libellé est masqué sur
 petit écran, tandis que son nom accessible descriptif reste disponible.
+À 800 px et en dessous, la grille du player passe sur une seule colonne ; le
+titre de page et le bouton d’accès au sommaire restent visibles. Le bouton
+ouvre le menu dans un tiroir superposé et le contenu Flux occupe toute la
+largeur, sans colonne latérale réservée. Au-dessus de 800 px, le menu et le
+contenu reprennent leurs colonnes latérales et le bouton mobile est masqué.
 
 Le document de preview reste à la taille du viewport et ne défile pas lui-même.
 Le contenu Flux défile dans son scrollport vertical ; la barre de navigation
