@@ -1,12 +1,12 @@
 # Conception proposée — paquet standard réimportable Elcé
 
-Cette note étaye le [plan actif](../plan/2026-10-26-elce-standard-export-import-plan.md).
+Cette note étaye le [plan actif](../../packages/elce/plan/2026-10-26-elce-standard-export-import-plan.md).
 Elle décrit des choix proposés pour sa revue ; elle ne spécifie aucun nouveau
 comportement déjà réalisé. Les décisions et leurs statuts restent dans le plan.
 
 ## Point de départ et raison du complément auteur
 
-L’[export actuel](../specs/sighty-export-spec.md) reçoit déjà le document Elcé,
+L’[export actuel](../../packages/elce/specs/sighty-export-spec.md) reçoit déjà le document Elcé,
 mais livre des scènes compilées, leurs ressources et les modules d’exécution.
 Le catalogue et les fichiers inutilisés par les scènes ne sont pas livrés ;
 le document éditable n’est pas dans `scenario.mjs`. Une Section a notamment

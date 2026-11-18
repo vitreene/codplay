@@ -15,10 +15,10 @@ et de fonctionnement des scènes n’implique pas de conserver les composants
 HTML ou de traduire leurs propriétés CSS.
 
 La séparation entre état logique et présentation est déjà portée par la
-[reconstruction logique](../../../../packages/codplay/specs/runtime-reconstruction-v2-spec.md).
-La [spécification des composants](../../../../packages/codplay/specs/component-materialization-v2-spec.md)
+[reconstruction logique](../../packages/codplay/specs/runtime-reconstruction-v2-spec.md).
+La [spécification des composants](../../packages/codplay/specs/component-materialization-v2-spec.md)
 distingue la base générique de sa spécialisation HTML. La
-[spécification du pont de cibles](../../../../packages/codplay/specs/third-party-target-bridge-spec.md)
+[spécification du pont de cibles](../../packages/codplay/specs/third-party-target-bridge-spec.md)
 décrit le raccord entre composants et capacités natives opaques. Cela ne certifie
 pas l’existence actuelle d’un runtime CodPlay autonome dans Rive.
 
@@ -77,8 +77,8 @@ expose le positionnement temporel d’une animation, mais cela ne démontre pas
 une équivalence avec la reconstruction complète de ces faits et de leurs
 conséquences. Cette différence reste à examiner sur un usage concret ; elle
 ne prouve ni une impossibilité dans Rive, ni un besoin universel de journal.
-[Contrat CP de reconstruction](../../../../packages/codplay/specs/runtime-reconstruction-v2-spec.md),
-[pipeline événementiel CP](../../../../packages/codplay/specs/event-pipeline-v2-spec.md),
+[Contrat CP de reconstruction](../../packages/codplay/specs/runtime-reconstruction-v2-spec.md),
+[pipeline événementiel CP](../../packages/codplay/specs/event-pipeline-v2-spec.md),
 [positionnement des animations Rive][animation].
 
 La bonne frontière d’une telle approche devrait rendre explicite qui décide
@@ -105,7 +105,7 @@ et indépendante des détails graphiques, lorsqu’elle réduit effectivement la
 complexité de fabrication. Une expérience courte, avec quelques écrans et
 transitions, peut rester plus simple en Rive natif.
 
-Le [contrat SY actuel](../../../../packages/sighty/specs/authoring-library-spec.md)
+Le [contrat SY actuel](../../packages/sighty/specs/authoring-library-spec.md)
 décrit cette séparation, mais son runtime délègue aujourd’hui les occurrences,
 montages, événements et commandes à CodPlay. Le modèle de parcours peut être
 pertinent sans que ce runtime soit réutilisable tel quel. La pertinence de SY

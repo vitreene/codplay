@@ -15,12 +15,12 @@ classe métier dédiée aux usages de cette première version, avec des
 conventions compatibles avec un futur moteur RRULE et une API Temporal
 privilégiée lorsque son intégration le permet.
 Un calendrier de diffusion Sighty-TV correspond à un écran.
-La [description générale du mod](../notes/2026-10-20-dgs-mod-study.md) porte
+La [description générale du mod](../../../../prospective/sighty-tv/2026-10-20-dgs-mod-study.md) porte
 l'intention de diffusion TV collective et autonome, le réemploi des contenus
 Elcé et la cohérence de l'édition entre mods. Ce plan en prépare une partie,
 dans le périmètre précisé par la discussion actuelle.
 L'étude conserve les exemples et le raisonnement dans la
-[note programmes/scheduler](../notes/2026-10-20-sequence-scheduler-study.md).
+[note programmes/scheduler](../../../../prospective/sighty-tv/2026-10-20-sequence-scheduler-study.md).
 Ce plan rassemble le périmètre, les décisions et l'ordre de réalisation.
 
 La première étape construit le calendrier et ses règles, puis la seconde
@@ -351,12 +351,12 @@ portée de chaque règle sans saisir du code ou des événements internes.
 Garder lisibles les durées inconnues avant lecture, sans leur attribuer une
 largeur temporelle trompeuse. Les détails apparaissent avec la sélection.
 
-La [note d'édition visuelle](../notes/2026-10-20-sequence-scheduler-study.md#édition-visuelle-des-programmes--rendre-la-logique-lisible)
+La [note d'édition visuelle](../../../../prospective/sighty-tv/2026-10-20-sequence-scheduler-study.md#édition-visuelle-des-programmes--rendre-la-logique-lisible)
 conserve les pistes et exemples. Les maquettes ne valent pas validation de
 la lecture : leurs gestes devront rejoindre les commandes et l'historique
 existants. Le modèle auteur conserve la logique, indépendamment du dessin.
 
-La [comparaison de projets publics](../notes/2026-10-20-sequence-scheduler-study.md#projets-publics-de-référence-pour-léditeur-de-programmes)
+La [comparaison de projets publics](../../../../prospective/sighty-tv/2026-10-20-sequence-scheduler-study.md#projets-publics-de-référence-pour-léditeur-de-programmes)
 fournit les références à examiner : Sequential Workflow Designer pour les
 conteneurs SVG, ossia score pour les relations temporelles et Xibo pour
 les gestes de composition de signalétique ; Blockly et React Flow complètent
@@ -392,7 +392,7 @@ calendrier auteur ne valent pas validation de ce rendu ou de sa navigation.
 
 La future intégration d'items comme persos, de parts internes ou d'une
 reconstruction temporelle fine reste à décider d'après l'usage. L'étude
-conserve ces pistes dans sa [rubrique de rendu](../notes/2026-10-20-sequence-scheduler-study.md#rendre-le-bdc-calendrier-dans-codplay--étude-du-composant).
+conserve ces pistes dans sa [rubrique de rendu](../../../../prospective/sighty-tv/2026-10-20-sequence-scheduler-study.md#rendre-le-bdc-calendrier-dans-codplay--étude-du-composant).
 Elles ne sont pas des prérequis du premier accueil foreign.
 
 ## Faisabilité des abonnements — évolution des sources

@@ -363,6 +363,13 @@ ghosts et la pose sélectionnée utilisent les mêmes coordonnées. Valider la
 continuité visuelle au pivot centré et aux quatre coins, ainsi qu’en lecture
 avec plusieurs items pour contrôler qu’aucun autre item ne saute.
 
+**Acceptation axe et ghosts — En cours :** la projection item fait suivre
+l’axe au cadre de mouvement existant. Sur « Départ décalé », Safari MCP
+confirme le raccord à 0,02 px après Seek au KF final, le suivi du chemin en
+lecture et en relance, ainsi que le déplacement du ghost et du tracé vers les
+quatre coins pendant des gestes annulés. Vérifier la lecture dans une scène à
+plusieurs items visibles et la capture native du pointeur pour clore la validation.
+
 **Preuve indépendante en attente :** aucun geste scale autonome n’existe dans
 le Selection Frame V2. Vérifier la préservation et la composition des scales
 déjà présents pendant les autres gestes ; ne pas présenter une mesure visuelle
@@ -429,6 +436,9 @@ l’arbitrage Editor : quand le hit-test sélectionne un item, consommer ce
 tracé ; Safari dans l’application réelle confirme la sélection, les zones
 inchangées, l’absence de PUT et Undo désactivé le 1 novembre 2026. La validation
 de ce conflit de clic est close ; les autres gestes natifs restent ouverts.
+
+**Évolution différée — édition directe du texte :** cadrer séparément l’édition
+dans le bloc. Le survol est couvert par la spécification d’intégration.
 
 ## 4. Aligner le modèle ZoneDef de l’éditeur
 

@@ -74,6 +74,21 @@ describe('Editor item presentation', () => {
     })
   })
 
+  it('places a corner pivot at the motion frame center while preserving the item pose', () => {
+    const projection = projectItemStyle({
+      x: 10, y: 10, width: 20, height: 12,
+      rotate: 90, [ITEM_MOTION_ROTATION_BASELINE]: 90,
+      'transform-origin': '0% 100%',
+    }, 1)
+    expect(projection.frameStyle).toMatchObject({
+      x: 'calc(10cqw - 0.5 * 12cqw)',
+      y: 'calc(10cqw - 0.5 * 20cqw)',
+    })
+    expect(projection.motionTransformStyle).toMatchObject({
+      left: '50%', top: '-50%', 'transform-origin': '0% 100%',
+    })
+  })
+
   it('composes the runtime pose with a complete local affine matrix, including shear', () => {
     const presented = composeItemPresentationPose({
       origin: { x: 10, y: 20 },

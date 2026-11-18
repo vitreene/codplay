@@ -19,7 +19,7 @@ uniquement le plan, sans changer le code ni les données des projets.
 | Identité et publication du projet importé | Proposition à valider | Créer une copie indépendante ; renouveler les IDs projet et média ; conserver les IDs internes des autres entités et leurs relations. Réutiliser cache, session, droit et synchronisation actuels. |
 | Entrée utilisateur | Proposition à valider | Dans le menu projets : importer le ZIP standard ou son dossier extrait ; ouvrir la copie et annoncer séparément la préparation locale et la confirmation en base. |
 
-La [note de conception](../notes/2026-10-26-elce-standard-export-import-design.md)
+La [note de conception](../../../prospective/elce-authoring-package/2026-10-26-elce-standard-export-import-design.md)
 précise la forme proposée, les défauts, les frontières et les échecs. Ses choix
 sont des propositions rattachées à ce plan, pas des contrats vérifiés.
 

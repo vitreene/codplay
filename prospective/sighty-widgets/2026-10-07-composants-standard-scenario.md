@@ -3,7 +3,7 @@
 ## Portée
 
 Cette note conserve l'orientation et la discussion sur les widgets autonomes.
-Le [plan distinct des widgets foreign](../plan/2026-11-11-widgets-foreign-plan.md)
+Le [plan distinct des widgets foreign](../../packages/sighty/plan/2026-11-11-widgets-foreign-plan.md)
 porte le raccord commun et sa réalisation. Ces orientations ne décrivent pas
 une API déjà disponible ni un changement appliqué au runtime actuel.
 
@@ -11,7 +11,7 @@ une API déjà disponible ni un changement appliqué au runtime actuel.
 
 Le sommaire qui présente les pages et les chapitres, ainsi que l’interface de
 navigation entre les pages, sont aujourd’hui des scènes CodPlay dans le
-[player Elcé](../../elce/specs/flux-scene-builder-spec.md). Pour ces deux
+[player Elcé](../../packages/elce/specs/flux-scene-builder-spec.md). Pour ces deux
 rôles, CodPlay n’apporte pas de valeur utile et n’est pas un support adapté.
 
 À terme, ces scènes seront remplacées par deux composants JavaScript
@@ -61,7 +61,7 @@ métier calendaire et ses adaptateurs restent dans leur ressource propriétaire.
 Les noms et signatures des opérations communes restent à arrêter dans le
 plan avant la réalisation.
 
-La [spécification Sighty](../specs/authoring-library-spec.md) reste l’autorité
-pour le graphe de scénario et le routage. La [spécification CodPlay `slot`](../../codplay/specs/slot-component-spec.md)
+La [spécification Sighty](../../packages/sighty/specs/authoring-library-spec.md) reste l’autorité
+pour le graphe de scénario et le routage. La [spécification CodPlay `slot`](../../packages/codplay/specs/slot-component-spec.md)
 reste l’autorité pour l’attachement du contenu foreign ; elle ne définit pas
 l’API de ces futurs composants Sighty.

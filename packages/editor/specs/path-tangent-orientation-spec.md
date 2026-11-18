@@ -54,8 +54,11 @@
 
 - L’éditeur résout une `MotionGeometryPose` par pose d’endpoint, à partir du
   cadre de contenu, des insets de bordure/padding et de la transformation affine. Cette
-  projection contient le cadre de contenu du CS, le cadre extérieur bordé et le
-  centre transformé de cette bordure, qui sert d’ancre au chemin.
+  projection contient le cadre de contenu du CS, le cadre extérieur bordé et
+  le point `transform-origin` transformé de cette boîte, qui sert d’ancre au
+  chemin et de référence au ghost. La présentation des poses libres résolues
+  place le centre du cadre motion sur ce point, selon la
+  [spécification de présentation](./item-presentation-spec.md).
 - Le bridge publie ensemble la pose sélectionnée, les segments et les ghosts
   dans le store de géométrie. Le CS et l’overlay s’abonnent à cette projection :
   le chemin utilise les ancres, les ghosts utilisent les cadres bordés, et le CS

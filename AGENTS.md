@@ -120,6 +120,13 @@
   conversations or duplicate commentary across documents.
 - Documentation roles are exclusive and must not be mixed:
   - `notes/` records project elaboration, exploration, and rationale; open decisions for an active feature stay in its plan;
+  - root `prospective/` is a personal convenience directory for the user.
+    Add or move documents into it only at the user's explicit request; never
+    use it as an automatic destination for analyses or generated documents.
+    It groups exploratory analyses of subjects whose development has not
+    begun, with their supporting assets; it contains no plans, specifications,
+    or implementation tracking. Notes supporting an ongoing implementation
+    remain with their owning module;
   - `plan/` records actions to perform, their order, gates, status, acceptance path, and decisions that are open or agreed but unapplied;
   - specifications record only behavior that has been implemented and verified;
   - `README.md` records only simple user-facing usage, with an illustrated concrete example; it must not contain internal contracts, architecture, implementation status, plans, or validation tracking.

@@ -300,10 +300,12 @@ describe('editor V2 player interpolation', () => {
 
   })
 
-  it('interpole aussi l’origine de rotation structurée dans la même action', async () => {
+  it.each([0.25, undefined])('interpole le pivot depuis %s ou le centre par défaut', async (sourceFraction) => {
     codplay = new CodPlay({ engine: EDITOR_ENGINE_OPTIONS, pauseOnDocumentHidden: false })
     const source = interpolationScene()
-    source.decors.first!.offset!.rotationOrigin = { fx: 0.25, fy: 0.25 }
+    if (sourceFraction !== undefined) {
+      source.decors.first!.offset!.rotationOrigin = { fx: sourceFraction, fy: sourceFraction }
+    }
     source.decors.second!.offset!.rotationOrigin = { fx: 0.75, fy: 0.75 }
     const built = buildSceneDocV2(source)
     expect(built.ok).toBe(true)
@@ -330,10 +332,11 @@ describe('editor V2 player interpolation', () => {
     const snapshot = instance.snapshot.get()
     const state = snapshot?.states.find((entry) => entry.target.persoId === 'item')?.state
     const style = state?.style as Record<string, unknown> | undefined
-    expect(style?.['transform-origin']).toBe('50% 50%')
+    const fraction = ((sourceFraction ?? 0.5) + 0.75) / 2
+    expect(style?.['transform-origin']).toBe(`${fraction * 100}% ${fraction * 100}%`)
 
     const item = root.querySelector<HTMLElement>('[data-item-id="story-main:item"]')
-    expect(getComputedStyle(item!).transformOrigin).toBe('50% 50%')
+    expect(getComputedStyle(item!).transformOrigin).toBe(style?.['transform-origin'])
   })
 
   it('materializes a destination-only style property without failing instance creation', async () => {
