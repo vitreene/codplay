@@ -31,6 +31,7 @@ export class EditorScenePersistence {
   private readonly listeners = new Set<() => void>()
   private readonly stopSubscriptions: Array<() => void> = []
   private deletingSceneId: string | null = null
+  private activation: Promise<void> = Promise.resolve()
 
   /** Loads the active scene from the local API and caches its revision. */
   async open(): Promise<EditorScene | null> {
@@ -140,7 +141,7 @@ export class EditorScenePersistence {
     }
     const loaded = controller.on('sceneLoaded', ({ scene }) => {
       observedScene = scene
-      void this.activate(scene)
+      this.activation = this.activate(scene)
     })
     const committed = controller.on('documentCommitted', ({ afterScene }) => persistIfChanged(afterScene))
     const restored = controller.on('sceneCommitted', ({ scene }) => persistIfChanged(scene))
@@ -157,12 +158,13 @@ export class EditorScenePersistence {
     return () => this.listeners.delete(listener)
   }
 
-  /** Waits until every scene's latest queued snapshot has reached SQLite. */
+  /** Waits for the latest queued snapshots and the loaded scene's SQLite activation. */
   async flush(): Promise<void> {
     while (this.pendingSnapshots.size > 0 || this.writeQueues.size > 0) {
       for (const sceneId of this.pendingSnapshots.keys()) this.startSceneWrites(sceneId)
       await Promise.all(this.writeQueues.values())
     }
+    await this.activation
   }
 
   /** Releases controller subscriptions when the Remix application is removed. */

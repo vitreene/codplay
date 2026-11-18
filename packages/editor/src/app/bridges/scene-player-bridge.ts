@@ -114,6 +114,27 @@ export function createScenePlayerBridge(
     root.remove()
   }
 
+  /** Closes the current document's instance and invalidates its pending playback and rebuilds. */
+  function closeScene(): void {
+    rebuildRevision += 1
+    seekRevision += 1
+    playbackRequestRevision += 1
+    pendingPlayRequest = null
+    rebuildInFlight = null
+    seekInFlight = null
+    coordination.unbindPlayer()
+    if (activeInstance !== null) codplay.instances.destroy(activeInstance.instanceId)
+    activeRoot?.remove()
+    releaseResourceUrls(activeResourceUrls)
+    codplay.preload.css.clear('editor-scene')
+    activeInstance = null
+    activeRoot = null
+    activeScene = null
+    activeResourceUrls = []
+    activeStyleSheet = ''
+    activePreRollMs = 0
+  }
+
   /** Builds, preloads, stages, and atomically publishes one V2 editor instance. */
   async function rebuild(scene: EditorScene): Promise<void> {
     const revision = ++rebuildRevision
@@ -438,6 +459,7 @@ export function createScenePlayerBridge(
     if (machine.getSnapshot().value === 'playing') queuePlaybackAfterRebuild(scene, rebuildPromise)
   })
   const unsubscribeLoaded = machine.on('sceneLoaded', ({ scene }) => {
+    if (activeScene?.id !== scene.id) closeScene()
     authorTimeMs = 0
     void scheduleRebuild(scene)
   })
@@ -470,26 +492,15 @@ export function createScenePlayerBridge(
   return {
     /** Destroys the active V2 instance, preload slots, and bridge subscriptions. */
     destroy(): void {
-      rebuildRevision += 1
-      seekRevision += 1
       unsubscribeSeek.unsubscribe()
       unsubscribeCommitted.unsubscribe()
       unsubscribeLoaded.unsubscribe()
       unsubscribeReverted.unsubscribe()
       unsubscribePlayback.unsubscribe()
       unsubscribePlaybackReconciled()
-      pendingPlayRequest = null
-      rebuildInFlight = null
       coordination.unbindSceneHost(mountTarget)
-      coordination.unbindPlayer()
-      if (activeInstance !== null) codplay.instances.destroy(activeInstance.instanceId)
-      activeRoot?.remove()
-      releaseResourceUrls(activeResourceUrls)
-      codplay.preload.css.clear('editor-scene')
+      closeScene()
       codplay.destroy()
-      activeInstance = null
-      activeRoot = null
-      activeScene = null
     },
   }
 }

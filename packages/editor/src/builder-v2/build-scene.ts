@@ -19,6 +19,7 @@ import { parseEase, prepareSvgPath } from 'ace'
 import { resolveKeyframeChannel } from '../app/commands/types'
 import type { CapsuleDef, EditorScene, Item, Keyframe, Transition, Zone } from '../app/commands/types'
 import { hasExplicitPlacementGeometry } from '../app/commands/offset-placement'
+import { isItemVisible } from '../app/commands/item-visibility/item-visibility'
 import { resolveKeyframeTransition } from './keyframe-transition'
 import { normalizeMotionEasing } from '../motion-editor/easing'
 import { resolveInitialPathRotation, STRAIGHT_MOTION_PATH } from '../motion-editor/item-rotation/item-rotation'
@@ -226,17 +227,7 @@ function validateSceneInput(scene: EditorScene): BuilderDiagnostic[] {
 /** Removes hidden items and descendants before Editor projects the document into V2. */
 function itemsForCompilation(items: readonly Item[]): Item[] {
   const itemById = new Map(items.map((item) => [item.id, item]))
-  return items.filter((item) => {
-    let current: Item | undefined = item
-    const visited = new Set<string>()
-    while (current !== undefined) {
-      if (current.visible === false) return false
-      if (visited.has(current.id)) return true
-      visited.add(current.id)
-      current = current.parentId === null ? undefined : itemById.get(current.parentId)
-    }
-    return true
-  })
+  return items.filter((item) => isItemVisible(item, itemById))
 }
 
 /** Validates the implicit scene-root decor with the same zone rules as item decors. */

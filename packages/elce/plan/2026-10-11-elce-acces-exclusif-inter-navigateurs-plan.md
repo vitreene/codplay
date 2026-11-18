@@ -35,6 +35,33 @@ La règle est inscrite dans le [plan de synchronisation](./2026-10-06-elce-local
 Les contrats actuellement vérifiés sont l'[accès par fenêtre](../specs/editor-window-access-spec.md),
 la [session du projet](../specs/project-session-spec.md) et l'[API projet](../specs/project-api-spec.md).
 
+## Évolution demandée — débrayage explicite
+
+**Principe demandé :** le système doit pouvoir être débrayé à la demande,
+indépendamment du pilotage IA. Le périmètre inclut la suspension et le transfert
+automatiques liés au focus, ainsi que l’exclusivité d’édition entre fenêtres
+et navigateurs. Le contrôle doit être prévu par l’application, réversible et
+appliqué aux frontières navigateur et serveur concernées, sans simulation du
+focus ni altération manuelle des verrous.
+
+**Cadrage : A relire avant implémentation.** Définir la commande d’activation,
+sa portée (application, projet ou session), sa persistance et la transition
+de retour au mode exclusif lorsque plusieurs éditeurs ont des changements en
+attente. Les contrôles de révision et les invariants documentaires restent des
+protections distinctes ; le débrayage ne décide ni fusion automatique ni
+écrasement d’une révision plus récente.
+
+Ordre de travail après validation du cadrage : préciser les deux modes et
+leurs transitions ; enrichir le circuit existant de `ProjectEditorLock`,
+`ProjectSessionCoordinator` et du droit serveur ; vérifier activation,
+désactivation, perte de focus, édition dans deux fenêtres, conflits de révision,
+médias et retour à l’exclusivité ; consolider ensuite les spécifications
+d’accès, de session et d’API. Examiner le raccord avec `ExclusiveSyncSession`
+sans introduire une seconde synchronisation. Le
+[plan de machines explicites](./2026-11-09-elce-explicit-state-machines-plan.md)
+reste un refactor sans changement de contrat ; cette évolution de comportement
+demande son propre cadrage validé dans le présent plan.
+
 ## Frontière réutilisable retenue
 
 **Décisions confirmées le 11 octobre 2026 :** la politique de

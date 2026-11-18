@@ -187,7 +187,11 @@ export const controllerMachine = setup({
     /** Chargement d'un document (une seule scène chargée à la fois à cette étape). */
     sceneLoaded: assign({
       scene: ({ event }) => (event.type === 'SCENE_LOADED' ? event.scene : null),
+      selection: ({ context, event }) => event.type === 'SCENE_LOADED' && event.scene.id === context.currentSceneId
+        ? context.selection
+        : EMPTY_SELECTION,
       selectedZoneId: () => null,
+      editGesture: ({ context }) => context.authoringMode === 'block' ? 'zone' : null,
       currentSceneId: ({ event }) => (event.type === 'SCENE_LOADED' ? event.scene.id : null),
       documents: ({ context, event }) => event.type === 'SCENE_LOADED'
         ? { ...context.documents, [event.scene.id]: { id: event.scene.id, title: event.scene.meta.title } }
@@ -278,7 +282,7 @@ export const controllerMachine = setup({
     RUN_TRANSACTION: { actions: ['runTransaction', 'emitSceneCommitted'] },
     RESTORE_DOCUMENT: { actions: ['restoreDocument', 'emitSceneCommitted'] },
     LOAD_SCENE: {},
-    SCENE_LOADED: { actions: ['sceneLoaded', 'emitSceneLoaded'] },
+    SCENE_LOADED: { target: '.idle', actions: ['sceneLoaded', 'emitSceneLoaded'] },
     HISTORY_BOUNDARY: { actions: ['emitFlushPending', 'emitHistoryBoundary'] },
     SEEK: { actions: 'emitSeek' },
     SEEK_RELEASED: { actions: ['normalizeSelectionAtTimeline', 'emitSceneCommitted'] },

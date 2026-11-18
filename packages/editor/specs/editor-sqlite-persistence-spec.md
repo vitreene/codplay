@@ -15,13 +15,22 @@ par la [spécification Sequence Editor V2](../specs/sequence-editor-v2-cues-mark
   sélection seuls ne déclenchent pas d'écriture. Par scène, une seule requête
   SQLite est en vol ; les snapshots arrivant pendant cette requête sont remplacés
   par le plus récent, puis écrit avec la nouvelle révision.
-- `flush()` attend chaque écriture en vol et le dernier snapshot en attente.
+- `flush()` attend chaque écriture en vol, le dernier snapshot en attente et
+  l’activation SQLite du document chargé.
   Chaque sauvegarde transporte la révision attendue ; une révision périmée est
   refusée, sans écraser la version plus récente.
 - Undo et Redo passent par le remplacement normal du document et enregistrent
   le snapshot restauré. SQLite ne reçoit aucune entrée d'historique.
 - Au démarrage, l'application charge la scène active et sa révision. Le choix
   de scène active est conservé séparément du document.
+- Depuis le catalogue, `EditorActionsFacade.selectScene()` termine les éditions
+  en attente par `HISTORY_BOUNDARY`, puis attend `flush()` avant de charger la
+  cible. Une erreur de sauvegarde conserve le document courant et empêche ce
+  chargement. Une fois la cible chargée par le contrôleur, le parcours attend
+  aussi son activation SQLite avant de permettre un autre changement de scène.
+  Ainsi, une écriture retardée de la scène quittée ne réactive pas celle-ci après
+  le choix de la suivante. Revenir à cette scène restitue son dernier snapshot
+  sauvegardé ; choisir la scène déjà courante ne la recharge pas.
 - La validation JSON stricte s'applique aux documents avant l'écriture ; les
   valeurs non sérialisables font échouer la sauvegarde avec leur chemin. Les
   références relationnelles et la cohérence des zones sont vérifiées au
@@ -91,6 +100,13 @@ Le serveur ferme la connexion lors de son arrêt.
   exerce la file réelle contre SQLite : les changements faits pendant une
   requête sont coalescés et `flush()` sauvegarde le dernier snapshot avec la
   révision attendue suivante.
+- [`tests/app/scene-switching/scene-switching.spec.ts`](../tests/app/scene-switching/scene-switching.spec.ts)
+  exerce le menu Remix, le contrôleur, l’API et SQLite ensemble : cohérence du
+  sélecteur, commit en attente, écritures retardées, retour au document sauvegardé,
+  conflit de révision et attente de l’activation avant un nouveau choix.
+  Le [parcours navigateur du catalogue](./editor-v2-integration-spec.md#changement-de-scène-dans-le-catalogue)
+  vérifie aussi la sauvegarde documentaire, le retour à la scène et sa
+  restauration depuis SQLite après rechargement de l’application.
 - `tests/commands/base-commands.spec.ts` vérifie la création d'IDs après
   restauration d'un document contenant déjà des IDs.
 - Le parcours navigateur des modes de rotation vérifie le reset sauvegardé,

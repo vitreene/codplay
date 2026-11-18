@@ -45,6 +45,18 @@ function createItemInZone(
 /** Renders the compact authoring actions without the removed integration fixtures. */
 export function EditorMenuRegion(handle: Handle<EditorMenuRegionProps>) {
   const { controller, actions, persistence } = handle.props
+  let switchingScene = false
+
+  /** Serializes catalogue changes through the existing document and persistence owners. */
+  const selectScene = (sceneId: string): void => {
+    if (switchingScene || sceneId.length === 0) return
+    switchingScene = true
+    void handle.update()
+    void actions.selectScene(sceneId, persistence).finally(() => {
+      switchingScene = false
+      void handle.update()
+    })
+  }
 
   return () => {
     const { scene, history } = handle.props
@@ -77,6 +89,7 @@ export function EditorMenuRegion(handle: Handle<EditorMenuRegionProps>) {
         ? 'Sélectionner une zone racine pour créer un texte'
         : null)
     const canDeleteScene = scene !== null
+      && !switchingScene
       && scenes.some((savedScene) => savedScene.id === scene.id)
       && scenes.length > 1
       && !persistence.isDeletingScene(scene.id)
@@ -124,22 +137,16 @@ export function EditorMenuRegion(handle: Handle<EditorMenuRegionProps>) {
             id="editor-scene-picker"
             aria-label="Choisir une scène"
             className="editor-menu-select"
-            key={`${scene?.id ?? 'none'}:${scenes.length}`}
             value={scene?.id ?? ''}
-            disabled={scenes.length === 0}
-            mix={on('change', (event) => {
-              const sceneId = event.currentTarget.value
-              if (sceneId.length === 0) return
-              void persistence.loadScene(sceneId).then((selected) => {
-                if (selected !== null) actions.loadScene(selected)
-              })
-            })}
+            disabled={scenes.length === 0 || switchingScene || (scene !== null && persistence.isDeletingScene(scene.id))}
+            mix={on('change', (event) => selectScene(event.currentTarget.value))}
           >
-            <option id="editor-scene-option-none" value="" disabled>Aucune scène</option>
+            <option id="editor-scene-option-none" value="" disabled selected={scene === null}>Aucune scène</option>
             {scenes.map((savedScene) => <option
               id={`editor-scene-option-${savedScene.id}`}
               key={savedScene.id}
               value={savedScene.id}
+              selected={savedScene.id === scene?.id}
             >{savedScene.title}</option>)}
           </select>
           <p id="editor-persistence-status" className={`editor-persistence-status editor-persistence-status--${persistenceStatus.kind}`} role="status">
@@ -155,6 +162,7 @@ export function EditorMenuRegion(handle: Handle<EditorMenuRegionProps>) {
               aria-label="Créer une scène"
               title="Créer une scène"
               className="editor-menu-button"
+              disabled={switchingScene}
               mix={on('click', () => actions.loadScene(createEmptyEditorScene()))}
             >
               <svg id="editor-create-scene-icon" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">

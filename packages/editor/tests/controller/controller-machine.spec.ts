@@ -59,6 +59,30 @@ describe('controllerMachine — scene lifecycle', () => {
     expect(actor.getSnapshot().context.scene?.id).toBe('scene-1')
     expect(actor.getSnapshot().context.currentSceneId).toBe('scene-1')
   })
+
+  it.each(['playing', 'creating'] as const)('leaves %s and clears the previous document selection on load', (mode) => {
+    const actor = createActor(controllerMachine).start()
+    const playbackChanges: boolean[] = []
+    const creationChanges: unknown[] = []
+    actor.on('playbackActiveChanged', ({ active }) => playbackChanges.push(active))
+    actor.on('creationModeChanged', ({ mode }) => creationChanges.push(mode))
+    actor.send({ type: 'SCENE_LOADED', scene: keyedSceneFixture() })
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item-1'], keyframeId: 'kf-a' })
+    actor.send(mode === 'playing'
+      ? { type: 'TELCO_ACTION_REQUEST' }
+      : { type: 'CREATE_MODE_ENTER', itemType: 'text', placementMode: 'transform' })
+
+    actor.send({ type: 'SCENE_LOADED', scene: { ...sceneFixture(), id: 'next-scene' } })
+
+    expect(actor.getSnapshot().value).toBe('idle')
+    expect(actor.getSnapshot().context.currentSceneId).toBe('next-scene')
+    expect(actor.getSnapshot().context.selection).toEqual({ itemIds: [] })
+    expect(actor.getSnapshot().context.creatingType).toBeNull()
+    expect(actor.getSnapshot().context.creatingPlacementMode).toBeNull()
+    expect(playbackChanges).toEqual(mode === 'playing' ? [true, false] : [])
+    expect(creationChanges.at(-1)).toEqual(mode === 'creating' ? null : undefined)
+    actor.stop()
+  })
 })
 
 describe('controllerMachine — selection, two emitters converging on one truth', () => {
