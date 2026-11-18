@@ -225,6 +225,84 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     originalResizeObserver = undefined
   })
 
+  it.each(['item', 'capsule'])('hides the selected item and its trajectory when masking the %s', async (maskedId) => {
+    actor = createActor(controllerMachine)
+    actor.start()
+    actions = new EditorActionsFacade(actor)
+    const documentScene = tangentScene()
+    const item = documentScene.items[0]!
+    documentScene.decors.first!.offset = { ...documentScene.decors.first!.offset, rotate: 33 }
+    if (maskedId === 'capsule') {
+      documentScene.decors.parent = { id: 'parent', offset: { width: 100, height: 100 } }
+      documentScene.items.push({
+        id: 'capsule', type: 'capsule', parentId: null, order: 'a', visible: true,
+        contentId: null, initialDecorId: 'parent', keyframes: [],
+        capsule: {
+          kind: 'grille', grid: { rows: 1, cols: 1 },
+          distribution: { mode: 'stagger', staggerInMs: 0, staggerOutMs: 0 },
+        },
+      })
+      item.parentId = 'capsule'
+    }
+    actions.loadScene(documentScene)
+    coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
+    const sceneRoot = document.createElement('div')
+    sceneRoot.style.width = '800px'
+    Object.defineProperty(sceneRoot, 'getBoundingClientRect', {
+      value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }),
+    })
+    const panel = document.createElement('div')
+    document.body.append(sceneRoot, panel)
+    sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
+    decorBridge = createDecorEditorBridge(panel, actor, coordination)
+    await waitTurns(24)
+    actions.selectItem(['item'], 'first-kf')
+    actor.send({ type: 'SEEK', timelineMs: 0 })
+    await waitTurns(24)
+
+    const frame = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')!
+    const path = sceneRoot.querySelector<SVGPathElement>('[data-motion-path]')!
+    const ghost = sceneRoot.querySelector<HTMLElement>('[data-motion-ghost="target"]')!
+    const tangent = sceneRoot.querySelector<HTMLElement>('#editor-motion-path-orientation')!
+    const visibleItem = () => sceneRoot.querySelector('[data-editor-visual-for="item"]')
+    const selected = { itemIds: ['item'], keyframeId: 'first-kf' }
+    const visiblePose = frame.style.transform
+    const visibleScene = actor.getSnapshot().context.scene!
+    expect(visibleItem()).not.toBeNull()
+    expect(frame.style.display).not.toBe('none')
+    expect(visiblePose).not.toBe('')
+    expect(path.style.display).not.toBe('none')
+    expect(ghost.style.display).not.toBe('none')
+    expect(tangent.style.display).not.toBe('none')
+
+    actor.send({ type: 'RUN_COMMAND', command: { name: 'toggleItemVisibility', args: { itemId: maskedId } } })
+    expect(frame.style.display).toBe('none')
+    expect(path.style.display).toBe('none')
+    expect(ghost.style.display).toBe('none')
+    expect(tangent.style.display).toBe('none')
+    await waitTurns(24)
+    expect(visibleItem()).toBeNull()
+    expect(actor.getSnapshot().context.selection).toMatchObject(selected)
+    expect(actor.getSnapshot().context.scene?.decors).toEqual(visibleScene.decors)
+    expect(frame.style.display).toBe('none')
+
+    actions.undo()
+    await waitTurns(24)
+    expect(visibleItem()).not.toBeNull()
+    expect(frame.style.display).not.toBe('none')
+    expect(frame.style.transform).toBe(visiblePose)
+    expect(path.style.display).not.toBe('none')
+    expect(ghost.style.display).not.toBe('none')
+    expect(tangent.style.display).not.toBe('none')
+    expect(actor.getSnapshot().context.selection).toMatchObject(selected)
+
+    actions.redo()
+    await waitTurns(24)
+    expect(visibleItem()).toBeNull()
+    expect(frame.style.display).toBe('none')
+    expect(path.style.display).toBe('none')
+  })
+
   it('uses the live item transform axis for the Selection Frame pivot', async () => {
     originalResizeObserver = globalThis.ResizeObserver
     globalThis.ResizeObserver = class {

@@ -241,7 +241,7 @@ Item {
                                        //   vide. Ajouté 2026-07-13, migration sequence-editor.
   parentId: string | null             // null = enfant de la capsule racine
   order: string                       // clé lexicale fractionnaire parmi les frères ("a","b","ab"…)
-  visible: boolean                    // inclusion dans la compilation Editor ;
+  visible: boolean                    // inclusion dans la présentation Editor ;
                                       // masque aussi les descendants d'une capsule
   contentId: string | null            // → contents ; null si bloc vide ou capsule (enfants = contenu)
   initialDecorId: string              // → decors — décor de base OBLIGATOIRE (état « intro terminée »)

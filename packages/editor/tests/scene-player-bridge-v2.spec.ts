@@ -202,6 +202,49 @@ describe('V2 editor position seek integration', () => {
     expect(root.style.aspectRatio).toBe('16 / 9')
   })
 
+  it('closes the previous document before building its replacement and discards its pending rebuild', async () => {
+    actor = createActor(controllerMachine).start()
+    actor.send({ type: 'SCENE_LOADED', scene: scene() })
+    coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
+    root = document.createElement('div')
+    document.body.append(root)
+    sceneBridge = createScenePlayerBridge(root, actor, coordination)
+    await waitTurns(32)
+    const previousRoot = root.querySelector('.editor-v2-instance-root')!
+    expect(previousRoot).not.toBeNull()
+    coordination.transport.play()
+    await waitTurns(32)
+    expect(coordination.transport.getState()?.status).toBe('playing')
+
+    actor.send({ type: 'RUN_COMMAND', command: { name: 'setDecor', args: { decorId: 'first', patch: { style: { color: 'green' } } } } })
+    const nextScene = {
+      ...scene(),
+      id: 'replacement-scene',
+      contents: { content: { id: 'content', type: 'text' as const, text: 'Replacement' } },
+    }
+    actor.send({ type: 'SCENE_LOADED', scene: nextScene })
+
+    expect(actor.getSnapshot().value).toBe('idle')
+    expect(previousRoot.isConnected).toBe(false)
+    expect(root.querySelectorAll('.editor-v2-instance-root')).toHaveLength(0)
+    expect(coordination.transport.getState()).toBeNull()
+    expect(coordination.snapshot.get()).toBeNull()
+
+    await waitTurns(64)
+    expect(root.querySelectorAll('.editor-v2-instance-root')).toHaveLength(1)
+    expect(root.textContent).toContain('Replacement')
+    expect(coordination.transport.getProgress()?.timelineMs).toBe(0)
+    coordination.transport.seek(2_000)
+    await waitTurns(32)
+    expect(coordination.transport.getProgress()?.timelineMs).toBe(2_000)
+    coordination.transport.play()
+    await waitTurns(32)
+    expect(coordination.transport.getState()?.status).toBe('playing')
+    coordination.transport.rewind()
+    await waitTurns(32)
+    expect(coordination.transport.getProgress()?.timelineMs).toBe(0)
+  })
+
   it('plays, seeks back, plays again, then seeks again without freezing the scene', async () => {
     const originalNow = Date.now
     const originalRaf = globalThis.requestAnimationFrame

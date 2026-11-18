@@ -54,126 +54,14 @@ comme précisé dans la dernière section.
 
 ## 2. Décrire une scène à un agent qui la construit
 
-### Ce qu’OpenFilm apporte
+L’analyse détaillée du pilotage IA est extraite dans l’[étude dédiée :
+enseignements d’OpenFilm, WebMCP, Elcé et Editor](../pilotage-ia/2026-11-18-pilotage-ia-webmcp-elce.md).
 
-L’agent travaille sur les mêmes fichiers que l’éditeur. Un manuel lui enseigne
-le format, la fabrication des plans et la vérification du résultat avec
-`openfilm look`. Le travail ne s’arrête donc pas à la génération : il comprend
-une observation des images et des corrections.
-
-OpenFilm transmet aussi les références visuelles sous forme de liens : clip,
-instant, intervalle ou région d’image. La personne peut ainsi désigner ce qui
-doit changer sans reformuler toute la scène.
-[Manuel de création][of-film-manual], [références communes aux outils][of-plugins].
-
-Les corrections manuelles internes aux plans sont appliquées par
-`overrides`, séparément du code des pages. Cette protection dépend de la
-stabilité des sélecteurs ciblés. Le code détecte également des retouches omises
-par une réécriture externe et des champs manuels remplacés par une ancienne
-valeur. Ce n’est pas une garantie générale de fusion de toutes les éditions.
-[Application des retouches][of-overrides], [détection des retouches perdues][of-dropped].
-
-### Notre point d’appui existe déjà
-
-Le chemin à réutiliser est :
-
-```text
-Intentions de l’agent
-    → commandes du contrôleur Editor
-    → EditorScene committée
-    → Builder existant
-    → CodPlay V2
-```
-
-`EditorActionsFacade.runCommand()` et `runTransaction()` adressent déjà
-l’acteur propriétaire du document. La transaction constitue le point d’appui
-pour une modification regroupée dans l’historique. Le catalogue de commandes
-inclut notamment création d’item et de capsule, contenu, décor, rattachement,
-keyframes et marqueurs.
-
-L’agent devrait modifier ces données auteur, conserver leurs identités et
-laisser le Builder résoudre le résultat. Construire un autre document runtime,
-patcher directement le DOM ou écrire SQLite pendant que le document est ouvert
-introduirait une seconde voie d’écriture.
-[Contrat d’intégration](../../packages/editor/specs/editor-v2-integration-spec.md),
-[historique](../../packages/editor/specs/editor-history-spec.md),
-[façade applicative](../../packages/editor/src/app/facades/editor-actions-facade.ts) et
-[commandes reconnues](../../packages/editor/src/app/controller/types.ts).
-
-### Exemple de collaboration à viser
-
-> Construis une scène de 20 secondes : un titre, puis trois cartes qui entrent
-> successivement. Utilise les images fournies, conserve le titre pendant la
-> présentation et termine par une conclusion.
-
-Une capsule et sa distribution peuvent exprimer cette intention sans recopier
-manuellement tous les timings calculés. Une correction comme « commence la
-deuxième carte à 8 secondes et conserve sa couleur » devrait porter sur la
-borne concernée, en préservant le décor déjà choisi.
-
-L’assistance utile combine quatre capacités : comprendre le document courant,
-construire une proposition, appliquer les commandes et inspecter le rendu.
-Un message peut être accompagné de la sélection et du temps auteur ; les
-identifiants d’item et de keyframe sont des références plus adaptées à notre
-modèle que les sélecteurs DOM d’OpenFilm.
-
-### Ce que le serveur fait réellement pour la coédition
-
-La protection dépasse les `overrides`. Dans `film.mjs`, `changeProjectFilm()`
-sérialise les modifications par projet, lit le film courant, applique le
-changement sur une copie et écrit seulement si le fichier n’a pas changé
-entre-temps. `editProjectFilm()` applique les opérations par identifiant et
-revalide le résultat ; certaines opérations sur une ancienne révision sont
-réappliquées, tandis qu’un changement périmé de disposition des pistes est refusé.
-[Écriture du film][of-film-server].
-
-`person-edits.mjs` conserve les versions vues et les champs modifiés par la
-personne. `mergeFilmWrite()` appelle le calcul de fusion de `person-merge.mjs`.
-Ce dernier recherche une base parmi les versions connues et fusionne par clip,
-champ ou propriété ; les ambiguïtés peuvent conserver le choix humain. Les
-notifications déjà transmises aux agents interviennent aussi dans ce calcul.
-L’état de suivi est en mémoire de session, distinct du fichier du film.
-[Suivi des retouches][of-person-edits], [calcul de fusion][of-person-merge].
-
-Ce mécanisme répond à leur choix de laisser un agent réécrire des fichiers
-entiers. Pour Editor, il renforce l’intérêt d’une entrée par commandes nommées
-sur le document courant : reproduire tout leur système de fusion serait une
-décision architecturale supplémentaire, pas un préalable démontré.
-
-Les références visuelles sont également construites dans le code : `clipRef()`
-transmet identité, source, découpage et vitesse ; `regionRef()` associe instant,
-rectangle, clips concernés et extrait visuel. C’est une capacité de contexte
-précise, au-delà d’une simple zone de conversation.
-[Construction des références][of-studio-refs].
-
-### Ce qui reste à concevoir
-
-- **Accès de l’agent.** Aucun protocole de coédition par agent n’est établi
-  dans les références Editor consultées. Le choix entre agent externe,
-  conversation intégrée et transport d’outils reste une étude d’intégration.
-- **Lecture et résultats.** La façade applicative reçoit des commandes mais
-  ses méthodes retournent `void`. La réception par l’agent des identifiants
-  créés, erreurs et résultats ne constitue pas aujourd’hui une API exposée.
-- **Éditions simultanées.** Le contrôle de révision SQLite protège une
-  sauvegarde, pas à lui seul une proposition d’agent fondée sur un document
-  devenu ancien. La proposition doit pouvoir être confrontée à l’état courant
-  avant application.
-- **Vérification visuelle.** Lire le document ne prouve pas que le texte tient
-  dans son cadre ou qu’une entrée est lisible. Une inspection de plusieurs
-  instants, sur le vrai player, complète les diagnostics structurels.
-- **Ressources.** Le catalogue et la persistance des octets médias restent
-  incomplets dans Editor. Une première expérimentation peut utiliser des
-  ressources stables fournies, sans supposer une chaîne de génération média.
-
-La graine pseudo-aléatoire auteur doit rester stable pendant l’édition. Un
-agent ne doit pas régénérer un tirage à chaque correction de la composition.
-Les previews continuent d’utiliser leur circuit temporaire ; elles ne deviennent
-pas une seconde persistance des propositions.
-[Persistance actuelle](../../packages/editor/specs/editor-sqlite-persistence-spec.md).
-
-**Appréciation :** piste favorable, avec un adaptateur applicatif à étudier
-autour des commandes existantes. Aucun besoin de modification du cœur CodPlay
-n’est démontré par cette étude.
+OpenFilm associe création par l’agent, références visuelles et protection des
+retouches humaines. Pour Editor, le point d’appui identifié reste le circuit
+des commandes du contrôleur vers le document auteur et le Builder existants.
+La réception des résultats, les propositions devenues périmées et l’inspection
+du vrai rendu restent des sujets d’intégration à concevoir.
 
 ## 3. Produire une vidéo de la scène, sans interactions
 
@@ -513,14 +401,6 @@ lecture du code gardent les limites explicitées ci-dessus.
 [of-readme]: https://github.com/openfilm/openfilm/blob/715c3a6e46b11a0b3ee038e8f7b3e3b4e19c5c36/README.md
 [of-spec]: https://github.com/openfilm/openfilm/blob/715c3a6e46b11a0b3ee038e8f7b3e3b4e19c5c36/packages/openfilm/SPEC.md
 [of-package]: https://github.com/openfilm/openfilm/blob/715c3a6e46b11a0b3ee038e8f7b3e3b4e19c5c36/packages/openfilm/package.json
-[of-film-manual]: https://github.com/openfilm/openfilm/blob/715c3a6e46b11a0b3ee038e8f7b3e3b4e19c5c36/packages/openfilm/manual/film/SKILL.md
-[of-plugins]: https://github.com/openfilm/openfilm/blob/715c3a6e46b11a0b3ee038e8f7b3e3b4e19c5c36/packages/openfilm/plugins/README.md
-[of-overrides]: https://github.com/openfilm/openfilm/blob/715c3a6e46b11a0b3ee038e8f7b3e3b4e19c5c36/packages/openfilm/src/overrides.mjs
-[of-dropped]: https://github.com/openfilm/openfilm/blob/715c3a6e46b11a0b3ee038e8f7b3e3b4e19c5c36/packages/openfilm/studio/ui/src/lib/dropped-overrides.ts
-[of-film-server]: https://github.com/openfilm/openfilm/blob/715c3a6e46b11a0b3ee038e8f7b3e3b4e19c5c36/packages/openfilm/studio/server/film.mjs
-[of-person-edits]: https://github.com/openfilm/openfilm/blob/715c3a6e46b11a0b3ee038e8f7b3e3b4e19c5c36/packages/openfilm/studio/server/person-edits.mjs
-[of-person-merge]: https://github.com/openfilm/openfilm/blob/715c3a6e46b11a0b3ee038e8f7b3e3b4e19c5c36/packages/openfilm/studio/server/person-merge.mjs
-[of-studio-refs]: https://github.com/openfilm/openfilm/blob/715c3a6e46b11a0b3ee038e8f7b3e3b4e19c5c36/packages/openfilm/studio/ui/src/lib/studio-refs.ts
 [of-render]: https://github.com/openfilm/openfilm/blob/715c3a6e46b11a0b3ee038e8f7b3e3b4e19c5c36/packages/openfilm/src/render.mjs
 [of-host]: https://github.com/openfilm/openfilm/blob/715c3a6e46b11a0b3ee038e8f7b3e3b4e19c5c36/packages/openfilm/src/host.mjs
 [of-look]: https://github.com/openfilm/openfilm/blob/715c3a6e46b11a0b3ee038e8f7b3e3b4e19c5c36/packages/openfilm/src/look.mjs

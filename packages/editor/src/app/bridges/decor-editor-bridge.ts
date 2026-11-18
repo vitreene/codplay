@@ -40,6 +40,7 @@ import {
 } from '../../decor-editor/modified-properties'
 import type { DecorModificationMap } from '../../decor-editor/modified-properties'
 import { resolveKeyframeChannel } from '../commands/types'
+import { isItemVisible } from '../commands/item-visibility/item-visibility'
 import type { CapsuleDef, Content, Decor, EditorScene, Item, ItemType, OffsetData, Orientation, RootPlacementMode } from '../commands/types'
 import { ROOT_PLACEMENT_GRID, rootPlacementModeForScene } from '../commands/root-placement-commands'
 import type { Command, Selection } from '../controller/types'
@@ -3274,11 +3275,18 @@ export function createDecorEditorBridge(
       controller.detach()
       return
     }
-    const item = scene.items.find((candidate) => candidate.id === target.itemId)
+    const itemsById = new Map(scene.items.map(candidate => [candidate.id, candidate]))
+    const item = itemsById.get(target.itemId)
     if (item === undefined) return
+    const visible = isItemVisible(item, itemsById)
+    if (!visible) {
+      activeMotion = null
+      frameCommitCandidatePx = null
+      snapshotCommitAwaitingPresentation = false
+    }
     // A document-backed target no longer needs the temporary snapshot contribution. This also
     // closes the preview left by a temporary edit when a freshly created keyframe is selected.
-    if (!target.isTemporary && snapshotPreviewActive && !snapshotCommitAwaitingPresentation) {
+    if ((!visible || !target.isTemporary) && snapshotPreviewActive && !snapshotCommitAwaitingPresentation) {
       clearSnapshotPreview()
     }
 
@@ -3304,7 +3312,7 @@ export function createDecorEditorBridge(
         // A scene rebuild destroys the runtime preview. Re-apply the accepted candidate only when
         // the player has reached its author time; the request-side `seek` notification is too early.
         const progress = coordination.transport.getProgress()
-        if (progress !== null && Math.abs(progress.timelineMs - temporaryCandidate.timeMs) <= 1) {
+        if (visible && progress !== null && Math.abs(progress.timelineMs - temporaryCandidate.timeMs) <= 1) {
           previewPatch(target.itemId, temporaryCandidate.patch, true, null)
         }
       } else {
@@ -3353,7 +3361,7 @@ export function createDecorEditorBridge(
       : readLogicalFrame(logicalSnapshot, target.itemId, posePatch)
     const rotationOrigin = posePatch.offset?.rotationOrigin
       ?? parseRotationOrigin(patch.style?.['transform-origin'])
-    const logicalFrame = logicalFrameFromState
+    const logicalFrame = !visible ? null : logicalFrameFromState
       ?? (rootWidth !== null && itemUsesZonePlacement(scene, item, lastKnownTimelineMs, target.keyframeId)
         ? readPresentedLogicalFrame(target.itemId, rootWidth, rotationOrigin, resolvedBorderInsets)
         : null)

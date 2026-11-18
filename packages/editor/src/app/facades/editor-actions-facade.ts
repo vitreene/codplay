@@ -4,6 +4,7 @@ import { applyDefaultTextFontSize, applyDefaultZonePlacementStyle } from '../com
 import type { EditorScene, RootPlacementMode } from '../commands/types'
 import type { controllerMachine } from '../controller/controller-machine'
 import type { Command } from '../controller/types'
+import type { EditorScenePersistence } from '../persistence/editor-scene-persistence'
 
 /** Routes editor UI intentions through the document-owning XState actor. */
 export class EditorActionsFacade {
@@ -24,6 +25,19 @@ export class EditorActionsFacade {
   /** Loads a document through the central controller and its existing module bridges. */
   loadScene(scene: EditorScene): void {
     this.controller.send({ type: 'SCENE_LOADED', scene: applyDefaultZonePlacementStyle(applyDefaultTextFontSize(scene)) })
+  }
+
+  /** Saves pending author edits before replacing the document and awaiting its SQLite activation. */
+  async selectScene(sceneId: string, persistence: EditorScenePersistence): Promise<void> {
+    if (sceneId === this.controller.getSnapshot().context.currentSceneId) return
+    this.controller.send({ type: 'HISTORY_BOUNDARY' })
+    await persistence.flush()
+    if (persistence.getStatus().kind === 'error') return
+
+    const scene = await persistence.loadScene(sceneId)
+    if (scene === null) return
+    this.loadScene(scene)
+    await persistence.flush()
   }
 
   /** Sends one typed document command through the central facade. */

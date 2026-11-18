@@ -33,6 +33,45 @@ parent. Cette projection laisse le document auteur et sa persistance intacts.
 Les items exclus ne contribuent pas à la validation ni au calcul du `preRollMs`
 de la scène compilée.
 
+## Changement de scène dans le catalogue
+
+Le menu passe par `EditorActionsFacade.selectScene()` et la
+[file SQLite](./editor-sqlite-persistence-spec.md) : les éditions en attente
+sont committées et sauvegardées avant de remplacer le document courant. Le
+sélecteur et les actions de création/suppression de scène restent désactivés
+pendant ce parcours, jusqu’à l’acquittement de l’activation SQLite.
+
+`SCENE_LOADED` ramène le contrôleur à `idle` et quitte donc la lecture ou la
+création en cours. Un changement d’identité de scène efface la sélection d’items
+et de keyframes ; le rechargement du même document conserve cette sélection.
+Le chargement remet toujours l’historique et le temps auteur à zéro.
+
+Quand l’identité change, `scene-player-bridge` détache la façade player, détruit
+l’ancienne instance, retire sa racine et libère ses ressources et son CSS avant
+de construire l’instance suivante. Il invalide aussi les rebuilds, seeks et
+demandes de lecture encore en attente pour l’ancien document. Le propriétaire
+`CodPlay` partagé reste vivant. Un commit ou un rechargement du même document
+conserve le circuit existant de préparation puis remplacement d’instance.
+
+Le `<select>` garde son identité DOM et sa valeur contrôlée. Chaque option porte
+aussi son état `selected`, afin que la sélection initiale reste correcte lorsque
+Remix insère les options après la valeur du contrôle. Les rendus du catalogue et
+les échecs de sauvegarde gardent ainsi l’option conforme au document courant.
+
+[`scene-switching.spec.ts`](../tests/app/scene-switching/scene-switching.spec.ts)
+vérifie le sélecteur réel et l’ordre de persistance avec SQLite.
+[`controller-machine.spec.ts`](../tests/controller/controller-machine.spec.ts)
+vérifie la sortie des états de lecture/création et la sélection au changement de
+document. [`scene-player-bridge-v2.spec.ts`](../tests/scene-player-bridge-v2.spec.ts)
+vérifie la fermeture avant construction, l’abandon d’un rebuild obsolète et
+Seek/Play/rewind dans la nouvelle instance à travers la vraie façade CodPlay.
+Le parcours Safari MCP du menu natif couvre le choix entre plusieurs scènes
+pendant la lecture, le retrait de l’ancienne racine avant l’ajout de la suivante,
+l’unicité de l’instance et la concordance entre option, contenu et identité
+active SQLite. Le retour puis le rechargement conservent les modifications
+sauvegardées ; Seek, Play, Pause, Stop et le redimensionnement utilisent ensuite
+la nouvelle instance sans modifier le document.
+
 ## Répartition verticale du layout Editor
 
 Dans le layout principal, le player de scène garde son ratio auteur et prend
@@ -177,6 +216,13 @@ sont définis dans [`app-layout.css`](../src/app/layout/app-layout.css).
   phase avant d'effacer la sélection. Un réattachement du même ensemble d'items
   conserve le panneau et les réglages actifs. Resize et scroll reprojettent le
   frame depuis la géométrie courante, sans mutation du document.
+- « Masquer » retire aussi le cadre de sélection, le tracé, les ghosts et les
+  commandes de trajectoire de l’item sélectionné. Le Builder et le pont Décor
+  appliquent la même règle aux items et aux descendants des capsules masquées.
+  La sélection reste dans la timeline. « Afficher » restitue les repères à
+  partir de la pose présentée au temps courant, avec son orientation.
+  Le changement de visibilité passe par l’historique et la sauvegarde du
+  document.
 - Les items de la scène affichent le curseur de pointage, y compris sur le
   texte. Le Selection Frame et ses poignées gardent les curseurs de leurs
   gestes.
@@ -238,6 +284,10 @@ sont définis dans [`app-layout.css`](../src/app/layout/app-layout.css).
   couvre la projection Editor vers `SceneDoc` V2, l'exclusion d'un item masqué,
   l'exclusion du sous-arbre d'une capsule masquée et la compilation du résultat
   par le vrai `CodPlay.build()`.
+- [L’intégration du pont Décor](../tests/decor-editor-bridge-integration-v2.spec.ts)
+  couvre la visibilité du cadre et de la trajectoire pour un item sélectionné
+  et pour l’enfant d’une capsule masquée, ainsi que le retour de la sélection
+  et de sa projection après Undo et Redo.
 - [`editor-player-command-facade-v2.spec.ts`](../tests/editor-player-command-facade-v2.spec.ts),
   [`scene-player-bridge-v2.spec.ts`](../tests/scene-player-bridge-v2.spec.ts)
   et [`controller-machine.spec.ts`](../tests/controller/controller-machine.spec.ts)

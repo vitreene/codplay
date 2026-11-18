@@ -471,30 +471,3 @@ reste la référence hors du périmètre Editor.
   Aucune refonte du Builder ne commence avant validation explicite de son
   modèle, de ses frontières et de son chemin d’acceptation. Les correctifs
   vérifiés restent décrits dans les specs existantes.
-
-## 7. Visibilité des items dans Editor
-
-**Décision acceptée :** `visible: false` retire l’item de la compilation Editor ;
-le document auteur et sa valeur `visible` restent persistés. Le Builder ne doit
-plus produire `EDITOR_V2_ITEM_VISIBILITY_UNSUPPORTED`. Une capsule masquée retire
-aussi ses descendants : aucun perso enfant ne peut être compilé sans le perso
-parent qui porte leur contenu.
-
-**Décision acceptée — présentation de l’item masqué :** « Masquer » cache aussi
-le Selection Frame et les trajectoires de l’item sélectionné (chemin et ghosts).
-« Afficher » rétablit leur présentation depuis la pose auteur au playhead ; le
-toggle ne modifie ni cette pose ni la sélection documentaire.
-
-**Actions après décision :** étendre le filtrage dans le Builder Editor existant,
-ajouter la régression à ses tests, puis valider le build Editor, la bascule et
-Undo/Redo dans l’application, ainsi que la persistance SQLite. Dans MCP, à KF0
-de Tangente, vérifier que Masquer retire l’item, le CS, le chemin et les ghosts,
-puis qu’Afficher les restitue avec la rotation initiale. Mettre à jour les specs
-du modèle et d’intégration V2 après vérification.
-
-**En cours :** le Builder omet l’item masqué et le sous-arbre d’une capsule
-masquée ; deux régressions vérifient aussi le résultat par `CodPlay.build()`.
-Le test Builder ciblé (23 tests), les tests de commande et persistance SQLite
-(25 tests), le typecheck et le build Editor passent. La bascule dans
-l’application avec Undo/Redo et restauration SQLite reste à accepter ; ne pas
-fermer cet item avant cette validation.
