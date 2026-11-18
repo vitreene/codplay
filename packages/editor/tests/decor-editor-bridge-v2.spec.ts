@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createActor } from 'xstate'
 import type { CodPlaySnapshot } from 'codplay'
+import { selectionFrameLocalToScene } from '@codplay/selection-frame/v2'
 import {
   applyFrameDelta,
   resolveEffectiveKeyframePatch,
@@ -52,21 +53,9 @@ function sceneWithDecors(): EditorScene {
   }
 }
 
-/** Applies the Selection Frame's center-origin rotate/scale transform to one local corner. */
+/** Projects a frame point through the same affine transform used by the Selection Frame. */
 function framePoint(value: SelectionFrameValue, localX: number, localY: number): { x: number; y: number } {
-  const angle = ((value.rotate ?? 0) * Math.PI) / 180
-  const scaleX = value.scaleX ?? 1
-  const scaleY = value.scaleY ?? 1
-  const cosine = Math.cos(angle)
-  const sine = Math.sin(angle)
-  const originX = (value.rotationOrigin?.fx ?? 0.5) * value.width
-  const originY = (value.rotationOrigin?.fy ?? 0.5) * value.height
-  const transformedX = (localX - originX) * scaleX
-  const transformedY = (localY - originY) * scaleY
-  return {
-    x: value.x + originX + cosine * transformedX - sine * transformedY,
-    y: value.y + originY + sine * transformedX + cosine * transformedY,
-  }
+  return selectionFrameLocalToScene(value, localX, localY)
 }
 
 /** Asserts that two transformed frame points coincide within floating-point precision. */
@@ -167,6 +156,52 @@ describe('decor-editor bridge V2', () => {
     const rotated = applyFrameDelta(moved, { kind: 'rotate', dr: 35 })
     const pivot = { x: moved.rotationOrigin!.fx * moved.width, y: moved.rotationOrigin!.fy * moved.height }
     expectSamePoint(framePoint(rotated, pivot.x, pivot.y), framePoint(moved, pivot.x, pivot.y))
+  })
+
+  it('compose move, resize, rotation and pivot against one skew-capable affine pose', () => {
+    const matrix = { a: 1, b: 0.25, c: 0.5, d: 1.125 }
+    const base: SelectionFrameValue = {
+      x: 140,
+      y: 70,
+      width: 180,
+      height: 120,
+      rotate: 14.036243467926479,
+      rotationOrigin: { fx: 0.2, fy: 0.75 },
+      affineProjection: {
+        origin: { x: 140 + 36 - matrix.a * 36 - matrix.c * 90, y: 70 + 90 - matrix.b * 36 - matrix.d * 90 },
+        matrix,
+      },
+    }
+    const move = applyFrameDelta(base, { kind: 'move', dx: 24, dy: -12 })
+    expect(move.affineProjection?.matrix).toEqual(matrix)
+    expect(move.affineProjection?.origin.x).toBeCloseTo(base.affineProjection!.origin.x + 24)
+    expect(move.affineProjection?.origin.y).toBeCloseTo(base.affineProjection!.origin.y - 12)
+
+    const resized = applyFrameDelta(base, {
+      kind: 'resize',
+      handle: 'se',
+      dx: matrix.a * 30 + matrix.c * 20,
+      dy: matrix.b * 30 + matrix.d * 20,
+    })
+    expect(resized.width).toBeCloseTo(base.width + 30)
+    expect(resized.height).toBeCloseTo(base.height + 20)
+    expect(resized.affineProjection?.matrix).toEqual(matrix)
+    expectSamePoint(framePoint(resized, 0, 0), framePoint(base, 0, 0))
+
+    const rotated = applyFrameDelta(base, { kind: 'rotate', dr: 35 })
+    const radians = 35 * Math.PI / 180
+    expect(rotated.affineProjection?.matrix.a).toBeCloseTo(Math.cos(radians) * matrix.a - Math.sin(radians) * matrix.b)
+    expect(rotated.affineProjection?.matrix.b).toBeCloseTo(Math.sin(radians) * matrix.a + Math.cos(radians) * matrix.b)
+    expect(rotated.affineProjection?.matrix.c).toBeCloseTo(Math.cos(radians) * matrix.c - Math.sin(radians) * matrix.d)
+    expect(rotated.affineProjection?.matrix.d).toBeCloseTo(Math.sin(radians) * matrix.c + Math.cos(radians) * matrix.d)
+    const pivot = { x: base.rotationOrigin!.fx * base.width, y: base.rotationOrigin!.fy * base.height }
+    expectSamePoint(framePoint(rotated, pivot.x, pivot.y), framePoint(base, pivot.x, pivot.y))
+
+    const pivoted = applyFrameDelta(base, { kind: 'pivot', fx: 0.8, fy: 0.1 })
+    for (const point of [[0, 0], [180, 0], [180, 120], [0, 120]] as const) {
+      expectSamePoint(framePoint(pivoted, point[0], point[1]), framePoint(base, point[0], point[1]))
+    }
+    expect(pivoted.affineProjection?.matrix).toEqual(matrix)
   })
 
   it('lit le style temporaire depuis le snapshot logique', () => {

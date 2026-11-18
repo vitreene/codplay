@@ -30,6 +30,13 @@ export type {
   SelectionFrameValue,
 } from './v2/types'
 export { createRotationModifier } from './v2/rotation-modifier'
+export {
+  rotateSelectionFrameAffine,
+  selectionFrameLinearTransform,
+  selectionFrameLocalToScene,
+  updateSelectionFrameAffineOrigin,
+} from './v2/affine-geometry'
+export type { SelectionFrameLinearMatrix, SelectionFramePoint } from './v2/affine-geometry'
 export { createZoneEditorV2 } from './zone-editor-v2'
 export type { ZoneEditorV2Options, ZoneEditorV2Pose } from './zone-editor-v2'
 export type { ZoneEditorHandle } from './zone-editor'
@@ -212,10 +219,19 @@ export function createSelectionFrameV2(options: SelectionFrameV2Options): Select
       return
     }
     frame.style.display = ''
-    frame.style.left = `${next.x}px`
-    frame.style.top = `${next.y}px`
     frame.style.width = `${Math.max(0, next.width)}px`
     frame.style.height = `${Math.max(0, next.height)}px`
+    if (next.affineProjection !== undefined) {
+      const { origin, matrix } = next.affineProjection
+      frame.style.left = `${origin.x}px`
+      frame.style.top = `${origin.y}px`
+      frame.style.transformOrigin = '0 0'
+      frame.style.transform = `matrix(${matrix.a}, ${matrix.b}, ${matrix.c}, ${matrix.d}, 0, 0)`
+      refreshHandleVisibility()
+      return
+    }
+    frame.style.left = `${next.x}px`
+    frame.style.top = `${next.y}px`
     frame.style.transformOrigin = `${(next.rotationOrigin?.fx ?? 0.5) * 100}% ${(next.rotationOrigin?.fy ?? 0.5) * 100}%`
     const rotate = next.rotate ?? 0
     const scaleX = next.scaleX ?? 1

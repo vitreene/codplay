@@ -213,25 +213,170 @@ conflit de révision et garde de dernière scène.
 
 ### Editor vers le player — synchronisation décor/projection et rotation
 
-**Statut : A relire.** L’implémentation est suspendue pendant la revue.
-Le [plan d’exécution détaillé](./2026-09-02-motion-editor-v2-plan.md) porte
-le périmètre, les propriétaires, les étapes, les portes de passage, les fixtures,
-les commandes de validation et le parcours MCP pour l’agent chargé de l’exécuter.
-L’[analyse](./notes/2026-10-29-editor-path-playback-analysis.md) conserve le
-raisonnement architectural.
+**Décision ouverte — emplacement du mode global :** le proposer dans le décor
+initial. Préciser si ce déplacement concerne le contrôle seul ou aussi le
+stockage, actuellement porté par l’item ; ne pas réintroduire d’option par KF.
 
-**Contraintes utilisateur à préserver :** couplage immédiat du décor et de ses
-projections, quelle que soit l’entrée ; un seul circuit existant ; rotation
-au degré entier ; calcul dans les capsules tournées et imbriquées ; aucune
-modification de CodPlay. L’interface de trajectoire fonctionne et constitue
-la référence de non-régression. La rotation est le défaut à corriger en priorité.
+Le mode unique tangente/manuelle, le reset des angles et l’orientation
+initiale constante sont décrits dans la
+[spec d’orientation](../specs/path-tangent-orientation-spec.md). Leur acceptation
+utilise une scène neuve à trois items, conformément au choix utilisateur de
+remplacer les anciens documents de test ; aucune compatibilité des anciennes
+options segment-locales n’est promise.
 
-Le plan impose une référence de trajectoire avant modification, puis une
-correction de rotation avant le renforcement des autres entrées. La seule
-convergence des fonctions ne prouve pas la conservation du comportement.
-Les gestes, le rendu, les callbacks de fin, l’écriture et le cycle player doivent
-rester corrects. Les modifications de code restent conditionnées à la validation
-du plan ; aucun comportement proposé n’est déclaré vérifié dans les specs.
+**Décision acceptée — continuité de l’orientation tangentielle :** conserver
+intacts les chemins auteurs, y compris leur cassure aux KFs. Au début de chaque
+segment tangent après le premier, compenser l’offset `rotateOffset.from` pour
+que l’orientation égale celle de la fin du segment précédent ; interpoler cet
+offset jusqu’au décalage initial constant à la fin du segment, avec la
+progression eased déjà portée par `move`. La position reste pilotée par le
+chemin courant. Sur le premier segment, préparer la référence d’affichage de la
+première pose avec la tangente au départ du chemin et le décalage initial ;
+l’offset auteur reste inchangé aux deux bornes de `rotateOffset`. Cette
+préparation évite un pivot visible avant le mouvement sans modifier les valeurs
+logiques de rotation. La correction reste dans le Builder Editor et réutilise
+l’interpolation existante de `rotateOffset` ; aucun changement CodPlay partagé
+ni nouveau lecteur temporel.
+
+**En cours — saut de rotation tangentielle :** Safari MCP reproduit un pivot
+initial sur `Manuel` : la pose présente l’offset auteur `0°`, puis atteint la
+tangente initiale d’environ `173,76°` au départ du premier segment. La
+référence de présentation de la pose initiale doit donc être préparée depuis
+cette tangente, sans remplacer l’offset logique. Safari MCP reproduit aussi le
+saut sur `Manuel`, en mode tangente, au KF de `2,5 s` : `+68,57°` à `2,45 s`,
+puis `−135,66°` vers `2,49 s`. Les tangentes des deux arcs au raccord valent
+`+68,72°` et `−135,69°`, soit un virage de `155,6°`. `build-scene.ts` applique
+maintenant l’offset de raccord calculé par `item-rotation/tangent-reference.ts`
+pour les poses libres dont la projection géométrique est résolue ; l’offset
+rejoint le décalage initial à la fin du segment. La régression garde deux
+segments droits formant un virage de plus de `150°`, vérifie le move compilé,
+le chemin auteur et les seeks autour du KF. Ajouter la preuve du premier segment
+sur pose initiale, Play et Seek, et vérifier que les items frères ne sautent
+pas. Les tests ciblés (16 cas), le typecheck et le build Editor passent pour le
+raccord au KF ; la preuve de rendu reste en attente.
+
+**À valider :** Play/Seek/replay et orientation visible autour de KF1 dans Safari
+MCP, puis consolider la spec. Malgré l’activation de Safari Technology Preview
+et la sélection MCP de l’onglet Editor, le serveur le signale inactif,
+`document.visibilityState` vaut `hidden`, `document.hasFocus()` vaut `false` et
+la capture est noire. Garder la correction `En cours` jusqu’à une preuve de
+rendu visible. Les transitions dont la géométrie dépend d’une zone ou n’a pas
+de projection résolue ne reçoivent pas encore cette correction.
+
+**Défaut d’échelle sur les trajectoires — En cours :** la rotation déforme
+l’échelle pendant un `move`, en mode manuel comme en mode tangente. Sur la scène
+Editor active, Safari MCP reproduit le défaut en mode manuel : pour le segment
+0–2 500 ms de l’item `Manuel`, les angles auteur passent de `15°` à `97°` et le
+scale de `1` à `0,793353`. Au milieu, l’échelle rendue est `0,680117`, alors que
+l’interpolation auteur attendue est `0,896677`. Un item sans scale auteur,
+rotaté de `0°` à `35°`, atteint `0,953717` au milieu au lieu de `1`. L’item
+`Tangente`, qui garde le même angle manuel sur son premier segment, reste à
+`1` : ce cas ne suffisait donc pas à couvrir la régression.
+
+La capture du `move` interpole les coefficients de la matrice affine complète.
+L’extraction de son scale dépend alors des angles source et cible ; une
+rotation peut ainsi créer ou réduire l’échelle rendue. L’interpolation d’un
+scale auteur doit rester indépendante de cette rotation.
+
+**Décision de correction acceptée :** la rotation ne change jamais le scale.
+Sans variation de scale auteur, le scale présenté reste constant ; lorsque
+l’auteur le fait varier, seul cet écart est interpolé. Cette règle s’applique
+aux deux modes de rotation. Le périmètre reste Editor : étendre la projection
+du composant item existant afin que la capture de trajectoire ne mélange pas
+rotation et scale, tout en restituant les transformations auteur via cette même
+présentation. Garder le `move`, le chemin, les keyframes et l’horloge existants ;
+ne pas créer de lecteur temporel ni compenser le scale avec une valeur calculée.
+Les angles manuels restent interpolés ; en tangente, le runtime conserve la
+tangente et le décalage initial. Les poses et ancres de chemin, insets, pivot,
+preview, CS/ghosts, resize, capsule et parent restent invariants. Ne pas toucher
+aux paquets partagés.
+
+**Actions :** ajouter une régression indépendante du mode pour rotation seule
+et rotation avec scale auteur ; modifier le Builder et le présentateur item
+Editor propriétaire pour isoler les transformations de la capture affine,
+avec scale identité `1` aux sources où l’auteur n’en a pas défini ; vérifier le
+CS/ghost, les trajectoires courbes et droites, rotation initiale, insertion,
+Play/Seek/replay, Undo/Redo, resize, capsule, parent/pivot/insets et persistance.
+Typecheck, tests, build et MCP Safari sur la scène Editor sont requis. Consolider
+la spec uniquement après cette preuve.
+
+**Capture de l’échelle au waypoint :** le bridge Decor utilise l’échelle du
+snapshot logique, avec la cascade auteur comme repli. Les gestes du CS sur pose
+libre gardent leur patch sans échelle issue de la matrice affichée. Le test
+d’intégration vérifie la promotion d’un KF décor avec un scale auteur
+interpolé différent de celui du CS. Dans « Rotation — scène neuve », le KF de
+« Manuel » à 2,5 s portait un scale de 0,793353 issu de l’ancienne capture.
+Ce champ a été retiré de ce KF via l’API versionnée. Safari MCP vérifie Play,
+Seek à 2,5 s et replay après rechargement SQLite, avec une taille de police
+constante à 14,36 px et une échelle à 1 à la précision de projection.
+
+**Preview Selection Frame par valeurs modifiées — En cours.**
+
+**Décision acceptée :** le bridge transporte seulement les propriétés auteur
+modifiées. La présentation combine toutes les contributions actives dans une
+matrice affine complète ; item, CS et overlay suivent cette composition.
+Translation, dimensions, rotation, échelles, pivot, transform CSS et éventuel
+cisaillement restent dans le même circuit. Le skew futur entrera comme
+contribution matricielle. Les propriétés peuvent être éditées par des
+interfaces distinctes ; leur projection complète est réunie dans le même
+cycle de preview/commit. Aucun changement du cœur `packages/codplay`.
+
+**Cause établie :** l’ancre privée conserve la matrice CSS complète, mais sa
+projection ne conserve pas la fraction `transform-origin` utilisée pour cette
+matrice. Le bridge peut donc afficher la géométrie avec la bonne matrice tout
+en plaçant l’axe du CS au centre par défaut. Safari MCP reproduit cet écart sur
+« Départ décalé » : l’item tourne autour de son axe CSS bas-gauche, tandis que
+le point du CS reste au centre. Les helpers `motion-editor/geometry.ts` et
+`content-box.ts` calculent aussi centre visuel, axe et insets depuis `rotate` et
+`scaleX/Y` seulement ; ils ne propagent pas une matrice générale jusque dans le
+chemin et les ghosts. Au KF1 de « Manuel », resize pendant `pointermove`
+conserve la rotation et l’alignement du contour à moins de `0,11 px` ;
+`pointercancel` restaure exactement la pose.
+
+**Actions :** faire porter à la projection CSS existante la matrice affine et
+son `transform-origin` normalisé ; le bridge réutilise ces deux valeurs pour
+produire ensemble l’item, le CS et l’overlay. Étendre les calculs existants de
+`content-box.ts` et `geometry.ts` à la même matrice pour centre, inset, axe du
+trajet et ghosts. Garder les patches auteur clairsemés. Couvrir rotation,
+resize, move et pivot avec matrice générale, axe décentré et cisaillement ;
+annulation et commit. Mettre à jour les specs `item-presentation`, motion
+Editor et Selection Frame V2 après vérification.
+
+**Preuve actuelle :** 70 tests ciblés Editor, 10 tests Selection Frame,
+typecheck Editor et build Editor passent. Safari MCP a vérifié le focus réel,
+la rotation et le resize pendant `pointermove`, puis `pointercancel` sans
+commit. Le défaut d’axe ci-dessus est reproduit et reste à corriger.
+
+**Acceptation restante :** tests ciblés avec l’origine issue du transform CSS,
+non-régression parent/enfant et reparent, Play/Seek/replay, resize,
+persistance, cycle de vie, typecheck, tests et build. Rejouer rotation et resize
+dans Safari MCP sur la scène Editor et constater l’alignement axe/item/CS
+pendant `pointermove`. Les gestes MCP synthétiques ne couvrent pas la capture
+native du pointeur.
+
+**Décision acceptée — axe du trajet et ghosts :** l’ancre d’un segment et
+le point de référence du ghost doivent être le point d’axe
+`transform-origin` de l’item, y compris quand il est décentré. Remplacer
+l’ancre centrale du cadre bordé définie par la spec de projection. Garder la
+projection propriétaire `resolveMotionGeometryPose`, afin que le chemin, les
+ghosts et la pose sélectionnée utilisent les mêmes coordonnées. Valider la
+continuité visuelle au pivot centré et aux quatre coins, ainsi qu’en lecture
+avec plusieurs items pour contrôler qu’aucun autre item ne saute.
+
+**Preuve indépendante en attente :** aucun geste scale autonome n’existe dans
+le Selection Frame V2. Vérifier la préservation et la composition des scales
+déjà présents pendant les autres gestes ; ne pas présenter une mesure visuelle
+directe d’un geste scale comme acquise.
+
+**Acceptation indépendante restante :** les six échecs de la suite Editor sur
+les zones, les valeurs de décor et les attentes d’offset vide sont aussi
+reproduits sur `HEAD` avant ce fix. Cette tranche ne les résout pas.
+
+Le renforcement général du couplage décor/projection reste **A relire**, hors
+de cette tranche. L’[analyse](./notes/2026-10-29-editor-path-playback-analysis.md)
+conserve son raisonnement. Les invariants restent le circuit documentaire
+unique, les unités cqw, la rotation affichée au degré entier, l’alignement du
+CS et de l’item, les chemins/ghosts et les capsules tournées ou imbriquées.
 
 **Décision acceptée — déplacement d’une borne de capsule :** le drag d’un
 losange de borne déplace uniquement le KF ciblé ; il conserve l’autre borne et
@@ -325,10 +470,17 @@ plus produire `EDITOR_V2_ITEM_VISIBILITY_UNSUPPORTED`. Une capsule masquée reti
 aussi ses descendants : aucun perso enfant ne peut être compilé sans le perso
 parent qui porte leur contenu.
 
+**Décision acceptée — présentation de l’item masqué :** « Masquer » cache aussi
+le Selection Frame et les trajectoires de l’item sélectionné (chemin et ghosts).
+« Afficher » rétablit leur présentation depuis la pose auteur au playhead ; le
+toggle ne modifie ni cette pose ni la sélection documentaire.
+
 **Actions après décision :** étendre le filtrage dans le Builder Editor existant,
 ajouter la régression à ses tests, puis valider le build Editor, la bascule et
-Undo/Redo dans l’application, ainsi que la persistance SQLite. Mettre à jour la
-spec du modèle et celle d’intégration V2 après vérification.
+Undo/Redo dans l’application, ainsi que la persistance SQLite. Dans MCP, à KF0
+de Tangente, vérifier que Masquer retire l’item, le CS, le chemin et les ghosts,
+puis qu’Afficher les restitue avec la rotation initiale. Mettre à jour les specs
+du modèle et d’intégration V2 après vérification.
 
 **En cours :** le Builder omet l’item masqué et le sous-arbre d’une capsule
 masquée ; deux régressions vérifient aussi le résultat par `CodPlay.build()`.

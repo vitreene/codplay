@@ -4,6 +4,7 @@ import { parseColor, prepareTween, resolveTween, type InterpolationValue } from 
 import { resolveKeyframeTransition } from './keyframe-transition'
 import type { StyleDefaultCapture } from './types'
 import { normalizeAngleDegrees } from '../motion-editor/geometry'
+import { resolveInitialPathRotation } from '../motion-editor/item-rotation/item-rotation'
 
 /** Resolves one Decor into the style record consumed by the V2 tag component. */
 export function resolveDecorStyle(decor: Decor | undefined): Record<string, unknown> {
@@ -133,7 +134,7 @@ export function resolveKeyframePoseStyle(
   item: Item,
   keyframe: Keyframe,
 ): Record<string, unknown> {
-  return resolveKeyframeLayers(scene, item, keyframe)
+  const pose = resolveKeyframeLayers(scene, item, keyframe)
     .filter((_decor, index) => index === 0 || resolveKeyframeChannel(resolveLayerKeyframe(item, keyframe, index - 1)) === 'pose')
     .reduce<Record<string, unknown>>((style, decor) => {
       const next = { ...style, ...resolvePoseChannelStyle(decor) }
@@ -147,6 +148,7 @@ export function resolveKeyframePoseStyle(
       if (offset.height === null) delete next.height
       return next
     }, {})
+  return item.rotationMode === 'tangent' ? { ...pose, rotate: resolveInitialPathRotation(scene, item) } : pose
 }
 
 /** Resolves offset fields through the pose chain, retaining nulls that clear inherited geometry. */

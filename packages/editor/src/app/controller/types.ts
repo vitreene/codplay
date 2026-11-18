@@ -72,6 +72,7 @@ export type Command =
   | { name: 'setRootZonesSurface'; args: { orientation: 'portrait' | 'landscape'; zones: readonly { id: string; name: string; area: ZoneRect }[] } }
   | { name: 'setZonesSurface'; args: { capsuleId: string | null; orientation: Orientation; zones: readonly { id: string; name: string; area: ZoneRect }[] } }
   | { name: 'assignType'; args: { itemId: string; type: ItemType } }
+  | { name: 'setItemRotationMode'; args: { itemId: string; mode: 'manual' | 'tangent' } }
   | { name: 'assignContent'; args: { itemId: string; content: Omit<Content, 'id'> } }
   | { name: 'attachItem'; args: { itemId: string; parentId: string | null; order?: string; beforeItemId?: string; afterItemId?: string } }
   | { name: 'setDecor'; args: { decorId: string; patch: Partial<Omit<Decor, 'id'>> } }

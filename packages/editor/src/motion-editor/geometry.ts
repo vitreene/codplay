@@ -1,6 +1,12 @@
 /** Pure geometry used by the editor motion overlay and its document adapter. */
 
 import { prepareSvgPath, resolvePath, resolvePathFrame } from 'ace'
+import {
+  rotateSelectionFrameAffine,
+  selectionFrameLinearTransform,
+  selectionFrameLocalToScene,
+  updateSelectionFrameAffineOrigin,
+} from '@codplay/selection-frame/v2'
 import type { CodPlayPresentationPose } from 'codplay'
 import type { SelectionFrameValue } from '../decor-editor/types'
 import { contentBoxFrameToPoseFrame, ZERO_CONTENT_BOX_INSETS_PX, type ContentBoxInsetsPx } from './content-box'
@@ -11,7 +17,7 @@ export type MotionGeometryPose = Readonly<{
   frame: SelectionFrameValue
   /** Outer border-box frame shared with visible ghosts and the movement hit surface. */
   borderFrame: SelectionFrameValue
-  /** Transformed centre of the outer border box, shared with the trajectory. */
+  /** Transformed transform-origin point of the outer border box, shared with the trajectory. */
   pathAnchor: MotionPoint
   /** Border insets used to derive both frames and the path anchor. */
   insets: ContentBoxInsetsPx
@@ -23,23 +29,7 @@ export function midpoint(from: MotionPoint, to: MotionPoint): MotionPoint {
 
 /** Returns the visual center of an affine selection-frame pose. */
 export function frameVisualCenter(frame: SelectionFrameValue): MotionPoint {
-  const fx = clamp(frame.rotationOrigin?.fx ?? 0.5)
-  const fy = clamp(frame.rotationOrigin?.fy ?? 0.5)
-  const originX = fx * frame.width
-  const originY = fy * frame.height
-  const scaleX = finiteScale(frame.scaleX)
-  const scaleY = finiteScale(frame.scaleY)
-  const angle = ((frame.rotate ?? 0) * Math.PI) / 180
-  const cosine = Math.cos(angle)
-  const sine = Math.sin(angle)
-  const localX = frame.width / 2
-  const localY = frame.height / 2
-  return {
-    x: frame.x + originX - (cosine * scaleX * originX - sine * scaleY * originY)
-      + cosine * scaleX * localX - sine * scaleY * localY,
-    y: frame.y + originY - (sine * scaleX * originX + cosine * scaleY * originY)
-      + sine * scaleX * localX + cosine * scaleY * localY,
-  }
+  return selectionFrameLocalToScene(frame, frame.width / 2, frame.height / 2)
 }
 
 /** Changes a frame heading without moving its affine visual centre. */
@@ -48,13 +38,13 @@ export function frameWithRotationAtVisualCenter(
   rotate: number,
 ): SelectionFrameValue {
   const center = frameVisualCenter(frame)
-  const rotated = { ...frame, rotate }
+  const rotated = rotateSelectionFrameAffine(frame, rotate)
   const rotatedCenter = frameVisualCenter({ ...rotated, x: 0, y: 0 })
-  return {
+  return updateSelectionFrameAffineOrigin({
     ...rotated,
     x: center.x - rotatedCenter.x,
     y: center.y - rotatedCenter.y,
-  }
+  })
 }
 
 /** Resolves the transformed centre of the visible border box from its content frame. */
@@ -65,31 +55,22 @@ export function motionPathAnchorForFrame(
   return resolveMotionGeometryPose(frame, insets).pathAnchor
 }
 
-/** Resolves the content frame, visible border frame and path centre as one affine projection. */
+/** Resolves the content frame, visible border frame and rotation axis as one affine projection. */
 export function resolveMotionGeometryPose(
   frame: SelectionFrameValue,
   insets: ContentBoxInsetsPx = ZERO_CONTENT_BOX_INSETS_PX,
 ): MotionGeometryPose {
-  const center = frameVisualCenter(frame)
-  const angle = (frame.rotate ?? 0) * Math.PI / 180
-  const cosine = Math.cos(angle)
-  const sine = Math.sin(angle)
-  const borderCenterX = (insets.right - insets.left) / 2
-  const borderCenterY = (insets.bottom - insets.top) / 2
-  const borderFrame = contentBoxFrameToPoseFrame(frame, insets)
+  const borderFrame = updateSelectionFrameAffineOrigin({
+    ...contentBoxFrameToPoseFrame(frame, insets),
+    width: frame.width + insets.left + insets.right,
+    height: frame.height + insets.top + insets.bottom,
+  })
+  const axisX = (frame.rotationOrigin?.fx ?? 0.5) * borderFrame.width
+  const axisY = (frame.rotationOrigin?.fy ?? 0.5) * borderFrame.height
   return {
     frame,
-    borderFrame: {
-      ...borderFrame,
-      width: frame.width + insets.left + insets.right,
-      height: frame.height + insets.top + insets.bottom,
-    },
-    pathAnchor: {
-      x: center.x + cosine * finiteScale(frame.scaleX) * borderCenterX
-        - sine * finiteScale(frame.scaleY) * borderCenterY,
-      y: center.y + sine * finiteScale(frame.scaleX) * borderCenterX
-        + cosine * finiteScale(frame.scaleY) * borderCenterY,
-    },
+    borderFrame,
+    pathAnchor: selectionFrameLocalToScene(borderFrame, axisX, axisY),
     insets,
   }
 }
@@ -103,11 +84,11 @@ export function frameWithRotationAtPathAnchor(
 ): SelectionFrameValue {
   const rotated = frameWithRotationAtVisualCenter(frame, rotate)
   const rotatedAnchor = motionPathAnchorForFrame(rotated, insets)
-  return {
+  return updateSelectionFrameAffineOrigin({
     ...rotated,
     x: rotated.x + pathAnchor.x - rotatedAnchor.x,
     y: rotated.y + pathAnchor.y - rotatedAnchor.y,
-  }
+  })
 }
 
 /** Projects a tangent-oriented content frame around its runtime path anchor. */
@@ -135,6 +116,10 @@ export function sameFramePose(left: SelectionFrameValue, right: SelectionFrameVa
   const pixelEpsilon = 0.5
   const angleEpsilon = 0.1
   const unitEpsilon = 0.001
+  const leftMatrix = selectionFrameLinearTransform(left)
+  const rightMatrix = selectionFrameLinearTransform(right)
+  const leftOrigin = selectionFrameLocalToScene(left, 0, 0)
+  const rightOrigin = selectionFrameLocalToScene(right, 0, 0)
   return Math.abs(left.x - right.x) < pixelEpsilon
     && Math.abs(left.y - right.y) < pixelEpsilon
     && Math.abs(left.width - right.width) < pixelEpsilon
@@ -144,6 +129,12 @@ export function sameFramePose(left: SelectionFrameValue, right: SelectionFrameVa
     && Math.abs((left.scaleY ?? 1) - (right.scaleY ?? 1)) < unitEpsilon
     && Math.abs((left.rotationOrigin?.fx ?? 0.5) - (right.rotationOrigin?.fx ?? 0.5)) < unitEpsilon
     && Math.abs((left.rotationOrigin?.fy ?? 0.5) - (right.rotationOrigin?.fy ?? 0.5)) < unitEpsilon
+    && Math.abs(leftOrigin.x - rightOrigin.x) < pixelEpsilon
+    && Math.abs(leftOrigin.y - rightOrigin.y) < pixelEpsilon
+    && Math.abs(leftMatrix.a - rightMatrix.a) < unitEpsilon
+    && Math.abs(leftMatrix.b - rightMatrix.b) < unitEpsilon
+    && Math.abs(leftMatrix.c - rightMatrix.c) < unitEpsilon
+    && Math.abs(leftMatrix.d - rightMatrix.d) < unitEpsilon
 }
 
 /** Projects a runtime box and its local content inset into the SelectionFrameV2 vocabulary. */
@@ -206,29 +197,22 @@ function selectionFrameFromPresentedPose(
   const scaleX = finiteScale(Math.hypot(rawMatrix.a, rawMatrix.b))
   const scaleY = finiteScale(Math.hypot(rawMatrix.c, rawMatrix.d))
   const rotate = Math.atan2(rawMatrix.b, rawMatrix.a) * 180 / Math.PI
-  const radians = rotate * Math.PI / 180
-  const linear = {
-    a: Math.cos(radians) * scaleX,
-    b: Math.sin(radians) * scaleX,
-    c: -Math.sin(radians) * scaleY,
-    d: Math.cos(radians) * scaleY,
-  }
   const origin = {
     fx: clamp(rotationOrigin?.fx ?? 0.5),
     fy: clamp(rotationOrigin?.fy ?? 0.5),
   }
   const pivotX = origin.fx * width
   const pivotY = origin.fy * height
-  // The runtime pose is affine. SelectionFrameV2 can represent rotation and
-  // scale but not an arbitrary shear from an ancestor, so preserve the exact
-  // visual centre even when the decomposed frame is the closest representation.
+  // Keep the local frame origin exact so gestures can use the complete matrix,
+  // including shear contributed by a CSS transform.
   const presentedCenter = {
     x: pose.origin.x + rawMatrix.a * localCenter.x + rawMatrix.c * localCenter.y,
     y: pose.origin.y + rawMatrix.b * localCenter.x + rawMatrix.d * localCenter.y,
   }
+  const localTopLeft = { x: localCenter.x - width / 2, y: localCenter.y - height / 2 }
   const frameCenterWithoutTranslation = {
-    x: pivotX + linear.a * (width / 2 - pivotX) + linear.c * (height / 2 - pivotY),
-    y: pivotY + linear.b * (width / 2 - pivotX) + linear.d * (height / 2 - pivotY),
+    x: pivotX + rawMatrix.a * (width / 2 - pivotX) + rawMatrix.c * (height / 2 - pivotY),
+    y: pivotY + rawMatrix.b * (width / 2 - pivotX) + rawMatrix.d * (height / 2 - pivotY),
   }
   return {
     x: presentedCenter.x - frameCenterWithoutTranslation.x,
@@ -239,6 +223,13 @@ function selectionFrameFromPresentedPose(
     scaleX,
     scaleY,
     rotationOrigin: origin,
+    affineProjection: {
+      origin: {
+        x: pose.origin.x + rawMatrix.a * localTopLeft.x + rawMatrix.c * localTopLeft.y,
+        y: pose.origin.y + rawMatrix.b * localTopLeft.x + rawMatrix.d * localTopLeft.y,
+      },
+      matrix: rawMatrix,
+    },
   }
 }
 

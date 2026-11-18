@@ -24,6 +24,14 @@ import type { CapsuleDef, EditorScene, Item, Keyframe, Transition, Zone } from '
 import { hasExplicitPlacementGeometry } from '../app/commands/offset-placement'
 import { resolveKeyframeTransition } from './keyframe-transition'
 import { normalizeMotionEasing } from '../motion-editor/easing'
+import { resolveInitialPathRotation, STRAIGHT_MOTION_PATH } from '../motion-editor/item-rotation/item-rotation'
+import { ITEM_MOTION_REFERENCE_ANGLE, ITEM_MOTION_ROTATION_BASELINE } from '../item-presentation/item-motion-reference'
+import {
+  resolveTangentJoinRotationOffset,
+  resolveTangentReferenceAngle,
+  resolveTangentSegmentAngle,
+  type MotionProjection,
+} from './item-rotation/tangent-reference'
 import { OFFSET_STYLE_PROPERTIES } from '../decor-editor/units'
 import {
   computeStyleDiff,
@@ -56,6 +64,7 @@ import {
 export function buildSceneDocV2(
   scene: EditorScene,
   styleDefaultsByItem: ReadonlyMap<string, StyleDefaultCapture> = new Map(),
+  projection?: MotionProjection,
 ): BuildSceneV2Result {
   const compilationScene = { ...scene, items: itemsForCompilation(scene.items) }
   const diagnostics = validateSceneInput(compilationScene)
@@ -146,7 +155,7 @@ export function buildSceneDocV2(
 
       const leaf = buildLeafPerso(
         compilationScene, item, current.parentPersoId, childArtifact, preRollMs, diagnostics,
-        styleDefaultsByItem.get(item.id), styleDefaultRequests, stackOrder,
+        styleDefaultsByItem.get(item.id), styleDefaultRequests, stackOrder, projection,
       )
       persos.push(...leaf.persos)
       eventimes.push(...leaf.eventimes)
@@ -751,24 +760,25 @@ function buildLeafPerso(
   styleDefaults: StyleDefaultCapture | undefined,
   styleDefaultRequests: StyleDefaultRequest[],
   stackOrder: number,
+  projection: MotionProjection | undefined,
 ): Readonly<{ persos: V2Perso[]; eventimes: Array<{ name: string; startAt: number }> }> {
   const content = item.contentId === null ? undefined : scene.contents[item.contentId]
   const keyframes = sortPoseKeyframes(item)
   const decorationKeyframes = sortDecorationKeyframes(scene, item)
   const firstKeyframe = keyframes[0]
+  const hasMotionTrajectory = item.rotationMode === 'tangent'
+    || keyframes.some(keyframe => typeof resolveKeyframePoseStyle(scene, item, keyframe).rotate === 'number')
+    || keyframes.slice(1).some((keyframe) => {
+    const path = scene.decors[keyframe.decorId]?.path
+    return typeof path === 'string' && path.trim() !== ''
+  })
+  const rotationBaseline = hasMotionTrajectory ? resolveInitialPathRotation(scene, item) : undefined
   const initialZoneId = resolveInitialZoneId(scene, item, firstKeyframe)
-  const initialStyle = firstKeyframe === undefined
-    ? resolveInitialStyle(scene, item)
-    : resolveKeyframeStyle(scene, item, firstKeyframe)
   const initialClassName = firstKeyframe === undefined
     ? resolveInitialClassName(scene, item)
     : resolveKeyframeClassName(scene, item, firstKeyframe)
   const transition = resolveTransitionActions(childArtifact)
-  const initial = {
-    ...initialStyle,
-    ...transition.introFrom,
-  }
-  const decorActions = buildInterpolationActions(
+  const interpolation = buildInterpolationActions(
     scene,
     item,
     parentPersoId,
@@ -779,16 +789,30 @@ function buildLeafPerso(
     initialClassName,
     styleDefaults,
     styleDefaultRequests,
+    projection,
+    rotationBaseline,
   )
+  const initialReferenceAngle = interpolation.initialReferenceAngle ?? rotationBaseline
+  const initialStyle = firstKeyframe === undefined
+    ? resolveInitialStyle(scene, item)
+    : resolveKeyframeStyle(scene, item, firstKeyframe)
+  const initial = {
+    ...initialStyle,
+    ...transition.introFrom,
+    ...(rotationBaseline === undefined ? {} : {
+      [ITEM_MOTION_REFERENCE_ANGLE]: initialReferenceAngle,
+      [ITEM_MOTION_ROTATION_BASELINE]: rotationBaseline,
+    }),
+  }
   const actions: Record<string, { style?: Record<string, unknown>; className?: ClassNameAction; move?: Move }> = { ...transition.actions }
-  for (const action of decorActions) {
+  for (const action of interpolation.actions) {
     actions[action.name] = {
       ...(action.style === undefined || Object.keys(action.style).length === 0 ? {} : { style: action.style }),
       ...(action.className === undefined ? {} : { className: action.className }),
       ...(action.move === undefined ? {} : { move: action.move }),
     }
   }
-  const eventimes = [...transition.eventimes, ...decorActions.map((action) => ({ name: action.name, startAt: action.startAt }))]
+  const eventimes = [...transition.eventimes, ...interpolation.actions.map((action) => ({ name: action.name, startAt: action.startAt }))]
   const common = {
     move: { target: resolveMoveTarget(parentPersoId, initialZoneId) },
     attr: { 'data-item-id': `${EDITOR_V2_STORY_ID}:${item.id}` },
@@ -839,26 +863,73 @@ function buildInterpolationActions(
   initialClassName: string | undefined,
   styleDefaults: StyleDefaultCapture | undefined,
   styleDefaultRequests: StyleDefaultRequest[],
-): DecorAction[] {
+  projection: MotionProjection | undefined,
+  rotationBaseline: number | undefined,
+): Readonly<{ actions: DecorAction[]; initialReferenceAngle: number | undefined }> {
   const actions: DecorAction[] = []
   const missingStyleDefaultProperties = new Set<string>()
+  const invalidPathKeyframeIds = new Set<string>()
   const poseSegments = poseKeyframes.slice(1).map((destination, index) => {
     const source = poseKeyframes[index]!
     const fromStyle = resolvePlacementPoseStyle(scene, item, source, resolveKeyframePoseStyle(scene, item, source))
     const toStyle = resolveKeyframePoseStyle(scene, item, destination)
+    const targetStyle = resolvePlacementPoseStyle(scene, item, destination, toStyle)
     const path = scene.decors[destination.decorId]?.path
+      ?? (item.rotationMode === 'tangent' ? STRAIGHT_MOTION_PATH : undefined)
+    const hasMotionPath = typeof path === 'string' && path.trim() !== ''
+    let validMotionPath = true
+    if (hasMotionPath && path !== undefined) {
+      try {
+        prepareSvgPath(path, { traversal: 'arc-length', precision: 2 })
+      } catch (cause) {
+        diagnostics.push(error(
+          'EDITOR_V2_MOTION_PATH_INVALID',
+          cause instanceof Error ? cause.message : 'The authored motion path is invalid.',
+          { itemId: item.id, keyframeId: destination.id, decorId: destination.decorId },
+        ))
+        invalidPathKeyframeIds.add(destination.id)
+        validMotionPath = false
+      }
+    }
+    const previous = poseKeyframes[index - 1]
+    const canResolveTangentSegment = validMotionPath && !invalidPathKeyframeIds.has(source.id)
+      && projection !== undefined
+      && [source, destination].every(keyframe => resolvePlacementZoneIdAtPoseKeyframe(scene, item, keyframe) === null)
+    const tangentReferenceAngle = item.rotationMode === 'tangent' && previous !== undefined && canResolveTangentSegment
+      && [previous, source, destination].every(keyframe => resolvePlacementZoneIdAtPoseKeyframe(scene, item, keyframe) === null)
+      ? resolveTangentReferenceAngle(scene, item, previous, source, projection, styleDefaults)
+      : undefined
+    const initialTangentAngle = item.rotationMode === 'tangent' && index === 0 && canResolveTangentSegment
+      ? resolveTangentSegmentAngle(scene, item, source, destination, 0, projection, styleDefaults)
+      : undefined
+    const tangentJoinRotationOffset = item.rotationMode === 'tangent' && previous !== undefined && canResolveTangentSegment
+      && [previous, source, destination].every(keyframe => resolvePlacementZoneIdAtPoseKeyframe(scene, item, keyframe) === null)
+      ? resolveTangentJoinRotationOffset(scene, item, previous, source, destination, projection, styleDefaults)
+      : undefined
     return {
       source,
       destination,
       sourceZoneId: resolvePlacementZoneIdAtPoseKeyframe(scene, item, source),
       destinationZoneId: resolvePlacementZoneIdAtPoseKeyframe(scene, item, destination),
       fromStyle,
-      toStyle: resolvePlacementPoseStyle(scene, item, destination, toStyle),
-      diff: computeStyleDiff(fromStyle, resolvePlacementPoseStyle(scene, item, destination, toStyle)),
+      diff: computeStyleDiff(fromStyle, targetStyle),
       path,
-      hasMotionPath: typeof path === 'string' && path.trim() !== '',
+      hasMotionPath,
+      validMotionPath,
+      followsMotionPath: poseKeyframes.slice(1, index + 1).some(keyframe => {
+        const previousPath = scene.decors[keyframe.decorId]?.path
+        return typeof previousPath === 'string' && previousPath.trim() !== ''
+      }),
+      previous,
+      tangentReferenceAngle,
+      initialTangentAngle,
+      tangentJoinRotationOffset,
     }
   })
+  const firstTangentAngle = poseSegments[0]?.initialTangentAngle
+  const initialReferenceAngle = firstTangentAngle === undefined || rotationBaseline === undefined
+    ? rotationBaseline
+    : firstTangentAngle + rotationBaseline
 
   for (let index = 1; index < decorationKeyframes.length; index += 1) {
     const source = decorationKeyframes[index - 1]!
@@ -896,27 +967,36 @@ function buildInterpolationActions(
     })
   }
 
-  for (const { source, destination, sourceZoneId, destinationZoneId, fromStyle, toStyle, diff, path, hasMotionPath } of poseSegments) {
-    const orientToPath = hasMotionPath && scene.decors[destination.decorId]?.orientToPath === true
+  for (const {
+    source,
+    destination,
+    previous,
+    sourceZoneId,
+    destinationZoneId,
+    fromStyle,
+    diff,
+    path,
+    hasMotionPath,
+    validMotionPath,
+    followsMotionPath,
+    tangentReferenceAngle,
+    tangentJoinRotationOffset,
+  } of poseSegments) {
+    if (!validMotionPath) continue
+    const referenceAngle = item.rotationMode === 'tangent'
+      ? tangentReferenceAngle ?? (previous === undefined ? initialReferenceAngle : rotationBaseline)
+      : rotationBaseline
+    const orientToPath = hasMotionPath && item.rotationMode === 'tangent'
     const zoneChanged = sourceZoneId !== destinationZoneId
-    if (hasMotionPath && path !== undefined) {
-      try {
-        prepareSvgPath(path, { traversal: 'arc-length', precision: 2 })
-      } catch (cause) {
-        diagnostics.push(error(
-          'EDITOR_V2_MOTION_PATH_INVALID',
-          cause instanceof Error ? cause.message : 'The authored motion path is invalid.',
-          { itemId: item.id, keyframeId: destination.id, decorId: destination.decorId },
-        ))
-        continue
-      }
-    }
     if (Object.keys(diff).length === 0 && !hasMotionPath && !zoneChanged) continue
 
     const intervalMs = Math.max(0, destination.timeMs - source.timeMs)
     const { durationMs, ease, startAtMs } = resolveKeyframeTransition(source, destination)
     const startAt = startAtMs + preRollMs
     const style = buildStyleTransition(fromStyle, diff, durationMs, ease, true, hasMotionPath && intervalMs > 0)
+    if (hasMotionPath && referenceAngle !== undefined) {
+      style.interpolated[ITEM_MOTION_REFERENCE_ANGLE] = referenceAngle
+    }
     const actionName = `${item.id}-kf-${destination.id}`
     const hasTimedMotionPath = hasMotionPath && intervalMs > 0
     const move = hasTimedMotionPath || zoneChanged
@@ -927,17 +1007,17 @@ function buildInterpolationActions(
             duration: intervalMs,
             ease,
             ...(path === undefined ? {} : { path }),
+            ...(hasTimedMotionPath ? { orientToPath } : {}),
             ...(orientToPath ? {
-              orientToPath: true,
               rotateOffset: {
-                from: typeof fromStyle.rotate === 'number' ? fromStyle.rotate : 0,
-                to: typeof toStyle.rotate === 'number' ? toStyle.rotate : 0,
+                from: tangentJoinRotationOffset ?? rotationBaseline ?? 0,
+                to: rotationBaseline ?? 0,
               },
             } : {}),
           }
           : { duration: durationMs, ease },
       }
-      : undefined
+      : followsMotionPath ? { target: resolveMoveTarget(parentPersoId, destinationZoneId) } : undefined
     if (Object.keys(style.interpolated).length > 0 || move !== undefined) {
       actions.push({
         name: actionName,
@@ -954,7 +1034,7 @@ function buildInterpolationActions(
       })
     }
   }
-  return actions
+  return { actions, initialReferenceAngle }
 }
 
 /** Clears inherited x/y runtime offsets when a pose returns to its structural zone target. */
@@ -1005,6 +1085,8 @@ function buildStyleTransition(
     // Missing numeric pose rotation uses the CSS identity angle without densifying source decor.
     const from = fromStyle[property]
       ?? (poseRotationIdentity && property === 'rotate' && typeof value === 'number' ? 0 : undefined)
+      ?? (poseRotationIdentity && (property === 'scaleX' || property === 'scaleY')
+        && typeof value === 'number' ? 1 : undefined)
     // FIRST precedes this action; LAST includes its resolved pose. Geometry-only assignments
     // therefore belong here even when the style resolver cannot tween the authored pair.
     if (capturesMotionGeometry && OFFSET_STYLE_PROPERTIES.has(property)

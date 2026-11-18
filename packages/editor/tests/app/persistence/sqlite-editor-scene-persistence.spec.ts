@@ -85,6 +85,7 @@ function createSceneFixture(): EditorScene {
     items: [
       {
         id: 'capsule-outer',
+        rotationMode: 'tangent',
         type: 'capsule',
         label: 'Capsule extérieure',
         parentId: null,
@@ -104,6 +105,7 @@ function createSceneFixture(): EditorScene {
       },
       {
         id: 'capsule-inner',
+        rotationMode: 'manual',
         type: 'capsule',
         parentId: 'capsule-outer',
         order: 'a0',

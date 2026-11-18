@@ -70,7 +70,7 @@ export interface MotionOverlayCallbacks {
   onPathActivate: () => void
   /** Called after the midpoint has been moved or reset. */
   onPathChange: (change: MotionPathChange) => void
-  /** Called when the selected incoming path's orientation option changes. */
+  /** Called when the selected item's global orientation mode changes. */
   onPathOrientationChange?: (enabled: boolean) => void
 }
 
@@ -200,7 +200,7 @@ export function createMotionOverlay(
     event.stopPropagation()
   }
 
-  /** Toggles tangent alignment for the active incoming path. */
+  /** Toggles tangent alignment for the complete item route. */
   function toggleOrientation(): void {
     const enabled = orientationButton.getAttribute('aria-pressed') !== 'true'
     orientationButton.setAttribute('aria-pressed', String(enabled))
@@ -506,7 +506,7 @@ export function createMotionOverlay(
     // not itself the arc midpoint.
     control.style.left = `${displayControlPoint.x - 6}px`
     control.style.top = `${displayControlPoint.y - 6}px`
-    if (!suspended && segment.path !== undefined) {
+    if (!suspended) {
       const aligned = segment.orientToPath === true
       orientationButton.setAttribute('aria-pressed', String(aligned))
       orientationButton.style.color = aligned ? '#ff6d00' : '#e5e7eb'

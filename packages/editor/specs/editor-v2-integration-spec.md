@@ -66,6 +66,9 @@ sont définis dans [`app-layout.css`](../src/app/layout/app-layout.css).
   projection DOM et ne deviennent pas des données auteur.
 - La projection média utilise `initial.sync`, selon le contrat
   [CodPlay media-sync V2](../../codplay/specs/media-sync-v2-spec.md).
+- Le mode de rotation est statique et propre à l’item. La bascule par la
+  commande centrale, le reset des angles et la projection du décalage initial
+  constant suivent la [spec d’orientation](./path-tangent-orientation-spec.md).
 - Le cadre et la palette partagent le même état du décor. L'interpolation d'un
   décor et de sa position/taille ne crée pas d'action de pose supplémentaire.
 - La palette Décor suit l’item sélectionné et le même état logique que son

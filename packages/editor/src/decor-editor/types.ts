@@ -1,3 +1,5 @@
+import type { SelectionFrameValue as SelectionFrameV2Value } from '@codplay/selection-frame/v2'
+
 /** V2 class value accepted by the className service. */
 export type ClassNameValue = string | { add?: string; remove?: string }
 
@@ -84,8 +86,6 @@ export interface DecorPatch {
   custom?: string // mini-éditeur de code : CSS libre, responsabilité auteur
   /** Optional CodPlay V2 SVG path for the incoming segment; absent means straight and never cascades. */
   path?: string
-  /** Aligns the item to the incoming explicit path; absent and false both mean disabled. */
-  orientToPath?: boolean
   /**
    * Open extension surface for Decor modules not yet described by this editor version. The bridge
    * transports unknown properties by path instead of silently dropping them at the type boundary.
@@ -126,15 +126,5 @@ export interface ZoneCard {
 
 // ─── Selection Frame value (px, interface de decor-editor) ───────────────
 
-export interface SelectionFrameValue {
-  x: number
-  y: number
-  width: number
-  height: number
-  rotate?: number
-  scaleX?: number
-  scaleY?: number
-  /** Rotation axis in local-box fractions; omitted means the box center. */
-  rotationOrigin?: { fx: number; fy: number }
-}
+export type SelectionFrameValue = SelectionFrameV2Value
 export type Unsubscribe = () => void

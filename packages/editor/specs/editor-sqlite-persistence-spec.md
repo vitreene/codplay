@@ -32,7 +32,7 @@ par la [spécification Sequence Editor V2](../specs/sequence-editor-v2-cues-mark
 | Table | Données persistées |
 | --- | --- |
 | `editor_scenes` | Identité, durée, réglages de scène, état/hooks facultatifs, réglages de capsule racine, références de décor/master, `markerTracks`, révision et dates. |
-| `items` | Type, libellé, visibilité, référence de contenu et décor initial. |
+| `items` | Type, libellé, visibilité, référence de contenu, décor initial et mode global de rotation nullable (`manual` / `tangent`). |
 | `capsules` | Réglages statiques de capsule associés à l'item : type, distribution, grille, transitions par défaut et comportement. |
 | `capsule_items` | Parent capsule et clé d'ordre des enfants. Un parent SQL `NULL` désigne un enfant direct de la racine implicite. |
 | `keyframes` | Ordre, instant, canal, décor référencé, transitions, nom et marqueur. |
@@ -66,6 +66,8 @@ dossier de données et `EDITOR_API_PORT` le port de l'API.
   une révision périmée produit HTTP `409`.
 - `PUT /api/active-scene` met à jour la scène active.
 
+La migration additive `20261117090000_add_item_rotation_mode` conserve les
+items historiques sans mode explicite (`NULL`, lu comme manuel).
 Le démarrage applique les migrations Remix `remix/data-table` à la base SQLite.
 Le serveur ferme la connexion lors de son arrêt.
 
@@ -91,9 +93,9 @@ Le serveur ferme la connexion lors de son arrêt.
   révision attendue suivante.
 - `tests/commands/base-commands.spec.ts` vérifie la création d'IDs après
   restauration d'un document contenant déjà des IDs.
+- Le parcours navigateur des modes de rotation vérifie le reset sauvegardé,
+  l’angle initial unique, Undo/Redo et leur restauration au rechargement, comme
+  décrit par la [spec d’orientation](./path-tangent-orientation-spec.md).
 - Parcours navigateur sur l'application réelle : chargement depuis SQLite,
   création, Undo/Redo persistés, retour à la scène d'origine par Undo, puis
   rechargement depuis SQLite sans erreur console.
-- La suite complète de `packages/editor` passe (**533 tests sur 50 fichiers**) ;
-  typecheck et build réussis. Le build émet uniquement son avertissement de
-  taille de bundle.

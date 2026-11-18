@@ -1,7 +1,9 @@
 import type { OffsetPatch, SelectionFrameValue } from './types'
 
 /** Partial local-pixel value used when projecting an existing structured offset to the frame. */
-export type OffsetValuesPx = Partial<SelectionFrameValue>
+export type OffsetValuesPx = Partial<{
+  -readonly [Property in keyof SelectionFrameValue]: SelectionFrameValue[Property]
+}>
 
 /** Style aliases owned by the existing structured frame/offset adapter. */
 export const OFFSET_STYLE_PROPERTIES = new Set(['x', 'y', 'width', 'height', 'rotate', 'scaleX', 'scaleY', 'transform-origin'])

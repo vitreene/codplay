@@ -1,8 +1,11 @@
 import { BaseHTMLComponent, type ComponentInput, type ComponentUpdateInput, type MaterializedPart } from 'codplay'
-import { ITEM_PREVIEW_INVERSE_PROPERTY } from './item-preview'
-import { projectItemStyle } from './item-style-projection'
-
-let nextFrameId = 0
+import { projectItemStyle, recordItemTransformProjection } from './item-style-projection'
+import { ITEM_MOTION_REFERENCE_ANGLE, ITEM_MOTION_ROTATION_BASELINE } from './item-motion-reference'
+import {
+  ITEM_PREVIEW_HEIGHT_PROPERTY,
+  ITEM_PREVIEW_TRANSFORM_PROPERTY,
+  ITEM_PREVIEW_WIDTH_PROPERTY,
+} from './item-preview'
 
 type NativeComponentClass<Initial extends Record<string, unknown>> = {
   new (input: ComponentInput<Initial>): BaseHTMLComponent<Initial>
@@ -14,8 +17,9 @@ export function createItemComponent<Initial extends Record<string, unknown>>(Nat
   return class ItemComponent extends BaseHTMLComponent<Initial> {
     static readonly declaredServices = NativeComponent.declaredServices
     readonly native: BaseHTMLComponent<Initial>
-    private readonly frameId = `editor-item-frame-${++nextFrameId}`
+    private readonly frameId = `editor-item-frame-${crypto.randomUUID()}`
     private styleElement: HTMLStyleElement | null = null
+    private transformAnchor: HTMLElement | null = null
     private visualAnchor: HTMLElement | null = null
 
     /** Gives the native content owner the same services, resources and immutable author data. */
@@ -28,7 +32,9 @@ export function createItemComponent<Initial extends Record<string, unknown>>(Nat
     render(): string {
       return `<div id="${this.frameId}">
         <style id="${this.frameId}-style" data-part="editor-item-style"></style>
-        <div id="${this.frameId}-visual" data-part="editor-item-visual">${this.native.render()}</div>
+        <div id="${this.frameId}-transform" data-part="editor-item-transform">
+          <div id="${this.frameId}-visual" data-part="editor-item-visual">${this.native.render()}</div>
+        </div>
       </div>`
     }
 
@@ -36,6 +42,7 @@ export function createItemComponent<Initial extends Record<string, unknown>>(Nat
     override _materialize(rootNode: unknown, parts: readonly MaterializedPart[]): void {
       super._materialize(rootNode, parts)
       this.styleElement = this.getPart('editor-item-style') as HTMLStyleElement
+      this.transformAnchor = this.getPart('editor-item-transform') as HTMLElement
       this.visualAnchor = this.getPart('editor-item-visual') as HTMLElement
       this.native._materialize(this.visualAnchor.firstElementChild, [])
     }
@@ -49,8 +56,19 @@ export function createItemComponent<Initial extends Record<string, unknown>>(Nat
     update(input: ComponentUpdateInput): void {
       const state = input.state
       const style = state.style as Readonly<Record<string, unknown>> | undefined ?? {}
-      const { [ITEM_PREVIEW_INVERSE_PROPERTY]: inverse, ...itemStyle } = style
-      const { frameStyle, visualStyle } = projectItemStyle(itemStyle, this.styleElement!.ownerDocument.defaultView?.devicePixelRatio ?? 1)
+      const {
+        [ITEM_MOTION_REFERENCE_ANGLE]: referenceAngle,
+        [ITEM_MOTION_ROTATION_BASELINE]: rotationBaseline,
+        [ITEM_PREVIEW_TRANSFORM_PROPERTY]: previewTransform,
+        [ITEM_PREVIEW_WIDTH_PROPERTY]: previewWidth,
+        [ITEM_PREVIEW_HEIGHT_PROPERTY]: previewHeight,
+        ...itemStyle
+      } = style
+      const { frameStyle, visualStyle, motionTransformStyle, rotationOrigin } = projectItemStyle({
+        ...itemStyle,
+        ...(referenceAngle === undefined ? {} : { [ITEM_MOTION_REFERENCE_ANGLE]: referenceAngle }),
+        ...(rotationBaseline === undefined ? {} : { [ITEM_MOTION_ROTATION_BASELINE]: rotationBaseline }),
+      }, this.styleElement!.ownerDocument.defaultView?.devicePixelRatio ?? 1)
       const attributes = state.attr as Readonly<Record<string, unknown>> | undefined ?? {}
       const { 'data-item-id': itemId, ...visualAttributes } = attributes
       const fillsFrameWidth = visualStyle.width === '100%'
@@ -65,21 +83,46 @@ export function createItemComponent<Initial extends Record<string, unknown>>(Nat
         className: this.perso.initial.editorFrameClassName,
         attr: { 'data-item-id': itemId },
       })
-      const [fx, fy] = (styleElement.style.transformOrigin || '50% 50%')
-        .split(/\s+/).map((value) => Number.parseFloat(value))
+      const previewTransformStyle = typeof previewTransform === 'string'
+        ? {
+          position: 'absolute',
+          left: '0px',
+          top: '0px',
+          width: typeof previewWidth === 'string' ? previewWidth : '100%',
+          height: typeof previewHeight === 'string' ? previewHeight : '100%',
+          scale: 'none',
+          translate: 'none',
+          transform: previewTransform,
+          'transform-origin': '0px 0px',
+        }
+        : {
+          position: 'absolute',
+          left: '0px',
+          top: '0px',
+          width: '100%',
+          height: '100%',
+          scale: motionTransformStyle.scale ?? 'none',
+          transform: motionTransformStyle.transform ?? 'none',
+          translate: motionTransformStyle.translate ?? 'none',
+          'transform-origin': motionTransformStyle['transform-origin'] ?? '50% 50%',
+        }
+      this.services.apply(this.transformAnchor, { style: {
+        ...previewTransformStyle,
+      } })
+      this.transformAnchor!.style.transform = typeof previewTransform === 'string'
+        ? previewTransform
+        : typeof motionTransformStyle.transform === 'string' ? motionTransformStyle.transform : 'none'
+      recordItemTransformProjection(this.transformAnchor!, rotationOrigin)
       const anchorLeft = fillsFrameWidth ? '0px' : '50%'
       const anchorTop = fillsFrameHeight ? '0px' : '50%'
-      const anchorTransform = inverse === undefined
-        ? `translate(${fillsFrameWidth ? '0' : '-50%'},${fillsFrameHeight ? '0' : '-50%'})`
-        : `${inverse} translate(${fx}%, ${fy}%) ${styleElement.style.transform} translate(${-fx!}%, ${-fy!}%)`
       this.services.apply(this.visualAnchor, { style: {
         position: 'absolute',
         width: fillsFrameWidth ? '100%' : 'max-content',
         height: fillsFrameHeight ? '100%' : 'max-content',
-        left: inverse === undefined ? anchorLeft : '0px',
-        top: inverse === undefined ? anchorTop : '0px',
+        left: anchorLeft,
+        top: anchorTop,
         'transform-origin': '0 0',
-        transform: anchorTransform,
+        transform: `translate(${fillsFrameWidth ? '0' : '-50%'},${fillsFrameHeight ? '0' : '-50%'})`,
       } })
       this.native.update({
         ...input,

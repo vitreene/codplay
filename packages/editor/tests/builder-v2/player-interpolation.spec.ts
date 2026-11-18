@@ -128,7 +128,9 @@ describe('editor V2 player interpolation', () => {
 
     const item = root.querySelector<HTMLElement>('[data-item-id="story-main:item"]')
     expect(item).not.toBeNull()
-    expect(getComputedStyle(item!).transform).toBe('translate(20cqw, 15cqw) rotate(7.5deg)')
+    expect(getComputedStyle(item!).transform).toBe('translate(20cqw, 15cqw) rotate(0deg)')
+    expect(item!.querySelector<HTMLElement>('[id$="-transform"]')?.style.transform)
+      .toBe('rotate(7.5deg) scale(1, 1)')
     expect(getComputedStyle(item!).width).toBe('30cqw')
     expect(getComputedStyle(item!).height).toBe('17cqw')
     expect(root.querySelector<HTMLElement>('[data-editor-visual-for="item"]')?.style.backgroundColor).toBe(`rgb(${parseColor('#800080').coords.map((value) => Math.round(value * 255)).join(', ')})`)
@@ -236,7 +238,9 @@ describe('editor V2 player interpolation', () => {
     expect(style?.rotate).toBeCloseTo(20.5)
 
     const item = root.querySelector<HTMLElement>('[data-item-id="story-main:item"]')
-    expect(getComputedStyle(item!).transform).toContain('rotate(20.5deg)')
+    expect(getComputedStyle(item!).transform).toContain('rotate(0deg)')
+    expect(item!.querySelector<HTMLElement>('[id$="-transform"]')?.style.transform)
+      .toBe('rotate(20.5deg) scale(1, 1)')
   })
 
   it('keeps the content-box anchor fixed while border-width itself interpolates', async () => {

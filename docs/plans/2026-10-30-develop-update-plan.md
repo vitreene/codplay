@@ -65,7 +65,7 @@ opportuniste du cœur. Les modifications ELCE non commitées du dossier
   `1.2537954100292328 px`, sur « needle between KFs with scale and pivot ».
   Un contrôle playback séparé échoue aussi sur l’alignement du ghost ; sa
   causalité reste ouverte. Ne pas déclarer la validation motion stabilisée.
-  Suivi propriétaire : [plan motion éditeur](../../packages/editor/plan/2026-09-02-motion-editor-v2-plan.md).
+  Suivi propriétaire : [spec d’orientation Editor](../../packages/editor/specs/path-tangent-orientation-spec.md) et [acceptations encore ouvertes](../../packages/editor/plan/decisions-a-prendre.md#2-fermer-les-portes-mouvement-v2).
 - Les 63 références de médias Elcé sont identiques dans la sauvegarde
   avant fusion et après fusion ; les 63 fichiers manquent déjà dans ce
   stockage local avant l’opération. Aucun document ni lien média n’est réécrit.

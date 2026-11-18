@@ -79,6 +79,7 @@ export function createScenePlayerBridge(
   let rebuildInFlight: { scene: EditorScene; promise: Promise<void> } | null = null
   let pendingPlayRequest: { scene: EditorScene; revision: number } | null = null
   let playbackRequestRevision = 0
+
   let seekInFlight: { instance: CodPlayInstance; promise: Promise<void> } | null = null
 
   coordination.bindSceneHost(mountTarget)
@@ -116,7 +117,11 @@ export function createScenePlayerBridge(
   /** Builds, preloads, stages, and atomically publishes one V2 editor instance. */
   async function rebuild(scene: EditorScene): Promise<void> {
     const revision = ++rebuildRevision
-    const initialResult = buildSceneDocV2(scene)
+    const projection = {
+      rootWidthPx: mountTarget.getBoundingClientRect().width,
+      pixelRatio: mountTarget.ownerDocument.defaultView?.devicePixelRatio ?? 1,
+    }
+    const initialResult = buildSceneDocV2(scene, new Map(), projection)
     if (!initialResult.ok) {
       console.error('[scenePlayer bridge] V2 scene build failed', initialResult.diagnostics)
       return
@@ -206,7 +211,7 @@ export function createScenePlayerBridge(
         return
       }
 
-      const measuredResult = buildSceneDocV2(scene, measuredDefaults)
+      const measuredResult = buildSceneDocV2(scene, measuredDefaults, projection)
       if (!measuredResult.ok) {
         if (revision === rebuildRevision) restoreStyleSheet(previousStyleSheet)
         releaseResourceUrls(stagedResourceUrls)

@@ -113,7 +113,7 @@ describe('motion overlay', () => {
     overlay.destroy()
   })
 
-  it('shows an icon-only tangent toggle only for an explicit active path', () => {
+  it('shows the item tangent toggle on explicit curves and implicit straight segments', () => {
     const changes: boolean[] = []
     const overlay = createMotionOverlay(host, {
       onActivateRole: () => undefined,
@@ -129,6 +129,8 @@ describe('motion overlay', () => {
     expect(button.style.zIndex).toBe('1161')
     expect(button.textContent).toBe('')
     expect(button.querySelector('#editor-motion-path-tangent-icon')).not.toBeNull()
+    overlay.setSegment(segment)
+    expect(button.style.display).toBe('flex')
     overlay.setSegment({ ...segment, path: 'M 0 0 A 0.5 0.5 0 0 1 1 0' })
 
     expect(button.style.display).toBe('flex')

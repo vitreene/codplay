@@ -8,6 +8,7 @@
  */
 
 import * as base from './base-commands'
+import { setItemRotationMode } from './item-rotation/item-rotation-commands'
 import * as rootPlacement from './root-placement-commands'
 import * as sequenceEditor from '../../sequence-editor/commands'
 import type { Command } from '../controller/types'
@@ -38,6 +39,8 @@ export function runCommandWithResult(scene: EditorScene, command: Command): { sc
       return { scene: rootPlacement.setZonesSurface(scene, command.args) }
     case 'assignType':
       return { scene: base.assignType(scene, command.args) }
+    case 'setItemRotationMode':
+      return { scene: setItemRotationMode(scene, command.args) }
     case 'assignContent':
       return { scene: base.assignContent(scene, command.args) }
     case 'attachItem':

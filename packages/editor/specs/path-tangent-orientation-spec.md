@@ -2,17 +2,39 @@
 
 ## Contrat
 
-- L’option d’alignement sur la tangente appartient au segment entrant du KF
-  cible. Elle est enregistrée sur son décor, à côté de `path`.
-- Le contrôle est un bouton icône sans texte visible, avec le nom accessible
-  « Aligner sur la tangente ». L’icône montre une courbe en U et sa tangente
-  horizontale fléchée au point de contact, sans axe vertical central. Le bouton
-  n’apparaît que pour un segment actif portant un chemin explicite. Un
-  déplacement droit et un document sans `orientToPath` conservent le
-  comportement antérieur.
-- Quand l’option est active, les rotations des décors source et cible sont des
-  décalages en degrés par rapport à la tangente avant. Le builder transmet le
-  chemin, l’option et les deux décalages dans le `move` V2.
+- Le mode `Item.rotationMode` est unique pour toutes les trajectoires d’un
+  item : `manual` (défaut si absent) ou `tangent`. Une ancienne propriété
+  `Decor.orientToPath` ne décide plus de l’orientation. `Decor.path` reste
+  propre au segment entrant du KF cible et ne cascade pas.
+- Le bouton icône « Aligner sur la tangente » change le mode de l’item entier.
+  Il apparaît sur le segment actif, courbe explicite ou droite implicite ;
+  son état est identique quel que soit le segment sélectionné. La commande cible
+  l’item de la sélection centrale, indépendamment du cache de segment actif.
+  Des clics successifs restent une bascule aux KFs comme aux temps interpolés.
+- Entrer en mode tangente efface les rotations `offset.rotate` des décors
+  référencés par l’item. Les autres propriétés et les chemins sont conservés.
+  Un décor également référencé par un autre item ou la racine est copié avant
+  cette modification. Revenir en manuel ne restaure pas les angles effacés.
+- En tangente, l’outil de rotation n’est disponible qu’au temps du premier KF
+  pose. Le `offset.rotate` de ce KF, ou celui du décor initial s’il est absent,
+  définit un décalage constant par rapport à la tangente. Les angles des KFs
+  suivants ne participent pas à la résolution de rotation. Le builder transmet
+  ce même décalage comme `rotateOffset.from` et `.to` sur chaque `move`, sans
+  tween de rotation entre ces angles. Une droite implicite utilise le chemin
+  natif `M 0 0 L 1 0` à la compilation, sans écrire ce chemin dans le document.
+- Pour des poses libres résolues en coordonnées numériques, le Builder reçoit
+  la largeur physique de projection et le ratio de pixels depuis le bridge de
+  scène. Après le premier segment, il prépare une référence de capture avec
+  la tangente de fin du segment précédent et le décalage initial. La propriété
+  technique `--editor-item-motion-reference-angle` appartient uniquement au
+  cadre de présentation. Elle rend les références de rotation cohérentes avant
+  l’interpolation affine, sans ajouter de scale ni remplacer les échelles
+  auteur. L’angle logique reste le décalage initial. Le Builder sans contexte
+  de projection, les poses dépendant d’une zone et les dimensions non résolues
+  ne reçoivent pas cette préparation ; ces cas ne font pas partie de cette
+  garantie d’échelle.
+- En manuel, les angles des KFs retrouvent leur interpolation de pose ; les
+  chemins continuent de décrire le déplacement sans imposer la tangente.
 - La pose de Play et de Seek vient du même résolveur CodPlay. Le centre visuel
   de l’item reste ancré au chemin et la pose alignée est conservée au KF cible
   et après la fin du segment.
@@ -25,8 +47,8 @@
   frame, un Stop répété ne renvoie pas de seek identique ; la pose tangente
   présentée de l’item et celle du CS restent inchangées. Si la lecture est en
   cours ou si le transport est ailleurs, Stop conserve son seek vers 0.
-- L’option suit les commandes existantes de décor : copy-on-write, Undo/Redo et
-  sauvegarde SQLite.
+- La bascule passe par la commande centrale `setItemRotationMode` ; Undo/Redo
+  et SQLite conservent le mode et le reset dans le circuit documentaire existant.
 
 ### Projection géométrique partagée dans l’éditeur
 
@@ -70,86 +92,62 @@
   est le plus faible ; si aucun couple ne respecte cette borne, il conserve le
   score précédent. Les tangentes d’extrémité des cas acceptés restent à moins
   de `1°` de l’arc initial et les échantillons du trajet à moins de `1,25`
-  unité de projection. La rotation auteur du KF est l’offset de fin du
-  segment entrant et de départ du segment sortant, pour que cet offset commun
-  ne crée pas un saut d’angle. Un KF déplacé hors du chemin conserve le raccord
+  unité de projection. En manuel, la rotation auteur du KF appartient aux deux
+  segments adjacents. En tangente, l’insertion conserve le décalage initial de
+  l’item pour les deux arcs ; elle n’ajoute pas une nouvelle référence d’angle.
+  Un KF déplacé hors du chemin conserve le raccord
   géométrique par tangente utilisé pour cette édition.
 
 Le contrat de calcul et de transport runtime est décrit par les
 [spécifications CodPlay `move`](../../codplay/specs/move-v2-spec.md) et
 [motion](../../codplay/specs/motion-frame-v2-spec.md).
 
-## Preuves
+## Preuves et limites
 
-- [`motion-editor/overlay.spec.ts`](../tests/motion-editor/overlay.spec.ts)
-  vérifie le bouton icône accessible, son état et sa disponibilité uniquement
-  sur un chemin actif explicite, son niveau de ciblage au-dessus du Selection
-  Frame, ainsi que l’usage de la même géométrie bordée par le chemin et les
-  ghosts. La suspension masque le point de trajectoire et sa reprise le réaffiche.
-  Il vérifie aussi que le contrôle central est déclaré comme overlay ;
-  [`scene-selection.spec.ts`](../tests/scene-selection.spec.ts) confirme qu’un
-  `pointerdown` sur ce contrôle conserve la sélection et ne crée aucun commit.
-  Le déplacement appartient au Selection Frame, sans surface seconde.
-  Le test vérifie aussi que
-  les ghosts réutilisables perdent leur adresse de KF lorsqu'ils sortent de la
-  projection, puis reçoivent une seule adresse fraîche quand ils y reviennent.
-- [`motion-editor/geometry.spec.ts`](../tests/motion-editor/geometry.spec.ts)
-  vérifie le centre de bordure transformé, y compris avec insets asymétriques,
-  et sa conservation lors d’un changement d’orientation. Elle vérifie aussi la
-  trajectoire et les tangentes lors du découpage d’un arc, dont le raccord
-  inférieur à `0,11°` sur la route initiale et inférieur à `0,1°` pour une
-  insertion au progrès interpolé avec rotation auteur.
-- [`decor-editor-bridge-integration-v2.spec.ts`](../tests/decor-editor-bridge-integration-v2.spec.ts)
-  vérifie le stockage sur le KF cible, Undo/Redo et la rotation du CS depuis
-  l’angle de la pose présentée. Le test `keeps route endpoints independent of
-  previously visited keyframes` vérifie le retour à la même géométrie après
-  visite des deux KFs, sans changement documentaire ; il échoue avec le cache
-  de l’implémentation précédente. Un autre cas charge deux documents avec les
-  mêmes IDs et confirme que le path actif suit le second document.
+- [`tangent-reference.spec.ts`](../tests/builder-v2/tangent-reference.spec.ts)
+  vérifie la référence de raccord, les échelles auteur, le snapshot logique,
+  l’exclusion des captures et la libération de la référence pendant la preview.
+  Safari MCP vérifie un scale constant à moins de `0,000002` de `1` dans la
+  scène Editor à trois items, sur la courbe puis la droite. Les fixtures
+  indépendantes vérifient aussi une échelle animée, une capsule tournée et des
+  insets asymétriques avec pivot décentré.
+- [`commands/item-rotation.spec.ts`](../tests/commands/item-rotation.spec.ts)
+  vérifie le reset de toute la chaîne, l’isolation des décors partagés, la
+  conservation des chemins et le retour en manuel sans restauration des angles.
 - [`builder-v2/motion-path.spec.ts`](../tests/builder-v2/motion-path.spec.ts)
-  vérifie le transport des rotations source/cible, le Seek, la stabilité après
-  détour et la lecture réelle du player.
-- [`scene-player-bridge-v2.spec.ts`](../tests/scene-player-bridge-v2.spec.ts)
-  vérifie la fin de lecture sans Seek compensateur, le Seek terminal répété et
-  les deux Stops. La pose inline motion et le CS restent cohérents.
-- [`motion-graph.spec.ts`](../../codplay/tests/runtime/motion/motion-graph.spec.ts)
-  vérifie l’orientation d’un enfant réparenté entre deux parents transformés.
+  vérifie le même décalage initial sur une courbe et une droite, l’absence de
+  tween de rotation en tangente et l’indépendance d’un second item en manuel.
+- [`decor-editor-bridge-integration-v2.spec.ts`](../tests/decor-editor-bridge-integration-v2.spec.ts)
+  vérifie la bascule d’item avec Undo/Redo, l’édition de l’angle initial par le
+  geste existant et l’absence d’outil de rotation aux autres positions. Les
+  clics successifs au temps interpolé vérifient le retour en manuel puis en
+  tangente. Safari MCP vérifie ces deux sens à `3 750 ms`, puis aux KFs de
+  `0` et `2 500 ms`, avec l’état du bouton, SQLite et Undo/Redo.
+- [`motion-editor/overlay.spec.ts`](../tests/motion-editor/overlay.spec.ts)
+  vérifie le bouton global, sa disponibilité sur une droite ou une courbe,
+  son ciblage au-dessus du CS et la suspension des contrôles pendant Play.
+- [`sqlite-editor-scene-persistence.spec.ts`](../tests/app/persistence/sqlite-editor-scene-persistence.spec.ts)
+  vérifie le round-trip des modes `manual`, `tangent` et absent.
+Le parcours Safari MCP utilise une scène neuve créée par les commandes Editor,
+avec trois items, des chemins courbes et droits et un départ décalé à `1,5 s`.
+Il vérifie la bascule globale, le reset et l’isolation des autres items, la
+rotation initiale tangentielle et la rotation manuelle entre deux KFs, puis
+l’insertion d’un waypoint par déplacement. La lecture rAF visible traverse les
+segments ; les seeks directs, les retours après détour, Stop/replay, Undo/Redo,
+l’annulation et le rechargement SQLite gardent le mode et les angles attendus.
+Le resize de `1220 × 867` à `1100 × 780` ne modifie pas le document.
 
-Le 30 octobre 2026, Safari MCP à 1328 × 775 a validé les gestes de rotation,
-pivot, resize, bordure et déplacement, puis la création d’un KF pose au playhead.
-Les écarts item/CS de cette série restent inférieurs à 0,58 px, ceux des ghosts
-courants à 0,77 px. La couleur et la promotion d’un KF décor en pose passent
-également. Undo/Redo, rechargement JSON et Stop répété gardent l’alignement.
-Le cas de validation garde `width/height: 20/12 cqw` sans tween de
-dimensions ; l’épaisseur de bordure, déclarée en `cqw`, varie et la rotation
-tangentielle change l’encombrement visuel. Après le choix amélioré des rayons,
-Safari mesure un raccord de `0,1074°` dans la scène initiale et de `0,0681°`
-après insertion d’un KF tourné à 20°, respectivement sous `0,11°` et `0,1°` aux
-viewports 1328 × 775, 1100 × 780 et 1024 × 775. Le Play rAF naturel traverse le
-KF dans les trois viewports avec la page visible. Après alignement
-de l’arrondi des bordures avec le CSS natif, les gestes et ghosts passent dans
-les trois viewports avec des écarts inférieurs à 0,59 px. Le parcours Play rAF
-du raccord tangent est validé ; les autres gates de transport restent suivies
-au [mémo de décisions Editor](../plan/decisions-a-prendre.md). Après le nettoyage de l’identité DOM des
-ghosts réutilisés, les parcours navigateur `editing` (17 contrôles) et `decor`
-(4 contrôles) passent sans adresse de KF obsolète ; l’erreur item/CS maximale
-mesurée dans ces deux parcours est de 0,584 px.
+Dans ces cas, la distance du centre au tracé pendant Play reste inférieure à
+`0,22 px` CSS. Les gestes de rotation conservent un écart visuel/CS inférieur
+à `0,00008°` et un écart de centre inférieur à `0,10 px` après commit. Une
+capsule fixe tournée à `30°` vérifie aussi l’orientation initiale de son enfant,
+l’absence de rotation parentale recopiée dans l’enfant, Seek et resize, avec
+un écart de centre inférieur à `0,08 px`. Les événements de pointeur envoyés
+aux handlers réels couvrent preview/commit et annulation ; ils ne certifient
+pas la capture matérielle du pointeur.
 
-Le 31 octobre 2026, Safari a aussi rechargé un document après promotion d’un KF
-décor en pose, puis répété la promotion avec les mêmes IDs. Le path reconstruit
-depuis le document chargé garde la preview et le commit à moins de 0,02 unité
-CSS d’écart.
-La validation Safari couvre aussi chaque ghost des trois KFs pose à son propre temps ;
-l’écart ghost/player maximal mesuré reste inférieur à 0,21 unité CSS.
-
-Le 31 octobre 2026, le déplacement depuis le body du Selection Frame a été
-vérifié au premier et au dernier KF avec les `PointerEvent` envoyés aux handlers
-de production dans Safari. À chaque preview, l’item et le cadre restent alignés à moins de
-0,006 unité CSS ; le commit garde quatre KFs. À 1,5 s, le contrôle de courbe et
-le bouton de tangente restent les cibles DOM au-dessus du cadre. Le déplacement
-et l’édition de courbe passent par leurs propriétaires respectifs.
-
-Le 1 novembre 2026, Play dans l’application Editor masque le point central de
-trajectoire (`display: none`) et Pause le réaffiche ; la révision SQLite reste
-inchangée. Safari signalait `document.hidden === true`, donc cette validation
-couvre l’état de lecture et le rendu synchrones, pas une progression rAF visible.
+Les changements de parent pendant un segment ne sont pas produits par cette
+bascule : `parentId`, les zones, les instants et les destinations de placement
+restent inchangés. Le réglage n’ajoute aucune conversion parent/local ni aucun
+régime de présentation. Les cas de reparent animés restent du ressort des
+contrats motion partagés ; leur calcul n’est pas modifié par le mode Editor.

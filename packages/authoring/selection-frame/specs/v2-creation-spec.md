@@ -6,6 +6,9 @@
 cadre attaché à un item existant. L’éditeur hôte garde la création documentaire,
 la conversion d’unités et la persistance.
 
+Le contrat du cadre V2 et de sa géométrie affine est décrit dans la
+[spécification du Selection Frame V2](./selection-frame-v2-spec.md).
+
 ## Contrat
 
 - Le paramètre optionnel `creation` fournit `onCreate`, `onCancel` facultatif

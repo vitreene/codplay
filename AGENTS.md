@@ -57,6 +57,12 @@
 - V2 demos are instruments for advancing CodPlay, not local demo products. They exercise the real project contracts, expose missing or incorrect core behavior, and provide the concrete acceptance path for fixing it. When a demo fails, first investigate and correct the applicable CodPlay contract or runtime; a demo-local change is allowed only to express the authored scenario or to make the fixture observe the agreed behavior, never to hide, compensate for, or replace a missing core capability.
 - A demo failure is therefore project evidence, not an isolated presentation problem. Any proposed demo-local correction must state which CodPlay contract it validates, why the runtime is not the responsible boundary, and how the real runtime path remains exercised.
 - CodPlay core capabilities are approaching v1. Adding to or modifying `packages/codplay` core requires explicit user authorization and must always be the consequence of an agreed plan. No opportunistic or speculative core patches.
+- Before requesting that authorization, demonstrate that the proposed core
+  correction is necessary to resolve the reported problem and that no other
+  solution exists within the established contracts. Examine and rule out
+  alternatives in the caller, its inputs, and its integration. An isolated
+  reproduction alone does not establish that necessity. User authorization
+  does not replace this demonstration; both are required before a core change.
 - CodPlay is a shared library used by several projects. Never change its core
   to accommodate Editor-specific circumstances or another caller's local
   implementation choices. A core correction must address a genuine usage bug,

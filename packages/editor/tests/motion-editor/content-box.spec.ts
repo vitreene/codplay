@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  contentBoxLayoutDisplacement,
   contentBoxFrameToPoseFrame,
   poseFrameToContentBoxFrame,
 } from '../../src/motion-editor/content-box'
+import { selectionFrameLinearTransform } from '@codplay/selection-frame/v2'
 import type { SelectionFrameValue } from '../../src/decor-editor/types'
 
 describe('motion editor content-box projection', () => {
@@ -71,5 +73,40 @@ describe('motion editor content-box projection', () => {
     const insets = { top: 4, right: 8, bottom: 6, left: 12 }
 
     expect(contentBoxFrameToPoseFrame(poseFrameToContentBoxFrame(frame, insets), insets)).toEqual(frame)
+  })
+
+  it('uses and preserves the complete affine projection when accounting for insets', () => {
+    const matrix = { a: 1.3, b: 0.4, c: 0.2, d: 0.9 }
+    const frame: SelectionFrameValue = {
+      x: 100,
+      y: 80,
+      width: 160,
+      height: 90,
+      rotate: 12,
+      scaleX: 1.2,
+      scaleY: 0.8,
+      rotationOrigin: { fx: 0.25, fy: 0.75 },
+      affineProjection: {
+        origin: { x: 74.5, y: 70.75 },
+        matrix,
+      },
+    }
+    const insets = { top: 4, right: 8, bottom: 6, left: 12 }
+    const displacement = contentBoxLayoutDisplacement(frame, insets)
+
+    expect(displacement.x).toBeCloseTo(13.4, 8)
+    expect(displacement.y).toBeCloseTo(7.15, 8)
+
+    const projected = poseFrameToContentBoxFrame(frame, insets)
+    expect(projected.affineProjection?.origin.x).toBeCloseTo(frame.affineProjection!.origin.x + displacement.x, 8)
+    expect(projected.affineProjection?.origin.y).toBeCloseTo(frame.affineProjection!.origin.y + displacement.y, 8)
+    expect(selectionFrameLinearTransform(projected)).toEqual(matrix)
+
+    const restored = contentBoxFrameToPoseFrame(projected, insets)
+    expect(restored.x).toBeCloseTo(frame.x, 8)
+    expect(restored.y).toBeCloseTo(frame.y, 8)
+    expect(restored.affineProjection?.origin.x).toBeCloseTo(frame.affineProjection!.origin.x, 8)
+    expect(restored.affineProjection?.origin.y).toBeCloseTo(frame.affineProjection!.origin.y, 8)
+    expect(restored.affineProjection?.matrix).toEqual(matrix)
   })
 })
