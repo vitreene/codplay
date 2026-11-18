@@ -161,24 +161,6 @@
   position: absolute;
   inset-inline-start: calc(anchor(left) + 0.5rem);
   inset-block-start: calc(anchor(top) + 0.5rem);
-  z-index: 2;
-  display: block;
-  width: 1.4rem;
-  height: 1.4rem;
-  color: #46726b;
-  background: #fffdf8;
-  border: 1px solid #46726b;
-  border-radius: 50%;
-  cursor: grab;
-  font-size: 0.9rem;
-  line-height: 1.25rem;
-  text-align: center;
-  transform: none;
-  user-select: none;
-}
-
-.elce-editor-content .elce-anchor-handle:active {
-  cursor: grabbing;
 }
 
 .elce-editor-content .elce-anchor-edit-position {

@@ -390,7 +390,7 @@ export const LEARNING_LAYOUT_STYLE_RULES = [
   [123, `
 
 @media (max-width: 800px) {
-  .elce-player-layout {
+  .elce-player-layout[data-menu-visible='true'] {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr) auto;
     grid-template-areas: 'title' 'content' 'navigation';
@@ -414,7 +414,7 @@ export const LEARNING_LAYOUT_STYLE_RULES = [
     font-size: 0.875rem;
   }
 
-  .elce-player-menu-toggle {
+  .elce-player-layout[data-menu-visible='true'] .elce-player-menu-toggle {
     display: inline-grid;
     flex: 0 0 auto;
   }
@@ -427,7 +427,7 @@ export const LEARNING_LAYOUT_STYLE_RULES = [
     display: contents;
   }
 
-  .elce-player-menu-drawer {
+  .elce-player-layout[data-menu-visible='true'] .elce-player-menu-drawer {
     position: fixed;
     z-index: 1000;
     inset: 0;
@@ -478,7 +478,7 @@ export const LEARNING_LAYOUT_STYLE_RULES = [
     flex: 1;
   }
 
-  .elce-player-menu-close {
+  .elce-player-layout[data-menu-visible='true'] .elce-player-menu-close {
     position: absolute;
     z-index: 1;
     inset-block-start: 0.5rem;

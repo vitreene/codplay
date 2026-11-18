@@ -42,14 +42,17 @@ export class ListService {
     return { ...list, rows: list.rows.filter((row) => row.id !== rowId) }
   }
 
-  /** Moves one row before the row at the requested index. */
-  public moveRow(list: ListContent, rowId: string, index: number): ListContent {
+  /** Moves one row to the requested insertion slot, counted before source removal. */
+  public moveRow(list: ListContent, rowId: string, insertionSlot: number): ListContent {
     const sourceIndex = list.rows.findIndex((row) => row.id === rowId)
     if (sourceIndex < 0) return list
+    const boundedSlot = Math.max(0, Math.min(insertionSlot, list.rows.length))
+    const targetIndex = boundedSlot > sourceIndex ? boundedSlot - 1 : boundedSlot
+    if (targetIndex === sourceIndex) return list
     const rows = [...list.rows]
     const [row] = rows.splice(sourceIndex, 1)
     if (row === undefined) return list
-    rows.splice(Math.max(0, Math.min(index, rows.length)), 0, row)
+    rows.splice(targetIndex, 0, row)
     return { ...list, rows }
   }
 

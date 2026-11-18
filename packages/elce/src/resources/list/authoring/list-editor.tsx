@@ -8,13 +8,13 @@ import { renderLucideIcon } from '../../../core/authoring/lucide-static-icon'
 
 const ROW_DRAG_MIME_TYPE = 'application/x-elce-list-row+json'
 const PREFIX_OPTIONS: readonly Readonly<{ value: ListPrefix; label: string }>[] = [
-  { value: 'none', label: 'Exemple' },
-  { value: 'disc', label: '• Exemple' },
-  { value: 'square', label: '▪ Exemple' },
-  { value: 'dash', label: '– Exemple' },
-  { value: 'lower-alpha', label: 'a. Exemple' },
-  { value: 'decimal', label: '1. Exemple' },
-  { value: 'lower-roman', label: 'i. Exemple' },
+  { value: 'none', label: 'Aucun' },
+  { value: 'disc', label: '•' },
+  { value: 'square', label: '▪' },
+  { value: 'dash', label: '–' },
+  { value: 'lower-alpha', label: 'a.' },
+  { value: 'decimal', label: '1.' },
+  { value: 'lower-roman', label: 'i.' },
 ]
 
 export interface ListEditorProps {
@@ -31,7 +31,7 @@ export function renderListEditor(props: ListEditorProps): RemixNode {
   const { list } = props
   const prefixOptions = [
     ...PREFIX_OPTIONS,
-    { value: 'custom' as const, label: `${list.customMarker} Exemple personnalisé` },
+    { value: 'custom' as const, label: `${list.customMarker} Personnalisé` },
   ]
   const showsStart = isOrderedPrefix(list.prefix)
   return <section
@@ -45,14 +45,14 @@ export function renderListEditor(props: ListEditorProps): RemixNode {
         <span id={`${props.idPrefix}-list-prefix-caption`}>Préfixe</span>
         <select
           id={`${props.idPrefix}-list-prefix`}
-          aria-label="Exemple de préfixe"
+          aria-label="Préfixe de la liste"
           mix={on<HTMLSelectElement, 'change'>('change', (event) => props.onChange(service.setPresentation(list, { prefix: event.currentTarget.value as ListPrefix })))}
         >
           {prefixOptions.map((option) => <option id={`${props.idPrefix}-list-prefix-${option.value}`} key={option.value} value={option.value} selected={option.value === list.prefix}>{option.label}</option>)}
         </select>
       </label>
       {showsStart
-        ? <label id={`${props.idPrefix}-list-start-label`} className="elce-list-editor__setting">
+        ? <label id={`${props.idPrefix}-list-start-label`} className="elce-list-editor__setting elce-list-editor__setting--start">
           <span id={`${props.idPrefix}-list-start-caption`}>Départ</span>
           <input
             id={`${props.idPrefix}-list-start`}
@@ -108,38 +108,21 @@ export function renderListEditor(props: ListEditorProps): RemixNode {
           >{option.label}</option>)}
         </select>
       </label>
-      <div id={`${props.idPrefix}-list-interval-label`} className="elce-list-editor__setting elce-list-editor__setting--interval">
-        <span id={`${props.idPrefix}-list-interval-caption`}>Intervalle (s)</span>
-        <details id={`${props.idPrefix}-list-interval-details`} className="elce-list-editor__timing">
-          <summary
-            id={`${props.idPrefix}-list-interval-toggle`}
-            className="elce-bdc-icon-button elce-list-editor__clock"
-            data-customized={list.intervalMs !== 0}
-            aria-label="Afficher l’intervalle"
-            title={`Intervalle : ${formatSeconds(list.intervalMs)} s`}
-          >{renderLucideIcon(Clock, `${props.idPrefix}-list-interval-icon`)}</summary>
-          <input
-            id={`${props.idPrefix}-list-interval`}
-            type="number"
-            min={0}
-            step={0.1}
-            value={list.intervalMs / 1000}
-            aria-label="Intervalle entre les lignes en secondes"
-            mix={[
-              on<HTMLInputElement, 'input'>('input', (event) => {
-                const intervalMs = Number(event.currentTarget.value) * 1000
-                if (Number.isFinite(intervalMs) && intervalMs >= 0) props.onChange(service.setPresentation(list, { intervalMs }))
-              }),
-              on<HTMLInputElement, 'blur'>('blur', (event) => closeTimingInputOnBlur(event.currentTarget, event.relatedTarget)),
-              on<HTMLInputElement, 'keydown'>('keydown', (event) => {
-                if (event.key !== 'Enter') return
-                event.preventDefault()
-                event.currentTarget.blur()
-              }),
-            ]}
-          />
-        </details>
-      </div>
+      <label id={`${props.idPrefix}-list-interval-label`} className="elce-list-editor__setting">
+        <span id={`${props.idPrefix}-list-interval-caption`}>Délai</span>
+        <input
+          id={`${props.idPrefix}-list-interval`}
+          type="number"
+          min={0}
+          step={0.1}
+          value={list.intervalMs / 1000}
+          aria-label="Délai entre les lignes en secondes"
+          mix={on<HTMLInputElement, 'input'>('input', (event) => {
+            const intervalMs = Number(event.currentTarget.value) * 1000
+            if (Number.isFinite(intervalMs) && intervalMs >= 0) props.onChange(service.setPresentation(list, { intervalMs }))
+          })}
+        />
+      </label>
     </div>
     <ol id={`${props.idPrefix}-list-rows`} className="elce-list-editor__rows">
       {list.rows.map((row, index) => renderListRow(row, index, props, service))}
@@ -210,17 +193,24 @@ function formatSeconds(milliseconds: number): string {
   return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 3, useGrouping: false }).format(milliseconds / 1000)
 }
 
-/** Closes a timing disclosure when focus leaves it, while preserving focus within its controls. */
-function closeTimingInputOnBlur(input: HTMLInputElement, nextFocusedTarget: EventTarget | null): void {
+/** Hides a timing input as soon as it loses focus. */
+function closeTimingInputOnBlur(input: HTMLInputElement): void {
   const details = input.closest('details')
   if (details === null) return
-  if (nextFocusedTarget instanceof Node && details.contains(nextFocusedTarget)) return
   details.open = false
 }
 
 /** Places the shared circular mode button in the List BDC header. */
 function renderListModeHeader(idPrefix: string, label: string, title: string, onClick: () => void): RemixNode {
   return <div id={`${idPrefix}-list-mode-header`} className="elce-list-bdc-frame__header">
+    <span
+      id={`${idPrefix}-list-drag-handle`}
+      className="elce-bdc-drag-handle elce-list-bdc-drag-handle"
+      draggable={true}
+      role="button"
+      aria-label="Déplacer la liste à points"
+      title="Glisser pour déplacer"
+    >↕</span>
     <button
       id={`${idPrefix}-list-mode-toggle`}
       className="elce-bdc-mode-toggle"
@@ -241,13 +231,21 @@ function renderListRow(row: ListRow, index: number, props: ListEditorProps, serv
     className="elce-list-editor__row"
     mix={[
       on<HTMLLIElement, 'dragover'>('dragover', (event) => {
-        if (event.dataTransfer !== null && Array.from(event.dataTransfer.types).includes(ROW_DRAG_MIME_TYPE)) event.preventDefault()
+        if (event.dataTransfer === null || !Array.from(event.dataTransfer.types).includes(ROW_DRAG_MIME_TYPE)) return
+        event.preventDefault()
+        setListDropTarget(event.currentTarget, getListDropPosition(event.currentTarget, event.clientY))
+      }),
+      on<HTMLLIElement, 'dragleave'>('dragleave', (event) => {
+        if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return
+        event.currentTarget.removeAttribute('data-drop-position')
       }),
       on<HTMLLIElement, 'drop'>('drop', (event) => {
         const sourceId = event.dataTransfer?.getData(ROW_DRAG_MIME_TYPE)
         if (sourceId === undefined || sourceId.length === 0) return
         event.preventDefault()
-        props.onChange(service.moveRow(props.list, sourceId, index))
+        const position = getListDropPosition(event.currentTarget, event.clientY)
+        clearListDropTargets(event.currentTarget.parentElement)
+        props.onChange(service.moveRow(props.list, sourceId, index + (position === 'after' ? 1 : 0)))
       }),
     ]}
   >
@@ -258,11 +256,14 @@ function renderListRow(row: ListRow, index: number, props: ListEditorProps, serv
       draggable={true}
       aria-label={`Réordonner la ligne ${rowNumber}`}
       title="Glisser pour réordonner"
-      mix={on<HTMLButtonElement, 'dragstart'>('dragstart', (event) => {
-        if (event.dataTransfer === null) return
-        event.dataTransfer.effectAllowed = 'move'
-        event.dataTransfer.setData(ROW_DRAG_MIME_TYPE, row.id)
-      })}
+      mix={[
+        on<HTMLButtonElement, 'dragstart'>('dragstart', (event) => {
+          if (event.dataTransfer === null) return
+          event.dataTransfer.effectAllowed = 'move'
+          event.dataTransfer.setData(ROW_DRAG_MIME_TYPE, row.id)
+        }),
+        on<HTMLButtonElement, 'dragend'>('dragend', (event) => clearListDropTargets(event.currentTarget.closest('ol'))),
+      ]}
     >{renderLucideIcon(GripVertical, `${props.idPrefix}-list-row-drag-icon-${row.id}`)}</button>
     <input
       id={`${props.idPrefix}-list-row-text-${row.id}`}
@@ -306,7 +307,7 @@ function renderListRow(row: ListRow, index: number, props: ListEditorProps, serv
             const delayMs = value === '' ? null : Number(value) * 1000
             if (delayMs === null || Number.isFinite(delayMs) && delayMs >= 0) props.onChange(service.setRowDelay(props.list, row.id, delayMs))
           }),
-          on<HTMLInputElement, 'blur'>('blur', (event) => closeTimingInputOnBlur(event.currentTarget, event.relatedTarget)),
+          on<HTMLInputElement, 'blur'>('blur', (event) => closeTimingInputOnBlur(event.currentTarget)),
           on<HTMLInputElement, 'keydown'>('keydown', (event) => {
             if (event.key !== 'Enter') return
             event.preventDefault()
@@ -324,6 +325,23 @@ function renderListRow(row: ListRow, index: number, props: ListEditorProps, serv
       mix={on<HTMLButtonElement, 'click'>('click', () => props.onChange(service.removeRow(props.list, row.id)))}
     >{renderLucideIcon(Trash2, `${props.idPrefix}-list-row-delete-icon-${row.id}`)}</button>
   </li>
+}
+
+/** Resolves whether a row's leading or trailing edge is the active insertion target. */
+function getListDropPosition(row: HTMLLIElement, clientY: number): 'before' | 'after' {
+  const bounds = row.getBoundingClientRect()
+  return clientY < bounds.top + bounds.height / 2 ? 'before' : 'after'
+}
+
+/** Displays a single insertion line for the row currently under the dragged item. */
+function setListDropTarget(row: HTMLLIElement, position: 'before' | 'after'): void {
+  clearListDropTargets(row.parentElement)
+  row.dataset.dropPosition = position
+}
+
+/** Removes insertion lines when a drag leaves or completes in a List editor. */
+function clearListDropTargets(list: Element | null): void {
+  list?.querySelectorAll('.elce-list-editor__row[data-drop-position]').forEach((row) => row.removeAttribute('data-drop-position'))
 }
 
 /** Counts user-perceived characters for the one-character custom marker field. */

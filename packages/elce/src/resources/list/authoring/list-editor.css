@@ -1,18 +1,35 @@
 .elce-list-bdc-node-view {
   display: flow-root;
   min-width: 0;
+  margin-block-end: 0.35rem;
 }
 
 .elce-list-bdc-frame {
+  --elce-bdc-frame-border-width: 2px;
+  position: relative;
   box-sizing: border-box;
   min-width: 0;
-  border: 2px dashed #9da9a5;
+  border: var(--elce-bdc-frame-border-width) dashed #9da9a5;
   border-radius: 0.2rem;
 }
 
 .elce-list-bdc-frame__header {
   display: flex;
   justify-content: flex-end;
+  min-block-size: 2.5rem;
+}
+
+.elce-list-bdc-frame__header > .elce-bdc-mode-toggle {
+  position: absolute;
+  inset-block-start: calc(-0.05rem - var(--elce-bdc-frame-border-width));
+  inset-inline-end: calc(0px - var(--elce-bdc-frame-border-width));
+  margin-inline-end: -0.05rem;
+}
+
+.elce-list-bdc-frame__header > .elce-list-bdc-drag-handle {
+  position: absolute;
+  inset-block-start: calc(0.5rem - var(--elce-bdc-frame-border-width));
+  inset-inline-start: calc(0.5rem - var(--elce-bdc-frame-border-width));
 }
 
 .elce-list-bdc-view__rows {
@@ -21,6 +38,10 @@
   margin: 0;
   padding-inline-start: 1.25em;
   overflow-wrap: anywhere;
+}
+
+.elce-list-bdc-view > .elce-list-bdc-frame__header {
+  margin-block-end: -0.5rem;
 }
 
 .elce-list-bdc-view__rows--none,
@@ -32,6 +53,10 @@
 .elce-list-bdc-view__row {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.elce-list-bdc-view__row + .elce-list-bdc-view__row {
+  margin-block-start: 0.5rem;
 }
 
 .elce-list-bdc-view__rows--dash > .elce-list-bdc-view__row,
@@ -74,8 +99,8 @@
   font-size: 0.7rem;
 }
 
-.elce-list-editor__setting--interval {
-  flex: none;
+.elce-list-editor__setting--start {
+  flex: 0 1 calc(7ch + 1.1rem + 2px);
 }
 
 .elce-list-editor__setting select,
@@ -111,6 +136,10 @@
   display: none;
 }
 
+.elce-list-editor__timing:not([open]) > input {
+  display: none;
+}
+
 .elce-list-editor__clock > .elce-ui-icon {
   width: 0.75rem;
   height: 0.75rem;
@@ -136,10 +165,31 @@
 }
 
 .elce-list-editor__row {
+  position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   gap: 0.4rem;
   align-items: center;
+}
+
+.elce-list-editor__row[data-drop-position='before']::before,
+.elce-list-editor__row[data-drop-position='after']::after {
+  position: absolute;
+  inset-inline: 0;
+  z-index: 1;
+  height: 2px;
+  border-radius: 2px;
+  background: #46726b;
+  content: '';
+  pointer-events: none;
+}
+
+.elce-list-editor__row[data-drop-position='before']::before {
+  top: -0.24rem;
+}
+
+.elce-list-editor__row[data-drop-position='after']::after {
+  bottom: -0.24rem;
 }
 
 .elce-list-editor__drag,

@@ -39,6 +39,27 @@
   cursor: pointer;
 }
 
+.elce-bdc-drag-handle {
+  z-index: 2;
+  display: block;
+  width: 1.4rem;
+  height: 1.4rem;
+  color: #46726b;
+  background: #fffdf8;
+  border: 1px solid #46726b;
+  border-radius: 50%;
+  cursor: grab;
+  font-size: 0.9rem;
+  line-height: 1.25rem;
+  text-align: center;
+  transform: none;
+  user-select: none;
+}
+
+.elce-bdc-drag-handle:active {
+  cursor: grabbing;
+}
+
 .elce-bdc-mode-toggle::before {
   position: absolute;
   inset-block-start: 50%;

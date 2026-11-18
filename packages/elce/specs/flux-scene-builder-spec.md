@@ -108,6 +108,17 @@ remplacements enregistrés sur le parent ou le placement restent prioritaires.
 Les racines de Graphe ancré gardent
 `initial: 'enter'` pour signaler un graphe déjà visible.
 
+Une Liste référencée dans le texte d’une Section observe son propre conteneur
+dans le scrollport Flux avec le `emit.observe` partagé. Son observateur, ses
+items et leur strap sont montés dans la story de page, qui contient ce
+scroll-container ; la story de Section conserve les persos de ses liens. Ce
+raccord est assemblé par
+[`learning-inline-text-scene.ts`](../src/mods/learning/inline-text/learning-inline-text-scene.ts)
+et [`flux-scene-builder.ts`](../src/resources/pages/flux/flux-scene-builder.ts).
+L’entrée et la sortie de la Liste pilotent les délais de ses items au moyen du
+strap Liste, sans observer la story Section ni créer un circuit d’observation
+distinct.
+
 - un perso `scroll-container` racine, placé sur `@root` ;
 - un perso `layout` article, placé dans ce scrollport, dont le markup possède
   des `id` explicites et des commentaires d’insertion pour chaque Section et le
