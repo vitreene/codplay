@@ -3,6 +3,8 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import {
   createSelectionFrameV2,
+  rotateSelectionFrameAffine,
+  selectionFrameLocalToScene,
   type SelectionFrameDelta,
   type SelectionFrameV2CreationResult,
   type SelectionFrameV2Modifier,
@@ -173,6 +175,66 @@ describe('createSelectionFrameV2', () => {
     expect(deltas.some((delta) => delta.kind === 'rotate' && delta.dr === 90)).toBe(true)
     expect(commits.at(-1)).toMatchObject({ rotate: 90 })
     expect(handle.isGestureActive()).toBe(false)
+    handle.destroy()
+  })
+
+  it('uses and preserves the complete affine projection while rotating around an off-center axis', () => {
+    root = document.createElement('div')
+    document.body.append(root)
+    Object.defineProperty(root, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ left: 10, top: 20, width: 600, height: 400, right: 610, bottom: 420 }),
+    })
+    const base: SelectionFrameValue = {
+      x: 80,
+      y: 40,
+      width: 120,
+      height: 80,
+      rotate: 14.036243467926479,
+      rotationOrigin: { fx: 0.2, fy: 0.75 },
+      affineProjection: {
+        origin: { x: 50, y: 26.5 },
+        matrix: { a: 1, b: 0.25, c: 0.5, d: 1.125 },
+      },
+    }
+    const deltas: SelectionFrameDelta[] = []
+    let candidate: SelectionFrameValue = base
+    const handle = createSelectionFrameV2({
+      sceneRoot: root,
+      onPreview: (delta) => {
+        deltas.push(delta)
+        candidate = delta.kind === 'rotate'
+          ? rotateSelectionFrameAffine(base, (base.rotate ?? 0) + delta.dr)
+          : base
+        return candidate
+      },
+      onCommit: () => {},
+    })
+    handle.setValue(base)
+
+    const tip = root.querySelector<HTMLElement>('[data-selection-frame-needle-tip]')!
+    const pivotX = base.rotationOrigin!.fx * base.width
+    const pivotY = base.rotationOrigin!.fy * base.height
+    const start = selectionFrameLocalToScene(base, pivotX, pivotY - 36)
+    const radians = 45 * Math.PI / 180
+    const end = selectionFrameLocalToScene(
+      base,
+      pivotX + Math.sin(radians) * 36,
+      pivotY - Math.cos(radians) * 36,
+    )
+    tip.dispatchEvent(pointerEvent('pointerdown', start.x + 10, start.y + 20))
+    tip.dispatchEvent(pointerEvent('pointermove', end.x + 10, end.y + 20))
+
+    expect(deltas.at(-1)).toEqual({ kind: 'rotate', dr: 45 })
+    expect(handle.element.style.left).toBe(`${candidate.affineProjection!.origin.x}px`)
+    expect(handle.element.style.top).toBe(`${candidate.affineProjection!.origin.y}px`)
+    expect(handle.element.style.transformOrigin).toBe('0 0')
+    const renderedMatrix = handle.element.style.transform.match(/matrix\(([^)]+)\)/)![1]!.split(',').map(Number)
+    expect(renderedMatrix[0]).toBeCloseTo(candidate.affineProjection!.matrix.a)
+    expect(renderedMatrix[1]).toBeCloseTo(candidate.affineProjection!.matrix.b)
+    expect(renderedMatrix[2]).toBeCloseTo(candidate.affineProjection!.matrix.c)
+    expect(renderedMatrix[3]).toBeCloseTo(candidate.affineProjection!.matrix.d)
+    tip.dispatchEvent(pointerEvent('pointercancel', end.x + 10, end.y + 20))
     handle.destroy()
   })
 

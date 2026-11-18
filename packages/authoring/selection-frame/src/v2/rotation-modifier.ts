@@ -2,6 +2,7 @@
 
 import { bindGestureSession, type GestureSessionHandle } from '../gesture-session'
 import { CHARACTERISTIC_POINTS, HANDLE_SIZE_PX } from '../handle-geometry'
+import { selectionFrameLinearTransform, selectionFrameLocalToScene } from './affine-geometry'
 import type {
   SelectionFrameDelta,
   SelectionFrameHandleId,
@@ -104,56 +105,19 @@ function mountRotationModifier(context: SelectionFrameV2ModifierContext): Select
     return Number.isFinite(input) ? Math.min(1, Math.max(0, input)) : 0.5
   }
 
-  /** Returns a finite non-zero scale for the local inverse used by pivot placement. */
-  function finiteNonZeroScale(input: number | undefined): number {
-    return input !== undefined && Number.isFinite(input) && Math.abs(input) > 1e-8 ? input : 1
-  }
-
-  /** Returns the local linear transform (rotate then scale) of a frame value. */
-  function linearTransform(input: SelectionFrameValue): { a: number; b: number; c: number; d: number } {
-    const angle = ((input.rotate ?? 0) * Math.PI) / 180
-    const cosine = Math.cos(angle)
-    const sine = Math.sin(angle)
-    return {
-      a: cosine * finiteNonZeroScale(input.scaleX),
-      b: sine * finiteNonZeroScale(input.scaleX),
-      c: -sine * finiteNonZeroScale(input.scaleY),
-      d: cosine * finiteNonZeroScale(input.scaleY),
-    }
-  }
-
   /** Returns the scene-root viewport origin used by the absolute overlay. */
   function sceneRootViewportOrigin(): Point {
     const rect = context.sceneRoot.getBoundingClientRect()
     return { x: rect.left, y: rect.top }
   }
 
-  /** Maps one local-box point to the viewport without reading a player node. */
-  function localPointToViewport(input: SelectionFrameValue, localX: number, localY: number): Point {
-    const origin = rotationOriginOf(input)
-    const pivotX = origin.fx * input.width
-    const pivotY = origin.fy * input.height
-    const matrix = linearTransform(input)
-    const root = sceneRootViewportOrigin()
-    const baseX = root.x + input.x + pivotX - (matrix.a * pivotX + matrix.c * pivotY)
-    const baseY = root.y + input.y + pivotY - (matrix.b * pivotX + matrix.d * pivotY)
-    return {
-      x: baseX + matrix.a * localX + matrix.c * localY,
-      y: baseY + matrix.b * localX + matrix.d * localY,
-    }
-  }
-
   /** Maps a viewport point back into the untransformed local box. */
   function viewportPointToLocal(input: SelectionFrameValue, viewportX: number, viewportY: number): Point {
-    const origin = rotationOriginOf(input)
-    const pivotX = origin.fx * input.width
-    const pivotY = origin.fy * input.height
-    const matrix = linearTransform(input)
+    const matrix = selectionFrameLinearTransform(input)
     const root = sceneRootViewportOrigin()
-    const baseX = root.x + input.x + pivotX - (matrix.a * pivotX + matrix.c * pivotY)
-    const baseY = root.y + input.y + pivotY - (matrix.b * pivotX + matrix.d * pivotY)
-    const worldX = viewportX - baseX
-    const worldY = viewportY - baseY
+    const origin = selectionFrameLocalToScene(input, 0, 0)
+    const worldX = viewportX - root.x - origin.x
+    const worldY = viewportY - root.y - origin.y
     const determinant = matrix.a * matrix.d - matrix.b * matrix.c
     if (!Number.isFinite(determinant) || Math.abs(determinant) < 1e-8) {
       return { x: worldX, y: worldY }
@@ -223,7 +187,8 @@ function mountRotationModifier(context: SelectionFrameV2ModifierContext): Select
   /** Converts a pointer event to one rotation or pivot delta. */
   function deltaFor(event: PointerEvent, gesture: Gesture): SelectionFrameDelta {
     if (gesture.kind === 'rotate') {
-      const angle = (Math.atan2(event.clientY - gesture.pivot.y, event.clientX - gesture.pivot.x) * 180) / Math.PI
+      const local = viewportPointToLocal(gesture.startValue, event.clientX, event.clientY)
+      const angle = (Math.atan2(local.y - gesture.pivot.y, local.x - gesture.pivot.x) * 180) / Math.PI
       gesture.accumulatedDeg += shortestAngleDelta(angle, gesture.previousPointerAngleDeg)
       gesture.previousPointerAngleDeg = angle
       const target = event.shiftKey
@@ -279,8 +244,9 @@ function mountRotationModifier(context: SelectionFrameV2ModifierContext): Select
     onStart: (event) => {
       if (value === null || context.isSuspended()) return null
       const origin = rotationOriginOf(value)
-      const pivot = localPointToViewport(value, origin.fx * value.width, origin.fy * value.height)
-      const angle = (Math.atan2(event.clientY - pivot.y, event.clientX - pivot.x) * 180) / Math.PI
+      const pivot = { x: origin.fx * value.width, y: origin.fy * value.height }
+      const local = viewportPointToLocal(value, event.clientX, event.clientY)
+      const angle = (Math.atan2(local.y - pivot.y, local.x - pivot.x) * 180) / Math.PI
       event.preventDefault()
       event.stopPropagation()
       return {

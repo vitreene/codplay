@@ -55,12 +55,12 @@ function pathPlaybackScene() {
   return {
     ...base,
     id: 'path-playback-end',
+    items: base.items.map((item) => ({ ...item, rotationMode: 'tangent' as const })),
     decors: {
       ...base.decors,
       second: {
         ...base.decors.second!,
         path: 'M 0 0 A 0.65 0.65 0 0 1 1 0',
-        orientToPath: true,
       },
     },
   }

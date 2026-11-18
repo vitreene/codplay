@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { prepareSvgPath, resolvePathFrame } from 'ace'
 import {
+  selectionFrameLinearTransform,
+  selectionFrameLocalToScene,
+} from '@codplay/selection-frame/v2'
+import {
   createDisplayArcPath,
   createMotionArcPath,
   frameWithRotationAtPathAnchor,
@@ -106,7 +110,7 @@ describe('motion-editor geometry', () => {
     expect(restored.y).toBeCloseTo(frame.y, 8)
   })
 
-  it('resolves one shared outer-frame and path-centre projection for asymmetric borders', () => {
+  it('resolves one shared outer-frame and path-axis projection for asymmetric borders', () => {
     const frame = {
       x: 100,
       y: 80,
@@ -119,12 +123,15 @@ describe('motion-editor geometry', () => {
     }
     const insets = { top: 7, right: 13, bottom: 2, left: 3 }
     const geometry = resolveMotionGeometryPose(frame, insets)
-    const borderCentre = frameVisualCenter(geometry.borderFrame)
-
     expect(geometry.borderFrame.width).toBe(176)
     expect(geometry.borderFrame.height).toBe(99)
-    expect(borderCentre.x).toBeCloseTo(geometry.pathAnchor.x, 8)
-    expect(borderCentre.y).toBeCloseTo(geometry.pathAnchor.y, 8)
+    expect(geometry.pathAnchor.x).toBeCloseTo(
+      geometry.borderFrame.x + frame.rotationOrigin.fx * geometry.borderFrame.width, 8,
+    )
+    expect(geometry.pathAnchor.y).toBeCloseTo(
+      geometry.borderFrame.y + frame.rotationOrigin.fy * geometry.borderFrame.height, 8,
+    )
+    expect(geometry.pathAnchor).not.toEqual(frameVisualCenter(geometry.borderFrame))
   })
 
   it('compares the complete frame pose, including its heading', () => {
@@ -135,6 +142,67 @@ describe('motion-editor geometry', () => {
     expect(sameFramePose(frame, rotated)).toBe(false)
     expect(sameFramePose(frame, displaced)).toBe(false)
     expect(sameFramePose(frame, { ...frame, rotate: 360 })).toBe(true)
+  })
+
+  it('keeps a sheared affine item on its off-centre path axis during rotation', () => {
+    const matrix = { a: 1.3, b: 0.4, c: 0.2, d: 0.9 }
+    const frame = {
+      x: 100,
+      y: 80,
+      width: 160,
+      height: 90,
+      rotate: 12,
+      scaleX: 1.2,
+      scaleY: 0.8,
+      rotationOrigin: { fx: 0.25, fy: 0.75 },
+      affineProjection: {
+        origin: { x: 74.5, y: 70.75 },
+        matrix,
+      },
+    }
+    const insets = { top: 4, right: 8, bottom: 6, left: 12 }
+    const geometry = resolveMotionGeometryPose(frame, insets)
+    const expectedAxis = selectionFrameLocalToScene(
+      geometry.borderFrame,
+      frame.rotationOrigin.fx * geometry.borderFrame.width,
+      frame.rotationOrigin.fy * geometry.borderFrame.height,
+    )
+    const rotated = frameWithRotationAtPathAnchor(frame, 63, geometry.pathAnchor, insets)
+    const rotatedMatrix = selectionFrameLinearTransform(rotated)
+    const sourceColumnDot = matrix.a * matrix.c + matrix.b * matrix.d
+    const rotatedColumnDot = rotatedMatrix.a * rotatedMatrix.c + rotatedMatrix.b * rotatedMatrix.d
+
+    expect(geometry.pathAnchor.x).toBeCloseTo(expectedAxis.x, 8)
+    expect(geometry.pathAnchor.y).toBeCloseTo(expectedAxis.y, 8)
+    expect(motionPathAnchorForFrame(rotated, insets).x).toBeCloseTo(geometry.pathAnchor.x, 8)
+    expect(motionPathAnchorForFrame(rotated, insets).y).toBeCloseTo(geometry.pathAnchor.y, 8)
+    expect(Math.hypot(rotatedMatrix.a, rotatedMatrix.b)).toBeCloseTo(Math.hypot(matrix.a, matrix.b), 8)
+    expect(Math.hypot(rotatedMatrix.c, rotatedMatrix.d)).toBeCloseTo(Math.hypot(matrix.c, matrix.d), 8)
+    expect(rotatedColumnDot).toBeCloseTo(sourceColumnDot, 8)
+    expect(rotatedMatrix.a * rotatedMatrix.d - rotatedMatrix.b * rotatedMatrix.c)
+      .toBeCloseTo(matrix.a * matrix.d - matrix.b * matrix.c, 8)
+  })
+
+  it('treats distinct affine contributions as distinct frame poses', () => {
+    const frame = {
+      x: 10,
+      y: 20,
+      width: 40,
+      height: 20,
+      rotate: 0,
+      affineProjection: {
+        origin: { x: 10, y: 20 },
+        matrix: { a: 1, b: 0.2, c: 0.4, d: 1 },
+      },
+    }
+
+    expect(sameFramePose(frame, {
+      ...frame,
+      affineProjection: {
+        ...frame.affineProjection,
+        matrix: { ...frame.affineProjection.matrix, c: 0.5 },
+      },
+    })).toBe(false)
   })
 
   it('splits a curved trajectory into two arcs sharing its tangent without flattening either half', () => {

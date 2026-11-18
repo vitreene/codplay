@@ -10,7 +10,8 @@ Ces entrées utilisent `AuthorApi` V1, qui s’appuie sur `codplay-v1`.
 Le mode création et l’éditeur de zones ont chacun leur
 [spécification dédiée](./creation-mode-spec.md) et
 [spécification dédiée](./zone-editor-spec.md). L’entrée `@codplay/selection-frame/v2`
-est distincte et n’est pas couverte ici. Le contrat d’`AuthorApi` est défini par
+est distincte et possède sa
+[spécification dédiée](./selection-frame-v2-spec.md). Le contrat d’`AuthorApi` est défini par
 la [spec AuthorApi V1](../../../../docs/formalisation/v1-author-api-spec.md).
 
 ## Cadre sur un item

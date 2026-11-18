@@ -3,6 +3,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CodPlay, type SceneDoc } from 'codplay'
 import { EDITOR_ENGINE_OPTIONS } from '../../src/item-presentation/engine-options'
+import { ITEM_MOTION_REFERENCE_ANGLE, ITEM_MOTION_ROTATION_BASELINE } from '../../src/item-presentation/item-motion-reference'
+import {
+  ITEM_PREVIEW_HEIGHT_PROPERTY,
+  ITEM_PREVIEW_TRANSFORM_PROPERTY,
+  ITEM_PREVIEW_WIDTH_PROPERTY,
+  itemPreviewTransform,
+} from '../../src/item-presentation/item-preview'
+import {
+  captureItemTransformProjection,
+  composeItemPresentationPose,
+  projectItemStyle,
+} from '../../src/item-presentation/item-style-projection'
 
 /** Owns independent pose and border clocks without any editor/demo fixture. */
 function scene(): SceneDoc {
@@ -31,6 +43,90 @@ describe('Editor item presentation', () => {
   const owners: CodPlay[] = []
   afterEach(() => { owners.splice(0).forEach((owner) => owner.destroy()); document.body.replaceChildren(); vi.restoreAllMocks() })
 
+  it('keeps motion-frame scale independent of changing visual rotation', () => {
+    const source = projectItemStyle({
+      rotate: 15,
+      scaleX: 1,
+      scaleY: 1,
+      [ITEM_MOTION_REFERENCE_ANGLE]: 15,
+      [ITEM_MOTION_ROTATION_BASELINE]: 15,
+    }, 1)
+    const middle = projectItemStyle({
+      rotate: 56,
+      scaleX: 0.9,
+      scaleY: 0.85,
+      [ITEM_MOTION_REFERENCE_ANGLE]: 15,
+      [ITEM_MOTION_ROTATION_BASELINE]: 15,
+    }, 1)
+
+    expect(source.frameStyle.rotate).toBe(15)
+    expect(middle.frameStyle.rotate).toBe(15)
+    expect(middle.frameStyle).not.toHaveProperty('scaleX')
+    expect(middle.frameStyle).not.toHaveProperty('scaleY')
+    expect(source.motionTransformStyle.transform).toBe('rotate(0deg) scale(1, 1)')
+    expect(middle.motionTransformStyle.transform).toBe('rotate(41deg) scale(0.9, 0.85)')
+  })
+
+  it('projects CSS transform-origin keywords as frame-axis fractions', () => {
+    expect(projectItemStyle({ 'transform-origin': 'left bottom' }, 1).rotationOrigin).toEqual({
+      fx: 0,
+      fy: 1,
+    })
+  })
+
+  it('composes the runtime pose with a complete local affine matrix, including shear', () => {
+    const presented = composeItemPresentationPose({
+      origin: { x: 10, y: 20 },
+      matrix: { a: 0, b: 1, c: -1, d: 0 },
+      localWidth: 100,
+      localHeight: 40,
+    }, {
+      matrix: { a: 1, b: 0.25, c: 0.5, d: 1, e: 12, f: -3 },
+      rotationOrigin: { fx: 0.25, fy: 0.75 },
+    })
+
+    expect(presented.origin).toEqual({ x: 13, y: 32 })
+    expect(presented.matrix).toEqual({ a: -0.25, b: 1, c: -1, d: 0.5 })
+  })
+
+  it('projects the displayed affine through the inverse runtime pose', () => {
+    const transform = itemPreviewTransform({
+      origin: { x: 10, y: 20 },
+      matrix: { a: 0, b: 1, c: -1, d: 0 },
+      localWidth: 40,
+      localHeight: 20,
+    }, {
+      x: 40,
+      y: 60,
+      width: 10,
+      height: 10,
+      rotate: 14,
+      rotationOrigin: { fx: 0, fy: 0 },
+      affineProjection: {
+        origin: { x: 40, y: 60 },
+        matrix: { a: 1, b: 0.25, c: 0.5, d: 1 },
+      },
+    })
+
+    expect(transform?.match(/^matrix\(([^)]+)\)$/)?.[1]?.split(',').map(Number)).toEqual([
+      0.25, -1, 1, -0.5, 40, -30,
+    ])
+  })
+
+  it('captures shear from the same CSS matrix used by the rendered transform anchor', () => {
+    const anchor = document.createElement('div')
+    anchor.style.width = '100px'
+    anchor.style.height = '40px'
+    anchor.style.transformOrigin = '0% 100%'
+    anchor.style.transform = 'matrix(1, 0.25, 0.5, 1, 12, -3)'
+    document.body.append(anchor)
+
+    expect(captureItemTransformProjection(anchor)).toEqual({
+      matrix: { a: 1, b: 0.25, c: 0.5, d: 1, e: -8, f: -3 },
+      rotationOrigin: { fx: 0, fy: 1 },
+    })
+  })
+
   it('keeps one state and composes the current border without moving the untouched axis', async () => {
     const owner = new CodPlay({ engine: EDITOR_ENGINE_OPTIONS })
     owners.push(owner)
@@ -57,6 +153,47 @@ describe('Editor item presentation', () => {
     expect(visual.style.borderWidth).toBe('2cqw')
     expect(visual.textContent).toBe('One item')
     expect(visual.parentElement!.style.transform).toBe('translate(-50%,-50%)')
+  })
+
+  it('renders the private preview matrix at its candidate dimensions', async () => {
+    const owner = new CodPlay({ engine: EDITOR_ENGINE_OPTIONS })
+    owners.push(owner)
+    const built = owner.build({ scene: scene() })
+    expect(built.ok).toBe(true)
+    if (!built.ok) return
+    const root = document.createElement('div')
+    root.style.width = '800px'
+    document.body.append(root)
+    const instance = owner.instances.create({ instanceId: 'affine-preview', ...built, root })
+    await instance.telco.seek(0)
+
+    const result = instance.snapshot.set([{
+      target: { storyId: 'main', persoId: 'item' },
+      timeMs: 0,
+      state: { style: {
+        width: 30,
+        height: 18,
+        [ITEM_PREVIEW_TRANSFORM_PROPERTY]: 'matrix(1, 0.25, 0.5, 1, 24, 32)',
+        [ITEM_PREVIEW_WIDTH_PROPERTY]: '30px',
+        [ITEM_PREVIEW_HEIGHT_PROPERTY]: '18px',
+      } },
+    }])
+    expect(result.ok).toBe(true)
+
+    const frame = root.querySelector<HTMLElement>('[data-item-id="main:item"]')!
+    const transformAnchor = document.getElementById(`${frame.id}-transform`)!
+    const native = root.querySelector<HTMLElement>('[data-editor-visual-for="item"]')!
+    expect(transformAnchor.style.transform).toBe('matrix(1, 0.25, 0.5, 1, 24, 32)')
+    expect(transformAnchor.style.width).toBe('30px')
+    expect(transformAnchor.style.height).toBe('18px')
+    expect(transformAnchor.style.transformOrigin).toBe('0px 0px')
+    expect(native.style.getPropertyValue(ITEM_PREVIEW_TRANSFORM_PROPERTY)).toBe('')
+    expect(native.style.getPropertyValue(ITEM_PREVIEW_WIDTH_PROPERTY)).toBe('')
+    expect(native.style.getPropertyValue(ITEM_PREVIEW_HEIGHT_PROPERTY)).toBe('')
+
+    instance.snapshot.clear()
+    expect(transformAnchor.style.width).toBe('100%')
+    expect(transformAnchor.style.height).toBe('100%')
   })
 
   it('does not change another owner using the native tag component', () => {
@@ -87,6 +224,28 @@ describe('Editor item presentation', () => {
     expect(frames[0]!.id).not.toBe(frames[1]!.id)
     expect(getComputedStyle(frames[0]!).transform).toContain('translate(calc(30cqw - max(')
     expect(getComputedStyle(frames[1]!).transform).toContain('translate(calc(50cqw - max(')
+  })
+
+  it('isolates author rules across independently loaded component modules', async () => {
+    const roots = [document.createElement('div'), document.createElement('div')]
+    document.body.append(...roots)
+    for (const [index, root] of roots.entries()) {
+      vi.resetModules()
+      const { createItemComponent } = await import('../../src/item-presentation/item-component')
+      const { CodPlay: FreshCodPlay } = await import('codplay')
+      const { TagComponent } = await import('codplay/runtime/components')
+      const { EDITOR_ENGINE_OPTIONS: freshOptions } = await import('../../src/item-presentation/engine-options')
+      const owner = new FreshCodPlay({ engine: { components: { override: freshOptions.components.override.map(entry =>
+        entry.type === 'tag' ? { ...entry, component: createItemComponent(TagComponent) } : entry,
+      ) } } })
+      owners.push(owner)
+      const built = owner.build({ scene: scene() })
+      expect(built.ok).toBe(true)
+      if (!built.ok) return
+      owner.instances.create({ instanceId: `module-${index}`, ...built, root })
+    }
+    const ids = roots.flatMap(root => [...root.querySelectorAll('[id]')].map(node => node.id))
+    expect(new Set(ids).size).toBe(ids.length)
   })
 
   it('retains native image sources and child identity across reparent, seek and reset', async () => {

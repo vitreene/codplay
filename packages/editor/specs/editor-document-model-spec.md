@@ -245,6 +245,7 @@ Item {
                                       // masque aussi les descendants d'une capsule
   contentId: string | null            // → contents ; null si bloc vide ou capsule (enfants = contenu)
   initialDecorId: string              // → decors — décor de base OBLIGATOIRE (état « intro terminée »)
+  rotationMode?: 'manual' | 'tangent' // choix unique pour toutes les trajectoires ; absent = manuel
   keyframes: Keyframe[]               // canaux pose/decor et vie dans le temps
   capsule?: CapsuleDef                // présent ssi type === 'capsule' ; la racine est dans rootCapsule
 }
@@ -376,6 +377,10 @@ Cue {                                 // repère temporel PONCTUEL, aimanté
 - **`Item.label` est un libellé d'affichage, pas du contenu** — distinct de `Content.text` : renommer une piste dans la timeline ne change jamais ce que l'item montre. Optionnel : l'éditeur dérive un affichage par défaut (troncature de `Content.text`, nom de source, badge de type) quand absent, plutôt que d'imposer sa saisie.
 - **`markerTracks` est une table indépendante, pas liée aux items/médias** — contrairement à `Cue` (qui vit dans `Content`, parce qu'une cue est la transcription d'une source précise), un marqueur est posé librement par l'auteur sur la timeline, sans rattachement à un média. D'où sa place à côté de `zones` (autre table référencée indépendante des items), pas dans `Content`.
 - Le comportement vérifié de la timeline V2 pour ces repères — Cue fixe attachée à sa source, Marker mobile auteur, snap partagé des KFs — est décrit dans la [spécification Sequence Editor V2](./sequence-editor-v2-cues-markers-spec.md).
+- **`Item.rotationMode`** est un réglage statique propre à l’item, indépendant
+  des décors et de leurs références partagées. Le reset des angles à l’entrée
+  en tangente et l’orientation initiale constante sont décrits dans la
+  [spécification d’orientation](./path-tangent-orientation-spec.md).
 - **`Decor.path` est une capacité de mouvement V2, pas une propriété de pose ou de visibilité** — il décrit le segment entrant vers le KF cible du canal `pose`. Un KF `decor` ne peut pas le porter. Une absence de `path` signifie la droite source→cible implicite ; les pixels de viewport et les mesures de bounding box ne sont jamais stockés. Le champ est segment-local : il n'entre pas dans la cascade générale de `Decor` et ne se propage pas aux keyframes suivants. Lorsqu'un décor est partagé et qu'un path est édité, l'éditeur applique le copy-on-write documenté pour isoler le keyframe cible. Les transitions nommées d'entrée/sortie restent portées par le keyframe et ne sont pas remplacées par ce champ. La forme du chemin est celle du contrat CodPlay V2 (`M`/`L`/`A`, préparation `arc-length`) ; l'éditeur ne crée pas de grammaire concurrente.
 - **Deux canaux sans timeline par propriété** — `pose` est la chaîne spatiale et `decor` est la chaîne d'habillage. Les KFs `decor` ne comptent pas dans la vie de l'item, ne deviennent pas des ghosts et ne coupent pas un trajet. Un KF `pose` peut porter en plus des valeurs de décor ; il alimente alors les deux chaînes, mais reste un seul KF documentaire et un seul point visuel.
 

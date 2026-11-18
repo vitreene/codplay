@@ -16,6 +16,11 @@ export type SelectionFrameValue = Readonly<{
   scaleY?: number
   /** Omitted values use the center of the box. */
   rotationOrigin?: SelectionFrameRotationOrigin
+  /** Complete scene-local affine projection used when the host presents additional transforms. */
+  affineProjection?: Readonly<{
+    origin: Readonly<{ x: number; y: number }>
+    matrix: Readonly<{ a: number; b: number; c: number; d: number }>
+  }>
 }>
 
 /** Geometry emitted when an author draws a new item before it has a player node. */

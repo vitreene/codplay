@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { CodPlay } from 'codplay'
 import { buildSceneDocV2, EDITOR_V2_STORY_ID } from '../../src/builder-v2'
 import type { EditorScene } from '../../src/app/commands/types'
+import { ITEM_MOTION_REFERENCE_ANGLE, ITEM_MOTION_ROTATION_BASELINE } from '../../src/item-presentation/item-motion-reference'
 
 /** Builds a minimal same-parent segment with a path carried by the target decor. */
 function pathScene(): EditorScene {
@@ -68,6 +69,7 @@ describe('editor V2 motion path adapter', () => {
         duration: 1_000,
         ease: 'inOut',
         path: 'M 0 0 A 0.7 0.7 0 0 1 1 0',
+        orientToPath: false,
       },
     })
     expect(moveAction.style).toEqual(expect.objectContaining({ x: expect.any(Object), y: expect.any(Object) }))
@@ -81,6 +83,7 @@ describe('editor V2 motion path adapter', () => {
     const scene = pathScene()
     scene.decors.first!.style = { 'border-width': '0cqw', 'border-style': 'solid' }
     scene.decors.border = { id: 'border', style: { 'border-width': '6cqw', 'border-style': 'solid' } }
+    scene.items[0]!.rotationMode = 'tangent'
     scene.decors.middle = {
       id: 'middle',
       offset: { translate: { x: 45, y: 30 }, width: 10, height: 10, rotate: 20 },
@@ -161,11 +164,11 @@ describe('editor V2 motion path adapter', () => {
     expect(atMiddle).toMatchObject({ activeSegmentId: expect.any(String), progress: 0 })
   })
 
-  it('compiles target path orientation with the source and target rotation offsets', () => {
+  it('compiles tangent orientation with one fixed initial rotation for every endpoint', () => {
     const scene = pathScene()
     scene.decors.first!.offset = { ...scene.decors.first!.offset, rotate: 12 }
     scene.decors.target!.offset = { ...scene.decors.target!.offset, rotate: 28 }
-    scene.decors.target!.orientToPath = true
+    scene.items[0]!.rotationMode = 'tangent'
 
     const result = buildSceneDocV2(scene)
     expect(result.ok).toBe(true)
@@ -178,10 +181,38 @@ describe('editor V2 motion path adapter', () => {
       ease: 'inOut',
       path: 'M 0 0 A 0.7 0.7 0 0 1 1 0',
       orientToPath: true,
-      rotateOffset: { from: 12, to: 28 },
+      rotateOffset: { from: 12, to: 12 },
     })
-    expect((moveAction.style as Record<string, unknown> | undefined)?.rotate).toEqual({ from: 12, to: 28, duration: 1000, ease: 'inOut' })
+    expect((moveAction.style as Record<string, unknown> | undefined)?.rotate).toBeUndefined()
     expect((perso.initial?.style as Record<string, unknown> | undefined)?.rotate).toBe(12)
+  })
+
+  it('uses the same initial angle on curves and implicit straight segments, independently for each item', () => {
+    const scene = pathScene()
+    scene.items[0]!.rotationMode = 'tangent'
+    scene.decors.first!.offset!.rotate = 17
+    scene.decors.target!.offset!.rotate = -80
+    scene.decors.final = { id: 'final', offset: { translate: { x: 70, y: 60 }, rotate: 120 } }
+    scene.items[0]!.keyframes.push({ id: 'final-kf', timeMs: 1500, decorId: 'final' })
+    scene.items.push({ ...scene.items[0]!, id: 'manual-item', order: 'b', rotationMode: 'manual' })
+    const result = buildSceneDocV2(scene)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const persos = result.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos
+    const tangent = persos.find((perso) => perso.id === 'item')!
+    const manual = persos.find((perso) => perso.id === 'manual-item')!
+    expect(tangent.actions['item-kf-target-kf']).toHaveProperty('move.transition.rotateOffset', { from: 17, to: 17 })
+    expect(tangent.actions['item-kf-final-kf']).toHaveProperty('move.transition', {
+      duration: 500, ease: 'inOut', path: 'M 0 0 L 1 0', orientToPath: true,
+      rotateOffset: { from: 17, to: 17 },
+    })
+    expect(tangent.actions['item-kf-final-kf']).not.toHaveProperty('style.rotate')
+    expect(manual.actions['manual-item-kf-target-kf']).toHaveProperty('move.transition.orientToPath', false)
+    expect(manual.actions['manual-item-kf-final-kf']).toHaveProperty('style.rotate', {
+      from: -80, to: 120, duration: 500, ease: 'inOut',
+    })
+    expect(scene.decors.final).not.toHaveProperty('path')
+    expect(scene.decors.target!.offset!.rotate).toBe(-80)
   })
 
   it('passes the prepared path through the CodPlay V2 player at seek time', async () => {
@@ -235,7 +266,7 @@ describe('editor V2 motion path adapter', () => {
     scene.decors.first!.offset = { ...scene.decors.first!.offset, rotate: 0 }
     scene.decors.target!.offset = { ...scene.decors.target!.offset, rotate: 0 }
     scene.decors.target!.path = 'M 0 0 L 0 1'
-    scene.decors.target!.orientToPath = true
+    scene.items[0]!.rotationMode = 'tangent'
     const built = buildSceneDocV2(scene)
     expect(built.ok).toBe(true)
     if (!built.ok) return
@@ -310,8 +341,9 @@ describe('editor V2 motion path adapter', () => {
 
   it('rejects an invalid authored path before a partial V2 scene escapes the builder', () => {
     const scene = pathScene()
+    scene.items[0]!.rotationMode = 'tangent'
     scene.decors.target!.path = 'M 0 0 C 0.5 0.5 0.8 0.5 1 0'
-    const result = buildSceneDocV2(scene)
+    const result = buildSceneDocV2(scene, new Map(), { rootWidthPx: 800, pixelRatio: 1 })
     expect(result.ok).toBe(false)
     if (result.ok) return
     expect(result.diagnostics).toEqual(expect.arrayContaining([
@@ -328,6 +360,80 @@ describe('editor V2 motion path adapter', () => {
     if (!result.ok) return
     const perso = result.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos.find((candidate) => candidate.id === 'item')!
     expect(perso.actions['item-kf-target-kf']).toHaveProperty('move')
-    expect(perso.actions['item-kf-final-kf']).not.toHaveProperty('move')
+    expect(perso.actions['item-kf-final-kf']).toHaveProperty('move', { target: `${EDITOR_V2_STORY_ID}__root` })
+    expect(perso.actions['item-kf-final-kf']).not.toHaveProperty('move.transition')
   })
+
+  it('publishes the style-owned straight segment after a manual curve instead of its previous endpoint', async () => {
+    codplay = new CodPlay({ engine: EDITOR_ENGINE_OPTIONS, pauseOnDocumentHidden: false })
+    const scene = pathScene()
+    scene.decors.final = { id: 'final', offset: { translate: { x: 80, y: 45 }, rotate: 35, scale: { x: 1.4, y: 0.7 } } }
+    scene.decors.target!.offset!.rotate = -15
+    scene.decors.target!.offset!.scale = { x: 1, y: 1 }
+    scene.items[0]!.keyframes.push({ id: 'final-kf', timeMs: 1500, decorId: 'final' })
+    const built = buildSceneDocV2(scene)
+    expect(built.ok).toBe(true)
+    if (!built.ok) return
+    const compiled = codplay.build({ scene: built.sceneDoc })
+    expect(compiled.ok).toBe(true)
+    if (!compiled.ok) return
+    const root = document.createElement('div')
+    document.body.append(root)
+    const instance = codplay.instances.create({ instanceId: 'manual-curve-to-straight', ...compiled, root })
+    for (const timeMs of [1250, 1500, 1100, 1250]) {
+      await instance.telco.seek(timeMs + built.preRollMs)
+      const item = instance.presentation.get()?.items.find(entry => entry.itemId === 'story-main:item')
+      expect(item?.activeSegmentId).toContain('item-kf-final-kf')
+      expect(item?.representation).toBe('source')
+      if (timeMs === 1100) expect(item?.progress).toBeLessThan(0.5)
+      if (timeMs !== 1100) expect(item?.progress).toBeCloseTo((timeMs - 1000) / 500)
+    }
+    const style = instance.snapshot.get()!.states.find(entry => entry.target.persoId === 'item')!.state.style
+    expect(style).toMatchObject({ rotate: 10, scaleX: 1.2, scaleY: 0.85 })
+  })
+
+  it('compiles a rotation-independent capture reference for an unscaled manual path', () => {
+    const scene = pathScene()
+    scene.decors.first!.offset!.rotate = 0
+    scene.decors.target!.offset!.rotate = 35
+    const built = buildSceneDocV2(scene, new Map(), { rootWidthPx: 800, pixelRatio: 1 })
+    expect(built.ok).toBe(true)
+    if (!built.ok) return
+    const item = built.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos.find((perso) => perso.id === 'item')!
+    expect(item.initial?.style).toHaveProperty(ITEM_MOTION_ROTATION_BASELINE, 0)
+    expect(item.initial?.style).toHaveProperty(ITEM_MOTION_REFERENCE_ANGLE, 0)
+    expect(item.actions['item-kf-target-kf']?.style).toMatchObject({
+      rotate: { from: 0, to: 35, duration: 1_000, ease: 'inOut' },
+      [ITEM_MOTION_REFERENCE_ANGLE]: 0,
+    })
+    expect(item.actions['item-kf-target-kf']?.style).not.toHaveProperty('scaleX')
+    expect(item.actions['item-kf-target-kf']?.style).not.toHaveProperty('scaleY')
+  })
+
+  it.each(['manual', 'tangent'] as const)(
+    'interpolates authored scale from its identity independently of rotation in %s mode',
+    (rotationMode) => {
+      const scene = pathScene()
+      scene.items[0]!.rotationMode = rotationMode
+      scene.decors.first!.offset!.rotate = 0
+      scene.decors.target!.offset = {
+        ...scene.decors.target!.offset,
+        rotate: 90,
+        scale: { x: 0.8, y: 0.7 },
+      }
+      const built = buildSceneDocV2(scene, new Map(), { rootWidthPx: 800, pixelRatio: 1 })
+      expect(built.ok).toBe(true)
+      if (!built.ok) return
+
+      const item = built.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos.find((perso) => perso.id === 'item')!
+      const initialReferenceAngle = rotationMode === 'tangent' ? -19.052609951309023 : 0
+      expect(item.actions['item-kf-target-kf']?.style).toMatchObject({
+        scaleX: { from: 1, to: 0.8, duration: 1_000, ease: 'inOut' },
+        scaleY: { from: 1, to: 0.7, duration: 1_000, ease: 'inOut' },
+        [ITEM_MOTION_REFERENCE_ANGLE]: initialReferenceAngle,
+      })
+      expect(item.initial?.style).toHaveProperty(ITEM_MOTION_ROTATION_BASELINE, 0)
+      expect(item.initial?.style).toHaveProperty(ITEM_MOTION_REFERENCE_ANGLE, initialReferenceAngle)
+    },
+  )
 })

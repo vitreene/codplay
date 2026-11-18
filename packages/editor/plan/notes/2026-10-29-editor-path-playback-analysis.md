@@ -2,18 +2,14 @@
 
 ## Périmètre et références
 
-Analyse de l’enchaînement existant des rotations et trajectoires, à la racine
-et dans une capsule tournée, étendue à toute remontée d’Editor vers le player.
-Elle ne certifie pas les modifications provisoires du workspace et n’attribue
-pas le saut observé à un propriétaire sur la seule base d’une stack runtime.
-Le [plan actif](../decisions-a-prendre.md#2-fermer-les-portes-mouvement-v2)
-porte les décisions, les actions proposées et leur revue. La correction est
-suspendue pendant cette analyse et la revue du plan.
-Le [plan d’exécution détaillé](../2026-09-02-motion-editor-v2-plan.md) précise
-les étapes pour l’agent exécutant. L’utilisateur confirme que l’interface de
-trajectoire fonctionne ; la rotation est défectueuse. La convergence proposée
-doit donc préserver cette interface et ses comportements comme référence,
-sans qualifier son rendu local de défaut ni le remplacer par hypothèse.
+Cette note conserve le raisonnement préparatoire du renforcement général du
+couplage décor/projections, encore soumis à revue dans le
+[mémo Editor](../decisions-a-prendre.md#2-fermer-les-portes-mouvement-v2).
+Le comportement vérifié de rotation est désormais le mode unique par item de
+la [spec d’orientation](../../specs/path-tangent-orientation-spec.md).
+Les propositions ci-dessous ne constituent pas un contrat ni une autorisation
+d’implémenter le couplage général. Les interactions de trajectoire restent les
+références de non-régression de cette reprise éventuelle.
 
 Références vérifiées : [présentation des items](../../specs/item-presentation-spec.md),
 [orientation de trajectoire](../../specs/path-tangent-orientation-spec.md),
@@ -70,8 +66,9 @@ l’écriture sparse, le copy-on-write et la granularité Undo/Redo.
    déjà par `DecorEditorController.applyPatch` / `onDecorChange`. Le drag de
    trajectoire peut rejoindre ce même traitement de modifications auteur via
    la frontière de callbacks existante de l’overlay, tout en conservant son
-   dessin pendant le drag et son unique notification de fin. Son `path` et
-   `orientToPath` visent le décor du KF cible du segment entrant, sans cascade ;
+   dessin pendant le drag et son unique notification de fin. Son `path`
+   vise le décor du KF cible du segment entrant, sans cascade ; le mode de
+   rotation est propre à l’item ;
    les offsets visent la pose éditée. Une cible commune d’interaction ne signifie
    donc pas écrire aveuglément tous les champs dans le même Decor.
 2. **Résoudre un seul candidat effectif.** Étendre le registre de modifications

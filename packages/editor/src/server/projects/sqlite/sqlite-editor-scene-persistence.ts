@@ -273,9 +273,9 @@ async function insertDecor(database: SceneDatabase, sceneId: string, decor: Deco
 /** Inserts one item identity while keeping its hierarchy in capsule_items. */
 async function insertItem(database: SceneDatabase, sceneId: string, sceneOrdinal: number, item: Item): Promise<void> {
   await queryRows(database, `
-    INSERT INTO items (scene_id, item_id, scene_ordinal, item_type, label, visible, content_id, initial_decor_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `, [sceneId, item.id, sceneOrdinal, item.type, item.label ?? null, item.visible ? 1 : 0, item.contentId, item.initialDecorId])
+    INSERT INTO items (scene_id, item_id, scene_ordinal, item_type, label, visible, content_id, initial_decor_id, rotation_mode)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [sceneId, item.id, sceneOrdinal, item.type, item.label ?? null, item.visible ? 1 : 0, item.contentId, item.initialDecorId, item.rotationMode ?? null])
 }
 
 /** Stores one capsule's static authoring settings separately from its child relations. */
@@ -397,10 +397,12 @@ async function readScene(database: SceneDatabase, sceneId: string): Promise<Stor
     if (membership === undefined) throw new Error(`Parent/ordre absent pour l’item « ${itemId} ».`)
     const capsule = capsules.get(itemId)
     const label = nullableText(row, 'label')
+    const rotationMode = nullableText(row, 'rotation_mode') as Item['rotationMode'] | null
     return {
       id: itemId,
       type: stringValue(row, 'item_type') as Item['type'],
       ...(label === null ? {} : { label }),
+      ...(rotationMode === null ? {} : { rotationMode }),
       parentId: nullableText(membership, 'parent_capsule_id'),
       order: stringValue(membership, 'order_key'),
       visible: numberValue(row, 'visible') === 1,

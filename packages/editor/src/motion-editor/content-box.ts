@@ -1,4 +1,8 @@
 import type { SelectionFrameValue } from '../decor-editor/types'
+import {
+  selectionFrameLinearTransform,
+  updateSelectionFrameAffineOrigin,
+} from '@codplay/selection-frame/v2'
 
 /** Pixel insets between an element's layout border-box origin and its content-box origin. */
 export type ContentBoxInsetsPx = Readonly<{
@@ -30,11 +34,11 @@ export function poseFrameToContentBoxFrame(
   insets: ContentBoxInsetsPx,
 ): SelectionFrameValue {
   const displacement = contentBoxLayoutDisplacement(frame, insets)
-  return {
+  return updateSelectionFrameAffineOrigin({
     ...frame,
     x: frame.x + displacement.x,
     y: frame.y + displacement.y,
-  }
+  })
 }
 
 /** Converts a content-box layout frame back to the border-box origin used by document offsets. */
@@ -43,11 +47,11 @@ export function contentBoxFrameToPoseFrame(
   insets: ContentBoxInsetsPx,
 ): SelectionFrameValue {
   const displacement = contentBoxLayoutDisplacement(frame, insets)
-  return {
+  return updateSelectionFrameAffineOrigin({
     ...frame,
     x: frame.x - displacement.x,
     y: frame.y - displacement.y,
-  }
+  })
 }
 
 /**
@@ -61,11 +65,7 @@ export function contentBoxLayoutDisplacement(
   frame: SelectionFrameValue,
   insets: ContentBoxInsetsPx,
 ): { x: number; y: number } {
-  const angle = ((frame.rotate ?? 0) * Math.PI) / 180
-  const scaleX = finiteScale(frame.scaleX)
-  const scaleY = finiteScale(frame.scaleY)
-  const cosine = Math.cos(angle)
-  const sine = Math.sin(angle)
+  const matrix = selectionFrameLinearTransform(frame)
   const fx = finiteOriginFraction(frame.rotationOrigin?.fx)
   const fy = finiteOriginFraction(frame.rotationOrigin?.fy)
   const contentPivotX = fx * frame.width
@@ -76,8 +76,8 @@ export function contentBoxLayoutDisplacement(
   const pivotDeltaY = borderBoxPivotY - contentPivotY
   const localInsetX = insets.left - pivotDeltaX
   const localInsetY = insets.top - pivotDeltaY
-  const transformedInsetX = cosine * scaleX * localInsetX - sine * scaleY * localInsetY
-  const transformedInsetY = sine * scaleX * localInsetX + cosine * scaleY * localInsetY
+  const transformedInsetX = matrix.a * localInsetX + matrix.c * localInsetY
+  const transformedInsetY = matrix.b * localInsetX + matrix.d * localInsetY
   return {
     x: pivotDeltaX + transformedInsetX,
     y: pivotDeltaY + transformedInsetY,
@@ -87,9 +87,4 @@ export function contentBoxLayoutDisplacement(
 /** Returns a finite transform-origin fraction, matching the overlay's centred fallback. */
 function finiteOriginFraction(value: number | undefined): number {
   return value !== undefined && Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0.5
-}
-
-/** Returns a finite non-zero scale so origin projection remains defined. */
-function finiteScale(value: number | undefined): number {
-  return value !== undefined && Number.isFinite(value) && Math.abs(value) > 1e-8 ? value : 1
 }

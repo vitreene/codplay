@@ -1,8 +1,16 @@
 import type { Actor } from 'xstate'
-import type { CodPlaySnapshot, CodPlaySnapshotPatch } from 'codplay'
+import type { CodPlayPresentationPose, CodPlaySnapshot, CodPlaySnapshotPatch } from 'codplay'
 import type { MotionEasing } from '../../motion-editor/easing'
 import { resolveMotionEaseProgress } from '../../motion-editor/easing'
-import { createRotationModifier, createSelectionFrameV2, createZoneEditorV2 } from '@codplay/selection-frame/v2'
+import {
+  createRotationModifier,
+  createSelectionFrameV2,
+  createZoneEditorV2,
+  rotateSelectionFrameAffine,
+  selectionFrameLinearTransform,
+  selectionFrameLocalToScene,
+  updateSelectionFrameAffineOrigin,
+} from '@codplay/selection-frame/v2'
 import type {
   SelectionFrameDelta,
   SelectionFrameHandleId,
@@ -44,9 +52,17 @@ import { clearOffsetPlacementGeometry, hasExplicitPlacementGeometry, missingZone
 // Read the stable identifier without importing the builder barrel: the latter also loads the
 // optional `ace` compiler, which is not needed by this authoring bridge or its pure tests.
 import { EDITOR_V2_STORY_ID } from '../../builder-v2/types'
-import { ITEM_PREVIEW_INVERSE_PROPERTY, itemPreviewInverse } from '../../item-presentation/item-preview'
-import { resolveDecorationStyleAtTime } from '../../builder-v2/decor-resolution'
+import { ITEM_MOTION_REFERENCE_ANGLE, ITEM_MOTION_ROTATION_BASELINE } from '../../item-presentation/item-motion-reference'
+import {
+  ITEM_PREVIEW_HEIGHT_PROPERTY,
+  ITEM_PREVIEW_TRANSFORM_PROPERTY,
+  ITEM_PREVIEW_WIDTH_PROPERTY,
+  itemPreviewTransform,
+} from '../../item-presentation/item-preview'
+import { composeItemPresentationPose, readItemTransformProjection } from '../../item-presentation/item-style-projection'
+import { resolveDecorationStyleAtTime, resolveOffsetAsStyle } from '../../builder-v2/decor-resolution'
 import { createMotionOverlay } from '../../motion-editor/overlay'
+import { resolveInitialPathRotation, STRAIGHT_MOTION_PATH } from '../../motion-editor/item-rotation/item-rotation'
 import type { MotionOverlayGhost, MotionOverlayHandle, MotionOverlayRole, MotionOverlaySegment } from '../../motion-editor/overlay'
 import { createMotionGeometryStore } from '../../motion-editor/geometry-store'
 import { createBlockMoveControl } from './block-move-control'
@@ -225,7 +241,9 @@ export function resolveTemporaryPatch(snapshot: CodPlaySnapshot | null, itemId: 
   if (styleState && typeof styleState === 'object' && !Array.isArray(styleState)) {
     const style: Record<string, string> = {}
     for (const [property, raw] of Object.entries(styleState as Record<string, unknown>)) {
-      if (OFFSET_STYLE_PROPERTIES.has(property)) continue
+      if (OFFSET_STYLE_PROPERTIES.has(property)
+        || property === ITEM_MOTION_REFERENCE_ANGLE
+        || property === ITEM_MOTION_ROTATION_BASELINE) continue
       style[property] = formatSnapshotValue(raw)
     }
     if (Object.keys(style).length > 0) patch.style = style
@@ -372,7 +390,6 @@ export function resolveCurrentPatch(decor: Decor, content: Content | undefined):
   if (decor.custom !== undefined) patch.custom = decor.custom
   if (decor.zoneId !== undefined) patch.zoneId = decor.zoneId
   if (decor.path !== undefined) patch.path = decor.path
-  if (decor.orientToPath !== undefined) patch.orientToPath = decor.orientToPath
   if (content?.text !== undefined) patch.text = content.text
   if (content?.textAutoSize !== undefined) patch.textAutoSize = content.textAutoSize
 
@@ -390,14 +407,6 @@ export function resolveCurrentPatch(decor: Decor, content: Content | undefined):
 export function resolveMotionPath(scene: EditorScene, item: Item, keyframeId: string): string | undefined {
   const keyframe = item.keyframes.find((candidate) => candidate.id === keyframeId)
   return keyframe === undefined || resolveKeyframeChannel(keyframe) !== 'pose' ? undefined : scene.decors[keyframe.decorId]?.path
-}
-
-/** Reads whether one explicit incoming path owns the target KF's item orientation. */
-function resolveMotionPathOrientation(scene: EditorScene, item: Item, keyframeId: string): boolean {
-  const keyframe = item.keyframes.find((candidate) => candidate.id === keyframeId)
-  return keyframe !== undefined
-    && resolveKeyframeChannel(keyframe) === 'pose'
-    && scene.decors[keyframe.decorId]?.orientToPath === true
 }
 
 /** Resolves the easing used by the pose segment, with the same precedence as the V2 builder. */
@@ -443,11 +452,14 @@ export function resolveEffectiveKeyframePatch(
     ...precedingDecors,
     { keyframe: kf, decor: ownDecor },
   ]
-  return layers
+  const patch = layers
     .map(({ keyframe, decor }) => keyframe === null || resolveKeyframeChannel(keyframe) === 'pose'
       ? resolveCurrentPatch(decor, content)
       : withoutPosePatch(resolveCurrentPatch(decor, content)))
     .reduce((acc, patch) => mergePatch(acc, patch), {} as DecorPatch)
+  return item.rotationMode === 'tangent'
+    ? mergePatch(patch, { offset: { rotate: resolveInitialPathRotation(scene, item) } })
+    : patch
 }
 
 /** Resolves only the pose payload at a keyframe, excluding decoration-only timeline points. */
@@ -465,9 +477,12 @@ export function resolveEffectivePosePatch(
     .filter((candidate) => (candidate.timeMs < keyframe.timeMs || candidate.id === keyframe.id)
       && resolveKeyframeChannel(candidate) === 'pose')
     .sort((left, right) => left.timeMs - right.timeMs)
-  return [initial, ...poseKeyframes.map((candidate) => scene.decors[candidate.decorId])]
+  const patch = [initial, ...poseKeyframes.map((candidate) => scene.decors[candidate.decorId])]
     .map((decor) => withoutNonPosePatch(resolveCurrentPatch(decor ?? { id: '' }, content)))
     .reduce((acc, patch) => mergePatch(acc, patch), {} as DecorPatch)
+  return item.rotationMode === 'tangent'
+    ? mergePatch(patch, { offset: { rotate: resolveInitialPathRotation(scene, item) } })
+    : patch
 }
 
 /** Removes the structured pose group from a full decoration patch. */
@@ -534,7 +549,6 @@ export function patchToDecorArgs(patch: DecorPatch): Partial<Omit<Decor, 'id'>> 
   if (patch.offset !== undefined) { args.offset = patch.offset as unknown as OffsetData; touched = true }
   if (patch.custom !== undefined) { args.custom = patch.custom; touched = true }
   if (patch.path !== undefined) { args.path = patch.path; touched = true }
-  if (patch.orientToPath !== undefined) { args.orientToPath = patch.orientToPath; touched = true }
   if (patch.zoneId !== undefined) { args.zoneId = patch.zoneId; touched = true }
   const knownProperties = new Set(['style', 'classes', 'offset', 'custom', 'path', 'orientToPath', 'zoneId'])
   const argsRecord = args as Record<string, unknown>
@@ -617,18 +631,18 @@ function materializeZoneFillStyle(base: DecorPatch, patch: DecorPatch): DecorPat
  * rotation/scale and keeps the rendered item still while its rotation axis is moved.
  */
 export function applyFrameDelta(base: SelectionFrameValue, delta: SelectionFrameDelta): SelectionFrameValue {
-  if (delta.kind === 'move') return { ...base, x: base.x + delta.dx, y: base.y + delta.dy }
-  if (delta.kind === 'rotate') return { ...base, rotate: normalizeAngleDegrees(Math.round((base.rotate ?? 0) + delta.dr)) }
+  if (delta.kind === 'move') return updateSelectionFrameAffineOrigin({ ...base, x: base.x + delta.dx, y: base.y + delta.dy })
+  if (delta.kind === 'rotate') {
+    return rotateSelectionFrameAffine(base, normalizeAngleDegrees(Math.round((base.rotate ?? 0) + delta.dr)))
+  }
   if (delta.kind === 'pivot') return applyRotationOriginDelta(base, delta.fx, delta.fy)
 
   const minSize = 4
-  const linear = frameLinearTransform(base)
-  const scaleX = finiteNonZeroScale(base.scaleX)
-  const scaleY = finiteNonZeroScale(base.scaleY)
-  const cosine = linear.a / scaleX
-  const sine = linear.b / scaleX
-  const localDx = (delta.dx * cosine + delta.dy * sine) / scaleX
-  const localDy = (-delta.dx * sine + delta.dy * cosine) / scaleY
+  const linear = selectionFrameLinearTransform(base)
+  const determinant = linear.a * linear.d - linear.b * linear.c
+  if (!Number.isFinite(determinant) || Math.abs(determinant) < 1e-8) return base
+  const localDx = (linear.d * delta.dx - linear.c * delta.dy) / determinant
+  const localDy = (-linear.b * delta.dx + linear.a * delta.dy) / determinant
 
   const width = delta.handle.includes('e')
     ? Math.max(minSize, base.width + localDx)
@@ -644,31 +658,13 @@ export function applyFrameDelta(base: SelectionFrameValue, delta: SelectionFrame
   const oldAnchor = framePoint(base, opposite.fx * base.width, opposite.fy * base.height)
   const candidateWithoutTranslation = framePoint({ ...base, x: 0, y: 0, width, height }, opposite.fx * width, opposite.fy * height)
 
-  return {
+  return updateSelectionFrameAffineOrigin({
     ...base,
     x: oldAnchor.x - candidateWithoutTranslation.x,
     y: oldAnchor.y - candidateWithoutTranslation.y,
     width,
     height,
-  }
-}
-
-/** Returns a finite non-zero scale so local-axis projection remains defined. */
-function finiteNonZeroScale(value: number | undefined): number {
-  return value !== undefined && Number.isFinite(value) && Math.abs(value) > 1e-8 ? value : 1
-}
-
-/** Returns the frame's linear rotate/scale matrix in local scene coordinates. */
-function frameLinearTransform(value: SelectionFrameValue): { a: number; b: number; c: number; d: number } {
-  const angle = ((value.rotate ?? 0) * Math.PI) / 180
-  const cosine = Math.cos(angle)
-  const sine = Math.sin(angle)
-  return {
-    a: cosine * finiteNonZeroScale(value.scaleX),
-    b: sine * finiteNonZeroScale(value.scaleX),
-    c: -sine * finiteNonZeroScale(value.scaleY),
-    d: cosine * finiteNonZeroScale(value.scaleY),
-  }
+  })
 }
 
 /** Returns the effective axis fraction, with the V2 center default and a finite clamp. */
@@ -680,14 +676,7 @@ function frameRotationOrigin(value: SelectionFrameValue): { fx: number; fy: numb
 
 /** Maps one local-box point into the frame's scene-local visual coordinates. */
 function framePoint(value: SelectionFrameValue, localX: number, localY: number): { x: number; y: number } {
-  const origin = frameRotationOrigin(value)
-  const originX = origin.fx * value.width
-  const originY = origin.fy * value.height
-  const matrix = frameLinearTransform(value)
-  return {
-    x: value.x + originX - (matrix.a * originX + matrix.c * originY) + matrix.a * localX + matrix.c * localY,
-    y: value.y + originY - (matrix.b * originX + matrix.d * originY) + matrix.b * localX + matrix.d * localY,
-  }
+  return selectionFrameLocalToScene(value, localX, localY)
 }
 
 /** Resolves the opposite characteristic point that must remain fixed during a resize. */
@@ -705,15 +694,15 @@ function applyRotationOriginDelta(base: SelectionFrameValue, fx: number, fy: num
   const currentOrigin = frameRotationOrigin(base)
   const previousPivot = { x: currentOrigin.fx * base.width, y: currentOrigin.fy * base.height }
   const nextPivot = { x: nextOrigin.fx * base.width, y: nextOrigin.fy * base.height }
-  const matrix = frameLinearTransform(base)
+  const matrix = selectionFrameLinearTransform(base)
   const deltaX = (previousPivot.x - nextPivot.x) - (matrix.a * (previousPivot.x - nextPivot.x) + matrix.c * (previousPivot.y - nextPivot.y))
   const deltaY = (previousPivot.y - nextPivot.y) - (matrix.b * (previousPivot.x - nextPivot.x) + matrix.d * (previousPivot.y - nextPivot.y))
-  return {
+  return updateSelectionFrameAffineOrigin({
     ...base,
     x: base.x + deltaX,
     y: base.y + deltaY,
     rotationOrigin: nextOrigin,
-  }
+  })
 }
 
 export function createDecorEditorBridge(
@@ -768,11 +757,8 @@ export function createDecorEditorBridge(
   /** Retains the live frame preview until the rebuilt document has been presented by the player. */
   let snapshotCommitAwaitingPresentation = false
   /** Prevents re-entrant presentation events from projecting stale host dimensions during a preview. */
-  let snapshotProjectionUpdateInProgress = false
   /** Current border geometry used only to move between the outer pose origin and content-box origin. */
   let frameBorderInsetsPx: FrameBorderInsetsPx = ZERO_CONTENT_BOX_INSETS_PX
-  /** Synchronous candidate used while a controller change is being converted to a snapshot. */
-  let previewContentFrameOverride: SelectionFrameValue | null = null
   let lastPreviewAccepted = false
   let snapshotPreviewActive = false
   /** Makes the runtime presentation authoritative for the visible CS during an active seek. */
@@ -993,7 +979,8 @@ export function createDecorEditorBridge(
       event.preventDefault()
       event.stopImmediatePropagation()
       frameGestureCancelled = true
-      selectionFrame.setValue(frameGestureBasePx ?? displayFramePx)
+      const restoredFrame = frameGestureBasePx ?? displayFramePx
+      selectionFrame.setValue(restoredFrame)
     }
     abortPhase()
   }
@@ -1388,6 +1375,21 @@ export function createDecorEditorBridge(
     return typeof value === 'number' && Number.isFinite(value) ? value : undefined
   }
 
+  /** Composes one runtime pose with the CSS matrix and axis captured by its transform anchor. */
+  function presentedItemPose(itemId: string, pose: CodPlayPresentationPose) {
+    const itemNode = [...(sceneHost?.querySelectorAll<HTMLElement>('[data-item-id]') ?? [])]
+      .find((candidate) => candidate.getAttribute('data-item-id') === `${EDITOR_V2_STORY_ID}:${itemId}`)
+    const transformAnchor = itemNode === undefined
+      ? null
+      : itemNode.ownerDocument.getElementById(`${itemNode.id}-transform`)
+    if (transformAnchor === null || transformAnchor.parentElement !== itemNode) return { pose }
+    const projection = readItemTransformProjection(transformAnchor)
+    return {
+      pose: composeItemPresentationPose(pose, projection),
+      rotationOrigin: projection.rotationOrigin,
+    }
+  }
+
   /** Resolves a logical frame from snapshot state, with document offset only as a missing-field fallback. */
   function readLogicalFrame(snapshot: CodPlaySnapshot | null, itemId: string, fallback: DecorPatch): SelectionFrameValue | null {
     const stateStyle = snapshotState(
@@ -1425,7 +1427,12 @@ export function createDecorEditorBridge(
     if (presentation === null || Math.abs(presentation.timeMs - lastKnownTimelineMs) > 1) return null
     const item = presentation.items.find((candidate) => candidate.itemId === `${EDITOR_V2_STORY_ID}:${itemId}`)
     if (item === undefined) return null
-    const frame = presentationPoseToSelectionFrame(item.pose, rotationOrigin, insets)
+    const presented = presentedItemPose(itemId, item.pose)
+    const frame = presentationPoseToSelectionFrame(
+      presented.pose,
+      presented.rotationOrigin ?? rotationOrigin,
+      insets,
+    )
     return {
       ...frame,
       x: pxToCqw(frame.x, rootWidthPx),
@@ -1555,9 +1562,7 @@ export function createDecorEditorBridge(
       sourceKeyframe: pair.sourceKeyframe,
       targetKeyframe: pair.targetKeyframe,
       path: motionContainsTarget ? motion.path : resolveMotionPath(scene, item, pair.targetKeyframe.id),
-      orientToPath: motionContainsTarget
-        ? motion.orientToPath === true
-        : resolveMotionPathOrientation(scene, item, pair.targetKeyframe.id),
+      orientToPath: item.rotationMode === 'tangent',
       ease: motionContainsTarget
         ? motion.ease
         : resolveMotionEasing(item, pair.sourceKeyframe.id, pair.targetKeyframe.id),
@@ -1634,14 +1639,12 @@ export function createDecorEditorBridge(
       const path = pairIsActive && currentMotion !== null
         ? currentMotion.path
         : resolveMotionPath(scene, item, targetKeyframe.id)
-      const orientToPath = pairIsActive && currentMotion !== null
-        ? currentMotion.orientToPath === true
-        : resolveMotionPathOrientation(scene, item, targetKeyframe.id)
+      const orientToPath = item.rotationMode === 'tangent'
       const sourceInsets = sourceEndpoint.insets
       const targetInsets = targetEndpoint.insets
       const sourceCenter = sourceGeometry.pathAnchor
       const targetCenter = targetGeometry.pathAnchor
-      const tangentPath = path !== undefined && orientToPath ? path : undefined
+      const tangentPath = orientToPath ? path ?? STRAIGHT_MOTION_PATH : undefined
       const sourceTangent = tangentPath === undefined
         ? undefined
         : motionPathTangentAngle(tangentPath, sourceCenter, targetCenter, 0)
@@ -1825,11 +1828,6 @@ export function createDecorEditorBridge(
     itemId: string,
     rotationOrigin: SelectionFrameValue['rotationOrigin'],
   ): SelectionFrameValue | null {
-    if ((snapshotProjectionUpdateInProgress || snapshotPreviewActive)
-      && frameTarget?.itemId === itemId
-      && displayFramePx !== null) {
-      return displayFramePx
-    }
     const presentation = coordination.presentation.get()
     if (presentation === null || Math.abs(presentation.timeMs - lastKnownTimelineMs) > 1) return null
     const runtimeItemId = `${EDITOR_V2_STORY_ID}:${itemId}`
@@ -1840,8 +1838,13 @@ export function createDecorEditorBridge(
       return presentationPoseToSelectionFrame(item.pose, rotationOrigin, frameBorderInsetsPx)
     }
     if (authorFramePx === null) return null
+    const presented = presentedItemPose(itemId, item.pose)
     return presentationItemPoseToContentFrame(
-      item.pose, authorFramePx.width, authorFramePx.height, rotationOrigin, frameBorderInsetsPx,
+      presented.pose,
+      authorFramePx.width,
+      authorFramePx.height,
+      presented.rotationOrigin ?? rotationOrigin,
+      frameBorderInsetsPx,
     )
   }
 
@@ -1851,6 +1854,16 @@ export function createDecorEditorBridge(
     return patch.rotate === undefined
       ? patch
       : { ...patch, rotate: normalizeAngleDegrees(patch.rotate) }
+  }
+
+  /** Converts ordinary frame gestures to pose edits. Zone offset handles scale separately. */
+  function frameGesturePatch(base: SelectionFrameValue, candidate: SelectionFrameValue, rootWidthPx: number): DecorPatch {
+    const { scale: _baseScale, ...baseOffset } = frameToOffsetPatch(base, rootWidthPx)
+    const { scale: _candidateScale, ...candidateOffset } = frameToOffsetPatch(candidate, rootWidthPx)
+    return modificationsToDecorPatch(modificationsFromDecorPatch(
+      { offset: baseOffset },
+      { offset: candidateOffset },
+    ))
   }
 
   /** Keeps pixel and responsive projections of the same authored frame together. */
@@ -1884,7 +1897,7 @@ export function createDecorEditorBridge(
     const item = scene.items.find((candidate) => candidate.id === target.itemId)
     if (item === undefined) return false
     const motion = resolveGestureMotion(scene, item, target)
-    return motion !== null && motion.path !== undefined && motion.orientToPath
+    return motion !== null && motion.orientToPath
   }
 
   /** Resolves the path tangent for a gesture candidate using the document endpoint frames. */
@@ -1897,7 +1910,8 @@ export function createDecorEditorBridge(
     const item = scene.items.find((candidate) => candidate.id === target.itemId)
     if (item === undefined) return null
     const motion = resolveGestureMotion(scene, item, target)
-    if (motion === null || motion.path === undefined || !motion.orientToPath) return null
+    if (motion === null || !motion.orientToPath) return null
+    const tangentPath = motion.path ?? STRAIGHT_MOTION_PATH
     const projectedSegment = motionGeometry.get().segments.find((segment) =>
       segment.sourceKeyframeId === motion.sourceKeyframe.id
       && segment.targetKeyframeId === motion.targetKeyframe.id)
@@ -1919,13 +1933,13 @@ export function createDecorEditorBridge(
     const tangentProgress = candidateIsSource ? 0 : candidateIsTarget ? 1 : easedProgress
     if (!candidateIsSource && !candidateIsTarget && frameGestureBasePx !== null) {
       const waypoint = motionPathAnchorForFrame(candidateFrame, candidateInsets)
-      const split = splitMotionPath(motion.path, sourceAnchor, waypoint, targetAnchor, easedProgress)
+      const split = splitMotionPath(tangentPath, sourceAnchor, waypoint, targetAnchor, easedProgress)
       const angle = split.after === undefined
         ? undefined
         : motionPathTangentAngle(split.after, split.waypoint, targetAnchor, 0)
       return angle === undefined ? null : { angle, pathAnchor: split.waypoint }
     }
-    const angle = motionPathTangentAngle(motion.path, sourceAnchor, targetAnchor, tangentProgress)
+    const angle = motionPathTangentAngle(tangentPath, sourceAnchor, targetAnchor, tangentProgress)
     return angle === undefined ? null : { angle, pathAnchor }
   }
 
@@ -1982,13 +1996,20 @@ export function createDecorEditorBridge(
     return sourceAngle + (targetAngle - sourceAngle) * easedProgress
   }
 
-  /** Sends one complete displayed content pose and sparse decoration to the item's single state. */
-  function toSnapshotPatches(itemId: string, patch: DecorPatch): CodPlaySnapshotPatch[] | null {
+  /** Projects a complete displayed pose while keeping the authored Decor contribution sparse. */
+  function toSnapshotPatches(
+    itemId: string,
+    patch: DecorPatch,
+    previewFrame: SelectionFrameValue | null | undefined,
+  ): CodPlaySnapshotPatch[] | null {
     const progress = coordination.transport.getProgress()
     if (progress === null) return null
-    const style: Record<string, unknown> = { ...(patch.style ?? {}) }
+    const style: Record<string, unknown> = {
+      ...(patch.style ?? {}),
+      ...resolveOffsetAsStyle(patch.offset),
+    }
+    const contentFrame = previewFrame === undefined ? displayFramePx : previewFrame
     const rootWidth = sceneRootWidthPx()
-    const contentFrame = previewContentFrameOverride ?? displayFramePx
     if (rootWidth !== null && contentFrame !== null && frameTarget?.itemId === itemId) {
       Object.assign(style, {
         x: pxToCqw(contentFrame.x, rootWidth),
@@ -2000,10 +2021,15 @@ export function createDecorEditorBridge(
         scaleY: contentFrame.scaleY ?? 1,
         'transform-origin': `${(contentFrame.rotationOrigin?.fx ?? 0.5) * 100}% ${(contentFrame.rotationOrigin?.fy ?? 0.5) * 100}%`,
       })
-      const presented = coordination.presentation.get()?.items.find((item) => item.itemId === `${EDITOR_V2_STORY_ID}:${itemId}`)
+      const presentation = coordination.presentation.get()
+      const presented = presentation?.items.find((item) => item.itemId === `${EDITOR_V2_STORY_ID}:${itemId}`)
       if (presented !== undefined && frameTarget.itemType !== 'capsule') {
-        const inverse = itemPreviewInverse(presented.pose)
-        if (inverse !== undefined) style[ITEM_PREVIEW_INVERSE_PROPERTY] = inverse
+        const transform = itemPreviewTransform(presented.pose, contentFrame)
+        if (transform !== undefined) {
+          style[ITEM_PREVIEW_TRANSFORM_PROPERTY] = transform
+          style[ITEM_PREVIEW_WIDTH_PROPERTY] = `${contentFrame.width}px`
+          style[ITEM_PREVIEW_HEIGHT_PROPERTY] = `${contentFrame.height}px`
+        }
       }
     }
     return Object.keys(style).length === 0 ? null : [{
@@ -2014,22 +2040,21 @@ export function createDecorEditorBridge(
   }
 
   /** Presents a patch through snapshot and optionally records its temporary candidate. */
-  function previewPatch(itemId: string, patch: DecorPatch, recordCandidate = false): boolean {
+  function previewPatch(
+    itemId: string,
+    patch: DecorPatch,
+    recordCandidate = false,
+    previewFrame?: SelectionFrameValue | null,
+  ): boolean {
     // Snapshot V2 currently carries the live style channel. A temporary edit may nevertheless
     // touch content, classes, custom data, zoneId or a future decor module. Record the complete
     // candidate independently so creation of a KF can capture those properties as well.
     if (recordCandidate) {
       coordination.decorPreview.set({ itemId, timeMs: lastKnownTimelineMs, patch })
     }
-    const snapshotPatches = toSnapshotPatches(itemId, patch)
+    const snapshotPatches = toSnapshotPatches(itemId, patch, previewFrame)
     if (snapshotPatches === null) return recordCandidate
-    snapshotProjectionUpdateInProgress = true
-    let result: ReturnType<typeof coordination.snapshot.set>
-    try {
-      result = coordination.snapshot.set(snapshotPatches)
-    } finally {
-      snapshotProjectionUpdateInProgress = false
-    }
+    const result = coordination.snapshot.set(snapshotPatches)
     const accepted = result?.ok === true
     if (accepted) {
       snapshotPreviewActive = true
@@ -2037,10 +2062,20 @@ export function createDecorEditorBridge(
     return accepted
   }
 
+  /** Allows one tangent orientation setting at the first pose time; manual poses remain editable. */
+  function canRotateSelection(): boolean {
+    const { scene, selection } = machine.getSnapshot().context
+    const item = scene?.items.find((candidate) => candidate.id === selection.itemIds[0])
+    if (item?.rotationMode !== 'tangent') return true
+    const first = sortPoseKeyframes(item)[0]
+    return first !== undefined && Math.abs(lastKnownTimelineMs - first.timeMs) <= 1
+  }
+
   /** Converts a frame delta to a controller patch and returns the accepted pixel candidate. */
   function previewFrame(delta: SelectionFrameDelta): SelectionFrameValue | null {
     const context = machine.getSnapshot().context
     if (context.authoringMode === 'zone') return null
+    if ((delta.kind === 'rotate' || delta.kind === 'pivot') && !canRotateSelection()) return displayFramePx
     const target = frameTarget
     const base = frameGestureBasePx ?? displayFramePx
     const rootWidth = sceneRootWidthPx()
@@ -2080,11 +2115,14 @@ export function createDecorEditorBridge(
         : delta.dx !== 0 || delta.dy !== 0
     const authoredBaseRotate = frameGestureBaseAuthorRotate ?? authorFramePx?.rotate ?? displayedBase.rotate ?? 0
     const tangentMotion = !zoneOffsetGesture && scene !== null && targetUsesTangent(scene, target)
-    const rawCandidate = applyFrameDelta(displayedBase, delta)
+    const rawDisplayCandidate = applyFrameDelta(displayedBase, delta)
     const tangentRotation = tangentMotion && delta.kind === 'rotate'
     const authoredBase = frameGestureBaseAuthorFrame
       ?? (tangentMotion ? authorFrameForGesture(displayedBase, authoredBaseRotate) : displayedBase)
-    const rotationDelta = normalizeAngleDegrees((rawCandidate.rotate ?? 0) - (displayedBase.rotate ?? 0))
+    const represented = coordination.presentation.get()?.items.find((entry) => entry.itemId === `${EDITOR_V2_STORY_ID}:${target.itemId}`)
+    const sourceRepresentation = represented?.representation === 'source'
+    const editsAuthorSource = sourceRepresentation && !zoneOffsetGesture && !tangentMotion
+    const rotationDelta = normalizeAngleDegrees((rawDisplayCandidate.rotate ?? 0) - (displayedBase.rotate ?? 0))
     const candidateAuthorFrame = tangentRotation
       ? frameWithRotationAtPathAnchor(
         authoredBase,
@@ -2092,45 +2130,54 @@ export function createDecorEditorBridge(
         motionPathAnchorForFrame(authoredBase, frameBorderInsetsPx),
         frameBorderInsetsPx,
       )
-      : tangentMotion
-        ? authorFrameForGesture(rawCandidate, authoredBaseRotate)
-        : rawCandidate
-    const candidate = tangentRotation
-      ? frameWithRotationAtPathAnchor(
+      : editsAuthorSource
+        ? {
+          ...authoredBase,
+          x: authoredBase.x + (rawDisplayCandidate.x - displayedBase.x),
+          y: authoredBase.y + (rawDisplayCandidate.y - displayedBase.y),
+          ...(delta.kind === 'resize' ? {
+            width: authoredBase.width + (rawDisplayCandidate.width - displayedBase.width),
+            height: authoredBase.height + (rawDisplayCandidate.height - displayedBase.height),
+          } : {}),
+          ...(delta.kind === 'rotate' ? {
+            rotate: normalizeAngleDegrees(Math.round(authoredBaseRotate + rotationDelta)),
+          } : {}),
+          ...(delta.kind === 'pivot' ? { rotationOrigin: rawDisplayCandidate.rotationOrigin } : {}),
+        }
+        : delta.kind === 'move' && sourceRepresentation
+          ? applyFrameDelta(authoredBase, delta)
+          : tangentMotion
+            ? authorFrameForGesture(rawDisplayCandidate, authoredBaseRotate)
+            : rawDisplayCandidate
+    const displayCandidate = tangentRotation
+      ? rotateSelectionFrameAffine(
         displayedBase,
-        rawCandidate.rotate ?? 0,
-        motionPathAnchorForFrame(displayedBase, frameBorderInsetsPx),
-        frameBorderInsetsPx,
+        rawDisplayCandidate.rotate ?? 0,
+        frameWithRotationAtPathAnchor(
+          displayedBase,
+          rawDisplayCandidate.rotate ?? 0,
+          motionPathAnchorForFrame(displayedBase, frameBorderInsetsPx),
+          frameBorderInsetsPx,
+        ),
       )
-      : tangentMotion && scene !== null
+      // Size and pivot edits keep the live affine orientation; only a path move recalculates its tangent.
+      : tangentMotion && delta.kind === 'move' && scene !== null
         ? displayFrameForAuthorFrame(scene, target, candidateAuthorFrame)
-        : rawCandidate
+        : rawDisplayCandidate
     lastPreviewAccepted = false
+    const patchBaseFrame = editsAuthorSource || delta.kind === 'move' || tangentRotation
+      ? authoredBase
+      : tangentMotion ? authorFrameForGesture(displayedBase, authoredBaseRotate) : displayedBase
     const framePatch = zoneOffsetGesture && scene !== null
       ? zoneOffsetPatchForFrameGesture(delta, displayedBase, candidateAuthorFrame, rootWidth, scene, target)
-      : modificationsToDecorPatch(modificationsFromDecorPatch(
-        {
-          offset: frameToOffsetPatch(
-            tangentRotation
-              ? authoredBase
-              : tangentMotion ? authorFrameForGesture(displayedBase, authoredBaseRotate) : displayedBase,
-            rootWidth,
-          ),
-        },
-        { offset: frameToOffsetPatch(candidateAuthorFrame, rootWidth) },
-      ))
+      : frameGesturePatch(patchBaseFrame, candidateAuthorFrame, rootWidth)
     if (framePatch === null) return base
-    previewContentFrameOverride = candidate
-    try {
-      controller.applyPatch(framePatch)
-    } finally {
-      previewContentFrameOverride = null
-    }
+    controller.applyPatch(framePatch)
     if (!lastPreviewAccepted) return base
-    displayFramePx = candidate
     setAuthorFrame(candidateAuthorFrame, rootWidth)
+    displayFramePx = displayCandidate
     syncMotionOverlay()
-    return candidate
+    return displayFramePx
   }
 
   /** Maps Selection Frame gestures to zone-relative transforms without overriding zone geometry. */
@@ -2184,7 +2231,6 @@ export function createDecorEditorBridge(
     itemId: string,
     keyframeId: string,
     path: string | undefined,
-    orientToPath?: boolean,
     endpointOffset?: OffsetPatch,
   ): Command[] {
     const item = scene.items.find((candidate) => candidate.id === itemId)
@@ -2204,7 +2250,6 @@ export function createDecorEditorBridge(
       name: 'setDecor',
       args: { decorId, patch: {
         path,
-        ...(orientToPath === undefined ? {} : { orientToPath }),
         ...(endpointOffset === undefined ? {} : { offset: endpointOffset }),
       } },
     })
@@ -2224,22 +2269,16 @@ export function createDecorEditorBridge(
     syncMotionOverlay()
   }
 
-  /** Persists the selected path segment's orientation option on its target Decor. */
+  /** Changes the orientation policy for the entire selected item in one document transaction. */
   function commitMotionPathOrientation(orientToPath: boolean): void {
-    const motion = activeMotion
-    if (motion === null || motion.path === undefined) return
-    const { scene } = machine.getSnapshot().context
-    if (scene === null) return
-    const commands = buildMotionPathCommands(
-      scene,
-      motion.itemId,
-      motion.targetKeyframeId,
-      motion.path,
-      orientToPath,
-    )
-    if (commands.length === 0) return
-    activeMotion = { ...motion, orientToPath }
-    machine.send({ type: 'RUN_TRANSACTION', commands })
+    const { scene, selection } = machine.getSnapshot().context
+    const target = scene === null ? null : resolveTarget(scene, selection, lastKnownTimelineMs)
+    if (target === null) return
+    machine.send({ type: 'RUN_COMMAND', command: {
+      name: 'setItemRotationMode',
+      args: { itemId: target.itemId, mode: orientToPath ? 'tangent' : 'manual' },
+    } })
+    activeMotion = null
     syncMotionOverlay()
   }
 
@@ -2252,6 +2291,12 @@ export function createDecorEditorBridge(
     const gestureUsesTangent = beforeFlush.scene !== null
       && gestureTarget !== null
       && targetUsesTangent(beforeFlush.scene, gestureTarget)
+    const gestureUsesAuthorSource = frameGestureBasePx !== null
+      && gestureTarget !== null
+      && !gestureUsesTangent
+      && coordination.presentation.get()?.items.some(item =>
+        item.itemId === `${EDITOR_V2_STORY_ID}:${gestureTarget.itemId}` && item.representation === 'source',
+      ) === true
     const convertDisplayedFrames = gestureUsesTangent
     const gestureAuthorRotate = frameGestureBaseAuthorRotate
       ?? (beforeFlush.scene !== null && gestureTarget !== null && convertDisplayedFrames
@@ -2261,12 +2306,12 @@ export function createDecorEditorBridge(
       ? frameGestureKind === 'rotate' && frameGestureBaseAuthorFrame !== null
         ? frameGestureBaseAuthorFrame
         : authorFrameForGesture(drop.sourceFrame, gestureAuthorRotate)
-      : drop.sourceFrame
+      : gestureUsesAuthorSource ? frameGestureBaseAuthorFrame ?? drop.sourceFrame : drop.sourceFrame
     const requestedTargetDocumentFrame = convertDisplayedFrames
       ? frameGestureBasePx !== null && authorFramePx !== null
         ? authorFramePx
         : authorFrameForGesture(drop.targetFrame, gestureAuthorRotate)
-      : drop.targetFrame
+      : gestureUsesAuthorSource ? authorFramePx ?? drop.targetFrame : drop.targetFrame
     // A previous palette/CS phase may still be waiting for its host-level flush. Finish it before
     // resolving the drop so this gesture cannot be overwritten by an older pending command.
     // The current temporary pose gesture itself is committed below from the same sparse registry;
@@ -2310,7 +2355,6 @@ export function createDecorEditorBridge(
       )
     const splitPatch: DecorPatch = split === null ? {} : {
       ...(split.before === undefined ? {} : { path: split.before }),
-      ...(originalSegment?.orientToPath ? { orientToPath: true } : {}),
     }
     const preservedTargetPatch = originalSegment?.targetKeyframeId === undefined ? null : resolveEffectivePosePatch(
       scene, item, originalSegment.targetKeyframeId,
@@ -2321,7 +2365,7 @@ export function createDecorEditorBridge(
     }).offset
     const splitCommands = split === null || originalSegment?.targetKeyframeId === undefined
       ? []
-      : buildMotionPathCommands(scene, item.id, originalSegment.targetKeyframeId, split.after, undefined, preservedTargetOffset)
+      : buildMotionPathCommands(scene, item.id, originalSegment.targetKeyframeId, split.after, preservedTargetOffset)
 
     // Movement-surface frames are already content-box frames. Persist those author coordinates;
     // the builder derives the border-box layout translation at runtime.
@@ -2329,13 +2373,17 @@ export function createDecorEditorBridge(
     // A pose gesture is the explicit exception to sparse Decor capture: the new waypoint must
     // freeze the complete frame, otherwise its missing width/rotation/etc. would keep resolving
     // from a different pose and the two resulting trajectory segments would not be stable.
-    const capturedPosePatch: DecorPatch = { offset: targetOffset }
-    const gestureOffsetPatch = modificationsToDecorPatch(
-      modificationsFromDecorPatch(
-        { offset: frameToOffsetPatch(sourceDocumentFrame, rootWidth) },
-        { offset: targetOffset },
-      ),
-    )
+    // The displayed matrix can include parent and presentation transforms.
+    // Freeze the logical scale, including any authored tween, at the inserted waypoint.
+    const authoredScale = insertsPose
+      ? resolveTemporaryOffset(presentedSnapshotAt(lastKnownTimelineMs), item.id,
+        resolveDocumentDecorBase(scene, sourceTarget, lastKnownTimelineMs)).offset?.scale
+      : undefined
+    const capturedPosePatch: DecorPatch = { offset: {
+      ...targetOffset,
+      scale: authoredScale ?? { x: 1, y: 1 },
+    } }
+    const gestureOffsetPatch = frameGesturePatch(sourceDocumentFrame, targetDocumentFrame, rootWidth)
 
     if (sourceTarget.keyframeId !== null && !sourceTarget.isTemporary) {
       // An exact real KF is edited at its own time. The common decor command builder supplies the
@@ -2933,8 +2981,9 @@ export function createDecorEditorBridge(
       && (context.authoringMode === null
         || (context.authoringMode === 'block' && item !== undefined
           && (!usesZonePlacement || context.editGesture === 'offset')))
+    const displayedFrame = selectionFrameActive ? displayFramePx ?? frame : null
     selectionFrame?.setSuspended(playbackActive)
-    selectionFrame?.setValue(selectionFrameActive ? frame : null)
+    selectionFrame?.setValue(displayedFrame)
     if (selectionFrame !== null) selectionFrame.element.style.pointerEvents = selectionFrameActive ? 'auto' : 'none'
 
     const zoneMoveActive = context.authoringMode === 'block'
@@ -2944,7 +2993,7 @@ export function createDecorEditorBridge(
       && context.scene !== null
       && item !== undefined
       && usesZonePlacement
-    blockMoveControl?.setValue(zoneMoveActive ? frame : null, zoneMoveActive)
+    blockMoveControl?.setValue(zoneMoveActive ? displayedFrame : null, zoneMoveActive)
   }
 
   /** Creates the frame once a scene host exists and binds it to the decor-owned callbacks. */
@@ -2957,12 +3006,24 @@ export function createDecorEditorBridge(
     selectionFrame?.destroy()
     resizeObserver?.disconnect()
     sceneHost = host
+    const rotationModifier = createRotationModifier()
     selectionFrame = createSelectionFrameV2({
       sceneRoot: host,
       // V2 capabilities are composed explicitly. Rotation remains a reusable modifier rather
       // than becoming a branch in the neutral move/resize overlay; future CS modules can be added
       // here without changing the editor bridge contract.
-      modifiers: [createRotationModifier()],
+      modifiers: [{
+        ...rotationModifier,
+        /** Adapts the existing rotation tool to the selected item's authoring policy. */
+        mount(context) {
+          const modifier = rotationModifier.mount(context)
+          return {
+            ...modifier,
+            /** Presents rotation controls only at positions allowed by the item policy. */
+            update(value) { modifier.update(canRotateSelection() ? value : null) },
+          }
+        },
+      }],
       onPreview: previewFrame,
       onCommit: commitSelectionFrameDrop,
       onCancel: () => {
@@ -3186,7 +3247,6 @@ export function createDecorEditorBridge(
     frameGestureBaseAuthorFrame = null
     frameCommitCandidatePx = null
     frameBorderInsetsPx = ZERO_CONTENT_BOX_INSETS_PX
-    previewContentFrameOverride = null
     activeMotion = null
     motionGeometry.publish({ selection: null, segments: [], ghosts: [], initialGhost: null })
   }
@@ -3210,7 +3270,6 @@ export function createDecorEditorBridge(
       frameGestureBaseAuthorFrame = null
       frameCommitCandidatePx = null
       frameBorderInsetsPx = ZERO_CONTENT_BOX_INSETS_PX
-      previewContentFrameOverride = null
       publishMotionGeometrySnapshot(null, [], [], false)
       controller.detach()
       return
@@ -3246,7 +3305,7 @@ export function createDecorEditorBridge(
         // the player has reached its author time; the request-side `seek` notification is too early.
         const progress = coordination.transport.getProgress()
         if (progress !== null && Math.abs(progress.timelineMs - temporaryCandidate.timeMs) <= 1) {
-          previewPatch(target.itemId, temporaryCandidate.patch, true)
+          previewPatch(target.itemId, temporaryCandidate.patch, true, null)
         }
       } else {
         patch = base
@@ -3373,9 +3432,10 @@ export function createDecorEditorBridge(
     const nextBorderInsets = rootWidth === null
       ? null
       : resolveFrameBorderInsets(null, entry.itemId, entry.patch, rootWidth)
-    const authorBase = displayFramePx !== null && target.isTemporary && targetUsesTangent(scene, target)
-      ? authorFrameForGesture(displayFramePx, authoredRotationAtGestureStart(scene, target, displayFramePx))
-      : authorFramePx
+    const authorBase = frameGestureBaseAuthorFrame
+      ?? (displayFramePx !== null && target.isTemporary && targetUsesTangent(scene, target)
+        ? authorFrameForGesture(displayFramePx, authoredRotationAtGestureStart(scene, target, displayFramePx))
+        : authorFramePx)
     const authorPatch = rootWidth === null || authorBase === null
       ? null
       : mergePatch({ offset: frameToOffsetPatch(authorBase, rootWidth) }, sparsePatch)
@@ -3386,18 +3446,12 @@ export function createDecorEditorBridge(
     const displayedCandidate = authorCandidate === null || nextBorderInsets === null || rootWidth === null
       ? displayFramePx
       : displayFrameForAuthorFrame(scene, target, authorCandidate, nextBorderInsets)
-    const gesturePreview = previewContentFrameOverride
-    previewContentFrameOverride = gesturePreview ?? displayedCandidate
-    try {
-      lastPreviewAccepted = previewPatch(entry.itemId, sparsePatch, target.isTemporary)
-    } finally {
-      previewContentFrameOverride = gesturePreview
-    }
+    lastPreviewAccepted = previewPatch(entry.itemId, sparsePatch, target.isTemporary, displayedCandidate)
     if (lastPreviewAccepted && nextBorderInsets !== null) {
       frameBorderInsetsPx = nextBorderInsets
       if (!isFramePoseGesture && rootWidth !== null && authorCandidate !== null && displayedCandidate !== null) {
         setAuthorFrame(authorCandidate, rootWidth)
-        displayFramePx = displayedCandidate
+        displayFramePx = presentedContentBoxFrameForItem(entry.itemId, displayedCandidate.rotationOrigin) ?? displayedCandidate
       }
       if (!isFramePoseGesture) syncMotionOverlay()
     }
