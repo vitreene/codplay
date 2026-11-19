@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data>
+	<globalProperties>
+		<!-- don't remove properties subtitles ! -->
+		<properties name="subtitles" bottom="0" left="0" textAlign="center" width="auto" centered="N" cssClass="subtitles outerContainer" effectEase="none" effectTime="0.2" showAfter="N" />
+		<!-- don't remove properties subtitles ! -->
+
+		<properties name="quizQuestion" id="question" x="0" y="0" width="100%" cssClass="is-bold" />
+
+		<properties name="full" x="center" y="center" cssClass="full lightRoomVignette" />
+
+		<properties name="fullIn" x="center" y="center" cssClass="full lightRoomVignette" scale="1.05">
+			<tween scale="1" time="10" ease="none" />
+		</properties>
+		<properties name="fullOut" x="center" y="center" cssClass="full lightRoomVignette" scale="1">
+			<tween scale="1.25" time="30" ease="none" />
+		</properties>
+
+		<properties name="growDownRotate" scale="1.2" rotation="5">
+			<tween scale="1" rotation="0" time="0.8" ease="back.out" />
+		</properties>
+
+		<properties name="styleDocument" cssStyle="borderRadius:30px;overflow:hidden;boxShadow:0 0 4px rgba(0,0,0,0.2)" />
+
+		<properties name="textOverlay" cssClass="bigText" textAlign="center" centered="Y" centeredY="Y" textSize="50" width="1400" textColor="#ffffff" effect="fromRight,toLeft" />
+		<properties name="textNotOverlay" cssClass="is-bold" textAlign="center" centered="Y" centeredY="Y" textSize="50" width="1400" textColor="#03A696" effect="fromRight,toLeft" />
+
+		<properties name="effectPanel" x="0" y="0" width="100%" height="0" centered="N" cssClass="outerContainer under" effect="noDefault,toBottom">
+			<tween height="100%" time="0.6" ease="sine.in" />
+		</properties>
+		<properties name="panelColor1" cssStyle="backgroundColor:var(--panel-bg-color--1)" />
+		<properties name="panelColor2" cssStyle="backgroundColor:var(--panel-bg-color--2)" />
+		<properties name="panelColor3" cssStyle="backgroundColor:var(--panel-bg-color--3)" />
+		<properties name="panelColor4" cssStyle="backgroundColor:#bacada" />
+
+		<properties name="effectPanelCircle" left="50%" top="50%" centered="Y" width="0" height="0" cssClass="outerContainer under in-circle" effect="noDefault,toBottom">
+			<tween width="2800px" height="2800px" time="0.5" ease="sine.in" />
+		</properties>
+
+		<properties name="effectPanelFromRight" left="100%" top="0" width="0%" height="100%" centered="N" cssClass="outerContainer under" effect="noDefault,toLeft">
+			<tween left="0" width="100%" time="0.6" ease="sine.in" />
+		</properties>
+		<properties name="effectPanelFromLeft" left="0" top="0" width="0%" height="100%" centered="N" cssClass="outerContainer under" effect="noDefault,toRight">
+			<tween width="100%" time="0.6" ease="sine.in" />
+		</properties>
+		<properties name="effectPanelFromBottom" left="0" top="100%" width="100%" height="0%" centered="N" cssClass="outerContainer under" effect="noDefault,toTop">
+			<tween top="0" height="100%" time="0.6" ease="sine.in" />
+		</properties>
+
+		<properties name="typeWriter" x="center" y="center" centered="Y" centeredY="Y" effect="letterByLetter,textFromBottom" effectDuration="3" effectEase="back.out" cssClass="says is-italic" width="1000" />
+
+
+		<properties name="h0" textSize="56" />
+		<properties name="h1" textSize="42" />
+		<properties name="h2" textSize="36" />
+		<properties name="h3" textSize="30" />
+		<properties name="h4" textSize="24" />
+		<properties name="h5" textSize="20" />
+		<properties name="h6" textSize="18" />
+
+		<properties name="voile" x="center" y="center" centered="Y" width="2000" height="1200" alpha="0" destination="time:1,alpha:1" />
+		<properties name="v-blanc" cssStyle="background-color:rgba(255,255,255,0.85)" />
+		<properties name="v-black" cssStyle="background-color:rgba(0,0,0,0.85)" />
+		<properties name="fullong" x="center" y="center" cssClass="full" destination="time:20,scale:1.2" />
+
+		<properties name="center" x="center" y="center" centered="Y" />
+		<properties name="centered" x="center" y="center" centeredY="Y" centered="Y" textAlign="center" />
+		<properties name="box" cssClass="notification font-extrabold w-max" cssStyle="padding:1rem 2rem" />
+		<properties name="minibox" cssClass="notification font-extrabold w-max" cssStyle="padding:0.5rem 1rem" />
+		<properties name="red" backgroundColor="0xfe0000" textColor="0xffffff" />
+		<properties name="blu" backgroundColor="0x4473c5" textColor="0xffffff" />
+		<properties name="bld" backgroundColor="0x181fac" textColor="0xffffff" />
+		<properties name="ver" backgroundColor="0x2eb61f" textColor="0xffffff" />
+		<properties name="orj" backgroundColor="0xed7d31" textColor="0xffffff" />
+		<properties name="gry" backgroundColor="0xdfdfdf" textColor="0x333333" />
+		<properties name="grd" backgroundColor="0x676767" textColor="0xffffff" />
+		<properties name="jon" backgroundColor="0xe8d82c" textColor="0x333333" />
+
+		<properties name="list-item-head" showAfter="Y" cssClass="list-item item-head isBold" textAlign="left" effect="fromBottom" />
+		<properties name="list-item" showAfter="Y" cssClass="list-item bullet primary" textAlign="left" textSize="24" textColor="0x333333" effect="fromLeft" effectEase="Back.easeOut" />
+		<properties name="list-header" showAfter="Y" cssClass="list-item" effect="fromLeft" effectEase="Back.easeOut" />
+
+		<properties name="tel" showAfter="Y" width="320" backgroundColor="0x90a9d4" cssClass="schema-pop" />
+		<properties name="subs" showAfter="Y" cssClass="note" textAlign="left" textSize="16" textColor="0x333333" />
+		<properties name="num" showAfter="Y" cssClass="isBold badge" textSize="20" effect="growDown" />
+		<properties name="pops" showAfter="Y" centered="Y" width="230" textAlign="center" textSize="26" backgroundColor="0x333333" cssClass="notes-pop center" />
+		<properties name="chef" showAfter="Y" width="200" textSize="16" cssClass="isBold notes-pop center" />
+
+		<properties name="question" width="100%" textAlign="left" textSize="38" textColor="#0062a8" effect="fromTop" effectEase="Back.easeOut" />
+		<properties name="cartouche" delay="0" showAfter="Y" left="50%" top="50%" centered="Y" width="1000" backgroundColor="#ddeeee" />
+		<properties name="fondQuizz" x="center" y="center" centered="Y" width="2000" height="1600" backgroundColor="#2a80bd" />
+
+		<properties name="manyMany" id="context" delay="1" src="manyMany" textSize="24" textAlign="left" effect="fromRight" />
+
+	</globalProperties>
+</data>

@@ -1,0 +1,10 @@
+<sequency>
+  <sound>p2_1.mp3</sound>
+  <container id="panel1_1" properties="effectPanelCircle,panelColor1" duration="4.5"/>
+  <container id="panel1_2" properties="effectPanelCircle,panelColor2" delay="0.2" duration="4.3"/>
+  <img delay="0.4" src="p2/circu01.png" x="center" y="center" scale="2" effect="growDown,toLeft" duration="4.5"/>
+  <img delay="0.4" src="p2/circu02.png" x="1220" y="140" scale="2" effect="toLeft" duration="4.5">
+    <tween delay="0.5" x="370" y="640" time="4" />
+  </img>
+  <img delay="5" src="p2/IMG_0565.jpg" x="center" y="center" background="Y" effect="fromLeft"/>
+</sequency>

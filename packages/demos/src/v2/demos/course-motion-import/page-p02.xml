@@ -1,0 +1,89 @@
+	<page id="p02">
+		<default />
+		<sequency>
+			<sound>02_02_01.mp3</sound>
+			<container delay="1" showAfter="Y" backgroundColor="CadetBlue" properties="full,center" />
+			<img src="02/_B1_1736.jpg" delay="0" duration="5" properties="fullOut" />
+			<img src="02/_B1_1741.jpg" delay="5" duration="6" properties="fullOut" />
+			<img id="fond01" src="02/_B1_1752.jpg" delay="11" properties="fullOut" />
+
+			<img src="02/bonnet@3x.png" delay="16" x="200" y="center" scale="0.9" effect="fromRight">
+				<tween delay="5" time="3" alpha="0" />
+				<tween targetItem="fond01" time="1" alpha="0.25" />
+			</img>
+			<img src="02/impermeable@3x.png" delay="17" x="400" y="center" scale="0.9" effect="fromRight">
+				<tween delay="5" time="3" alpha="0" />
+			</img>
+			<img src="02/parapluie@3x.png" delay="22" x="350" y="360" scale="0.9" effect="fromRight" />
+
+			<container delay="5" x="900" y="100" width="500" cssClass="message is-link" effect="toLeft">
+				<container cssClass="is-relative message-body is-flex-list is-vertical ">
+					<sub src="c02p02t001" delay="00" cssClass="bullet is-relative" properties="h4" effect="fromRight" />
+					<sub src="c02p02t002" delay="06" cssClass="bullet is-relative" properties="h4" effect="fromRight" />
+					<sub src="c02p02t003" delay="11" cssClass="bullet is-relative" properties="h4" effect="fromRight" />
+					<sub src="c02p02t004" delay="17" cssClass="bullet is-relative" properties="h4" effect="fromRight" />
+				</container>
+			</container>
+
+			<svg src="02/croix.svg" delay="11.5" duration="4" x="682" y="416" width="200" effect="growDown" />
+			<svg src="02/croix.svg" delay="17.5" duration="4" x="295" y="398" width="200" effect="growDown" />
+			<svg src="02/croix.svg" delay="22" x="335" y="401" width="200" effect="growDown" />
+
+		</sequency>
+		<sequency>
+			<sound>02_02_02.mp3</sound>
+			<img src="02/_B1_1732.jpg" delay="0" properties="fullOut" />
+
+			<container delay="0" x="100" y="100" width="500" cssClass="message is-link" effect="toLeft">
+				<container cssClass="is-relative message-body is-flex-list is-vertical ">
+					<sub src="c02p02t005" delay="00" cssClass="is-relative" properties="h4" />
+					<sub src="c02p02t006" delay="06" cssClass="bullet is-relative" properties="h4" effect="fromRight" />
+					<sub src="c02p02t007" delay="09" cssClass="bullet is-relative" properties="h4" effect="fromRight" />
+					<sub src="c02p02t008" delay="14" cssClass="bullet is-relative" properties="h4" effect="fromRight" />
+					<sub src="c02p02t009" delay="17" cssClass="bullet is-relative" properties="h4" effect="fromRight" />
+				</container>
+			</container>
+		</sequency>
+
+		<sequency>
+			<sound>02_02_03.mp3</sound>
+			<img id="fond02" src="02/_B1_1746.jpg" delay="0" properties="fullOut" />
+
+			<img src="02/rain.png" delay="4" x="1146" y="388" scale="0.3" effect="grow" alpha="0.5">
+				<tween targetItem="fond02" time="3" alpha="0.25" />
+			</img>
+			<img src="02/stormy.png" delay="6" x="558" y="427" scale="0.3" effect="grow" alpha="0.7" />
+			<img src="02/sun.png" delay="9" x="1150" y="260" scale="0.4" effect="grow" />
+			<img src="02/weather-snow.png" delay="8" x="905" y="488" scale="1.3" effect="grow" />
+
+			<container delay="0" x="100" y="100" width="500" cssClass="message is-link" effect="toLeft">
+				<container cssClass="is-relative message-body is-flex-list is-vertical ">
+					<sub src="c02p02t010" delay="00" cssClass="bullet is-relative" properties="h4" effect="fromRight" />
+					<sub src="c02p02t011" delay="04" cssClass="bullet is-relative" properties="h4" effect="fromRight" />
+				</container>
+			</container>
+		</sequency>
+
+
+		<sequency>
+			<sound>02_02_04.mp3</sound>
+			<img src="02/_B1_1754.jpg" delay="0" duration="6" properties="fullOut" />
+			<img src="02/fotolia_94635724.jpg" delay="6" duration="3" properties="fullOut" />
+			<img src="02/_MG_8735.jpg" delay="9" duration="3" properties="fullOut" />
+			<img src="02/photo-ravon-r2-parking.jpg" delay="12" duration="2" properties="fullOut" />
+			<img src="02/_B1_1746.jpg" delay="14" duration="3" properties="fullOut" />
+			<img src="02/_B1_1749.jpg" delay="17" showAfter="Y" properties="fullOut" />
+
+			<container delay="0" showAfter="Y" x="1000" y="100" width="500" cssClass="message is-link">
+				<container showAfter="Y" cssClass="is-relative message-body is-flex-list is-vertical ">
+					<sub src="c02p02t012" delay="00" showAfter="Y" cssClass="is-relative" properties="h4" />
+					<sub src="c02p02t013" delay="06" showAfter="Y" cssClass="bullet is-relative" properties="h4" effect="fromRight" />
+					<sub src="c02p02t014" delay="09" showAfter="Y" cssClass="bullet is-relative" properties="h4" effect="fromRight" />
+					<sub src="c02p02t015" delay="12" showAfter="Y" cssClass="bullet is-relative" properties="h4" effect="fromRight" />
+					<sub src="c02p02t016" delay="14" showAfter="Y" cssClass="bullet is-relative" properties="h4" effect="fromRight" />
+					<sub src="c02p02t017" delay="17" showAfter="Y" cssClass="bullet is-relative" properties="h4" effect="fromRight" />
+				</container>
+			</container>
+		</sequency>
+
+	</page>

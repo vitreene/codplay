@@ -173,8 +173,6 @@
   authorize CodPlay core changes or bypass accepted-plan gates.
 - A handoff report is a snapshot for transfer, not an accumulating journal or
   a substitute for study notes, an execution plan, or a delivered specification.
-- Before resuming CodPlay V2 work, read [`packages/codplay/plan/notes/2026-08-26-decouverte-etat-codplay-v2.md`](packages/codplay/plan/notes/2026-08-26-decouverte-etat-codplay-v2.md) after identifying the applicable detailed plan.
-
 ## Module status
 
 - Module status belongs in the applicable plans and implementation tracking, not in README files.

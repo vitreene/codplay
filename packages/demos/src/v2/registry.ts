@@ -18,6 +18,22 @@ export type V2DemoDefinition = Readonly<{
 /** V2 demos are loaded on demand so the selector does not import every scene. */
 export const V2_DEMO_REGISTRY: readonly V2DemoDefinition[] = [
   {
+    id: "course-motion",
+    path: "?demo=course-motion",
+    title: "XML → CodPlay · page et stories",
+    description: "Page p02 convertie en une scène CodPlay : quatre séquences s’enchaînent, avec images, SVG, textes et audio.",
+    load: async () => {
+      const [module, stylesheet] = await Promise.all([
+        import('./demos/course-motion-import/main'),
+        import('./demos/course-motion-import/style.css?url'),
+      ]);
+      return {
+        createScene: module.createScene,
+        stylesheetUrl: resolveStylesheetUrl(stylesheet.default),
+      };
+    },
+  },
+  {
     id: "flip-list",
     path: "?demo=flip-list",
     title: "FLIP stress test",

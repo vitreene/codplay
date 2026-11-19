@@ -1,0 +1,9 @@
+<data>
+  <globalProperties>
+    <properties name="effectPanelCircle" left="50%" top="50%" centered="Y" width="0" height="0" cssClass="outerContainer under in-circle" effect="noDefault,toBottom">
+      <tween width="2800px" height="2800px" time="0.5" ease="sine.in" />
+    </properties>
+    <properties name="panelColor1" cssStyle="backgroundColor:var(--panel-bg-color--1)" />
+    <properties name="panelColor2" cssStyle="backgroundColor:var(--panel-bg-color--2)" />
+  </globalProperties>
+</data>
