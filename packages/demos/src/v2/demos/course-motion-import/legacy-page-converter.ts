@@ -95,6 +95,13 @@ function readTranslations(xml: string): ReadonlyMap<string, string> {
   }, new Map<string, string>())
 }
 
+/** Resolves one source translation key through the page fixture's existing parser. */
+export function resolveLegacyTranslation(xml: string, key: string): string {
+  const content = readTranslations(xml).get(key)
+  if (content === undefined) throw new Error(`The source translation ${key} is missing.`)
+  return content
+}
+
 /** Resolves and validates a list of source property names. */
 function resolveProperties(element: Element, properties: ReadonlyMap<string, Element>): ReadonlyMap<string, string> {
   const names = element.getAttribute('properties')?.split(',').map((name) => name.trim()).filter(Boolean) ?? []

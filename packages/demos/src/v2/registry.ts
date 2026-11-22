@@ -20,8 +20,8 @@ export const V2_DEMO_REGISTRY: readonly V2DemoDefinition[] = [
   {
     id: "course-motion",
     path: "?demo=course-motion",
-    title: "XML → CodPlay · page et stories",
-    description: "Page p02 convertie en une scène CodPlay : quatre séquences s’enchaînent, avec images, SVG, textes et audio.",
+    title: "Mouvement d’objet · circulation",
+    description: "Page 2 : séquence animée, quiz visuel et séquence de correction.",
     load: async () => {
       const [module, stylesheet] = await Promise.all([
         import('./demos/course-motion-import/main'),
@@ -30,6 +30,41 @@ export const V2_DEMO_REGISTRY: readonly V2DemoDefinition[] = [
       return {
         createScene: module.createScene,
         stylesheetUrl: resolveStylesheetUrl(stylesheet.default),
+      };
+    },
+  },
+  {
+    id: "spie-transmission",
+    path: "?demo=spie-transmission",
+    title: "XML → CodPlay · transmission SPIE",
+    description: "Page 004 : SVG animés, narration et cinq zones qui révèlent les vecteurs de transmission.",
+    load: async () => {
+      const [module, stylesheet] = await Promise.all([
+        import('./demos/spie-transmission-import/main'),
+        import('./demos/spie-transmission-import/style.css?url'),
+      ]);
+      return {
+        createScene: module.createScene,
+        stylesheetUrl: resolveStylesheetUrl(stylesheet.default),
+      };
+    },
+  },
+  {
+    id: "external-course-page",
+    path: "?demo=external-course-page",
+    title: "Lecteur externe · page 112",
+    description: "La télécommande V2 pilote la narration et les animations de la page source.",
+    load: async () => {
+      const [module, stylesheet] = await Promise.all([
+        import("./demos/external-course-page/main"),
+        import("./demos/external-course-page/style.css?url"),
+      ]);
+      return {
+        createScene: module.createScene,
+        stylesheetUrl: resolveStylesheetUrl(stylesheet.default),
+        engineCapabilities: module.engineCapabilities,
+        sourceAdapterFactories: module.sourceAdapterFactories,
+        externalTelcoTransport: module.externalTelcoTransport,
       };
     },
   },

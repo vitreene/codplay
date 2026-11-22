@@ -1,0 +1,20 @@
+<svg
+	xmlns="http://www.w3.org/2000/svg"
+	width="100%"
+	height="100%"
+	viewBox="0 0 199 199"
+>
+	<defs>
+		<style>
+			.cercle-cls-1 {
+				fill: #fff;
+				stroke: #006837;
+				stroke-miterlimit: 10;
+				stroke-width: 12px;
+			}
+		</style>
+	</defs>
+	<g id="Calque_2" data-name="Calque 2">
+		<g id="p3"><circle class="cercle-cls-1" cx="99.5" cy="99.5" r="93.5" /></g>
+	</g>
+</svg>

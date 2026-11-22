@@ -1,9 +1,11 @@
 import { createRemote } from '@codplay/remote'
 import type { CodPlayTelco } from 'codplay'
+import type { V2DemoExternalTelcoTransport } from './types'
 
 type V2DemoTelcoOptions = Readonly<{
   onLog: (message: string, level?: 'info' | 'warn' | 'error') => void
   onReload?: () => void | Promise<void>
+  externalTelcoTransport?: V2DemoExternalTelcoTransport
 }>
 
 /** Creates the circular-arrow control used to remount the current V2 scene. */
@@ -36,8 +38,11 @@ export function createV2DemoTelco(telco: CodPlayTelco, options: V2DemoTelcoOptio
   sync: () => void
   destroy: () => void
 } {
+  const remoteTelco = options.externalTelcoTransport === undefined
+    ? telco
+    : createExternalRemoteTransport(telco, options.externalTelcoTransport)
   const remote = createRemote({
-    telco,
+    telco: remoteTelco,
     onInfo: (message) => options.onLog(message),
     onError: (message) => options.onLog(message, 'error'),
   })
@@ -102,6 +107,58 @@ export function createV2DemoTelco(telco: CodPlayTelco, options: V2DemoTelcoOptio
       reloadButton.removeEventListener('click', reloadScene)
       reloadButton.remove()
       remote.destroy()
+    },
+  }
+}
+
+/** Projects source progress and seek onto the official remote without changing the host clock. */
+function createExternalRemoteTransport(
+  telco: CodPlayTelco,
+  source: V2DemoExternalTelcoTransport,
+) {
+  const getState = () => {
+    const hostState = telco.getState()
+    const sourceState = source.getState()
+    return {
+      ...hostState,
+      ...sourceState,
+      status: sourceState.status ?? hostState.status,
+    }
+  }
+
+  return {
+    getState,
+    getProgress: () => source.getProgress(),
+    get commandInFlight() {
+      return telco.commandInFlight || source.commandInFlight
+    },
+    get rate() {
+      return telco.rate
+    },
+    setRate: (rate: number) => telco.setRate(rate),
+    play: () => telco.play(),
+    pause: () => telco.pause(),
+    togglePlay: () => telco.togglePlay(),
+    seek: (targetMs: number) => source.seek(targetMs),
+    rewind: async () => {
+      await telco.pause()
+      return source.rewind()
+    },
+    onChange: (listener: Parameters<CodPlayTelco['onChange']>[0]) => {
+      const stopHost = telco.onChange(() => listener(getState()))
+      const stopSource = source.onProgress(() => listener(getState()))
+      return () => {
+        stopHost()
+        stopSource()
+      }
+    },
+    onProgress: (listener: Parameters<CodPlayTelco['onProgress']>[0]) => {
+      const stopHost = telco.onProgress(() => listener(getState()))
+      const stopSource = source.onProgress(() => listener(getState()))
+      return () => {
+        stopHost()
+        stopSource()
+      }
     },
   }
 }

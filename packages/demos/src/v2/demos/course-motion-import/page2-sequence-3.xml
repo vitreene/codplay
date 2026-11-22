@@ -1,0 +1,7 @@
+<page id="page2">
+  <sequency>
+    <sound>p2_3.mp3</sound>
+    <snapFLA common="Y" src="snapFLA/croix_rouge_snap_canvas.js" x="660" y="320" scale="0.6" loop="N" showAfter="Y"/>
+    <img delay="1.5" x="center" y="390" scale="1.4" effect="blink" showAfter="Y">p2/2_2b.jpg</img>
+  </sequency>
+</page>

@@ -107,6 +107,29 @@ export {
   createScrollContainerSourceAdapter,
   validateScrollContainerInitial,
 } from './scroll-container'
+export {
+  createExternalCoursePagePlaybackBinding,
+  createExternalCoursePageLaunchUrl,
+  createExternalCoursePageSourceAdapter,
+  EXTERNAL_COURSE_PAGE_DEFINITION,
+  EXTERNAL_COURSE_PAGE_LIBRARY,
+  EXTERNAL_COURSE_PAGE_LIBRARY_ID,
+  EXTERNAL_COURSE_PAGE_TYPE,
+  ExternalCoursePageComponent,
+  validateExternalCoursePageAction,
+  validateExternalCoursePageInitial,
+} from './external-course-page'
+export type {
+  ExternalCoursePageCommandResult,
+  ExternalCourseConfigValue,
+  ExternalCoursePageCommand,
+  ExternalCoursePageInitial,
+  ExternalCoursePagePlaybackTransport,
+  ExternalCoursePagePlaybackStatus,
+  ExternalCoursePageProgress,
+  ExternalCoursePageReaderMessage,
+  ExternalCoursePageRuntime,
+} from './external-course-page'
 export type {
   ScrollContainerInitial,
   ScrollObservationDeclaration,

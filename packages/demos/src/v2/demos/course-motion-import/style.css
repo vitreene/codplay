@@ -1,124 +1,95 @@
 @font-face {
-  font-family: "Futura";
+  font-family: "Raleway";
   font-style: normal;
   font-weight: 300;
-  src: url("/assets/course-access/fonts/FuturaLight.ttf") format("truetype");
+  src: url("/assets/course-motion-import/02_circulation/fonts/Raleway-Thin.ttf") format("truetype");
 }
 
 @font-face {
-  font-family: "Futura";
+  font-family: "Raleway";
   font-style: normal;
   font-weight: 400;
-  src: url("/assets/course-access/fonts/FuturaRegular.ttf") format("truetype");
+  src: url("/assets/course-motion-import/02_circulation/fonts/Raleway-Regular.ttf") format("truetype");
 }
 
 @font-face {
-  font-family: "Futura";
+  font-family: "Raleway";
   font-style: normal;
   font-weight: 700;
-  src: url("/assets/course-access/fonts/FuturaBold.ttf") format("truetype");
+  src: url("/assets/course-motion-import/02_circulation/fonts/Raleway-Bold.ttf") format("truetype");
 }
 
-.course-access-stage,
-.course-access-stage > section {
+.course-motion-stage {
   position: relative;
   width: 100%;
   height: 100%;
   min-height: 0;
   overflow: hidden;
   container-type: inline-size;
-  color: #000;
-  font-family: "Futura", "Raleway", Arial, Helvetica, sans-serif;
-  font-weight: 400;
-  line-height: 1.5;
+  background: #f6f6f6;
+  font-family: "Raleway", Arial, Helvetica, sans-serif;
+  line-height: 1.2;
 }
 
-.course-access-container {
+.course-motion-panel {
   box-sizing: border-box;
 }
 
-.course-access-container.full {
-  overflow: hidden;
+.course-motion-panel--color-1 {
+  background-color: var(--panel-bg-color--1, #004677);
 }
 
-.course-access-container.lightRoomVignette::after {
-  position: absolute;
-  inset: 0;
-  content: "";
-  box-shadow: inset 0 0 6rem rgba(0, 0, 0, 0.5);
-  pointer-events: none;
+.course-motion-panel--color-2 {
+  background-color: var(--panel-bg-color--2, #005ea0);
 }
 
-.course-access-container.message {
-  border-radius: 0.25cqw;
-  background: whitesmoke;
-  font-size: 1cqw;
+.course-motion-quiz-stage {
+  background: #e1e1e1;
 }
 
-.course-access-container.message.is-link {
-  background: #eff1fa;
+.course-motion-quiz-prompt {
+  margin: 0;
 }
 
-.course-access-container.message-body {
-  border-color: #dbdbdb;
-  border-radius: 0.25cqw;
-  border-style: solid;
-  border-width: 0 0 0 0.25cqw;
-  color: #4a4a4a;
-  padding: 1.25em 1.5em;
+.course-motion-quiz-validate {
+  border: 0;
+  border-radius: 0.5cqw;
+  color: white;
+  background: #0872b8;
+  font-size: 1.5cqw;
+  cursor: pointer;
 }
 
-.course-access-container.message.is-link .course-access-container.message-body {
-  border-color: #485fc7;
-  color: #3850b7;
+.course-motion-quiz-validate:disabled {
+  cursor: default;
+  opacity: 0.3;
 }
 
-.course-access-container.is-flex-list {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.4em;
-}
-
-.course-access-container.is-vertical {
-  flex-direction: column;
-}
-
-.course-access-stage .is-bold {
-  font-weight: 700;
-}
-
-.course-access-stage .font-semibold {
-  font-weight: 600;
-}
-
-.course-access-stage .font-bold {
-  font-weight: 700;
-}
-
-.course-access-stage .font-extrabold {
-  font-weight: 800;
-}
-
-.course-access-text.bullet {
-  display: flex;
-  text-align: left;
-}
-
-.course-access-text.bullet::before {
-  color: currentColor;
-  content: "◆ ";
-  display: inline-block;
-  margin-right: 0.5em;
-}
-
-.course-access-image {
-  overflow: visible;
-}
-
-.course-access-image img {
+.course-motion-hotspot {
   display: block;
+  box-sizing: border-box;
 }
 
-.course-access-image--full {
+.course-motion-hotspot .input__control {
+  display: block;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  appearance: none;
+  opacity: 0.01;
+  cursor: pointer;
+}
+
+.course-motion-hotspot .input__label,
+.course-motion-hotspot .input__hint,
+.course-motion-hotspot .input__selection-icon,
+.course-motion-hotspot .input__correction-icon {
+  position: absolute;
+  width: 1px;
+  height: 1px;
   overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }

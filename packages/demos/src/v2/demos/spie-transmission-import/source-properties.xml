@@ -1,0 +1,6 @@
+<globalProperties>
+<properties name="h1"  textSize="60" />
+<properties name="titre"  cssClass="titre" />
+<properties name="list-item-head" showAfter="Y" cssClass="list-item item-head titre isBold" textAlign="left"  effect="fromTop"  />
+<properties name="list-item" showAfter="Y"  cssClass="list-item bullet primary" textAlign="left" textSize="24" textColor="0x333333" effect="fromLeft" effectEase="Back.easeOut" />
+</globalProperties>

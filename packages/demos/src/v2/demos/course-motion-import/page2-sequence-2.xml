@@ -1,0 +1,15 @@
+<page id="page2">
+  <default textSize="32" textColor="#333333" textAlign="center" />
+  <sequency>
+    <sound>p2_2.mp3</sound>
+    <sub id="question" x="center" y="60" width="1140" centered="Y" textAlign="center">m2p2_txt1</sub>
+    <img delay="0" x="center" y="390" background="Y" scale="1.4" showAfter="Y">p2/2_2a.jpg</img>
+    <img delay="0" id="zone1" x="697" y="335" scale="1.4" alpha="0">p2/2_2a_zone.png</img>
+    <quizz showAfter="N">
+      <type>choice</type>
+      <prop x="590" y="202" correct="Y" width="80" textAlign="center" cssClass="noCheckbox pointerEventsNone" alpha="0.01" scale="1.4" withBackground="N" itemToShow="zone1">m2p2_txt2_zone</prop>
+      <sequencyAction id="success"><sound common="Y">bonne.mp3</sound></sequencyAction>
+      <sequencyAction id="failed"><sound common="Y">mauvaise.mp3</sound></sequencyAction>
+    </quizz>
+  </sequency>
+</page>

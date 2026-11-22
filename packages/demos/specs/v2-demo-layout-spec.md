@@ -27,5 +27,22 @@ le verrou d'entrée utilisateur parce qu'il possède l'hôte DOM commun. Une dé
 ne doit pas créer un second player ni un circuit d'eventimes pour empêcher une
 interaction avant le démarrage.
 
+Une scène peut fournir un transport externe optionnel au layout pour une page
+dont un lecteur tiers possède la timeline. Le layout conserve alors la
+télécommande officielle unique : état, progression et durée viennent du
+transport source, tandis que Play/Pause et le cycle de vie restent raccordés à
+la telco CodPlay. Seek et retour au début passent par le transport source; ils
+ne déplacent pas la timeline CodPlay. Le transport source notifie directement
+la télécommande et ne transforme pas les échantillons de progression en
+événements CodPlay.
+
 Le parcours d'acceptation et son statut d'implémentation sont suivis dans le
 [plan du verrou d'entrée](../plan/2026-09-23-v2-layout-launch-gate-plan.md).
+
+## Références
+
+- [Composition de la télécommande](../src/v2/layout/telco.ts)
+- [Contrat du transport externe](../src/v2/layout/types.ts)
+- [Tests de composition](../src/v2/layout/telco.spec.ts)
+- [Composant de page externe](../../authoring/component-v2/specs/external-course-page-spec.md)
+- [Plan POC et validation navigateur](../../elce/plan/external-course-adapter-poc-plan.md)

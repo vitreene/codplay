@@ -215,11 +215,13 @@ export function createRemote<State extends RemoteState>(
     const { status, sequenceEnded, initialized } = state
     const canPlay = initialized && (sequenceEnded || status === 'ready' || status === 'paused')
     const canPause = status === 'playing'
-    const canRewind = initialized && (status === 'ready' || status === 'paused' || status === 'playing')
+    const { displayMs, maxMs } = resolveDisplayedMs(state)
+    const hasTimeline = maxMs > 0
+    const canRewind = initialized && hasTimeline && (status === 'ready' || status === 'paused' || status === 'playing')
     const canSeek = initialized
+      && hasTimeline
       && !sequenceEnded
       && (status === 'ready' || status === 'paused' || status === 'playing')
-    const { displayMs, maxMs } = resolveDisplayedMs(state)
 
     setIfChanged(playButton.disabled, inFlight || (!canPlay && !canPause), (value) => { playButton.disabled = value })
     const playLabel = canPause ? 'Pause' : 'Lire'

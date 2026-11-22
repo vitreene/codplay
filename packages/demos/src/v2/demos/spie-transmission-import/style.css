@@ -1,0 +1,66 @@
+@font-face {
+  font-family: "SPIE Bebas Neue";
+  src: url("/assets/spie-transmission/fonts/bebasneue-bold-webfont.woff2") format("woff2");
+  font-weight: 700;
+}
+
+@font-face {
+  font-family: "SPIE Roboto";
+  src: url("/assets/spie-transmission/fonts/Roboto-Regular.ttf") format("truetype");
+  font-weight: 400;
+}
+
+.spie-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1600 / 788;
+  overflow: hidden;
+  container-type: inline-size;
+  background: white;
+  font-family: "SPIE Roboto", Arial, sans-serif;
+}
+
+.spie-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.spie-hotspot {
+  cursor: pointer;
+}
+
+.spie-text {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+.spie-text.titre {
+  font-family: "SPIE Bebas Neue", Arial, sans-serif;
+  font-weight: 700;
+  line-height: 0.8;
+}
+
+.spie-list {
+  pointer-events: none;
+}
+
+.spie-list .list-item {
+  margin-bottom: 0.8em;
+  line-height: 1.1;
+}
+
+.spie-list .item-head {
+  margin: 0 0 0.27em;
+  line-height: 0.8;
+}
+
+.spie-list .bullet {
+  padding-left: 1.25cqw;
+}
+
+.spie-list .bullet::before {
+  content: "◆ ";
+  color: #0062a8;
+  margin-left: -1.25cqw;
+}

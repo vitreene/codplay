@@ -142,12 +142,13 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
     telco: CodPlayInstance["telco"],
     instance: CodPlayInstance,
     playback: V2DemoPlayback | undefined,
+    externalTelcoTransport: V2DemoModule["externalTelcoTransport"],
     onReload: () => void | Promise<void>,
   ): void {
     telcoPlaybackCleanup?.();
     telcoPlaybackCleanup = null;
     telcoControls?.destroy();
-    telcoControls = createV2DemoTelco(telco, { onLog: log, onReload });
+    telcoControls = createV2DemoTelco(telco, { onLog: log, onReload, externalTelcoTransport });
     const playbackControl = playback;
     if (playbackControl !== undefined) {
       const playbackLabel = playbackControl.label;
@@ -349,7 +350,13 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
       });
     }
     sceneInteractionCleanup = lockSceneInputUntilFirstPlay(sceneSlot, instance.telco);
-    installTelco(instance.telco, instance, module.playback, () => mount(module));
+    installTelco(
+      instance.telco,
+      instance,
+      module.playback,
+      module.externalTelcoTransport,
+      () => mount(module),
+    );
     for (const injection of module.initialEvents ?? []) {
       await instance.events.emit(injection.eventime, injection.target);
     }
