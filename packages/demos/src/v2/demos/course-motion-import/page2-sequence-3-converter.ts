@@ -110,6 +110,7 @@ function createCorrectionCross(assetBasePath: string, parentStageId: string): Co
     initial: {
       src: `${assetBasePath.replace(/\/$/, '')}/p2/correction-cross.svg`,
       alt: 'Croix rouge sur l’élément à corriger',
+      className: 'course-motion-correction-cross',
       img: { style: { width: '100%', height: '100%', objectFit: 'contain' } },
       style: {
         position: 'absolute',

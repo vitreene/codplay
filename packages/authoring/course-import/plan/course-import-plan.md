@@ -40,7 +40,10 @@ transcriptions de démonstration et leurs observations sont décrites dans
   propriétés/traductions, les tweens littéraux simples, les appels GSAP
   littéraux simples et les appels de visibilité à cible résolue. Elle signale
   les cibles calculées, fonctions métier inconnues, styles non résolus et
-  chronologies ambiguës. Les quiz restent hors périmètre.
+  chronologies ambiguës. Le modèle pédagogique complet des quiz reste hors
+  périmètre; la conversion réutilisable des zones visuelles cliquables dessinées
+  par un ou plusieurs masques SVG est acceptée comme règle générique à cadrer
+  dans l’action 3.
 - Les callbacks sont analysés sans exécution. Un même déclencheur source peut
   devenir une émission et plusieurs actions destinataires. Les répétitions
   structurellement équivalentes sont regroupées en recette paramétrée dans le
@@ -55,7 +58,10 @@ transcriptions de démonstration et leurs observations sont décrites dans
   chargement des styles et les commandes de lecture restent dans le layout V2.
 - Les démos de transcription servent de fixtures d’acceptation hors du moteur.
   Le code générique ne les importe pas et ne dépend pas de leurs identifiants,
-  styles, ressources ou routines.
+  styles, ressources ou routines. Une démo peut appeler le moteur et fournir
+  ses résolveurs de projet; `course-motion-import` doit exercer `PageConverter`
+  sur les éléments dont la conversion est générique au lieu de les reconvertir
+  localement.
 - Pour le futur moteur, les propriétés, classes, polices et médias se résolvent
   depuis les sources du projet. Les règles propres à un format source sont
   isolées des méthodes communes de conversion.
@@ -78,24 +84,28 @@ transcriptions de démonstration et leurs observations sont décrites dans
   laisser son image de fond chevaucher l'entrée de la story suivante; l'état
   visuel de la dernière story est conservé à la fin de la scène. Un perso avec
   `duration` se masque à sa propre échéance.
-- La démo SAMERA reste `?demo=course-motion`. Elle utilise les contrôles, le
-  cycle d’instance et le player V2 partagés; aucun service local de playback.
+- Le prototype `?demo=course-motion` prend sa source dans le projet standard
+  `02_circulation.xml`, page2. Les transcriptions SAMERA `p02` et SPIE
+  `page004` sont des fixtures distinctes; elles ne sont pas la scène comparée
+  par ce prototype. La démo utilise le player V2 partagé et aucun service local
+  de playback.
 - Le prototype motion de `?demo=course-motion` utilise la première séquence
   de `02_circulation.xml/page2` (`p2_1.mp3`). Ses deux panneaux `effectPanelCircle`
   sont appelés par les conteneurs source `panel1_1` et `panel1_2`. Leur
   transition automatique est hors du travail actif; cette localisation est le
   seul constat conservé. La suite expérimentale ajoute la séquence source
-  `p2_2.mp3` et son quiz visuel à la même démo. Le moteur générique continue
-  d’exclure les quiz.
+  `p2_2.mp3` et son quiz visuel à la même démo. La transcription du modèle de
+  question, de sa validation et de ses retours reste distincte de la règle
+  générique de zone cliquable à masque SVG.
 - Le quiz visuel de `02_circulation.xml/page2` a un seul choix source, déclaré
-  correct. Sa zone de clic révèle `zone1`; « Valider » confirme la réponse et
-  déclenche `bonne.mp3`. L’action source `failed` référence `mauvaise.mp3`,
-  mais aucun choix faux n’est déclaré : le POC ne crée pas de zone erronée ni
-  de branche d’échec fictive. Le `<prop>` place un item QCM dont le libellé
-  ajoute `1.5em` de retrait avant son SVG; la zone CodPlay doit donc placer le
-  clip sur la silhouette rendue, après ce retrait et le `scale` source, plutôt
-  que sur le bord `x` du `<prop>`. Elle reprend le composant `input` et le
-  parcours `change → listen/straps → actions` exercé par `quiz-series`. Le
+  correct. Son hit-area reprend le cadre converti de l’image `zone1`; le même
+  clip SVG masque le perso `input` et son voile rouge à la sélection. Le PNG
+  teinté n’est pas superposé comme une deuxième couche. « Valider » confirme la
+  réponse et déclenche `bonne.mp3`. L’action source `failed` référence
+  `mauvaise.mp3`, mais aucun choix faux n’est déclaré : le POC ne crée pas de
+  zone erronée ni de branche d’échec fictive. Les coordonnées du `<prop>` restent
+  validées, mais ne positionnent pas le hit-area CodPlay. Le parcours
+  `change → listen/straps → actions` reprend celui exercé par `quiz-series`. Le
   `<sub>` `m2p2_txt1` est résolu depuis le fragment français de la source; son
   HTML riche est porté par un perso `text`. Taille, couleur, alignement,
   placement, Raleway et son interlignage viennent du XML et de la feuille
@@ -103,6 +113,16 @@ transcriptions de démonstration et leurs observations sont décrites dans
 - Les longueurs rapportent le canevas source `1600 × 788` à `cqw`. `scale`
   devient une dimension de boîte pour `img`; aucune transformation CSS `scale`
   n’est ajoutée à l’image.
+- `delay` et `duration` sont des paramètres temporels standards du corpus,
+  écrits comme nombres en secondes. Pour les éléments visuels, le délai d’un
+  enfant s’ajoute à celui de ses conteneurs de la même séquence; sa durée règle
+  sa visibilité et hérite de celle du conteneur si elle n’est pas déclarée.
+  Les usages de `duration` sur `<sequency>` et `<tween>` gardent leur rôle
+  distinct de durée de séquence et de durée d’interpolation. Une durée
+  absente ou nulle hérite du conteneur, comme dans le lecteur source. `PageConverter`
+  porte le calcul temporel commun des profils visuels pris en charge; le
+  contexte reste propriétaire des effets source, des repères et des rôles
+  médias.
 - Les conteneurs imbriqués conservent leur position source dans le canevas.
   Le conteneur `is-flex-list is-vertical` reste un `layout` avec son style de
   flux; le contrat du composant `list` porte sur l’ordre structurel, pas sur ce
@@ -153,14 +173,23 @@ d’Editor vers Elcé seront définis selon le projet retenu.
 
 ## Actions
 
-1. **Prototype motion — En cours, hors moteur.** `course-motion-import/main.ts`
-   sélectionne la première séquence de `02_circulation.xml/page2`, ses
-   propriétés et ses médias. Réutiliser `convertLegacyPageSequence` et le
-   player V2 partagé. Comparer dans Brave la lecture source et CodPlay, vérifier
-   Play, Seek, les transitions et la console, puis aligner
-   `course-motion-import-spec.md` sur ce rendu. La réalisation locale du cercle
-   reste expérimentale et ne valide pas une règle générique d’import.
-   Les fixtures SAMERA et SPIE restent hors du moteur générique.
+1. **Prototype motion — En cours, raccord partiel.**
+   `course-motion-import/main.ts` conserve la sélection standard de
+   `02_circulation.xml/page2/p2_1`. Son adaptateur passe les éléments génériques
+   par `CourseSourceReader` et `PageConverter` avec les résolutions de
+   ressources, propriétés, canevas, géométrie et tweens de ce projet.
+   `PageConverter` calcule le `delay` cumulatif et l’héritage du `duration` des
+   profils visuels. Il fournit les frontières de visibilité communes; les
+   sorties animées restent ajustées par l’adaptateur.
+   Garder dans l’adaptateur de démo le mapping des effets `growDown`, `fromLeft`
+   et `toLeft`, le panneau `effectPanelCircle`, les chemins, dimensions
+   intrinsèques et règles de couleur propres à cette source. Le quiz p2_2 et la
+   correction p2_3 restent assemblés par leurs convertisseurs dédiés; réutiliser
+   le moteur pour leurs images et textes quand le profil générique suffit.
+   La scène CodPlay est vérifiée dans Brave au Seek de 1 500 ms et en Play
+   jusqu’au quiz p2_2; la console ne signale pas d’erreur ni d’avertissement
+   Vite. Il reste à lancer le lecteur source dans Brave et comparer Play, Seek
+   et les transitions avant de finaliser la spécification de démo.
 2. **Quiz visuel et suite Circulation — En cours, hors moteur.** Dans
    `?demo=course-motion`, transcrire `p2_2` et `p2_3` de
    `02_circulation.xml/page2`. Le bouton CodPlay « Valider » est un perso
@@ -172,22 +201,50 @@ d’Editor vers Elcé seront définis selon le projet retenu.
    locale (tween fini de 958 ms), puis l’image `2_2b.jpg` apparaît 1,5 s après
    et reçoit deux cycles d’opacité finis. Aucun contrôle de télécommande,
    minuteur ni changement du core n’est ajouté.
+   `2_2a.jpg` source porte `showAfter="Y"`; le perso image doit donc rester
+   dans le stage parent, hors du layout de quiz masqué après le retour sonore.
+   Le layout de quiz est transparent pour laisser cette image visible pendant
+   la question.
+   Le hit-area p2_2 suit le cadre converti de `zone1`. À la sélection, le même
+   perso `input` dessine le voile rouge à travers son clip SVG; le PNG teinté
+   n’est pas superposé. Les images de présentation traversent les pointeurs
+   afin que seul le composant `input` reçoive le clic. Le parcours de sélection
+   est accepté lorsque des points sur le haut, le buste, les côtés et les jambes
+   ciblent ce radio pendant Play et que son `change` applique le voile à la même
+   silhouette. La sélection CodPlay et son hit-testing SVG sont vérifiés dans
+   Brave; la comparaison source reste ouverte.
+   Brave confirme la référence toujours visible sous la croix à l’arrivée, puis
+   sous `2_2b.jpg` pendant ses clignotements. Les `showAfter="Y"` source sur la
+   croix et l’image expliquent qu’elles restent superposées après le blink.
    À l’entrée de p2_2, l’image de fond `IMG_0565` de p2_1 est masquée sur la
    track `main`, à 8 626,508 ms; le lecteur source retire le fond précédent à
    cette frontière. Brave compare les deux lecteurs jusqu’à `sequence:end`.
    Seek à 8 000 ms conserve le fond et Seek à 8 700 ms le masque. Après la fin,
    « Lire » relance depuis zéro; « Revenir au début » envoie un `rewind` rejeté
-   après `sequence:end`, donc le replay est validé via « Lire ». La croix SVG
-   et les deux clignotements restent des rendus expérimentaux à revoir
-   visuellement. La spécification décrit ce comportement et sa limite.
-3. **Dictionnaire du corpus XML — premier lot inventorié.** Qualifier les
-   familles de narration motion-design et prioriser les règles transversales à
-   partir du corpus canonique. Le quiz visuel par clic sur une illustration est
-   signalé comme fréquent : relever ses variantes (une ou plusieurs zones,
-   révélation, validation explicite, retours de réussite/erreur et dépendance
-   à la narration) avant de décider d’une règle générique fondée sur les
-   modèles Elcé et leur projection CodPlay. Le POC `p2_2` reste le premier cas
-   d’observation, pas une généralisation.
+   après `sequence:end`, donc le replay est validé via « Lire ». Le placement
+   et la persistance de l’image cible après le quiz sont vérifiés dans CodPlay;
+   la croix SVG et les deux clignotements restent des rendus expérimentaux à
+   comparer au lecteur source.
+3. **Zones visuelles cliquables — conception acceptée, contrat à préciser.**
+   Comparer le POC `02_circulation.xml/page2/p2_2` avec
+   `AS BTP-INDUSTRIE-LOGISTIQUE/1-PROD_save2024/public/content/xml/07_evaluation.xml/page_7102`.
+   Ce dernier déclare cinq `prop` correctes, chacune avec `x/y`, `oneClick` et
+   `itemToShow=zoneN`; cinq images PNG `zoneN` servent de révélations dans une
+   séquence suivante. Ce cas confirme les choix multiples à cliquer et leur
+   révélation; il n’emploie pas de masque SVG et ne prouve pas un hit-testing
+   sur la transparence des PNG. Relever dans les deux formes le lien à
+   l’illustration, les repères géométriques et les ressources de masque ou de
+   révélation. Définir la conversion générique des zones en composants `input`
+   et leur circuit d’événement CodPlay existant; garder le modèle complet de
+   question, la validation et les retours pédagogiques hors de cette règle.
+   Reprendre ensuite `p2_2` pour exercer le hit-testing SVG. Utiliser une
+   fixture de test autonome pour exercer plusieurs choix et révélations selon
+   le motif de `page_7102`; son conteneur `panZoom` reste une règle distincte.
+   Les tests possèdent leurs fixtures. La règle reste hors spécification et
+   hors implémentation tant que le mapping des masques, les repères et
+   l’acceptation ne sont pas établis. La skill
+   `.agents/skills/course-import-visual-interactions/SKILL.md` guide l’analyse
+   de ces sources sans présenter leurs formes comme un contrat de conversion.
 4. **Moteur générique — En cours.** Les lecteurs XML, sommaire, propriétés,
    textes, styles et appels, le convertisseur `SceneDoc`, les recettes
    d’interactions et le rapport sont implémentés dans `course-import/src`.
@@ -210,7 +267,7 @@ Les huit dossiers de la [liste des projets](../notes/corpus-xml/synthese-corpus-
 forment le corpus canonique. Le [dictionnaire](../notes/corpus-xml/dictionnaire-corpus-xml.json)
 donne les chemins XML exacts dans `projects[].xml_roots` et recense 133 XML
 et 1 077 pages. Les essais SAMERA et SPIE servent à vérifier la restitution
-des cas déjà travaillés. Les règles candidates restent à relire.
+des cas déjà travaillés. Les autres règles candidates restent à relire.
 
 1. **Recenser les documents.** Analyser des lots de fichiers XML seuls,
    groupés par projet et version quand ils sont connus. Identifier les
@@ -233,7 +290,12 @@ des cas déjà travaillés. Les règles candidates restent à relire.
    restitution pour chaque règle ci-dessous. Conserver dans le bilan les
    cibles, phases de déclenchement et paramètres restant à résoudre.
 
-### Règles candidates pour la narration motion design — À relire
+### Règles candidates pour la narration motion design — à qualifier
+
+Les autres transpositions du tableau restent à qualifier. La lecture des
+paramètres numériques `delay` et `duration` pour les éléments visuels est
+acceptée selon la décision ci-dessus; elle ne généralise pas les rôles de ces
+attributs sur les sections, tweens ou interactions.
 
 L’ordre proposé part des valeurs source résolues et va jusqu’aux réactions.
 Le [parcours d’import](#parcours-dimport-dun-chapitre--à-relire) décrit les circuits à

@@ -18,12 +18,14 @@ export type LegacyImageConversionOptions = Readonly<{
   chapterId: string;
   imageSize: Readonly<{ width: number; height: number }>;
   stageId: string;
+  targetId?: string;
 }>;
 
 type ConvertedImage = Readonly<{
   perso: ImagePerso;
   eventimes: readonly SceneEventime[];
   exitEndAt: number | null;
+  initialFrame: Readonly<{ x: number; y: number; width: number; height: number }>;
 }>;
 
 /** Formats a media path with the identifier convention used by the source player. */
@@ -79,7 +81,7 @@ export function convertLegacyImageElement(
   const source = image.getAttribute('src');
   if (!source || !options.chapterId) throw new Error('The image requires a chapter id and a source.');
   if (source.split('/').includes('..')) throw new Error('Parent-directory media paths are not supported.');
-  const itemId = id || `img_${options.chapterId}_${formatLegacyResourceId(source)}`;
+  const itemId = options.targetId ?? id ?? `img_${options.chapterId}_${formatLegacyResourceId(source)}`;
 
   const effects = (image.getAttribute('effect') ?? '').split(',').filter(Boolean);
   const supportedEffects = new Set(['growDown', 'grow', 'fromLeft', 'fromRight', 'toLeft']);
@@ -182,6 +184,12 @@ export function convertLegacyImageElement(
         : 0
   );
   const entryY = centerY - startHeight / 2;
+  const initialFrame = {
+    x: fromLeft || growDown ? entryX : targetX,
+    y: growDown ? entryY : targetY,
+    width: growDown ? startWidth : outerWidth,
+    height: growDown ? startHeight : outerHeight,
+  };
   const appearEvent = `${itemId}:appear`;
   const alpha = readNumber(image, 'alpha', 1);
   if (alpha < 0 || alpha > 1) throw new Error('Expected an image alpha between zero and one.');
@@ -280,10 +288,7 @@ export function convertLegacyImageElement(
         position: 'absolute',
         left: 0,
         top: 0,
-        x: fromLeft || growDown ? entryX : targetX,
-        y: growDown ? entryY : targetY,
-        width: growDown ? startWidth : outerWidth,
-        height: growDown ? startHeight : outerHeight,
+        ...initialFrame,
         opacity: 0,
         ...(grow ? { scaleX: 0.5, scaleY: 0.5 } : {}),
         zIndex: 1,
@@ -300,7 +305,7 @@ export function convertLegacyImageElement(
     actions,
   } satisfies ImagePerso;
 
-  return { perso, eventimes, exitEndAt };
+  return { perso, eventimes, exitEndAt, initialFrame };
 }
 
 /** Converts one motion-focused XML image into a complete SceneDoc for facade tests. */

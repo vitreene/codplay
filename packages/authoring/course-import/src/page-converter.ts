@@ -16,7 +16,7 @@ import {
 } from './javascript-call-reader'
 import { factorRepeatedInteractions, type SourceInteraction } from './interaction-factor'
 import { getElementChildren, readTextContent } from './xml-document-reader'
-import { SourceStyleReader } from './source-style-reader'
+import type { SourceStyleReader } from './source-style-reader'
 
 /** Supplies project-resolved data without embedding project rules in the engine. */
 export type PageConversionContext = Readonly<{
@@ -43,8 +43,14 @@ export type PageConversionContext = Readonly<{
     target: XmlElement,
     arguments_: readonly JavaScriptExpression[],
   ) => Readonly<Record<string, unknown>> | undefined
-  resolveTween?: (tween: XmlElement, owner: XmlElement | undefined) => ResolvedSourceTween | undefined
+  resolveTween?: (tween: XmlElement, owner: XmlElement | undefined, ownerTiming: ResolvedItemTiming | undefined) => ResolvedSourceTween | undefined
   easeMappings?: Readonly<Record<string, string>>
+}>
+
+/** Describes a visual item's cumulative start and inherited visible duration. */
+export type ResolvedItemTiming = Readonly<{
+  startAtMs: number
+  durationMs?: number
 }>
 
 /** States whether one source callback maps to a DOM event or a resolved time. */
@@ -85,6 +91,7 @@ type StoryBuild = {
   persos: MutablePerso[]
   bySourceId: Map<string, MutablePerso[]>
   elements: XmlElement[]
+  itemTimings: Map<XmlElement, ResolvedItemTiming>
   eventimes: Readonly<Record<string, unknown>>[]
   interactions: SourceInteraction[]
 }
@@ -111,6 +118,7 @@ const SUPPORTED_ELEMENT_TYPES: Readonly<Record<string, string>> = {
 const TIMING_ATTRIBUTES = new Set([
   'delay', 'duration', 'effect', 'effectEase', 'effectTime', 'effectTimeOut', 'repeat', 'repeatDelay', 'showAfter', 'time', 'yoyo',
 ])
+const VISUAL_ELEMENT_TYPES = new Set(['container', 'img', 'sub'])
 
 const COMMON_ATTRIBUTES = new Set([
   'alpha', 'alt', 'backgroundColor', 'centered', 'centeredY', 'class', 'color', 'cssClass', 'cssStyle', 'fontFamily',
@@ -174,6 +182,7 @@ export class PageConverter {
       persos: [],
       bySourceId: new Map(),
       elements: [section],
+      itemTimings: new Map(),
       eventimes: [],
       interactions: [],
     }
@@ -206,6 +215,7 @@ export class PageConverter {
     context: PageConversionContext,
     build: PageBuild,
     parentId = '@root',
+    parentTiming: ResolvedItemTiming = { startAtMs: 0 },
   ): MutablePerso | undefined {
     const type = SUPPORTED_ELEMENT_TYPES[element.name]
     if (type === undefined) {
@@ -229,26 +239,80 @@ export class PageConverter {
       ...(className === undefined ? {} : { className }),
       ...(Object.keys(style).length === 0 ? {} : { style }),
     }
+    const timing = this.resolveItemTiming(element, attributes, parentTiming, build)
     if (attributes.id === undefined) addIssue(build, element, 'source-id-generated', 'warning', `A stable target ID was generated as ${sourceId}.`)
     const profile = this.convertElementProfile(element, id, story.id, initial, attributes, context, build)
     if (profile === undefined) return undefined
-    const perso: MutablePerso = { id, type, initial: profile.initial, actions: profile.actions ?? {}, emit: {}, sourceId, source: element, attributes }
-    story.eventimes.push(...(profile.eventimes ?? []))
+    const timedProfile = this.applyItemTiming(profile, timing, id)
+    const perso: MutablePerso = { id, type, initial: timedProfile.initial, actions: timedProfile.actions ?? {}, emit: {}, sourceId, source: element, attributes }
+    story.itemTimings.set(element, timing)
+    story.eventimes.push(...(timedProfile.eventimes ?? []))
     const candidates = story.bySourceId.get(sourceId) ?? []
     candidates.push(perso)
     story.bySourceId.set(sourceId, candidates)
     story.persos.push(perso)
     story.elements.push(element)
-    this.inspectAttributes(element, attributes, context, build)
+    this.inspectAttributes(element, attributes, timing, context, build)
 
     if (element.name === 'container') {
       getElementChildren(element).forEach((child) => {
-        if (child.name !== 'tween') this.convertElement(child, story, [...ancestors, element], context, build, id)
+        if (child.name !== 'tween') this.convertElement(child, story, [...ancestors, element], context, build, id, timing)
       })
     } else if (getElementChildren(element).some(({ name }) => name !== 'tween')) {
       addIssue(build, element, 'source-nested-content-unresolved', 'blocker', `Nested XML elements inside <${element.name}> are not flattened into a guessed target structure.`)
     }
     return perso
+  }
+
+  /** Adds the element's delay and inherited duration using its visual ancestors. */
+  private resolveItemTiming(
+    element: XmlElement,
+    attributes: Readonly<Record<string, string>>,
+    parentTiming: ResolvedItemTiming,
+    build: PageBuild,
+  ): ResolvedItemTiming {
+    if (!VISUAL_ELEMENT_TYPES.has(element.name)) return parentTiming
+    const delaySeconds = readTimingNumber(attributes.delay, 'delay', element, build, 0)
+    const ownDurationSeconds = attributes.duration === undefined
+      ? undefined
+      : readTimingNumber(attributes.duration, 'duration', element, build, 0)
+    const startAtMs = parentTiming.startAtMs + delaySeconds * 1_000
+    const durationSeconds = ownDurationSeconds === undefined || ownDurationSeconds === 0
+      ? parentTiming.durationMs === undefined ? undefined : parentTiming.durationMs / 1_000
+      : ownDurationSeconds
+    return {
+      startAtMs,
+      ...(durationSeconds === undefined || durationSeconds === 0 ? {} : { durationMs: durationSeconds * 1_000 }),
+    }
+  }
+
+  /** Adds default visibility boundaries while leaving source effects to the adapter. */
+  private applyItemTiming(
+    profile: ConvertedElementProfile,
+    timing: ResolvedItemTiming,
+    id: string,
+  ): ConvertedElementProfile {
+    const actions = { ...(profile.actions ?? {}) }
+    const eventimes = [...(profile.eventimes ?? [])]
+    const style = { ...(profile.initial.style as Readonly<Record<string, unknown>> | undefined) }
+    if (timing.startAtMs > 0) {
+      const startEvent = `${id}:source-timing:start`
+      const display = style.display ?? 'block'
+      style.display = 'none'
+      actions[startEvent] = { style: { display } }
+      eventimes.push({ name: startEvent, startAt: timing.startAtMs })
+    }
+    if (timing.durationMs !== undefined) {
+      const endEvent = `${id}:source-timing:end`
+      actions[endEvent] = { style: { display: 'none' } }
+      eventimes.push({ name: endEvent, startAt: timing.startAtMs + timing.durationMs })
+    }
+    return {
+      ...profile,
+      initial: { ...profile.initial, ...(Object.keys(style).length === 0 ? {} : { style }) },
+      actions,
+      eventimes,
+    }
   }
 
   /** Selects the dedicated conversion rule for one stable source element type. */
@@ -384,10 +448,11 @@ export class PageConverter {
     applyExplicitStyle(attributes, style, importantProperties, element, context, build)
 
     const geometryAttributes = ['x', 'y', 'left', 'top', 'right', 'bottom', 'centered', 'centeredY']
-    if (geometryAttributes.some((name) => attributes[name] !== undefined)) {
+    const hasImageScale = element.name === 'img' && attributes.scale !== undefined
+    if (geometryAttributes.some((name) => attributes[name] !== undefined) || hasImageScale) {
       const geometry = context.resolveGeometry?.(element, attributes)
       if (geometry === undefined) {
-        const present = geometryAttributes.filter((name) => attributes[name] !== undefined)
+        const present = [...geometryAttributes.filter((name) => attributes[name] !== undefined), ...(hasImageScale ? ['scale'] : [])]
         addIssue(build, element, 'source-geometry-unresolved', 'blocker', `Source placement uses ${present.join(', ')}; its anchor and coordinate basis are not declared.`, JSON.stringify(Object.fromEntries(present.map((name) => [name, attributes[name]])), null, 2), 'Supply a source geometry resolver for the project canvas and anchor semantics.')
       } else {
         Object.entries(geometry)
@@ -465,7 +530,7 @@ export class PageConverter {
     context: PageConversionContext,
     build: PageBuild,
   ): void {
-    const resolved = context.resolveTween?.(tween, owner)
+    const resolved = context.resolveTween?.(tween, owner, owner === undefined ? undefined : story.itemTimings.get(owner))
     if (resolved === undefined) {
       addIssue(build, tween, 'source-tween-unresolved', 'blocker', 'The tween target, time base, start values, or source channels are not fully resolved.', readTextContent(tween) || JSON.stringify(tween.attributes), 'Return a resolved tween only after the source adapter establishes its target, absolute start, duration, channel values, and easing.')
       return
@@ -697,6 +762,7 @@ export class PageConverter {
   private inspectAttributes(
     element: XmlElement,
     attributes: Readonly<Record<string, string>>,
+    timing: ResolvedItemTiming,
     _context: PageConversionContext,
     build: PageBuild,
   ): void {
@@ -704,16 +770,17 @@ export class PageConverter {
       if (COMMON_ATTRIBUTES.has(name) || TIMING_ATTRIBUTES.has(name) || /^on[A-Z]/.test(name)) return
       addIssue(build, element, 'source-attribute-untranslated', 'warning', `The source attribute ${name} is preserved in provenance but has no generic mapping.`, `${name}="${attributes[name]}"`)
     })
-    Object.keys(attributes).filter((name) => TIMING_ATTRIBUTES.has(name)).forEach((name) => {
+    Object.keys(attributes).filter((name) => TIMING_ATTRIBUTES.has(name)
+      && (!(name === 'delay' || name === 'duration') || !VISUAL_ELEMENT_TYPES.has(element.name))).forEach((name) => {
       addIssue(build, element, 'source-timing-unresolved', 'blocker', `The source timing field ${name} needs its source time base and lifecycle semantics.`, `${name}="${attributes[name]}"`)
     })
-    if (attributes.duration === undefined && element.name !== 'sound' && element.name !== 'video') {
+    if (timing.durationMs === undefined && element.name !== 'sound' && element.name !== 'video') {
       addIssue(build, element, 'source-no-duration-end-hide-unresolved', 'blocker', 'The source rule that hides items without a duration at the section boundary is not represented in this partial SceneDoc.', undefined, 'Resolve the section end boundary and map the source display policy before importing this page for playback.')
     }
     if (attributes.override !== undefined) {
       addIssue(build, element, 'source-override-unconsumed', 'blocker', 'The final resolved attributes still contain an override marker whose source precedence is not applied.')
     }
-    if (attributes.scale !== undefined || attributes.rotation !== undefined || attributes.rotate !== undefined) {
+    if ((attributes.scale !== undefined && element.name !== 'img') || attributes.rotation !== undefined || attributes.rotate !== undefined) {
       addIssue(build, element, 'source-transform-unresolved', 'blocker', 'Source scale or rotation needs a channel and a coordinate basis before it is mapped.', JSON.stringify({ scale: attributes.scale, rotation: attributes.rotation, rotate: attributes.rotate }))
     }
   }
@@ -731,6 +798,21 @@ export class PageConverter {
       recipes: build.recipes,
     }
   }
+}
+
+/** Parses one finite non-negative visual timing value in source seconds. */
+function readTimingNumber(
+  rawValue: string | undefined,
+  name: 'delay' | 'duration',
+  element: XmlElement,
+  build: PageBuild,
+  fallback: number,
+): number {
+  if (rawValue === undefined) return fallback
+  const value = Number(rawValue)
+  if (Number.isFinite(value) && value >= 0) return value
+  addIssue(build, element, 'source-timing-value-invalid', 'blocker', `The visual ${name} must be a finite non-negative number of seconds.`, `${name}="${rawValue}"`)
+  return fallback
 }
 
 /** Returns the containing page supplied as the first source ancestor. */

@@ -44,7 +44,12 @@
 }
 
 .course-motion-quiz-stage {
-  background: #e1e1e1;
+  background: transparent;
+}
+
+.course-motion-image,
+.course-motion-correction-cross {
+  pointer-events: none;
 }
 
 .course-motion-quiz-prompt {

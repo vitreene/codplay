@@ -87,9 +87,32 @@ alors que la ressource n’est pas préparée pour l’import.
 
 Les `<tween>` sont convertis uniquement quand l’adaptateur fournit une cible,
 un temps absolu, une durée, les deux bornes de chaque canal et une courbe
-compatible. Le moteur crée alors une action avec un `eventime` de story. Les
-segments enchaînés, répétitions, `yoyo`, expressions et temps relatifs ne sont
-pas déduits automatiquement.
+compatible. Le résolveur reçoit aussi le timing effectif du perso qui porte le
+tween. Le moteur crée alors une action avec un `eventime` de story. Les segments
+enchaînés, répétitions, `yoyo`, expressions et temps relatifs ne sont pas
+déduits automatiquement.
+
+## Timing visuel commun
+
+Pour `<container>`, `<img>` et `<sub>`, `delay` et `duration` sont des nombres
+en secondes. Le début effectif additionne les délais des conteneurs visuels
+ancêtres et le délai de l’élément. Une durée positive propre à l’élément
+remplace celle héritée du conteneur; une durée absente ou nulle hérite de la
+durée du conteneur. Ces deux attributs gardent leur résolution source pour les
+médias, les sections, les tweens et les interactions.
+
+Un délai effectif positif initialise `display: none` et crée un événement
+`<perso-id>:source-timing:start` à son échéance, qui restaure l’affichage résolu
+du perso. Une durée effective crée `<perso-id>:source-timing:end` à
+`début + durée`, qui masque le perso. La politique des éléments visuels sans
+durée reste une décision du lecteur source et produit le diagnostic
+`source-no-duration-end-hide-unresolved`. Un adaptateur peut prolonger cette
+frontière lorsqu’un effet de sortie source doit se terminer avant le masquage.
+
+Les images converties gardent `type: 'img'`. Leur repère, leur taille issue de
+`scale` et leur `object-fit` dépendent du résolveur géométrique et de la
+présentation CodPlay fournis par l’appelant; le moteur ne crée pas de
+transformation CSS `scale` à partir de l’attribut source.
 
 ## Analyse statique des routines
 
@@ -132,7 +155,7 @@ peuvent donc contenir les éléments convertibles même si d’autres éléments
 bloquent la page.
 
 La conversion n’établit pas encore le démarrage séquentiel des stories, leur
-condition de fin, la règle de masquage des éléments sans `duration`, ni
+condition de fin, la règle de masquage des éléments sans durée, ni
 l’interaction entre la fin d’un média et les pop-ups. Ces cas restent des
 blockers dans le rapport. Leur résolution exige une règle source commune ou un
 adaptateur dont la sémantique a été établie. Le moteur n’infère pas une durée

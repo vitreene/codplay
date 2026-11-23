@@ -1,14 +1,15 @@
 # Transcription de pages XML dans CodPlay V2
 
-## Page SAMERA `p02`
+## Fixture SAMERA `p02` — hors route active
 
 ### Rôle
 
-Cette spécification décrit l’import de la page `p02` du cours SAMERA
-`02_acces.xml` dans une scène CodPlay V2. Une page source produit un
-`SceneDoc`; chaque `<sequency>` produit une story de ce document. La démo
-`?demo=course-motion` exerce la conversion avec le player, le builder, les
-composants et le cycle d’instance V2 partagés.
+Cette section décrit le convertisseur conservé pour la page `p02` du cours
+SAMERA `02_acces.xml`. Une page source produit un `SceneDoc`; chaque
+`<sequency>` produit une story de ce document. Ce fixture n’est pas la scène
+comparée par la route `?demo=course-motion`, qui utilise le cours standard
+`02_circulation.xml`, page2. Les règles SAMERA ci-dessous restent propres à
+`convertLegacyPage`.
 
 Le document source retenu est conservé dans
 [`page-p02.xml`](../src/v2/demos/course-motion-import/page-p02.xml). Ses
@@ -160,6 +161,30 @@ Les [notes SPIE](../notes/spie-transmission-import-notes.md) relèvent les cas
 
 ## Circulation `02_circulation`, page2 — quiz visuel
 
+### Première séquence p2_1 — import générique et effets de source
+
+La route de comparaison utilise la page standard `02_circulation.xml/page2`,
+pas le fixture SAMERA `p02`. Le fragment de séquence p2_1 est enveloppé dans
+une page puis lu par `CourseSourceReader`; `PageConverter` fournit les persos
+`img`, `layout` et audio `media`, leurs chemins résolus, la géométrie et les
+événements de timing communs. Le résolveur de cette source utilise le canevas
+`1600 × 788`, convertit `scale` des images en dimensions, et place les images
+par leur centre source. Le média audio démarre en mode `master` à l’instant 0.
+
+Les délais d’images et de panneaux sont convertis en secondes, additionnés dans
+les conteneurs visuels, puis fusionnés avec leurs effets d’apparition. Les
+durées déterminent le début de sortie; l’adaptateur de la scène retire la
+frontière de masquage générique et applique la sortie `toLeft` ou la fermeture
+locale du panneau avant de masquer le perso. Le `<tween>` d’image est résolu
+par `PageConverter` à partir du timing effectif de son image; le résolveur
+source fournit ses bornes de position et sa courbe. `effectPanelCircle`, ses
+couleurs, et les effets `growDown`, `fromLeft` et `toLeft` restent dans
+`legacy-page-sequence-converter.ts` et `legacy-image-converter.ts`.
+
+Les images utilisent `type: 'img'`; leur élément natif a
+`object-fit: contain` dans cette transcription. La route `?demo=course-motion`
+monte la séquence dans le layout et le player V2 partagés.
+
 La route `?demo=course-motion` ajoute à la première séquence animée de page2
 la séquence `p2_2` et son arrêt interactif. Le fragment source retenu est
 [`page2-sequence-2.xml`](../src/v2/demos/course-motion-import/page2-sequence-2.xml).
@@ -169,16 +194,21 @@ La narration `p2_2.mp3` commence à 8 626,508 ms et dure 4 469,683 ms.
 
 - L’image `p2/2_2a.jpg` devient le perso image
   `img_02_circulation_p2_2_2a`. Elle reprend `x="center"`, `y="390"` et
-  `scale="1.4"`; son rendu `img` garde `object-fit: contain`.
+  `scale="1.4"`; son rendu `img` garde `object-fit: contain`. Source
+  `showAfter="Y"` oblige à la conserver pendant l’épisode de correction : le
+  perso image est placé dans le stage parent de la page, hors du layout
+  `course-motion-p2-2-stage` qui porte les contrôles du quiz. Le layout du quiz
+  reste transparent pour laisser voir cette illustration pendant la question.
 - À l’entrée de p2_2, l’événement story
   `course-motion-p2-1:background:hide` masque en `display: none` le fond
   `img_02_circulation_p2_IMG_0565`. Il est placé à 8 626,508 ms sur la track
   de p2_1, la frontière où le lecteur source retire les éléments de la
   séquence précédente. Un Seek avant cette occurrence conserve le fond;
   après elle, le fond reste masqué.
-- L’image alpha `p2/2_2a_zone.png` devient le perso `zone1`, placé par son
-  centre source (`x="697"`, `y="335"`, `scale="1.4"`) et masqué avant la
-  sélection.
+- L’image alpha `p2/2_2a_zone.png` n’est pas montée comme une couche au-dessus
+  de l’illustration. Ses dimensions intrinsèques (79 × 183) et son placement
+  source (`x="697"`, `y="335"`, `scale="1.4"`) fournissent le cadre de la
+  zone interactive via le convertisseur d’image partagé par la démo.
 - Le `<sub>` source référence `m2p2_txt1`, résolu depuis le fragment français
   [`page2-text-fr.xml`](../src/v2/demos/course-motion-import/page2-text-fr.xml).
   Son contenu HTML `<b>` est conservé dans le perso `text`
@@ -197,17 +227,19 @@ La narration `p2_2.mp3` commence à 8 626,508 ms et dure 4 469,683 ms.
   `scale="1.4"` et référence `zone1`. Le SVG de `m2p2_txt2_zone` (viewBox
   `80 × 190`) fournit la forme réelle du clic via le clip inline
   [`page2-hotspot-clip.svg`](../src/v2/demos/course-motion-import/page2-hotspot-clip.svg).
-  Le lecteur source insère ce SVG dans le libellé QCM après son retrait de
-  `1.5em`; le parent QCM réduit la taille de police à `0.95em`, et le contexte
-  source est à 32 px. Avec `scale="1.4"`, le bord gauche de la forme se place
-  donc à `590 + (1.5 × 0.95 × 32 × 1.4) = 653.84` px source. La conversion
-  conserve `y=202`, la largeur `80 × 1.4` et la hauteur `190 × 1.4`, puis
-  rapporte ces valeurs au canevas en `cqw`. Elle clippe le contrôle à la forme
-  SVG; elle ne rend pas toute la boîte rectangulaire cliquable.
-- La sélection révèle `zone1`. « Valider » confirme ensuite le seul choix
-  déclaré, désactive le contrôle et joue `bonne.mp3` via un perso `media`
-  indépendant. La fin de séquence est planifiée après la narration et le
-  feedback de réussite, selon celui qui se termine le plus tard.
+  Les attributs de placement du `<prop>` restent lus et validés, mais le cadre
+  CodPlay suit celui de l’image `zone1` afin que la surface interactive soit
+  alignée sur la zone visuelle. Le chemin est normalisé sur le cadre de cette
+  image en `objectBoundingBox`, puis converti en `cqw`.
+- Le perso `input` utilise ce même clip SVG pour le hit-testing et pour son voile
+  rouge semi-transparent à la sélection. Le rendu et la zone cliquable partagent
+  ainsi une forme unique; aucun perso image `zone1` superposé n’est nécessaire.
+  Les images de présentation, y compris la croix de correction, ont
+  `pointer-events: none` afin qu’elles ne capturent pas le pointeur.
+- « Valider » confirme le seul choix déclaré, désactive le contrôle et joue
+  `bonne.mp3` via un perso `media` indépendant. La fin de séquence est planifiée
+  après la narration et le feedback de réussite, selon celui qui se termine le
+  plus tard.
 - Le XML déclare aussi une action `failed` avec `mauvaise.mp3`, mais ne déclare
   aucune réponse fausse. Cette page ne produit donc pas de hotspot d’erreur ni
   de branche d’échec accessible.
@@ -234,8 +266,9 @@ Le core CodPlay ne porte aucune logique particulière à ce quiz.
 
 Le fragment [`page2-sequence-3.xml`](../src/v2/demos/course-motion-import/page2-sequence-3.xml)
 contient `p2_3.mp3`, le `snapFLA` `croix_rouge_snap_canvas.js` à `x=660`,
-`y=320`, `scale=0.6`, et l’image `p2/2_2b.jpg`, retardée de 1,5 s,
-positionnée au centre à `y=390`, `scale=1.4`, avec l’effet source `blink`.
+`y=320`, `scale=0.6`, `loop="N"`, `showAfter="Y"`, et l’image
+`p2/2_2b.jpg`, retardée de 1,5 s, positionnée au centre à `y=390`,
+`scale=1.4`, avec l’effet source `blink` et `showAfter="Y"`.
 Il est transcrit en story distincte `page2-sequence-3` par
 [`page2-sequence-3-converter.ts`](../src/v2/demos/course-motion-import/page2-sequence-3-converter.ts).
 
@@ -258,4 +291,10 @@ sa croix et son image restent dans leurs états initiaux jusqu’aux événement
 planifiés après le retour sonore. La séquence n’ajoute ni commande de lecture
 au layout, ni action de télécommande. La croix SVG et le clignotement sont des
 transcriptions expérimentales des deux éléments source; ils ne prétendent pas
-reproduire le runtime SnapFLA ni son effet CSS.
+reproduire le runtime SnapFLA ni son effet CSS. Le layout du quiz peut être
+masqué après le retour `bonne.mp3` sans masquer l’image `2_2a.jpg`. À l’arrivée,
+la croix se superpose à cette image de référence; l’image corrigée `2_2b.jpg`
+arrive ensuite au-dessus, clignote deux fois, puis reste visible. Pendant son
+clignotement, l’image de référence demeure visible en dessous. La source marque
+la croix et l’image corrigée `showAfter="Y"`; ainsi, à la fin du clignotement,
+les deux restent présentes et la croix demeure au-dessus de l’image corrigée.

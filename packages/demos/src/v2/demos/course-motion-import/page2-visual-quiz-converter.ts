@@ -14,10 +14,7 @@ const ANSWER_SELECTED_EVENT = `${QUIZ_PREFIX}:answer:selected`;
 const ANSWER_RESOLVED_EVENT = `${QUIZ_PREFIX}:answer:resolved`;
 const VALIDATE_EVENT = `${QUIZ_PREFIX}:validate`;
 const QUIZ_STAGE_HIDE_EVENT = `${QUIZ_PREFIX}:stage:hide`;
-const SOURCE_HOTSPOT_HEIGHT = 190;
-const SOURCE_QUIZ_FONT_SIZE = 32;
-const SOURCE_QCM_ITEM_FONT_SCALE = 0.95;
-const SOURCE_LABEL_PADDING_EM = 1.5;
+const HOTSPOT_TINT_COLOR = 'rgba(255, 0, 0, 0.5)';
 export const PAGE2_SUCCESS_FEEDBACK_DURATION_MS = 1_513.8;
 const PAGE2_AUDIO_START_AT_MS = 8_626.508;
 const PAGE2_AUDIO_DURATION_MS = 4_469.683;
@@ -25,6 +22,7 @@ const PIXELS_PER_CQW = LEGACY_SOURCE_CANVAS.pixelsPerCqw;
 
 type QuizStoryPerso = StoryDoc['persos'][number];
 type QuizEventime = NonNullable<StoryDoc['eventimes']>[number];
+type LegacyImageFrame = ReturnType<typeof convertLegacyImageElement>['initialFrame'];
 
 type Page2VisualQuizOptions = Readonly<{
   assetBasePath: string;
@@ -293,19 +291,19 @@ function createAudioPerso(
   };
 }
 
-/** Positions the answer region over the SVG inside the source QCM's padded label. */
-function createHotspotPerso(choice: Element, stageId: string): QuizStoryPerso {
-  const left = Number(choice.getAttribute('x'));
-  const top = Number(choice.getAttribute('y'));
-  const width = Number(choice.getAttribute('width'));
-  const scale = Number(choice.getAttribute('scale'));
+/** Positions the SVG answer region on the converted tinted image frame. */
+function createHotspotPerso(choice: Element, imageFrame: LegacyImageFrame, stageId: string): QuizStoryPerso {
+  const sourceX = Number(choice.getAttribute('x'));
+  const sourceY = Number(choice.getAttribute('y'));
+  const sourceWidth = Number(choice.getAttribute('width'));
+  const sourceScale = Number(choice.getAttribute('scale'));
   const opacity = Number(choice.getAttribute('alpha'));
   if (
-    ![left, top, width, scale, opacity].every(Number.isFinite)
-    || left < 0
-    || top < 0
-    || width <= 0
-    || scale <= 0
+    ![sourceX, sourceY, sourceWidth, sourceScale, opacity].every(Number.isFinite)
+    || sourceX < 0
+    || sourceY < 0
+    || sourceWidth <= 0
+    || sourceScale <= 0
     || opacity < 0
     || opacity > 1
   ) {
@@ -313,16 +311,14 @@ function createHotspotPerso(choice: Element, stageId: string): QuizStoryPerso {
   }
   const selectedEvent = ANSWER_SELECTED_EVENT;
   const resolvedEvent = ANSWER_RESOLVED_EVENT;
-  // The source label adds 1.5em after the QCM's 0.95em font-size, before scale.
-  const svgLeft = left + scale * SOURCE_LABEL_PADDING_EM * SOURCE_QCM_ITEM_FONT_SCALE * SOURCE_QUIZ_FONT_SIZE;
   const hotspotStyle = {
     position: 'absolute',
-    left: `${svgLeft / PIXELS_PER_CQW}cqw`,
-    top: `${top / PIXELS_PER_CQW}cqw`,
-    width: `${width * scale / PIXELS_PER_CQW}cqw`,
-    height: `${SOURCE_HOTSPOT_HEIGHT * scale / PIXELS_PER_CQW}cqw`,
+    left: `${imageFrame.x}cqw`,
+    top: `${imageFrame.y}cqw`,
+    width: `${imageFrame.width}cqw`,
+    height: `${imageFrame.height}cqw`,
     clipPath: 'url(#course-motion-hotspot-shape)',
-    opacity,
+    backgroundColor: 'transparent',
     zIndex: 3,
     cursor: 'pointer',
   };
@@ -347,7 +343,12 @@ function createHotspotPerso(choice: Element, stageId: string): QuizStoryPerso {
       change: { event: { name: ANSWER_SELECT_EVENT, data: { answerId: TARGET_ANSWER_ID } } },
     },
     actions: {
-      [selectedEvent]: { selectedAnswerIds: [TARGET_ANSWER_ID], checked: true, visualState: 'selected' },
+      [selectedEvent]: {
+        selectedAnswerIds: [TARGET_ANSWER_ID],
+        checked: true,
+        visualState: 'selected',
+        style: { backgroundColor: HOTSPOT_TINT_COLOR },
+      },
       [resolvedEvent]: {
         selectedAnswerIds: [TARGET_ANSWER_ID],
         correctAnswerIds: [TARGET_ANSWER_ID],
@@ -356,6 +357,7 @@ function createHotspotPerso(choice: Element, stageId: string): QuizStoryPerso {
         disableAnswers: true,
         showCorrection: true,
         visualState: 'revealed-correct',
+        style: { backgroundColor: HOTSPOT_TINT_COLOR },
       },
     },
   };
@@ -445,15 +447,14 @@ export function convertPage2VisualQuiz(
     assetBasePath: imageBasePath,
     chapterId: '02_circulation',
     imageSize: sourceImageSize,
-    stageId,
+    stageId: options.parentStageId,
   });
-  const revealImagePerso = convertLegacyImageElement(revealImage, {
+  const revealImageFrame = convertLegacyImageElement(revealImage, {
     assetBasePath: imageBasePath,
     chapterId: '02_circulation',
     imageSize: revealImageSize,
     stageId,
-  });
-  const revealEvent = `${QUIZ_PREFIX}:hotspot:reveal`;
+  }).initialFrame;
   const promptKey = prompt.textContent?.trim();
   if (!promptKey) throw new Error('The source prompt must reference one translation key.');
   const promptWidth = Number(prompt.getAttribute('width'));
@@ -487,10 +488,10 @@ export function convertPage2VisualQuiz(
     },
     actions: {},
   } satisfies QuizStoryPerso;
-  const inputPerso = createHotspotPerso(choice, stageId);
+  const inputPerso = createHotspotPerso(choice, revealImageFrame, stageId);
   const showStageEvent = `${QUIZ_PREFIX}:stage:show`;
   const showStage: QuizEventime = { name: showStageEvent, startAt: options.audioStartAtMs };
-  const absoluteImageEventimes = [...baseImage.eventimes, ...revealImagePerso.eventimes]
+  const absoluteImageEventimes = baseImage.eventimes
     .map((eventime) => ({ ...eventime, startAt: eventime.startAt + options.audioStartAtMs }));
 
   return {
@@ -506,10 +507,7 @@ export function convertPage2VisualQuiz(
         if (state.submitted === true || event.data?.answerId !== TARGET_ANSWER_ID) return undefined;
         return {
           update: { selectedAnswerIds: [TARGET_ANSWER_ID] },
-          events: [
-            { name: ANSWER_SELECTED_EVENT, visibility: 'public' },
-            { name: revealEvent },
-          ],
+          events: [{ name: ANSWER_SELECTED_EVENT, visibility: 'public' }],
         };
       },
       [`${QUIZ_PREFIX}-submit`]: handleVisualQuizSubmit,
@@ -524,13 +522,6 @@ export function convertPage2VisualQuiz(
       mainAudio.perso,
       feedbackAudio.perso,
       baseImage.perso,
-      {
-        ...revealImagePerso.perso,
-        actions: {
-          ...revealImagePerso.perso.actions,
-          [revealEvent]: { style: { opacity: 1 } },
-        },
-      },
       promptPerso,
       inputPerso,
       ...createValidationControlPersos(stageId),

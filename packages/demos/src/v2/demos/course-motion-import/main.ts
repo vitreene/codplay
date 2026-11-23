@@ -32,11 +32,14 @@ export function createScene(): SceneDoc {
     },
   });
   const motionStory = motionScene.stories.main;
-  const previousBackgroundId = 'img_02_circulation_p2_IMG_0565';
+  const previousBackground = motionStory.persos.find((perso) => (
+    perso.type === 'img' && perso.initial?.src === `${IMAGE_BASE_PATH}/p2/IMG_0565.jpg`
+  ));
   const backgroundHideEvent = 'course-motion-p2-1:background:hide';
-  if (!motionStory.persos.some(({ id }) => id === previousBackgroundId)) {
+  if (previousBackground === undefined) {
     throw new Error('The p2_1 background image is missing from the motion scene.');
   }
+  const previousBackgroundId = previousBackground.id;
   const motionStoryWithBackgroundEnd = {
     ...motionStory,
     persos: motionStory.persos.map((perso) => (

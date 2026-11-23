@@ -19,6 +19,7 @@
   "dependencies": {
     "@codplay/capsule-automation": "*",
     "@codplay/component-v2": "*",
+    "@codplay/course-import": "*",
     "@codplay/editor": "*",
     "@codplay/remote": "*",
     "@codplay/scene-factory": "*",

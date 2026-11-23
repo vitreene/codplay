@@ -12,7 +12,7 @@ export type {
   JavaScriptPrimitive,
 } from './javascript-call-reader'
 export { PageConverter } from './page-converter'
-export type { PageConversionContext, ResolvedCallbackTrigger, ResolvedSourceTween } from './page-converter'
+export type { PageConversionContext, ResolvedCallbackTrigger, ResolvedItemTiming, ResolvedSourceTween } from './page-converter'
 export { SourceStyleReader } from './source-style-reader'
 export type { SourceStyleIssue, SourceStyleResolution, SourceStyleSheet } from './source-style-reader'
 export type {
