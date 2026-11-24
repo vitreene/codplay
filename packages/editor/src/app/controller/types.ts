@@ -69,7 +69,6 @@ export type Command =
   | { name: 'createItem'; args: { geometry: OffsetData; parentId?: string | null; zoneId?: string } }
   | { name: 'setRootPlacementMode'; args: { mode: RootPlacementMode } }
   | { name: 'createRootZone'; args: { zoneId: string; area: ZoneRect } }
-  | { name: 'setRootZonesSurface'; args: { orientation: 'portrait' | 'landscape'; zones: readonly { id: string; name: string; area: ZoneRect }[] } }
   | { name: 'setZonesSurface'; args: { capsuleId: string | null; orientation: Orientation; zones: readonly { id: string; name: string; area: ZoneRect }[] } }
   | { name: 'assignType'; args: { itemId: string; type: ItemType } }
   | { name: 'setItemRotationMode'; args: { itemId: string; mode: 'manual' | 'tangent' } }
@@ -80,7 +79,6 @@ export type Command =
   | { name: 'createKeyframe'; args: { itemId: string; timeMs: number; decorId?: string } }
   | { name: 'createCapsule'; args: { geometry: OffsetData; capsuleDef: CapsuleDef; parentId?: string | null; zoneId?: string } }
   | { name: 'setCapsuleDef'; args: { itemId: string; patch: Partial<CapsuleDef> } }
-  | { name: 'placeInZone'; args: { itemId: string; zoneId: string | null } }
   | { name: 'deleteItem'; args: { itemId: string } }
   | SequenceEditorCommand
 

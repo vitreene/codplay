@@ -1,3 +1,4 @@
+import { multiplyMatrix, type Matrix2D } from 'ace'
 import type { CodPlayPresentationPose } from 'codplay'
 import { OFFSET_STYLE_PROPERTIES } from '../decor-editor/units'
 import { resolveContentInsetStyles } from '../motion-editor/border-insets'
@@ -9,37 +10,16 @@ import { ITEM_MOTION_REFERENCE_ANGLE, ITEM_MOTION_ROTATION_BASELINE } from './it
 
 type Length = Readonly<{ cqw: number; px: number }>
 
-export type AffineMatrix2D = Readonly<{
-  a: number
-  b: number
-  c: number
-  d: number
-  e: number
-  f: number
-}>
-
 /** The CSS transform and the local axis that produced it, captured at one presentation update. */
 export type ItemTransformProjection = Readonly<{
-  matrix: AffineMatrix2D
+  matrix: Matrix2D
   rotationOrigin: Readonly<{ fx: number; fy: number }>
 }>
 
 const itemTransformProjections = new WeakMap<Element, ItemTransformProjection>()
 
-/** Multiplies affine matrices in CSS column-vector order. */
-function multiplyAffine(left: AffineMatrix2D, right: AffineMatrix2D): AffineMatrix2D {
-  return {
-    a: left.a * right.a + left.c * right.b,
-    b: left.b * right.a + left.d * right.b,
-    c: left.a * right.c + left.c * right.d,
-    d: left.b * right.c + left.d * right.d,
-    e: left.a * right.e + left.c * right.f + left.e,
-    f: left.b * right.e + left.d * right.f + left.f,
-  }
-}
-
 /** Reads the computed 2D portion of a CSS transform matrix. */
-function readTransformMatrix(node: Element, transform: string): AffineMatrix2D {
+function readTransformMatrix(node: Element, transform: string): Matrix2D {
   if (transform === '' || transform === 'none') return { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
   const Matrix = node.ownerDocument.defaultView?.DOMMatrixReadOnly
   if (Matrix !== undefined) {
@@ -148,11 +128,11 @@ export function captureItemTransformProjection(
   const scale = readTransformScale(style.scale, 1)
   const scaleMatrix = { a: scale.x, b: 0, c: 0, d: scale.y, e: 0, f: 0 }
   const authoredTransform = readTransformMatrix(node, style.transform)
-  const local = multiplyAffine(rotateMatrix, multiplyAffine(scaleMatrix, authoredTransform))
+  const local = multiplyMatrix(rotateMatrix, multiplyMatrix(scaleMatrix, authoredTransform))
   return {
-    matrix: multiplyAffine(translateMatrix, multiplyAffine(
+    matrix: multiplyMatrix(translateMatrix, multiplyMatrix(
       { a: 1, b: 0, c: 0, d: 1, e: originX, f: originY },
-      multiplyAffine(local, { a: 1, b: 0, c: 0, d: 1, e: -originX, f: -originY }),
+      multiplyMatrix(local, { a: 1, b: 0, c: 0, d: 1, e: -originX, f: -originY }),
     )),
     rotationOrigin,
   }

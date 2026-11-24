@@ -1,4 +1,5 @@
 import type { Actor } from 'xstate'
+import { invertMatrix } from 'ace'
 import { EDITOR_V2_STORY_ID } from '../../builder-v2/types'
 import type { EditorPlayerPresentationFrame } from '../commands/editor-player-command-facade'
 import type { EditorCoordinationBridge } from './editor-coordination-bridge'
@@ -39,12 +40,10 @@ function resolvePresentedItemId(
     if (!itemId.startsWith(itemIdPrefix)
       || !sceneItemIds.has(itemId.slice(itemIdPrefix.length))
       || pose.localWidth <= 0 || pose.localHeight <= 0) return []
-    const determinant = pose.matrix.a * pose.matrix.d - pose.matrix.b * pose.matrix.c
-    if (!Number.isFinite(determinant) || Math.abs(determinant) < 1e-8) return []
-    const dx = point.x - pose.origin.x
-    const dy = point.y - pose.origin.y
-    const localX = (pose.matrix.d * dx - pose.matrix.c * dy) / determinant
-    const localY = (-pose.matrix.b * dx + pose.matrix.a * dy) / determinant
+    const inverse = invertMatrix({ ...pose.matrix, e: pose.origin.x, f: pose.origin.y })
+    if (inverse === null) return []
+    const localX = inverse.a * point.x + inverse.c * point.y + inverse.e
+    const localY = inverse.b * point.x + inverse.d * point.y + inverse.f
     return localX >= 0 && localX <= pose.localWidth && localY >= 0 && localY <= pose.localHeight
       ? [itemId.slice(itemIdPrefix.length)]
       : []

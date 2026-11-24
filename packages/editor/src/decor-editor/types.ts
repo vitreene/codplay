@@ -3,10 +3,6 @@ import type { SelectionFrameValue as SelectionFrameV2Value } from '@codplay/sele
 /** V2 class value accepted by the className service. */
 export type ClassNameValue = string | { add?: string; remove?: string }
 
-// ─── Orientation ────────────────────────────────────────────────────────────
-
-export type OrientationContext = 'horizontal' | 'vertical'
-
 // ─── Item ───────────────────────────────────────────────────────────────────
 
 export type ItemType = 'bloc' | 'text' | 'image' | 'media' | 'video' | 'capsule'
@@ -16,16 +12,6 @@ export type ItemType = 'bloc' | 'text' | 'image' | 'media' | 'video' | 'capsule'
 export interface FlexAnchor {
   alignSelf: 'start' | 'center' | 'end' | 'stretch'
   justifySelf: 'start' | 'center' | 'end' | 'stretch'
-}
-
-// ─── Capsule ────────────────────────────────────────────────────────────────
-
-export interface CapsulePatch {
-  behavior?: string
-  defaultTransition?: string
-  sequencing?: 'sequential' | 'stagger'
-  staggerMs?: number
-  grid?: { rows: number; cols: number } | { preset: string }
 }
 
 // ─── Offset (module non-CSS, transposé en aval — conversion d’unités) ──────────────────
@@ -80,7 +66,6 @@ export interface DecorPatch {
   classes?: ClassNameValue
   offset?: OffsetPatch
   zoneId?: string | null // identifiant stable ; null = surface de la capsule
-  capsule?: CapsulePatch // items capsule uniquement (§ 8)
   text?: string // contenu textuel (saisie dans dedit)
   textAutoSize?: TextAutoSizePatch // items texte uniquement (spec text-auto-size §5)
   custom?: string // mini-éditeur de code : CSS libre, responsabilité auteur
@@ -100,28 +85,8 @@ export type ResolvedDecor = DecorPatch
 
 export interface DecorPreset {
   name: string
-  /** Jamais `offset`, `zoneId`, `capsule` — cf contrat de palette. */
+  /** Jamais `offset` ni `zoneId` — cf contrat de palette. */
   patch: DecorPatch
-}
-
-// ─── Zones ──────────────────────────────────────────────────────────────────
-
-export interface ZoneCoords {
-  x: number // cqw, relatif à la capsule
-  y: number // cqw
-  width: number // cqw
-  height: number // cqw
-}
-
-export type ZoneDef =
-  | { id: string; name: string; coords: ZoneCoords }
-  | { id: string; name: string; contexts: Record<OrientationContext, ZoneCoords> }
-
-export type ZoneTable = ZoneDef[]
-
-export interface ZoneCard {
-  name: string
-  zones: ZoneTable
 }
 
 // ─── Selection Frame value (px, interface de decor-editor) ───────────────

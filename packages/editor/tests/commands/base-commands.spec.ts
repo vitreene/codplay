@@ -114,7 +114,7 @@ describe('assignType', () => {
     const { scene, itemId } = commands.createItem(emptyScene(), { geometry: {} })
     const next = commands.assignType(scene, { itemId, type: 'image' })
     const item = next.items.find((i) => i.id === itemId)!
-    expect(next.decors[item.initialDecorId]).toEqual({ id: item.initialDecorId, offset: {} })
+    expect(next.decors[item.initialDecorId]).toEqual({ id: item.initialDecorId })
   })
 })
 
@@ -276,23 +276,6 @@ describe('setCapsuleDef', () => {
   it('throws when the target item has no CapsuleDef', () => {
     const created = commands.createItem(emptyScene(), { geometry: {} })
     expect(() => commands.setCapsuleDef(created.scene, { itemId: created.itemId, patch: {} })).toThrow()
-  })
-})
-
-describe('placeInZone', () => {
-  it('assigns a zone id onto the item initial decor', () => {
-    const created = commands.createItem(emptyScene(), { geometry: {} })
-    const next = commands.placeInZone(created.scene, { itemId: created.itemId, zoneId: 'zone-1' })
-    const item = next.items.find((i) => i.id === created.itemId)!
-    expect(next.decors[item.initialDecorId]?.zoneId).toBe('zone-1')
-  })
-
-  it('clears the zone id when given null', () => {
-    const created = commands.createItem(emptyScene(), { geometry: {} })
-    const placed = commands.placeInZone(created.scene, { itemId: created.itemId, zoneId: 'zone-1' })
-    const cleared = commands.placeInZone(placed, { itemId: created.itemId, zoneId: null })
-    const item = cleared.items.find((i) => i.id === created.itemId)!
-    expect(cleared.decors[item.initialDecorId]?.zoneId).toBeNull()
   })
 })
 

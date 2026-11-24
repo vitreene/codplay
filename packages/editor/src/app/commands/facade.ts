@@ -33,8 +33,6 @@ export function runCommandWithResult(scene: EditorScene, command: Command): { sc
       return { scene: rootPlacement.setRootPlacementMode(scene, command.args) }
     case 'createRootZone':
       return { scene: rootPlacement.createRootZone(scene, command.args) }
-    case 'setRootZonesSurface':
-      return { scene: rootPlacement.setRootZonesSurface(scene, command.args) }
     case 'setZonesSurface':
       return { scene: rootPlacement.setZonesSurface(scene, command.args) }
     case 'assignType':
@@ -55,8 +53,6 @@ export function runCommandWithResult(scene: EditorScene, command: Command): { sc
       return base.createCapsule(scene, command.args)
     case 'setCapsuleDef':
       return { scene: base.setCapsuleDef(scene, command.args) }
-    case 'placeInZone':
-      return { scene: base.placeInZone(scene, command.args) }
     case 'deleteItem':
       return { scene: base.deleteItem(scene, command.args) }
     // ── Commandes locales au sequence-editor (`sequence-editor/commands.ts`) — même voie

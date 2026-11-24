@@ -28,9 +28,9 @@ describe('resolveFieldAcrossItems (contrat de multi-sélection, multi-sélection
     expect(resolveFieldAcrossItems(decors, 'style.font-size')).toEqual({ kind: 'mixed' })
   })
 
-  it('propriété racine simple (zone)', () => {
+  it('propriété racine simple (zoneId, identité stable de la zone)', () => {
     const decors: ResolvedDecor[] = [{ zoneId: 'header-id' }, { zoneId: 'header-id' }]
-    expect(resolveFieldAcrossItems(decors, 'zone')).toEqual({ kind: 'uniform', value: 'header' })
+    expect(resolveFieldAcrossItems(decors, 'zoneId')).toEqual({ kind: 'uniform', value: 'header-id' })
   })
 
   it('style est une carte ouverte : n\'importe quelle propriété CSS fonctionne sans déclaration préalable', () => {

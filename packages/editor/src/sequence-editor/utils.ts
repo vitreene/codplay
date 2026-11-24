@@ -1,9 +1,5 @@
 import { resolveKeyframeChannel } from './types'
-import type { LayoutProfile, Item, SnapPoint } from './types'
-
-export function clampMs(ms: number, minMs: number, maxMs: number): number {
-  return Math.max(minMs, Math.min(maxMs, ms))
-}
+import type { LayoutProfile, Item } from './types'
 
 /** Every item directly under `parentId` (root items when `null`), sorted by their fractional `order` key — same patron as `build-scene.ts::childrenOf`. */
 export function childrenOf(items: Item[], parentId: string | null): Item[] {
@@ -66,16 +62,6 @@ export function getParentClipMarkers(
     introMs: keyframes[0]?.timeMs ?? null,
     outroMs: keyframes.at(-1)?.timeMs ?? null,
   }
-}
-
-export function generateSnapPoints(items: Item[]): SnapPoint[] {
-  const points: SnapPoint[] = []
-  for (const item of items) {
-    for (const kf of item.keyframes) {
-      points.push({ timeMs: kf.timeMs, source: 'keyframe', id: kf.id })
-    }
-  }
-  return points
 }
 
 /** Every descendant id of `itemId` (itself excluded), computed by repeated parentId lookups — no `children` field to walk. */

@@ -130,8 +130,8 @@ export function createSequenceEditorBridge(
       captures.push({ itemId, keyframeId, candidate, persisted: false })
       return [command]
     }
-    // `resolveKeyframeInsertionPatch` n'a déjà renvoyé un patch non-null qu'après avoir vérifié
-    // `patchDiffersFromBase` — au moins un champ diverge donc forcément ici, `patchToDecorArgs`
+    // `resolveKeyframeInsertionPatch` ne renvoie un patch non-null que si la map des propriétés
+    // modifiées n'est pas vide — au moins un champ diverge donc forcément ici, `patchToDecorArgs`
     // (`touched` sur les mêmes champs) ne peut pas renvoyer `null` pour ce même patch.
     const decorArgs = patchToDecorArgs(patch)
     if (decorArgs === null) {

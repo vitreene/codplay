@@ -15,9 +15,9 @@ describe('stripInherited', () => {
     expect(result.style).toBeUndefined()
   })
 
-  it('retire une propriété racine simple (zone)', () => {
+  it('retire une propriété racine simple (zoneId)', () => {
     const patch: DecorPatch = { zoneId: 'header-id', style: { 'font-weight': 'bold' } }
-    const result = stripInherited(patch, 'zone')
+    const result = stripInherited(patch, 'zoneId')
     expect(result.zoneId).toBeUndefined()
     expect(result.style).toEqual({ 'font-weight': 'bold' })
   })

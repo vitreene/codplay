@@ -18,7 +18,6 @@ import {
   motionPathAnchorForFrame,
   midpoint,
   normalizeAngleDegrees,
-  presentationBorderBoxPoseToContentFrame,
   presentationItemPoseToContentFrame,
   presentationPoseToSelectionFrame,
   resolveMotionGeometryPose,
@@ -358,27 +357,6 @@ describe('motion-editor geometry', () => {
     expect(frameVisualCenter(frame).y).toBeCloseTo(126, 6)
     expect(frame.width).toBe(40)
     expect(frame.height).toBe(20)
-  })
-
-  it('projects a path host border-box pose back to the same shared content frame', () => {
-    const pose = {
-      origin: { x: 100, y: 80 },
-      matrix: { a: 0, b: 2, c: -1, d: 0 },
-      localWidth: 50,
-      localHeight: 36,
-    }
-    const insets = { left: 3, top: 5, right: 7, bottom: 11 }
-    const hostFrame = presentationBorderBoxPoseToContentFrame(pose, { fx: 0.5, fy: 0.5 }, insets)
-    const contentFrame = presentationPoseToSelectionFrame(
-      { ...pose, localWidth: 40, localHeight: 20 },
-      { fx: 0.5, fy: 0.5 },
-      insets,
-    )
-
-    expect(hostFrame).toEqual(contentFrame)
-    expect(hostFrame.width).toBe(40)
-    expect(hostFrame.height).toBe(20)
-    expect(frameVisualCenter(hostFrame)).toMatchObject({ x: 85, y: 126 })
   })
 
   it('keeps current content dimensions independent of the motion frame dimensions', () => {

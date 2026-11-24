@@ -1,7 +1,5 @@
 /** Pure timing resolution for one editor motion segment. */
 
-export const DEFAULT_MOTION_TRANSITION_WINDOW_MS = 500
-
 export type MotionKeyframeReference = Readonly<{
   id: string
   timeMs: number
@@ -29,20 +27,6 @@ export type MotionLifetime = Readonly<{
 export type MotionInheritedLifetime = Readonly<{
   introTimeMs: number
   outroTimeMs: number
-}>
-
-export type MotionTimingDefinition = Readonly<{
-  durationMs?: number
-  direction?: 'before' | 'after'
-}>
-
-export type MotionTransitionWindow = Readonly<{
-  sourceTimeMs: number
-  targetTimeMs: number
-  startTimeMs: number
-  endTimeMs: number
-  durationMs: number
-  direction: 'before' | 'after'
 }>
 
 /** Returns keyframes in a stable temporal order without mutating the caller's collection. */
@@ -108,35 +92,4 @@ export function resolveMotionLifetime(
   // interval is visible; this resolver preserves the real/virtual ownership instead of silently
   // dropping an inherited marker from the timeline projection.
   return { intro, outro }
-}
-
-/** Resolves a bounded motion window without reading or mutating editor state. */
-export function resolveMotionTransitionWindow(
-  sourceTimeMs: number,
-  targetTimeMs: number,
-  transition?: MotionTimingDefinition,
-  defaultDurationMs = DEFAULT_MOTION_TRANSITION_WINDOW_MS,
-): MotionTransitionWindow | null {
-  if (!Number.isFinite(sourceTimeMs) || !Number.isFinite(targetTimeMs) || targetTimeMs <= sourceTimeMs) return null
-
-  const intervalMs = targetTimeMs - sourceTimeMs
-  const requestedDurationMs = transition?.durationMs ?? defaultDurationMs
-  const durationMs = Math.min(intervalMs, clampPositiveDuration(requestedDurationMs))
-  const direction = transition?.direction ?? 'after'
-  const startTimeMs = direction === 'before' ? targetTimeMs - durationMs : sourceTimeMs
-
-  return {
-    sourceTimeMs,
-    targetTimeMs,
-    startTimeMs,
-    endTimeMs: startTimeMs + durationMs,
-    durationMs,
-    direction,
-  }
-}
-
-/** Keeps a motion duration positive and finite before the interval clamp is applied. */
-function clampPositiveDuration(value: number): number {
-  if (!Number.isFinite(value)) return 1
-  return Math.max(1, Math.round(value))
 }

@@ -1,4 +1,5 @@
 import type { Actor } from 'xstate'
+import { invertMatrix } from 'ace'
 import type { CodPlayPresentationPose, CodPlaySnapshot, CodPlaySnapshotPatch } from 'codplay'
 import type { MotionEasing } from '../../motion-editor/easing'
 import { resolveMotionEaseProgress } from '../../motion-editor/easing'
@@ -606,12 +607,6 @@ function buildDecorCommands(scene: EditorScene, target: Target, patch: DecorPatc
   const contentArgs = patchToContentArgs(patch, existingContent, target.itemType)
   if (contentArgs) commands.push({ name: 'assignContent', args: { itemId: target.itemId, content: contentArgs } })
 
-  // `.capsule` (→ `Item.capsule`) : aucun geste de création de capsule n'existe encore dans
-  // l'app (`DemoMenuRegion` ne crée que des items texte) — rien à vérifier tant que ce cas ne
-  // se présente pas réellement. `.custom` (CSS libre) est routé depuis ce jour via
-  // `Decor.custom`/`patchToDecorArgs` — plus un gap, cf `specs/decor-style-interpolation-spec.md`.
-  if (patch.capsule !== undefined) console.warn('[decorEditor bridge] patch.capsule non routé — aucune capsule créée par cet incrément')
-
   return commands
 }
 
@@ -639,11 +634,10 @@ export function applyFrameDelta(base: SelectionFrameValue, delta: SelectionFrame
   if (delta.kind === 'pivot') return applyRotationOriginDelta(base, delta.fx, delta.fy)
 
   const minSize = 4
-  const linear = selectionFrameLinearTransform(base)
-  const determinant = linear.a * linear.d - linear.b * linear.c
-  if (!Number.isFinite(determinant) || Math.abs(determinant) < 1e-8) return base
-  const localDx = (linear.d * delta.dx - linear.c * delta.dy) / determinant
-  const localDy = (-linear.b * delta.dx + linear.a * delta.dy) / determinant
+  const inverse = invertMatrix({ ...selectionFrameLinearTransform(base), e: 0, f: 0 })
+  if (inverse === null) return base
+  const localDx = inverse.a * delta.dx + inverse.c * delta.dy
+  const localDy = inverse.b * delta.dx + inverse.d * delta.dy
 
   const width = delta.handle.includes('e')
     ? Math.max(minSize, base.width + localDx)
@@ -712,7 +706,7 @@ export function createDecorEditorBridge(
   coordination: import('./editor-coordination-bridge').EditorCoordinationBridge,
   actions?: EditorActionsFacade,
 ): BridgeHandle {
-  const catalogs: DecorEditorCatalogs = { presets: DEFAULT_PRESETS, cards: [], palette: DEFAULT_PALETTE }
+  const catalogs: DecorEditorCatalogs = { presets: DEFAULT_PRESETS, palette: DEFAULT_PALETTE }
   const controller = new DecorEditorController(catalogs)
   const motionGeometry = createMotionGeometryStore()
   let mountHandle: DecorEditorMountHandle | null = null
@@ -1994,7 +1988,8 @@ export function createDecorEditorBridge(
       : Math.min(1, Math.max(0, (lastKnownTimelineMs - motion.sourceKeyframe.timeMs) / durationMs))
     const easedProgress = resolveMotionEaseProgress(motion.ease, progress)
 
-    return sourceAngle + (targetAngle - sourceAngle) * easedProgress
+    // Same shortest-arc rule as the Builder's rotation tween, so the gesture starts from the shown angle.
+    return sourceAngle + normalizeAngleDegrees(targetAngle - sourceAngle) * easedProgress
   }
 
   /** Projects a complete displayed pose while keeping the authored Decor contribution sparse. */
@@ -3396,8 +3391,6 @@ export function createDecorEditorBridge(
         defaults: {},
         chain: [],
         patch,
-        zones: [],
-        context: 'horizontal',
         isTemporary: target.isTemporary,
         modifiedProperties: [...modifiedProperties.keys()],
       },
@@ -3630,12 +3623,12 @@ export function createDecorEditorBridge(
    * preview live pendant que `isPlaying === true`. Le pont `scenePlayer` conserve l'instance pour
    * un simple Play/Seek et réapplique la pose runtime avant de jouer ; le gel empêche donc la
    * palette de réinjecter une preview périmée pendant ce handoff.
-   * `mountHandle.setPreviewSuspended` — pas `controller.detach()` — préserve le panneau actif et les
-   * toggles (`visualPosition`/`zoneMode`) à travers un cycle play→pause : `ITEMS.DETACH` les
-   * réinitialise (vérifié dans `decor-editor/machine.ts`), ce que ce chantier ne veut pas faire pour
-   * un simple play/pause. `syncSelection` à la sortie : la resynchronisation se fait sur le node
-   * dont la pose a déjà été réappliquée par le runtime, `setPreviewSuspended(false)` déclenche alors
-   * une seule écriture, déjà à jour.
+   * `mountHandle.setPreviewSuspended` — pas `controller.detach()` — préserve le panneau actif à
+   * travers un cycle play→pause : un détachement suivi d'un rattachement le réinitialise
+   * (`decor-editor/machine.ts`), ce que ce chantier ne veut pas faire pour un simple play/pause.
+   * `syncSelection` à la sortie : la resynchronisation se fait sur le node dont la pose a déjà été
+   * réappliquée par le runtime, `setPreviewSuspended(false)` déclenche alors une seule écriture,
+   * déjà à jour.
    */
   const unsubscribePlaybackActive = machine.on('playbackActiveChanged', ({ active }) => {
     playbackActive = active

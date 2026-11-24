@@ -1,5 +1,5 @@
 import { setup, assign } from 'xstate'
-import type { DecorPatch, ItemType, OrientationContext, ResolvedDecor, ZoneTable } from './types'
+import type { DecorPatch, ItemType, ResolvedDecor } from './types'
 import type { PanelId } from './palette-panel'
 import { mergePatch, resolveDecor } from './merge'
 import { stripInherited } from './strip-inherited'
@@ -24,16 +24,11 @@ export interface AttachedItem {
 
 export interface DecorEditorMachineContext {
   items: AttachedItem[]
-  zones: ZoneTable
-  orientationContext: OrientationContext
   /** Panneau actif — identifiant opaque pour le contrat, résolu contre PaletteConfig côté rendu/contrôleur. */
   activePanelId: PanelId
-  visualPosition: boolean
-  zoneMode: boolean
 }
 
 export type DecorEditorMachineInput = {
-  orientationContext?: OrientationContext
   initialPanelId?: PanelId
 }
 
@@ -51,18 +46,13 @@ export interface AttachItemEntry {
 // ─── Events ──────────────────────────────────────────────────────────────────
 
 export type DecorEditorEvent =
-  | { type: 'ITEMS.ATTACH'; items: AttachItemEntry[]; zones: ZoneTable; initialPanelId: PanelId }
+  | { type: 'ITEMS.ATTACH'; items: AttachItemEntry[]; initialPanelId: PanelId }
   | { type: 'ITEMS.DETACH' }
-  | { type: 'CHAIN.SET'; itemId: string; chain: DecorPatch[] }
-  | { type: 'CONTEXT.SET'; context: OrientationContext }
   | { type: 'PANEL.SELECT'; panelId: PanelId }
   | { type: 'PATCH.APPLY'; patch: DecorPatch }
   | { type: 'PATCH.STRIP'; path: string }
   | { type: 'MODIFIED.SET'; itemId: string; paths: readonly string[] }
   | { type: 'PRESET.APPLY'; patch: DecorPatch }
-  | { type: 'ZONES.SET'; zones: ZoneTable }
-  | { type: 'VISUAL_POSITION.TOGGLE'; on: boolean }
-  | { type: 'ZONE_MODE.TOGGLE'; on: boolean }
 
 // ─── Machine ─────────────────────────────────────────────────────────────────
 
@@ -82,8 +72,8 @@ function toAttachedItems(entries: AttachItemEntry[]): AttachedItem[] {
  * `syncSelection` (`decor-editor-bridge.ts`) réattache le MÊME ensemble d'items à chaque
  * `sceneCommitted` — pas seulement quand la sélection change réellement — pour rafraîchir leurs
  * données (`defaults`/`chain`/`patch`) depuis le document à jour. Un re-attach de ce type ne doit
- * jamais réinitialiser la présentation (panneau actif, mode position visuelle, mode zone) : seul un
- * geste de l'utilisateur (choisir un panneau, changer de sélection) a le droit de la changer.
+ * jamais réinitialiser le panneau actif : seul un geste de l'utilisateur (choisir un panneau,
+ * changer de sélection) a le droit de le changer.
  * Comparaison par ensemble (pas par ordre) — une multi-sélection resynchronisée dans un ordre
  * différent reste « la même sélection ».
  */
@@ -105,11 +95,7 @@ export const decorEditorMachine = setup({
 
   context: ({ input }) => ({
     items: [],
-    zones: [],
-    orientationContext: input.orientationContext ?? 'horizontal',
     activePanelId: input.initialPanelId ?? '',
-    visualPosition: false,
-    zoneMode: false,
   }),
 
   states: {
@@ -121,10 +107,7 @@ export const decorEditorMachine = setup({
           target: 'active',
           actions: assign(({ event }) => ({
             items: toAttachedItems(event.items),
-            zones: event.zones,
             activePanelId: event.initialPanelId,
-            visualPosition: false,
-            zoneMode: false,
           })),
         },
       },
@@ -135,32 +118,14 @@ export const decorEditorMachine = setup({
       on: {
         'ITEMS.DETACH': {
           target: 'inactive',
-          actions: assign(() => ({ items: [], zones: [], visualPosition: false, zoneMode: false })),
+          actions: assign(() => ({ items: [] })),
         },
 
         'ITEMS.ATTACH': {
-          actions: assign(({ context, event }) => {
-            const sameSelection = sameItemIdSet(context.items, event.items)
-            return {
-              items: toAttachedItems(event.items),
-              zones: event.zones,
-              activePanelId: sameSelection ? context.activePanelId : event.initialPanelId,
-              visualPosition: sameSelection ? context.visualPosition : false,
-              zoneMode: sameSelection ? context.zoneMode : false,
-            }
-          }),
-        },
-
-        'CHAIN.SET': {
           actions: assign(({ context, event }) => ({
-            items: context.items.map(item =>
-              item.itemId === event.itemId ? { ...item, chain: event.chain } : item,
-            ),
+            items: toAttachedItems(event.items),
+            activePanelId: sameItemIdSet(context.items, event.items) ? context.activePanelId : event.initialPanelId,
           })),
-        },
-
-        'CONTEXT.SET': {
-          actions: assign(({ event }) => ({ orientationContext: event.context })),
         },
 
         'PANEL.SELECT': {
@@ -195,18 +160,6 @@ export const decorEditorMachine = setup({
           actions: assign(({ context, event }) => ({
             items: context.items.map(item => ({ ...item, patch: mergePatch(item.patch, event.patch) })),
           })),
-        },
-
-        'ZONES.SET': {
-          actions: assign(({ event }) => ({ zones: event.zones })),
-        },
-
-        'VISUAL_POSITION.TOGGLE': {
-          actions: assign(({ event }) => ({ visualPosition: event.on })),
-        },
-
-        'ZONE_MODE.TOGGLE': {
-          actions: assign(({ event }) => ({ zoneMode: event.on })),
         },
       },
     },

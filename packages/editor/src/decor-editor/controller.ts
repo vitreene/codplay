@@ -8,7 +8,7 @@ import type { FieldState } from './field-state'
 import { hasExplicitPlacementGeometry } from '../app/commands/offset-placement'
 import { buildPatchFromPath } from './path-patch'
 import type {
-  DecorPatch, DecorPreset, ItemType, OrientationContext, ResolvedDecor, ZoneCard, ZoneTable,
+  DecorPatch, DecorPreset, ItemType, ResolvedDecor,
 } from './types'
 
 // ─── Public snapshot type ────────────────────────────────────────────────────
@@ -27,7 +27,6 @@ export type DecorChangeEntry = { itemId: string; patch: DecorPatch }
 
 export interface DecorEditorCatalogs {
   presets: DecorPreset[]
-  cards: ZoneCard[]
   palette: PaletteConfig
 }
 
@@ -37,8 +36,6 @@ export interface AttachItemInput {
   defaults: ResolvedDecor
   chain: DecorPatch[]
   patch: DecorPatch
-  zones: ZoneTable
-  context: OrientationContext
   isTemporary?: boolean
   /** Property paths changed by the user for the currently displayed target. */
   modifiedProperties?: readonly string[]
@@ -50,20 +47,18 @@ export class DecorEditorController {
   private actor: ReturnType<typeof createActor<typeof decorEditorMachine>>
   private catalogs: DecorEditorCatalogs
   private decorChangeCallbacks = new Set<(entries: DecorChangeEntry[]) => void>()
-  private zonesChangeCallbacks = new Set<(zones: ZoneTable) => void>()
   private interactionEndCallbacks = new Set<() => void>()
   private zonePlacementCallbacks = new Set<(useZone: boolean) => void>()
 
-  constructor(catalogs: DecorEditorCatalogs, orientationContext: OrientationContext = 'horizontal') {
+  constructor(catalogs: DecorEditorCatalogs) {
     this.catalogs = catalogs
-    this.actor = createActor(decorEditorMachine, { input: { orientationContext } })
+    this.actor = createActor(decorEditorMachine, { input: {} })
     this.actor.start()
   }
 
   destroy(): void {
     this.actor.stop()
     this.decorChangeCallbacks.clear()
-    this.zonesChangeCallbacks.clear()
     this.interactionEndCallbacks.clear()
     this.zonePlacementCallbacks.clear()
   }
@@ -107,24 +102,12 @@ export class DecorEditorController {
         isTemporary: input.isTemporary,
         modifiedProperties: input.modifiedProperties,
       })),
-      zones: inputs[0]?.zones ?? [],
       initialPanelId,
     })
-    if (inputs[0]) this.send({ type: 'CONTEXT.SET', context: inputs[0].context })
   }
 
   detach(): void {
     this.send({ type: 'ITEMS.DETACH' })
-  }
-
-  /** No-op tant qu'aucun item n'est attaché (le contexte initial se règle au constructeur). */
-  setContext(ctx: OrientationContext): void {
-    this.send({ type: 'CONTEXT.SET', context: ctx })
-  }
-
-  /** Révision de la chaîne d'héritage d'un item (déplacement de kf) : repli complet, sans état résiduel. */
-  setChain(itemId: string, chain: DecorPatch[]): void {
-    this.send({ type: 'CHAIN.SET', itemId, chain })
   }
 
   // ── Panel / modes ────────────────────────────────────────────────────────────
@@ -146,14 +129,6 @@ export class DecorEditorController {
 
   getPresets(): DecorPreset[] {
     return this.catalogs.presets
-  }
-
-  setVisualPosition(on: boolean): void {
-    this.send({ type: 'VISUAL_POSITION.TOGGLE', on })
-  }
-
-  setZoneMode(on: boolean): void {
-    this.send({ type: 'ZONE_MODE.TOGGLE', on })
   }
 
   /** Requests the host to store or clear the current item's explicit geometry. */
@@ -213,18 +188,6 @@ export class DecorEditorController {
     this.emitDecorChange()
   }
 
-  applyCard(name: string): void {
-    const card = this.catalogs.cards.find(c => c.name === name)
-    if (!card) return
-    this.send({ type: 'ZONES.SET', zones: card.zones })
-    this.emitZonesChange()
-  }
-
-  setZones(zones: ZoneTable): void {
-    this.send({ type: 'ZONES.SET', zones })
-    this.emitZonesChange()
-  }
-
   // ── Field resolution (multi-sélection) ──────────────────────────────────────
 
   /** État d'un champ à travers tous les items attachés — valeur commune, ou mixte (contrat de multi-sélection). */
@@ -280,24 +243,11 @@ export class DecorEditorController {
     return this.getItems().map(item => ({ itemId: item.itemId, patch: item.patch }))
   }
 
-  getResolvedDecors(): ResolvedDecor[] {
-    return this.getItems().map(resolveAttachedDecor)
-  }
-
-  getZones(): ZoneTable {
-    return this.actor.getSnapshot().context.zones
-  }
-
   // ── Change notifications ─────────────────────────────────────────────────────
 
   onDecorChange(cb: (entries: DecorChangeEntry[]) => void): Unsubscribe {
     this.decorChangeCallbacks.add(cb)
     return () => this.decorChangeCallbacks.delete(cb)
-  }
-
-  onZonesChange(cb: (zones: ZoneTable) => void): Unsubscribe {
-    this.zonesChangeCallbacks.add(cb)
-    return () => this.zonesChangeCallbacks.delete(cb)
   }
 
   /**
@@ -324,8 +274,4 @@ export class DecorEditorController {
     for (const cb of this.decorChangeCallbacks) cb(entries)
   }
 
-  private emitZonesChange(): void {
-    const zones = this.getZones()
-    for (const cb of this.zonesChangeCallbacks) cb(zones)
-  }
 }

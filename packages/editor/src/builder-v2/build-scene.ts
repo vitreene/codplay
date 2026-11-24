@@ -22,6 +22,7 @@ import { hasExplicitPlacementGeometry } from '../app/commands/offset-placement'
 import { isItemVisible } from '../app/commands/item-visibility/item-visibility'
 import { resolveKeyframeTransition } from './keyframe-transition'
 import { normalizeMotionEasing } from '../motion-editor/easing'
+import { normalizeAngleDegrees } from '../motion-editor/geometry'
 import { resolveInitialPathRotation, STRAIGHT_MOTION_PATH } from '../motion-editor/item-rotation/item-rotation'
 import { ITEM_MOTION_REFERENCE_ANGLE, ITEM_MOTION_ROTATION_BASELINE } from '../item-presentation/item-motion-reference'
 import {
@@ -1104,7 +1105,12 @@ function buildStyleTransition(
       if (value !== undefined) discrete[property] = value
       continue
     }
-    interpolated[property] = { from, to: value, duration: durationMs, ease }
+    // Authored angles are stored normalized in [−180°, 180°). Between two pose keyframes the
+    // rotation takes the shortest arc: only the tween target is unwrapped, never the Decor.
+    const to = property === 'rotate' && typeof from === 'number' && typeof value === 'number'
+      ? from + normalizeAngleDegrees(value - from)
+      : value
+    interpolated[property] = { from, to, duration: durationMs, ease }
   }
   return { interpolated, discrete }
 }

@@ -65,17 +65,6 @@ export function createRootZone(
   return { ...scene, zones: { ...scene.zones, [zone.id]: zone } }
 }
 
-/** Applies one orientation's authored surface to the complete root-zone set by stable id. */
-export function setRootZonesSurface(
-  scene: EditorScene,
-  args: Readonly<{
-    orientation: Orientation
-    zones: readonly Readonly<{ id: string; name: string; area: ZoneRect }>[]
-  }>,
-): EditorScene {
-  return setZonesSurface(scene, { ...args, capsuleId: null })
-}
-
 /** Applies one capsule's authored surface by zone id, preserving the opposite orientation. */
 export function setZonesSurface(
   scene: EditorScene,

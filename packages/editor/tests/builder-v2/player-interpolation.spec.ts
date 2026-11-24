@@ -249,6 +249,57 @@ describe('editor V2 player interpolation', () => {
       .toBe('rotate(20.5deg) scale(1, 1)')
   })
 
+  it('rotates across ±180° along the shortest arc while the authored angles stay normalized', async () => {
+    codplay = new CodPlay({ engine: EDITOR_ENGINE_OPTIONS, pauseOnDocumentHidden: false })
+    const scene = interpolationScene()
+    scene.decors.first!.offset = { translate: { x: 10, y: 5 }, width: 20, height: 12, rotate: 167 }
+    scene.decors.second!.offset = { translate: { x: 30, y: 25 }, width: 40, height: 22, rotate: -166 }
+    const built = buildSceneDocV2(scene)
+    expect(built.ok).toBe(true)
+    if (!built.ok) return
+
+    // 167° → −166° is a +27° turn, not a −333° one. The document keeps both angles normalized.
+    const itemDoc = built.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos.find((perso) => perso.id === 'item')!
+    expect(itemDoc.actions['item-kf-second-kf']?.style?.rotate).toMatchObject({ from: 167, to: 194 })
+    expect(scene.decors.second!.offset!.rotate).toBe(-166)
+
+    const reverse = interpolationScene()
+    reverse.decors.first!.offset = { ...reverse.decors.first!.offset, rotate: -170 }
+    reverse.decors.second!.offset = { ...reverse.decors.second!.offset, rotate: 170 }
+    const reverseBuilt = buildSceneDocV2(reverse)
+    expect(reverseBuilt.ok).toBe(true)
+    if (!reverseBuilt.ok) return
+    const reverseDoc = reverseBuilt.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos.find((perso) => perso.id === 'item')!
+    expect(reverseDoc.actions['item-kf-second-kf']?.style?.rotate).toMatchObject({ from: -170, to: -190 })
+
+    const root = document.createElement('div')
+    Object.defineProperty(root, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: 800, height: 450, x: 0, y: 0, top: 0, left: 0, right: 800, bottom: 450 }),
+    })
+    document.body.append(root)
+    const compiled = codplay.build({ scene: built.sceneDoc })
+    expect(compiled.ok).toBe(true)
+    if (!compiled.ok) return
+    const instance = codplay.instances.create({
+      instanceId: 'editor-v2-player-shortest-rotation',
+      compiledScene: compiled.compiledScene,
+      functions: compiled.functions,
+      root,
+      mountTargets: [{ id: 'root-host', kind: 'root', storyId: EDITOR_V2_STORY_ID }],
+    })
+
+    await instance.telco.seek(500 + built.preRollMs)
+    const style = instance.snapshot.get()?.states.find((entry) => entry.target.persoId === 'item')?.state.style as Record<string, unknown> | undefined
+    expect(style?.rotate).toBeCloseTo(180.5)
+    // The frame carries the 167° rotation baseline and the anchor the remaining +13.5°: 180.5° in
+    // total. The long arc would have presented 0.5° (−166.5° on the anchor).
+    const item = root.querySelector<HTMLElement>('[data-item-id="story-main:item"]')
+    expect(getComputedStyle(item!).transform).toContain('rotate(167deg)')
+    expect(item!.querySelector<HTMLElement>('[id$="-transform"]')?.style.transform)
+      .toBe('rotate(13.5deg) scale(1, 1)')
+  })
+
   it('keeps the content-box anchor fixed while border-width itself interpolates', async () => {
     codplay = new CodPlay({ engine: EDITOR_ENGINE_OPTIONS, pauseOnDocumentHidden: false })
     const source = interpolationScene()

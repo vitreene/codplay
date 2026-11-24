@@ -326,27 +326,6 @@ function initialDecorIsShared(scene: EditorScene, item: Item): boolean {
     || scene.items.some((candidate) => candidate.keyframes.some((keyframe) => keyframe.decorId === decorId))
 }
 
-/**
- * Assigne/retire une zone à un item. Filtré côté appelant aux zones de la capsule parente
- * (document-model — le reparent cross-capsule n'est pas pris en charge par le modèle actuel) ; cette commande applique la
- * référence, elle ne valide pas l'appartenance de la zone à la capsule (responsabilité du module
- * qui propose les zones disponibles, pas de la façade).
- */
-export function placeInZone(scene: EditorScene, args: { itemId: string; zoneId: string | null }): EditorScene {
-  const item = requireItem(scene, args.itemId)
-  const decor = scene.decors[item.initialDecorId]
-  const zoneFillStyle = args.zoneId !== null && !hasExplicitPlacementGeometry(decor?.offset)
-    ? missingZoneFillStyle(decor?.style, decor?.custom)
-    : {}
-  return setDecor(scene, {
-    decorId: item.initialDecorId,
-    patch: {
-      zoneId: args.zoneId,
-      ...(Object.keys(zoneFillStyle).length === 0 ? {} : { style: { ...decor?.style, ...zoneFillStyle } }),
-    },
-  })
-}
-
 /** Removes an item and its descendants while preserving decor/content references still owned by the remaining scene. */
 export function deleteItem(scene: EditorScene, args: { itemId: string }): EditorScene {
   const idsToRemove = collectDescendantIds(scene, args.itemId)

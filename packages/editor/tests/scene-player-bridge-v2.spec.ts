@@ -517,7 +517,11 @@ describe('V2 editor position seek integration', () => {
       const itemRotation = itemMatrix === undefined
         ? Number(terminalItemTransform.match(/rotate\(([-+\d.eE]+)deg\)/)?.[1] ?? 0)
         : Math.atan2(itemMatrix[1]!, itemMatrix[0]!) * 180 / Math.PI
-      const selectionRotation = Number(selectionFrame.style.transform.match(/rotate\(([-+\d.eE]+)deg\)/)?.[1])
+      // The Selection Frame writes its affine projection as `matrix(...)`, or `rotate(...)` otherwise.
+      const selectionMatrix = selectionFrame.style.transform.match(/matrix\(([^)]+)\)/)?.[1]?.split(',').map(Number)
+      const selectionRotation = selectionMatrix === undefined
+        ? Number(selectionFrame.style.transform.match(/rotate\(([-+\d.eE]+)deg\)/)?.[1])
+        : Math.atan2(selectionMatrix[1]!, selectionMatrix[0]!) * 180 / Math.PI
       expect(itemRotation).toBeCloseTo(terminalRotation, 3)
       expect(selectionRotation).toBeCloseTo(terminalRotation, 3)
 

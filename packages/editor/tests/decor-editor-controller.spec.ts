@@ -22,7 +22,7 @@ function paletteConfig(): PaletteConfig {
 }
 
 function catalogs(): DecorEditorCatalogs {
-  return { presets: [{ name: 'label', patch: { style: { 'font-weight': 'bold' } } }], cards: [], palette: paletteConfig() }
+  return { presets: [{ name: 'label', patch: { style: { 'font-weight': 'bold' } } }], palette: paletteConfig() }
 }
 
 function attachInput(overrides: Partial<AttachItemInput> = {}): AttachItemInput {
@@ -32,8 +32,6 @@ function attachInput(overrides: Partial<AttachItemInput> = {}): AttachItemInput 
     defaults: {} as ResolvedDecor,
     chain: [],
     patch: {},
-    zones: [],
-    context: 'horizontal',
     ...overrides,
   }
 }

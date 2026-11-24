@@ -149,11 +149,13 @@ describe('Editor tangent capture reference', () => {
     expect(authorRule.textContent).toContain('rotate(109deg)')
     expect(node.getAttribute('style')).not.toContain(ITEM_MOTION_REFERENCE_ANGLE)
 
-    instance.snapshot.set([{ target: { storyId: EDITOR_V2_STORY_ID, persoId: 'item' }, timeMs: 1200 + result.preRollMs,
+    const preview = instance.snapshot.set([{ target: { storyId: EDITOR_V2_STORY_ID, persoId: 'item' }, timeMs: 1200 + result.preRollMs,
       state: { style: { rotate: 37 } } }])
+    expect(preview?.ok).toBe(true)
     expect(authorRule.textContent).toContain('rotate(109deg)')
+    // `snapshot.get()` reads the base logical state: the active preview is never part of it.
     expect(instance.snapshot.get()!.states.find(entry => entry.target.persoId === 'item')!.state.style)
-      .toMatchObject({ rotate: 37, [ITEM_MOTION_REFERENCE_ANGLE]: 109, [ITEM_MOTION_ROTATION_BASELINE]: 19 })
+      .toMatchObject({ rotate: 19, [ITEM_MOTION_REFERENCE_ANGLE]: 109, [ITEM_MOTION_ROTATION_BASELINE]: 19 })
     instance.snapshot.clear()
     expect(authorRule.textContent).toContain('rotate(109deg)')
     expect(instance.snapshot.get()!.states.find(entry => entry.target.persoId === 'item')!.state.style).toMatchObject({ rotate: 19 })

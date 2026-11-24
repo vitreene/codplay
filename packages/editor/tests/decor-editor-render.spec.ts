@@ -14,13 +14,13 @@ function paletteConfig(): PaletteConfig {
 }
 
 function catalogs(): DecorEditorCatalogs {
-  return { presets: [], cards: [], palette: paletteConfig() }
+  return { presets: [], palette: paletteConfig() }
 }
 
 const DEFAULTS: ResolvedDecor = {}
 
 function attachInput(overrides: Partial<AttachItemInput> = {}): AttachItemInput {
-  return { itemId: 'item-1', itemType: 'text', defaults: DEFAULTS, chain: [], patch: {}, zones: [], context: 'horizontal', ...overrides }
+  return { itemId: 'item-1', itemType: 'text', defaults: DEFAULTS, chain: [], patch: {}, ...overrides }
 }
 
 describe('createDecorEditorPalette — champ couleur, rafraîchissement après perte de focus', () => {

@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  DEFAULT_MOTION_TRANSITION_WINDOW_MS,
   resolveMotionKeyframeAlignment,
   resolveMotionLifetime,
-  resolveMotionTransitionWindow,
   sortMotionKeyframes,
 } from '../../src/motion-editor/timing'
 
@@ -55,44 +53,5 @@ describe('motion-editor timing', () => {
     const inherited = { introTimeMs: 4_000, outroTimeMs: 2_000 } as const
     expect(resolveMotionLifetime([], inherited)).toBeNull()
     expect(inherited).toEqual({ introTimeMs: 4_000, outroTimeMs: 2_000 })
-  })
-
-  it('uses the provisional 500 ms window from the source by default', () => {
-    expect(resolveMotionTransitionWindow(1_000, 3_000)).toEqual({
-      sourceTimeMs: 1_000,
-      targetTimeMs: 3_000,
-      startTimeMs: 1_000,
-      endTimeMs: 1_500,
-      durationMs: DEFAULT_MOTION_TRANSITION_WINDOW_MS,
-      direction: 'after',
-    })
-  })
-
-  it('clamps the default window to a short KF interval', () => {
-    expect(resolveMotionTransitionWindow(100, 350)).toMatchObject({
-      startTimeMs: 100,
-      endTimeMs: 350,
-      durationMs: 250,
-      direction: 'after',
-    })
-  })
-
-  it("places an explicit 'before' window immediately before the target KF", () => {
-    expect(resolveMotionTransitionWindow(1_000, 2_000, { durationMs: 300, direction: 'before' })).toMatchObject({
-      startTimeMs: 1_700,
-      endTimeMs: 2_000,
-      durationMs: 300,
-      direction: 'before',
-    })
-  })
-
-  it('clamps an explicit window and rejects an invalid KF interval', () => {
-    expect(resolveMotionTransitionWindow(1_000, 1_200, { durationMs: 500, direction: 'before' })).toMatchObject({
-      startTimeMs: 1_000,
-      endTimeMs: 1_200,
-      durationMs: 200,
-    })
-    expect(resolveMotionTransitionWindow(2_000, 2_000)).toBeNull()
-    expect(resolveMotionTransitionWindow(Number.NaN, 2_000)).toBeNull()
   })
 })

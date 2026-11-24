@@ -26,7 +26,8 @@ describe('root placement commands', () => {
     })
     expect(item).toMatchObject({ type: 'bloc', contentId: null, parentId: null })
     expect(updated.decors[item.initialDecorId]).toMatchObject({ zoneId: 'zone-a' })
-    expect(updated.decors[item.initialDecorId]?.offset).toEqual({})
+    // A zone-placed block carries no geometry of its own: no empty offset is written.
+    expect(updated.decors[item.initialDecorId]?.offset).toBeUndefined()
   })
 
   it('keeps the root zone parent constraint when creating an item', () => {

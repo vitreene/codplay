@@ -208,8 +208,9 @@ describe('editor V2 motion path adapter', () => {
     })
     expect(tangent.actions['item-kf-final-kf']).not.toHaveProperty('style.rotate')
     expect(manual.actions['manual-item-kf-target-kf']).toHaveProperty('move.transition.orientToPath', false)
+    // Manual angles take the shortest arc: −80° → 120° is a −160° turn (target −240°), not +200°.
     expect(manual.actions['manual-item-kf-final-kf']).toHaveProperty('style.rotate', {
-      from: -80, to: 120, duration: 500, ease: 'inOut',
+      from: -80, to: -240, duration: 500, ease: 'inOut',
     })
     expect(scene.decors.final).not.toHaveProperty('path')
     expect(scene.decors.target!.offset!.rotate).toBe(-80)

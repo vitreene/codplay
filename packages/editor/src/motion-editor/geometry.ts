@@ -157,20 +157,6 @@ export function presentationPoseToSelectionFrame(
   )
 }
 
-/** Projects a motion-host border-box pose back to the Editor's content-box frame. */
-export function presentationBorderBoxPoseToContentFrame(
-  pose: CodPlayPresentationPose,
-  rotationOrigin: SelectionFrameValue['rotationOrigin'],
-  insets: ContentBoxInsetsPx,
-): SelectionFrameValue {
-  const width = Math.max(0, finiteDimension(pose.localWidth) - insets.left - insets.right)
-  const height = Math.max(0, finiteDimension(pose.localHeight) - insets.top - insets.bottom)
-  return selectionFrameFromPresentedPose(pose, width, height, rotationOrigin, {
-    x: insets.left + width / 2,
-    y: insets.top + height / 2,
-  })
-}
-
 /** Projects the native content centred inside a motion frame whose size may follow another clock. */
 export function presentationItemPoseToContentFrame(
   pose: CodPlayPresentationPose,
@@ -231,21 +217,6 @@ function selectionFrameFromPresentedPose(
       matrix: rawMatrix,
     },
   }
-}
-
-/** Returns a frame translated by a scene-local pointer delta. */
-export function translateFrame(frame: SelectionFrameValue, dx: number, dy: number): SelectionFrameValue {
-  return { ...frame, x: frame.x + dx, y: frame.y + dy }
-}
-
-/** Returns the distance from a point to a segment, used by the overlay hit-test. */
-export function distanceToSegment(point: MotionPoint, from: MotionPoint, to: MotionPoint): number {
-  const dx = to.x - from.x
-  const dy = to.y - from.y
-  const lengthSquared = dx * dx + dy * dy
-  if (lengthSquared <= Number.EPSILON) return Math.hypot(point.x - from.x, point.y - from.y)
-  const projection = Math.min(1, Math.max(0, ((point.x - from.x) * dx + (point.y - from.y) * dy) / lengthSquared))
-  return Math.hypot(point.x - (from.x + projection * dx), point.y - (from.y + projection * dy))
 }
 
 /** Returns a normalized SVG arc for three scene points, or undefined for the implicit straight path. */
@@ -493,12 +464,6 @@ function arcControlAtTangent(source: MotionPoint, target: MotionPoint, tangent: 
   }
 }
 
-/** Returns the normalized control point of a scene-space motion path. */
-export function normalizeMotionControl(source: MotionPoint, control: MotionPoint, target: MotionPoint): MotionPoint | undefined {
-  const normalized = normalizePoints(source, control, target)
-  return normalized?.control
-}
-
 /** Maps a normalized control point back into scene-local coordinates. */
 export function denormalizeMotionControl(source: MotionPoint, target: MotionPoint, control: MotionPoint): MotionPoint {
   const dx = target.x - source.x
@@ -540,12 +505,6 @@ export function isStraightMotion(source: MotionPoint, control: MotionPoint, targ
   if (normalized === undefined) return true
   const midpointX = 0.5
   return Math.abs(normalized.control.x - midpointX) <= 1e-4 && Math.abs(normalized.control.y) <= 1e-4
-}
-
-/** Clamps one duration to the positive finite range accepted by CodPlay motion. */
-export function clampMotionDuration(value: number, minimum = 1, maximum = Number.MAX_SAFE_INTEGER): number {
-  if (!Number.isFinite(value)) return minimum
-  return Math.min(maximum, Math.max(minimum, Math.round(value)))
 }
 
 type NormalizedPoints = Readonly<{ source: MotionPoint; control: MotionPoint; target: MotionPoint }>

@@ -27,7 +27,6 @@ function attachEvent(overrides: Partial<{ patch: DecorPatch; chain: DecorPatch[]
   return {
     type: 'ITEMS.ATTACH' as const,
     items: [entry({ patch: overrides.patch ?? {}, chain: overrides.chain ?? [] })],
-    zones: [],
     initialPanelId: 'shape',
   }
 }
@@ -56,43 +55,37 @@ describe('decorEditorMachine — cycle de vie', () => {
     actor.send({
       type: 'ITEMS.ATTACH',
       items: [entry({ itemId: 'a' }), entry({ itemId: 'b', itemType: 'image' })],
-      zones: [],
-      initialPanelId: 'shape',
+        initialPanelId: 'shape',
     })
     const items = actor.getSnapshot().context.items
     expect(items.map(i => i.itemId)).toEqual(['a', 'b'])
     actor.stop()
   })
 
-  it('ITEMS.ATTACH pose activePanelId depuis initialPanelId et réinitialise visualPosition/zoneMode pour une sélection RÉELLEMENT différente', () => {
+  it('ITEMS.ATTACH pose activePanelId depuis initialPanelId pour une sélection RÉELLEMENT différente', () => {
     const actor = boot()
     actor.send(attachEvent())
     actor.send({ type: 'PANEL.SELECT', panelId: 'transform' })
-    actor.send({ type: 'VISUAL_POSITION.TOGGLE', on: true })
     actor.send({
       type: 'ITEMS.ATTACH',
       items: [entry({ itemId: 'item-2' })], // sélection différente (autre itemId)
-      zones: [],
-      initialPanelId: 'typo',
+        initialPanelId: 'typo',
     })
     const snap = actor.getSnapshot()
     expect(snap.context.activePanelId).toBe('typo')
-    expect(snap.context.visualPosition).toBe(false)
     actor.stop()
   })
 
-  it('ITEMS.ATTACH sur la MÊME sélection préserve activePanelId/visualPosition/zoneMode (présentation — réservée à l\'utilisateur)', () => {
+  it('ITEMS.ATTACH sur la MÊME sélection préserve activePanelId (présentation — réservée à l\'utilisateur)', () => {
     // `decor-editor-bridge.ts::syncSelection` réattache le même item à CHAQUE `sceneCommitted` (pour
     // rafraîchir ses données depuis le document) — pas seulement quand la sélection change. Un
     // re-attach de ce type ne doit jamais écraser la présentation choisie par l'utilisateur.
     const actor = boot()
     actor.send(attachEvent())
     actor.send({ type: 'PANEL.SELECT', panelId: 'transform' })
-    actor.send({ type: 'VISUAL_POSITION.TOGGLE', on: true })
     actor.send({ ...attachEvent(), initialPanelId: 'typo' }) // même item-1, données rafraîchies
     const snap = actor.getSnapshot()
     expect(snap.context.activePanelId).toBe('transform')
-    expect(snap.context.visualPosition).toBe(true)
     actor.stop()
   })
 
@@ -149,32 +142,6 @@ describe('decorEditorMachine — édition du décor (item unique)', () => {
     actor.stop()
   })
 
-  it('CHAIN.SET révise la chaîne d\'un item ciblé, sans toucher à l\'écart courant ni au panneau actif', () => {
-    const actor = boot()
-    actor.send(attachEvent({ patch: { style: { 'font-weight': 'bold' } } }))
-    actor.send({ type: 'PANEL.SELECT', panelId: 'transform' })
-    actor.send({ type: 'CHAIN.SET', itemId: 'item-1', chain: [{ style: { 'font-size': '99cqw' } }] })
-    const snap = actor.getSnapshot()
-    expect(snap.context.items[0]!.chain).toEqual([{ style: { 'font-size': '99cqw' } }])
-    expect(snap.context.items[0]!.patch).toEqual({ style: { 'font-weight': 'bold' } })
-    expect(snap.context.activePanelId).toBe('transform') // pas réinitialisé
-    actor.stop()
-  })
-
-  it('CHAIN.SET ne touche que l\'item ciblé par itemId', () => {
-    const actor = boot()
-    actor.send({
-      type: 'ITEMS.ATTACH',
-      items: [entry({ itemId: 'a', chain: [] }), entry({ itemId: 'b', chain: [] })],
-      zones: [],
-      initialPanelId: 'shape',
-    })
-    actor.send({ type: 'CHAIN.SET', itemId: 'a', chain: [{ style: { 'font-size': '1cqw' } }] })
-    const items = actor.getSnapshot().context.items
-    expect(items.find(i => i.itemId === 'a')!.chain).toEqual([{ style: { 'font-size': '1cqw' } }])
-    expect(items.find(i => i.itemId === 'b')!.chain).toEqual([])
-    actor.stop()
-  })
 })
 
 describe('decorEditorMachine — édition groupée (plusieurs items)', () => {
@@ -183,8 +150,7 @@ describe('decorEditorMachine — édition groupée (plusieurs items)', () => {
     actor.send({
       type: 'ITEMS.ATTACH',
       items: [entry({ itemId: 'a' }), entry({ itemId: 'b' })],
-      zones: [],
-      initialPanelId: 'shape',
+        initialPanelId: 'shape',
     })
     actor.send({ type: 'PATCH.APPLY', patch: { style: { color: 'oklch(0.5 0 0)' } } })
     const items = actor.getSnapshot().context.items
@@ -221,42 +187,7 @@ describe('resolveAttachedDecor', () => {
   })
 })
 
-describe('decorEditorMachine — modes et zones', () => {
-  it('VISUAL_POSITION.TOGGLE active/désactive le mode position', () => {
-    const actor = boot()
-    actor.send(attachEvent())
-    actor.send({ type: 'VISUAL_POSITION.TOGGLE', on: true })
-    expect(actor.getSnapshot().context.visualPosition).toBe(true)
-    actor.send({ type: 'VISUAL_POSITION.TOGGLE', on: false })
-    expect(actor.getSnapshot().context.visualPosition).toBe(false)
-    actor.stop()
-  })
-
-  it('ZONE_MODE.TOGGLE active/désactive le mode zones', () => {
-    const actor = boot()
-    actor.send(attachEvent())
-    actor.send({ type: 'ZONE_MODE.TOGGLE', on: true })
-    expect(actor.getSnapshot().context.zoneMode).toBe(true)
-    actor.stop()
-  })
-
-  it('ZONES.SET met à jour la table de zones', () => {
-    const actor = boot()
-    actor.send(attachEvent())
-    const zones = [{ id: 'zone-header', name: 'header', coords: { x: 0, y: 0, width: 100, height: 20 } }]
-    actor.send({ type: 'ZONES.SET', zones })
-    expect(actor.getSnapshot().context.zones).toEqual(zones)
-    actor.stop()
-  })
-
-  it('CONTEXT.SET change le contexte d\'orientation (item attaché requis)', () => {
-    const actor = boot()
-    actor.send(attachEvent())
-    actor.send({ type: 'CONTEXT.SET', context: 'vertical' })
-    expect(actor.getSnapshot().context.orientationContext).toBe('vertical')
-    actor.stop()
-  })
-
+describe('decorEditorMachine — événements hors item', () => {
   it('événements d\'édition sans item attaché sont des no-op sûrs', () => {
     const actor = boot()
     actor.send({ type: 'PANEL.SELECT', panelId: 'transform' })

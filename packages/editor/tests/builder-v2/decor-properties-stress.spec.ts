@@ -149,13 +149,18 @@ describe('editor V2 Decor property stress path', () => {
     const built = buildSceneDocV2(stressScene())
     expect(built.ok).toBe(true)
     if (!built.ok) return
-    expect(built.diagnostics).toEqual(expect.arrayContaining([
+    // Item zones are compiled: only a zone on the implicit root decor stays deferred.
+    expect(built.diagnostics).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'EDITOR_V2_ZONE_DEFERRED' }),
     ]))
 
     const persos = built.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos
     const perso = persos.find((candidate) => candidate.id === 'stress-item')!
-    expect(persos).toHaveLength(2)
+    // The root list, the structural target of the stress zone, and the item.
+    expect(persos.map((candidate) => candidate.id)).toEqual(
+      expect.arrayContaining(['editor-zone-target:stress-zone', 'stress-item']),
+    )
+    expect(persos).toHaveLength(3)
     const actionStyleProperties = new Set(
       Object.values(perso.actions ?? {}).flatMap((action) => (
         action && typeof action === 'object' && 'style' in action && action.style && typeof action.style === 'object'
@@ -214,8 +219,7 @@ describe('editor V2 Decor property stress path', () => {
     expect(destinationStyle.scaleX).toBe(1.2)
     expect(destinationStyle.scaleY).toBe(0.8)
     expect(destinationStyle['transform-origin']).toBe('75% 75%')
-    // Zone is deliberately outside the current builder slice; the diagnostic above makes this
-    // boundary visible instead of treating the absence as a successful projection.
+    // The zone is expressed by the item's move target, never as a `zone` property of the perso.
     expect(perso.initial).not.toHaveProperty('zone')
 
     expect(perso.actions['stress-item-decor-kf-stress-target-kf-classes']).toEqual({
@@ -238,7 +242,7 @@ describe('editor V2 Decor property stress path', () => {
       futureModule: { enabled: true, values: { border: 'future' } },
     }
     const content: Content = { id: 'content', type: 'text', text: 'future' }
-    const patch = resolveCurrentPatch(decor, content, stressScene()) as Record<string, unknown>
+    const patch = resolveCurrentPatch(decor, content) as Record<string, unknown>
 
     expect(patch).toMatchObject({
       style: { border: '2cqw solid red' },
@@ -249,6 +253,6 @@ describe('editor V2 Decor property stress path', () => {
       text: 'future',
       futureModule: { enabled: true, values: { border: 'future' } },
     })
-    expect(patch).toHaveProperty('zone', null)
+    expect(patch).toHaveProperty('zoneId', null)
   })
 })

@@ -2,8 +2,8 @@
  * Modules non-CSS du décor dont l'écart est un objet imbriqué, fusionné superficiellement
  * propriété par propriété — même mécanique que `style`, mais hors de la carte CSS plate
  * (modèle du décor : « toute donnée qui produit du CSS via une interface intermédiaire
- * sort de `style` » — `offset` en est le premier exemple, `capsule` et `textAutoSize`
- * suivent le même principe).
+ * sort de `style` » — `offset` en est le premier exemple, `textAutoSize`
+ * suit le même principe).
  *
  * Config, pas logique : `mergePatch` (merge.ts) lit cette liste plutôt que de coder les
  * noms en dur. Ajouter un module au décor (`types.ts`, `DecorPatch`) nécessite de
@@ -11,4 +11,4 @@
  * (bug déjà rencontré une fois avec `textAutoSize`). `path` est l'exception
  * documentée : il est segment-local et doit rester hors de cette cascade.
  */
-export const STRUCTURED_GROUPS = ['offset', 'capsule', 'textAutoSize'] as const
+export const STRUCTURED_GROUPS = ['offset', 'textAutoSize'] as const
