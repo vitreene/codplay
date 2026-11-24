@@ -10,9 +10,27 @@
  */
 
 import { assign, emit, enqueueActions, setup } from 'xstate'
-import { runCommand, transaction } from '../commands/facade'
+import { CommandError, runCommand, transaction } from '../commands/facade'
 import { EMPTY_SELECTION } from './types'
-import type { ControllerContext, ControllerEmitted, ControllerEvent, EditPanel, Selection } from './types'
+import type { EditorScene } from '../commands/types'
+import type { CommandFailure, ControllerContext, ControllerEmitted, ControllerEvent, EditPanel, Selection } from './types'
+
+/**
+ * Runs one document mutation at the controller boundary. A refused command becomes the failure
+ * shown to the author (and reported to the developer console) instead of an unexplained halt.
+ */
+function attemptMutation(mutate: () => EditorScene): Readonly<{ scene: EditorScene }> | Readonly<{ failure: CommandFailure }> {
+  try {
+    return { scene: mutate() }
+  } catch (error) {
+    console.error('[controller] document command refused', error)
+    return {
+      failure: error instanceof CommandError
+        ? { commandName: error.commandName, message: error.message }
+        : { commandName: 'inconnue', message: error instanceof Error ? error.message : String(error) },
+    }
+  }
+}
 
 /** Maximum author-time distance for deriving a keyframe selection at a phase boundary. */
 export const KEYFRAME_SELECTION_TOLERANCE_MS = 50
@@ -146,7 +164,12 @@ export const controllerMachine = setup({
     runCommand: enqueueActions(({ context, event, enqueue }) => {
       if (event.type !== 'RUN_COMMAND' || !context.scene) return
       const beforeScene = context.scene
-      const afterScene = runCommand(beforeScene, event.command)
+      const result = attemptMutation(() => runCommand(beforeScene, event.command))
+      if ('failure' in result) {
+        enqueue.raise({ type: 'COMMAND_FAILED', failure: result.failure })
+        return
+      }
+      const afterScene = result.scene
       enqueue.assign({
         scene: afterScene,
         selectedZoneId: context.selectedZoneId !== null && afterScene.zones[context.selectedZoneId] !== undefined
@@ -166,7 +189,12 @@ export const controllerMachine = setup({
     runTransaction: enqueueActions(({ context, event, enqueue }) => {
       if (event.type !== 'RUN_TRANSACTION' || !context.scene) return
       const beforeScene = context.scene
-      const afterScene = transaction(beforeScene, event.commands)
+      const result = attemptMutation(() => transaction(beforeScene, event.commands))
+      if ('failure' in result) {
+        enqueue.raise({ type: 'COMMAND_FAILED', failure: result.failure })
+        return
+      }
+      const afterScene = result.scene
       enqueue.assign({
         scene: afterScene,
         selectedZoneId: context.selectedZoneId !== null && afterScene.zones[context.selectedZoneId] !== undefined
@@ -260,6 +288,7 @@ export const controllerMachine = setup({
     zonesVisible: false,
     creatingType: null,
     creatingPlacementMode: null,
+    failure: null,
 
   },
   on: {
@@ -296,8 +325,15 @@ export const controllerMachine = setup({
      */
     TELCO_ACTION_REQUEST: { target: '.playing', actions: 'emitFlushPending' },
     PHASE_ABORT: { actions: 'emitSceneReverted' },
+    /** A refused command stops the editor explicitly: the final state is shown by the layout. */
+    COMMAND_FAILED: {
+      target: '.failed',
+      actions: assign({ failure: ({ event }) => (event.type === 'COMMAND_FAILED' ? event.failure : null) }),
+    },
   },
   states: {
+    /** Terminal: the actor stops processing events until the page is reloaded. */
+    failed: { type: 'final' },
     idle: {
       on: {
         CREATE_MODE_ENTER: { target: 'creating', actions: ['enterCreateMode', 'emitCreationModeChanged'] },

@@ -50,7 +50,12 @@ export interface ControllerContext {
   creatingType: ItemType | null
   /** Placement racine sélectionné pour le tracé courant — `null` en dehors de ce mode. */
   creatingPlacementMode: RootPlacementMode | null
+  /** Refused document command that stopped the editor; null while the editor runs. */
+  failure: CommandFailure | null
 }
+
+/** What the failure display tells the author about the command that stopped the editor. */
+export type CommandFailure = Readonly<{ commandName: string; message: string }>
 
 // ─── Commandes de la façade — vocabulaire fermé, jamais une mutation arbitraire ─────────
 
@@ -66,7 +71,7 @@ export interface ControllerContext {
  * module sequence-editor plutôt que d'engorger ce vocabulaire central déjà documenté comme fermé.
  */
 export type Command =
-  | { name: 'createItem'; args: { geometry: OffsetData; parentId?: string | null; zoneId?: string } }
+  | { name: 'createItem'; args: { geometry: OffsetData; parentId?: string | null; zoneId?: string; itemId?: string; introTimeMs?: number } }
   | { name: 'setRootPlacementMode'; args: { mode: RootPlacementMode } }
   | { name: 'createRootZone'; args: { zoneId: string; area: ZoneRect } }
   | { name: 'setZonesSurface'; args: { capsuleId: string | null; orientation: Orientation; zones: readonly { id: string; name: string; area: ZoneRect }[] } }
@@ -75,9 +80,9 @@ export type Command =
   | { name: 'assignContent'; args: { itemId: string; content: Omit<Content, 'id'> } }
   | { name: 'attachItem'; args: { itemId: string; parentId: string | null; order?: string; beforeItemId?: string; afterItemId?: string } }
   | { name: 'setDecor'; args: { decorId: string; patch: Partial<Omit<Decor, 'id'>> } }
+  | { name: 'setItemDecor'; args: { itemId: string; keyframeId: string | null; patch: Partial<Omit<Decor, 'id'>>; forkDecorId: string } }
   | { name: 'registerDecor'; args: { decorId: string } }
-  | { name: 'createKeyframe'; args: { itemId: string; timeMs: number; decorId?: string } }
-  | { name: 'createCapsule'; args: { geometry: OffsetData; capsuleDef: CapsuleDef; parentId?: string | null; zoneId?: string } }
+  | { name: 'createCapsule'; args: { geometry: OffsetData; capsuleDef: CapsuleDef; parentId?: string | null; zoneId?: string; itemId?: string; introTimeMs?: number } }
   | { name: 'setCapsuleDef'; args: { itemId: string; patch: Partial<CapsuleDef> } }
   | { name: 'deleteItem'; args: { itemId: string } }
   | SequenceEditorCommand
@@ -152,6 +157,8 @@ export type ControllerEvent =
    * ainsi effacer toute preview live désormais périmée.
    */
   | { type: 'PHASE_ABORT' }
+  /** Raised by the controller itself when a document command is refused. */
+  | { type: 'COMMAND_FAILED'; failure: CommandFailure }
 
 // ─── Événements émis — les ponts utilisent machine.on aux frontières utiles, pas subscribe sur chaque snapshot. ───
 

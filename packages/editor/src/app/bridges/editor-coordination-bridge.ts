@@ -70,7 +70,7 @@ export type EditorCoordinationDecorPreview = Readonly<{
 
 const KEYFRAME_PREVIEW_TOLERANCE_MS = 50
 
-type SequenceReconciliationPort = Pick<SequenceEditorController, 'reconcilePlaybackTime' | 'seek'>
+type SequenceReconciliationPort = Pick<SequenceEditorController, 'reconcilePlaybackTime' | 'seek' | 'getPlayheadMs'>
 
 /** Internal editor handoff notification used to resynchronize decor before playback resumes. */
 export type EditorPlaybackReconciledListener = (timelineMs: number) => void
@@ -135,6 +135,11 @@ export class EditorCoordinationBridge {
   /** Registers the sequence model as the owner of the author playhead. */
   attachSequenceEditor(sequence: SequenceReconciliationPort): void {
     this.sequence = sequence
+  }
+
+  /** Reads the author playhead, owned by the sequence editor; 0 while no timeline is attached. */
+  getAuthorTimeMs(): number {
+    return this.sequence?.getPlayheadMs() ?? 0
   }
 
   /** Publishes the stable scene-region host to editor overlays without exposing the player. */

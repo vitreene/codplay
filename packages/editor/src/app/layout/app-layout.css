@@ -11,6 +11,10 @@
   --app-timeline-resizer-height: 8px;
   --app-timeline-height: 160px;
 
+  --app-failure-bg: #7f1d1d;
+  --app-failure-border: #f87171;
+  --app-layer-failure: 10000;
+
   --app-font: ui-sans-serif, system-ui, sans-serif;
   --app-font-size: 13px;
 }
@@ -253,4 +257,39 @@ body,
   box-sizing: border-box;
   padding: 1rem;
   overflow: auto;
+}
+
+/* ── Arrêt sur commande refusée ─────────────────────────────────────────── */
+/* Bloque toute l'interface : l'acteur central est arrêté, aucun geste n'a plus d'effet. */
+.editor-failure {
+  position: fixed;
+  inset: 0;
+  z-index: var(--app-layer-failure);
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 0.6);
+}
+
+.editor-failure__panel {
+  max-width: 32rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--app-failure-border);
+  border-radius: 6px;
+  background: var(--app-failure-bg);
+  color: var(--app-text);
+  font: var(--app-font-size) var(--app-font);
+}
+
+.editor-failure__title {
+  margin-top: 0;
+  font-weight: bold;
+}
+
+.editor-failure__message {
+  font-family: ui-monospace, monospace;
+}
+
+.editor-failure__hint {
+  margin-bottom: 0;
+  color: var(--app-text-muted);
 }

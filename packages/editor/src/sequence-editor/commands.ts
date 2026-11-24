@@ -15,14 +15,10 @@
  * via la façade centrale (`attachItem` pour TRACK.MOVE, `deleteItem` pour
  * TRACK.REMOVE) — pas dupliquées ici (voir `specs/editor-v2-integration-spec.md`).
  *
- * La création de keyframe (`createNamedKeyframe`) N'appelle PAS le
- * `createKeyframe` central : le sequence-editor a besoin de choisir l'id du
- * keyframe À L'AVANCE (stable pendant tout un geste de drag, cf.
- * `CLIP.START_DRAW`) et, pour l'outillage de clip, de poser les labels optionnels
- * `name: 'intro'|'outro'` à la création — deux besoins que `createKeyframe` central
- * (id généré en interne, pas de champ `name`) ne couvre pas. Les labels ne définissent
- * pas les frontières V2 ; ce sont les premier/dernier keyframes selon `timeMs`.
- * Un seul point de création ici, jamais deux voies.
+ * La création de keyframe (`createNamedKeyframe`) est l'unique voie de création de l'éditeur :
+ * l'appelant choisit l'id du keyframe À L'AVANCE (stable pendant tout un geste de drag, cf.
+ * `CLIP.START_DRAW`) et l'id de son décor. Les labels optionnels ne définissent pas les
+ * frontières V2 ; ce sont les premier/dernier keyframes selon `timeMs`.
  */
 
 import type { EditorScene, Item, Keyframe, KeyframeChannel, MarkerTrack, Marker, Transition, Waveform } from './types'
@@ -93,21 +89,18 @@ function detachKeyframesByMarkerIds(items: Item[], markerIds: ReadonlySet<string
 // ─── Keyframes ──────────────────────────────────────────────────────────────
 
 /**
- * Seul point de création de keyframe pour le sequence-editor — `keyframeId` fourni par
- * l'appelant (stable pendant un geste de drag), `decorId` réutilisé s'il existe déjà
- * (partage un décor adjacent), sinon un décor vide est créé — même règle que le
- * `createKeyframe` central (`Keyframe.decorId` toujours non-null).
+ * Seul point de création de keyframe de l'éditeur — `keyframeId` et `decorId` sont fournis par
+ * l'appelant (`createId`). Un `decorId` existant est partagé (décor adjacent) ; sinon un décor vide
+ * est créé sous cet id, que l'appelant remplit dans la même transaction.
  */
 export function createNamedKeyframe(
   scene: EditorScene,
-  args: { itemId: string; keyframeId: string; timeMs: number; decorId?: string; channel?: KeyframeChannel; name?: string },
+  args: { itemId: string; keyframeId: string; timeMs: number; decorId: string; channel?: KeyframeChannel; name?: string },
 ): EditorScene {
-  let nextScene = scene
-  let decorId = args.decorId
-  if (decorId === undefined || !scene.decors[decorId]) {
-    decorId = decorId ?? `decor-${args.keyframeId}`
-    nextScene = { ...nextScene, decors: { ...nextScene.decors, [decorId]: { id: decorId } } }
-  }
+  const { decorId } = args
+  const nextScene = scene.decors[decorId] === undefined
+    ? { ...scene, decors: { ...scene.decors, [decorId]: { id: decorId } } }
+    : scene
   const kf: Keyframe = {
     id: args.keyframeId,
     timeMs: args.timeMs,

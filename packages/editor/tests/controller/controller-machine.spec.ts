@@ -363,3 +363,56 @@ describe('controllerMachine — zones visibility (ephemeral toggle)', () => {
     expect(actor.getSnapshot().context.zonesVisible).toBe(false)
   })
 })
+
+describe('controllerMachine — refused document command', () => {
+  it('stops explicitly in the failed state, naming the command, without changing the document', () => {
+    const scene: EditorScene = {
+      ...sceneFixture(),
+      rootCapsule: { kind: 'card', distribution: { mode: 'stagger' }, grid: { rows: 90, cols: 160 } },
+      zones: {
+        'zone-root': {
+          id: 'zone-root', capsuleId: null, name: 'z1',
+          surfaces: { portrait: { row: 1, col: 1, rowSpan: 1, colSpan: 1 }, landscape: { row: 1, col: 1, rowSpan: 1, colSpan: 1 } },
+        },
+      },
+    }
+    const actor = createActor(controllerMachine)
+    const committed: unknown[] = []
+    actor.on('documentCommitted', (event) => committed.push(event))
+    actor.start()
+    actor.send({ type: 'SCENE_LOADED', scene })
+    const errors = console.error
+    console.error = () => {}
+    try {
+      actor.send({ type: 'RUN_COMMAND', command: { name: 'setRootPlacementMode', args: { mode: 'transform' } } })
+    } finally {
+      console.error = errors
+    }
+
+    const snapshot = actor.getSnapshot()
+    expect(snapshot.value).toBe('failed')
+    expect(snapshot.status).toBe('done')
+    expect(snapshot.context.failure).toMatchObject({ commandName: 'setRootPlacementMode' })
+    expect(snapshot.context.failure?.message).toMatch(/root zones must be removed/)
+    expect(snapshot.context.scene).toBe(scene)
+    expect(committed).toEqual([])
+  })
+
+  it('names the refused command inside a transaction', () => {
+    const actor = createActor(controllerMachine)
+    actor.start()
+    actor.send({ type: 'SCENE_LOADED', scene: sceneFixture() })
+    const errors = console.error
+    console.error = () => {}
+    try {
+      actor.send({ type: 'RUN_TRANSACTION', commands: [{ name: 'deleteItem', args: { itemId: 'missing' } }, {
+        name: 'setDecor', args: { decorId: 'missing-decor', patch: {} },
+      }] })
+    } finally {
+      console.error = errors
+    }
+    expect(actor.getSnapshot().value).toBe('failed')
+    expect(actor.getSnapshot().context.failure?.commandName).toBe('setDecor')
+  })
+})
+

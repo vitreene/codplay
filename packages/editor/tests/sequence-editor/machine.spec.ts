@@ -227,8 +227,8 @@ describe('sequenceEditorMachine — clip draw (capsule intro/outro)', () => {
 
     expect(actor.getSnapshot().value).toBe('idle')
     expect(batches).toEqual([[
-      { name: 'createNamedKeyframe', args: { itemId: 'cap', keyframeId: 'intro-1', timeMs: 1000 } },
-      { name: 'createNamedKeyframe', args: { itemId: 'cap', keyframeId: 'outro-1', timeMs: 4000 } },
+      { name: 'createNamedKeyframe', args: { itemId: 'cap', keyframeId: 'intro-1', timeMs: 1000, decorId: expect.any(String) } },
+      { name: 'createNamedKeyframe', args: { itemId: 'cap', keyframeId: 'outro-1', timeMs: 4000, decorId: expect.any(String) } },
     ]])
   })
 
@@ -248,8 +248,8 @@ describe('sequenceEditorMachine — clip draw (capsule intro/outro)', () => {
     expect(batches[0]).toEqual([
       { name: 'deleteKeyframe', args: { itemId: 'cap', keyframeId: 'old-intro' } },
       { name: 'deleteKeyframe', args: { itemId: 'cap', keyframeId: 'old-outro' } },
-      { name: 'createNamedKeyframe', args: { itemId: 'cap', keyframeId: 'new-intro', timeMs: 1000 } },
-      { name: 'createNamedKeyframe', args: { itemId: 'cap', keyframeId: 'new-outro', timeMs: 3000 } },
+      { name: 'createNamedKeyframe', args: { itemId: 'cap', keyframeId: 'new-intro', timeMs: 1000, decorId: expect.any(String) } },
+      { name: 'createNamedKeyframe', args: { itemId: 'cap', keyframeId: 'new-outro', timeMs: 3000, decorId: expect.any(String) } },
     ])
   })
 

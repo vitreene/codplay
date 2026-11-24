@@ -161,8 +161,8 @@ describe('clip draw', () => {
     expect(batches).toEqual([[
       { name: 'deleteKeyframe', args: { itemId: 'track-01', keyframeId: 'kf-01' } },
       { name: 'deleteKeyframe', args: { itemId: 'track-01', keyframeId: 'kf-03' } },
-      { name: 'createNamedKeyframe', args: { itemId: 'track-01', keyframeId: 'new-intro', timeMs: 1000 } },
-      { name: 'createNamedKeyframe', args: { itemId: 'track-01', keyframeId: 'new-outro', timeMs: 3000 } },
+      { name: 'createNamedKeyframe', args: { itemId: 'track-01', keyframeId: 'new-intro', timeMs: 1000, decorId: expect.any(String) } },
+      { name: 'createNamedKeyframe', args: { itemId: 'track-01', keyframeId: 'new-outro', timeMs: 3000, decorId: expect.any(String) } },
     ]])
     actor.stop()
   })
@@ -174,8 +174,8 @@ describe('clip draw', () => {
     actor.send({ type: 'CLIP.DRAW_MOVE', pointerMs: 2000 })
     actor.send({ type: 'CLIP.DRAW_END' })
     expect(batches[0]?.filter(c => c.name === 'createNamedKeyframe')).toEqual([
-      { name: 'createNamedKeyframe', args: { itemId: 'track-01', keyframeId: 'rev-i', timeMs: 2000 } },
-      { name: 'createNamedKeyframe', args: { itemId: 'track-01', keyframeId: 'rev-o', timeMs: 4000 } },
+      { name: 'createNamedKeyframe', args: { itemId: 'track-01', keyframeId: 'rev-i', timeMs: 2000, decorId: expect.any(String) } },
+      { name: 'createNamedKeyframe', args: { itemId: 'track-01', keyframeId: 'rev-o', timeMs: 4000, decorId: expect.any(String) } },
     ])
     actor.stop()
   })

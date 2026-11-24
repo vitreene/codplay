@@ -5,6 +5,7 @@ import { resolveKeyframeAlignment, resolveKeyframeInsertionPatch, patchToDecorAr
 import type { controllerMachine } from '../controller/controller-machine'
 import type { Command } from '../controller/types'
 import type { BridgeHandle } from './types'
+import { createId } from '../commands/ids'
 import type { EditorCoordinationBridge, EditorDecorPreviewCandidate } from './editor-coordination-bridge'
 
 /**
@@ -138,14 +139,13 @@ export function createSequenceEditorBridge(
       captures.push({ itemId, keyframeId, candidate, persisted: false })
       return [command]
     }
-    // `decorId` omis (jamais celui résolu par `adjacentDecorId` côté machine.ts) : `createNamedKeyframe`
-    // crée alors lui-même un décor vide frais à `decor-${keyframeId}` — `setDecor` l'y remplit dans la
-    // MÊME transaction, aucune commande `registerDecor` séparée n'est nécessaire.
-    const { decorId: _ignored, ...argsWithoutDecorId } = command.args
+    // Le décor adjacent proposé par la machine n'est pas partagé : le candidat reçoit un décor neuf,
+    // que `createNamedKeyframe` crée et que `setDecor` remplit dans la MÊME transaction.
+    const decorId = createId('decor')
     captures.push({ itemId, keyframeId, candidate, persisted: true })
     return [
-      { ...command, args: argsWithoutDecorId },
-      { name: 'setDecor', args: { decorId: `decor-${keyframeId}`, patch: decorArgs } },
+      { ...command, args: { ...command.args, decorId } },
+      { name: 'setDecor', args: { decorId, patch: decorArgs } },
     ]
   }
 

@@ -205,6 +205,7 @@ export function AppLayout(handle: Handle<AppLayoutProps>) {
         persistence={persistence}
         scene={snapshot.context.scene}
         history={history}
+        getAuthorTimeMs={() => coordination.getAuthorTimeMs()}
       />
     </section>
     <section
@@ -230,5 +231,13 @@ export function AppLayout(handle: Handle<AppLayoutProps>) {
       <SequenceEditorRegion controller={controller} coordination={coordination} />
     </section>
     <section id="editor-telco-region" className="app-region app-region--telco" />
+    {snapshot.value === 'failed' && snapshot.context.failure !== null && <div id="editor-failure" className="editor-failure" role="alert">
+      <div id="editor-failure-panel" className="editor-failure__panel">
+        <p id="editor-failure-title" className="editor-failure__title">L’éditeur s’est arrêté</p>
+        <p id="editor-failure-command">La commande « {snapshot.context.failure.commandName} » a été refusée :</p>
+        <p id="editor-failure-message" className="editor-failure__message">{snapshot.context.failure.message}</p>
+        <p id="editor-failure-hint" className="editor-failure__hint">Les modifications déjà enregistrées sont conservées. Rechargez la page pour reprendre.</p>
+      </div>
+    </div>}
   </div>
 }

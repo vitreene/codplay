@@ -1,10 +1,11 @@
+import { createId } from '../commands/ids'
 import type { EditorScene } from '../commands/types'
 import { ROOT_PLACEMENT_GRID } from '../commands/root-placement-commands'
 
 /** Creates an empty document using the current EditorScene model. */
 export function createEmptyEditorScene(title = 'Nouvelle scène'): EditorScene {
   return {
-    id: `editor-scene-${crypto.randomUUID()}`,
+    id: createId('editor-scene'),
     meta: {
       title,
       durationMs: 5000,

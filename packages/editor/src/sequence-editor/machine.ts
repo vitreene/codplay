@@ -14,6 +14,7 @@ import { LAYOUT_PROFILE_DEFAULT } from './layout-profile'
 import { DISPLAY_CONFIG_DEFAULT } from './display-config'
 import { childrenOf, findParentClipBounds } from './utils'
 import { resolveMotionLifetime } from '../motion-editor/timing'
+import { createId } from '../app/commands/ids'
 
 /**
  * `specs/editor-v2-integration-spec.md` — cette machine NE POSSÈDE PLUS `scene`/`selection` : ce sont des projections en
@@ -64,7 +65,6 @@ export type MachineSnapPoint = {
 
 export type MachineInteraction =
   | { kind: 'dragging-keyframe'; trackId: string; keyframeId: string; originMs: number; currentMs: number }
-  | { kind: 'dragging-playhead'; originMs: number; currentMs: number }
   | { kind: 'panning'; originPx: number; originStartMs: number }
   | { kind: 'drawing-clip'; trackId: string; startMs: number; currentMs: number; introId: string; outroId: string }
 
@@ -129,6 +129,8 @@ export type SequenceEditorEvent =
   | { type: 'DRAG.START_KEYFRAME'; trackId: string; keyframeId: string }
   | { type: 'DRAG.MOVE'; pointerMs: number }
   | { type: 'DRAG.END' }
+  /** Abandons the drag (pointercancel, lost pointer, Escape): nothing is emitted. */
+  | { type: 'DRAG.CANCEL' }
   | { type: 'CLIP.PLACE'; trackId: string; pointerMs: number }
   | { type: 'CLIP.START_DRAW'; trackId: string; pointerMs: number; introId: string; outroId: string }
   | { type: 'CLIP.DRAW_MOVE'; pointerMs: number }
@@ -352,9 +354,6 @@ function adjacentDecorId(keyframes: Keyframe[], timeMs: number): string | undefi
   return prev?.decorId ?? sorted[0]?.decorId
 }
 
-function freshId(prefix: string): string {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-}
 
 // ─── Machine ─────────────────────────────────────────────────────────────────
 
@@ -364,14 +363,6 @@ export const sequenceEditorMachine = setup({
     events: SequenceEditorEvent
     input: MachineInput
     emitted: SequenceEditorEmitted
-  },
-
-  guards: {
-    canCommitDrag: ({ context }) => {
-      const i = context.interaction
-      if (!i || i.kind !== 'dragging-keyframe') return false
-      return i.currentMs >= 0 && i.currentMs <= context.scene.meta.durationMs
-    },
   },
 
 }).createMachine({
@@ -515,10 +506,10 @@ export const sequenceEditorMachine = setup({
             // creating an empty, unrelated one. Once a real KF exists, the adjacent decor keeps
             // the established copy-on-write/inheritance protocol.
             const decorId = event.decorId
-              ?? (item ? adjacentDecorId(item.keyframes, timeMs) ?? item.initialDecorId : undefined)
+              ?? (item ? adjacentDecorId(item.keyframes, timeMs) ?? item.initialDecorId : createId('decor'))
             return {
               type: 'commandBatch' as const,
-              commands: [{ name: 'createNamedKeyframe', args: { itemId: event.trackId, keyframeId: event.id ?? freshId('kf'), timeMs, decorId } }],
+              commands: [{ name: 'createNamedKeyframe', args: { itemId: event.trackId, keyframeId: event.id ?? createId('kf'), timeMs, decorId } }],
             }
           }),
         },
@@ -612,9 +603,9 @@ export const sequenceEditorMachine = setup({
 
             let commands: Command[]
             if (!intro) {
-              commands = [{ name: 'createNamedKeyframe', args: { itemId: event.trackId, keyframeId: freshId('kf'), timeMs: clampedMs } }]
+              commands = [{ name: 'createNamedKeyframe', args: { itemId: event.trackId, keyframeId: createId('kf'), timeMs: clampedMs, decorId: createId('decor') } }]
             } else if (!outro) {
-              commands = [{ name: 'createNamedKeyframe', args: { itemId: event.trackId, keyframeId: freshId('kf'), timeMs: clampedMs } }]
+              commands = [{ name: 'createNamedKeyframe', args: { itemId: event.trackId, keyframeId: createId('kf'), timeMs: clampedMs, decorId: createId('decor') } }]
             } else {
               const moveId = Math.abs(clampedMs - intro.timeMs) <= Math.abs(clampedMs - outro.timeMs) ? intro.id : outro.id
               commands = [{ name: 'moveKeyframe', args: { itemId: event.trackId, keyframeId: moveId, timeMs: clampedMs } }]
@@ -825,11 +816,13 @@ export const sequenceEditorMachine = setup({
         },
         'DRAG.END': {
           target: 'idle',
-          guard: 'canCommitDrag',
           actions: [
+            // A drag that never left its origin (a simple click) is a selection, not an edit.
             emit(({ context }) => {
               const i = context.interaction
-              if (!i || i.kind !== 'dragging-keyframe') return { type: 'commandBatch' as const, commands: [] }
+              if (!i || i.kind !== 'dragging-keyframe' || i.currentMs === i.originMs) {
+                return { type: 'commandBatch' as const, commands: [] }
+              }
               return {
                 type: 'commandBatch' as const,
                 commands: [{ name: 'moveKeyframe', args: { itemId: i.trackId, keyframeId: i.keyframeId, timeMs: i.currentMs } }],
@@ -838,6 +831,7 @@ export const sequenceEditorMachine = setup({
             assign({ interaction: null }),
           ],
         },
+        'DRAG.CANCEL': { target: 'idle', actions: assign({ interaction: null }) },
       },
     },
 
@@ -875,8 +869,8 @@ export const sequenceEditorMachine = setup({
               const commands: Command[] = []
               if (existingIntro) commands.push({ name: 'deleteKeyframe', args: { itemId: i.trackId, keyframeId: existingIntro.id } })
               if (existingOutro) commands.push({ name: 'deleteKeyframe', args: { itemId: i.trackId, keyframeId: existingOutro.id } })
-              commands.push({ name: 'createNamedKeyframe', args: { itemId: i.trackId, keyframeId: i.introId || freshId('kf'), timeMs: minMs } })
-              commands.push({ name: 'createNamedKeyframe', args: { itemId: i.trackId, keyframeId: i.outroId || freshId('kf'), timeMs: maxMs } })
+              commands.push({ name: 'createNamedKeyframe', args: { itemId: i.trackId, keyframeId: i.introId || createId('kf'), timeMs: minMs, decorId: createId('decor') } })
+              commands.push({ name: 'createNamedKeyframe', args: { itemId: i.trackId, keyframeId: i.outroId || createId('kf'), timeMs: maxMs, decorId: createId('decor') } })
               return { type: 'commandBatch' as const, commands }
             }),
             assign({ interaction: null }),

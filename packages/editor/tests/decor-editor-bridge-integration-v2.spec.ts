@@ -10,6 +10,7 @@ import { EditorPlayerCommandFacade } from '../src/app/commands/editor-player-com
 import { EditorActionsFacade } from '../src/app/facades/editor-actions-facade'
 import { buildSceneDocV2, EDITOR_V2_STORY_ID } from '../src/builder-v2'
 import { ITEM_MOTION_REFERENCE_ANGLE, ITEM_MOTION_ROTATION_BASELINE } from '../src/item-presentation/item-motion-reference'
+import { assertJsonCompatible } from '../src/app/persistence/json-serialization'
 import { readItemTransformProjection } from '../src/item-presentation/item-style-projection'
 import {
   frameVisualCenter,
@@ -2056,6 +2057,52 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     expect(sourceGhost.style.left).toBe(initialSourceLeft)
   })
 
+  it('écrit le décor initial quand le geste du CS vise l’état initial, sans KF ni intro sous la tête de lecture', async () => {
+    originalResizeObserver = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class {
+      observe(): void {}
+      disconnect(): void {}
+    } as unknown as typeof ResizeObserver
+
+    actor = createActor(controllerMachine)
+    actor.start()
+    const baseScene = scene()
+    // An item without keyframe: its whole state is the initial decor, shown at the 2 s playhead.
+    actor.send({
+      type: 'SCENE_LOADED',
+      scene: { ...baseScene, items: baseScene.items.map((item) => ({ ...item, keyframes: [] })) },
+    })
+    coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
+
+    const sceneRoot = document.createElement('div')
+    sceneRoot.style.width = '800px'
+    Object.defineProperty(sceneRoot, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }),
+    })
+    const decorPanel = document.createElement('div')
+    document.body.append(sceneRoot, decorPanel)
+    sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    await waitTurns()
+
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item'] })
+    actor.send({ type: 'SEEK', timelineMs: 2_000 })
+    await waitTurns(24)
+
+    const frame = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')!
+    frame.dispatchEvent(pointerEvent('pointerdown', 160, 160))
+    frame.dispatchEvent(pointerEvent('pointermove', 240, 200))
+    frame.dispatchEvent(pointerEvent('pointerup', 240, 200))
+    await waitTurns(24)
+
+    const committedScene = actor.getSnapshot().context.scene!
+    const committedItem = committedScene.items.find((item) => item.id === 'item')!
+    // Like a palette edit, the gesture is kept on the initial decor: no keyframe appears.
+    expect(committedItem.keyframes).toHaveLength(0)
+    expect(committedScene.decors.first?.offset?.translate).toEqual({ x: 20, y: 15 })
+  })
+
   it('repositionne le dernier KF sans en créer et isole son décor partagé', async () => {
     originalResizeObserver = globalThis.ResizeObserver
     globalThis.ResizeObserver = class {
@@ -2558,5 +2605,48 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     initialGhost?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
     await waitTurns(24)
     expect(actor.getSnapshot().context.selection).toMatchObject({ itemIds: ['item'], keyframeId: 'first-kf' })
+  })
+
+  it('keeps the document JSON-compatible after editing a text content through the palette', async () => {
+    originalResizeObserver = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class {
+      observe(): void {}
+      disconnect(): void {}
+    } as unknown as typeof ResizeObserver
+
+    actor = createActor(controllerMachine)
+    actor.start()
+    actor.send({ type: 'SCENE_LOADED', scene: scene() })
+    coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
+    const sceneRoot = document.createElement('div')
+    sceneRoot.style.width = '800px'
+    Object.defineProperty(sceneRoot, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }),
+    })
+    const decorPanel = document.createElement('div')
+    document.body.append(sceneRoot, decorPanel)
+    sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    await waitTurns()
+
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item'] })
+    actor.send({ type: 'SEEK', timelineMs: 0 })
+    await waitTurns()
+
+    const contentTab = [...decorPanel.querySelectorAll<HTMLButtonElement>('.dedit-tab')].find((tab) => tab.textContent === 'Contenu')
+    expect(contentTab).toBeDefined()
+    contentTab!.click()
+    await waitTurns()
+    const textInput = decorPanel.querySelector<HTMLInputElement>('[data-decor-property-path="text"] input')
+    expect(textInput).not.toBeNull()
+    textInput!.value = 'Texte modifié'
+    textInput!.dispatchEvent(new Event('change', { bubbles: true }))
+    await waitTurns(24)
+
+    const committedScene = actor.getSnapshot().context.scene!
+    expect(committedScene.contents.content?.text).toBe('Texte modifié')
+    // The persistence boundary rejects any `undefined` value, including an absent optional field written as a key.
+    expect(() => assertJsonCompatible(committedScene)).not.toThrow()
   })
 })

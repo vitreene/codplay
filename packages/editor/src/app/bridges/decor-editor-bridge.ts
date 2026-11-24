@@ -33,7 +33,6 @@ import type { CapsuleDefinitionEditorHandle, CapsuleEditorSelection } from '../.
 import { capsuleGridForScene, isManualCapsuleType } from '../../capsule-editor/capsule-grid'
 import type { DecorPatch, OffsetPatch, SelectionFrameValue } from '../../decor-editor/types'
 import {
-  applyDecorPatch,
   applyDecorModifications,
   collectDecorModifications,
   modificationsFromDecorPatch,
@@ -41,9 +40,10 @@ import {
 } from '../../decor-editor/modified-properties'
 import type { DecorModificationMap } from '../../decor-editor/modified-properties'
 import { resolveKeyframeChannel } from '../commands/types'
+import { createId } from '../commands/ids'
 import { isItemVisible } from '../commands/item-visibility/item-visibility'
 import type { CapsuleDef, Content, Decor, EditorScene, Item, ItemType, OffsetData, Orientation, RootPlacementMode } from '../commands/types'
-import { ROOT_PLACEMENT_GRID, rootPlacementModeForScene } from '../commands/root-placement-commands'
+import { canSetRootPlacementMode, ROOT_PLACEMENT_GRID, rootPlacementModeForScene } from '../commands/root-placement-commands'
 import type { Command, Selection } from '../controller/types'
 import type { controllerMachine } from '../controller/controller-machine'
 import type { BridgeHandle } from './types'
@@ -350,32 +350,6 @@ function parseRotationOrigin(value: unknown): { fx: number; fy: number } | undef
 }
 
 /**
- * Copy-on-write  : un `decorId` peut être partagé
- * entre plusieurs keyframes adjacents (`KEYFRAME.ADD` en hérite délibérément, « à la création
- * d'un keyframe » — pour ne pas dupliquer inutilement des décors identiques). Le muter en place
- * (`setDecor`) modifierait TOUS les keyframes qui le référencent, pas seulement celui en cours
- * d'édition — bug constaté 2026-07-17 (kf2 hérite du décor de kf1, éditer kf2 change aussi kf1, et
- * `buildKeyframeDecorActions` ne voit alors aucun diff entre les deux, donc aucune interpolation).
- * Les éditions ordinaires conservent la compatibilité du contrat existant quand le premier KF
- * partage volontairement `initialDecorId`. L'édition du champ `path`, qui est segment-local, active
- * en plus la garde `includeInitialDecor` afin qu'une donnée importée ou une commande manuelle ne
- * puisse pas contaminer le décor initial d'un item.
- */
-function isDecorSharedByAnotherReference(
-  scene: EditorScene,
-  decorId: string,
-  keyframeId: string,
-  options?: Readonly<{ includeInitialDecor?: boolean }>,
-): boolean {
-  return scene.items.some((item) => (options?.includeInitialDecor === true && item.initialDecorId === decorId)
-    || item.keyframes.some((k) => k.id !== keyframeId && k.decorId === decorId))
-}
-
-function freshDecorId(): string {
-  return `decor-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-}
-
-/**
  * `decor.zoneId` → `patch.zoneId` conserve l'identité stable de la zone dans tout le circuit.
  * `content.text`/`.textAutoSize` sont inclus ici (pas seulement le décor) : le panneau
  * « Contenu »/« Auto » de la palette doit refléter la valeur RÉELLEMENT posée à l'attache,
@@ -562,46 +536,32 @@ export function patchToDecorArgs(patch: DecorPatch): Partial<Omit<Decor, 'id'>> 
   return touched ? args : null
 }
 
-/** Adds only the target decor's already-authored siblings before a sparse exact-KF write. */
-function materializeExistingDecorPatch(scene: EditorScene, decorId: string, patch: DecorPatch): DecorPatch {
-  const existing = scene.decors[decorId]
-  if (!existing) return patch
-  const existingPatch = resolveCurrentPatch(existing, undefined)
-  return applyDecorPatch(existingPatch, patch)
-}
-
-/** Écart routé vers `assignContent` (`text`/`textAutoSize`) — fusionné sur le `Content` existant, jamais un remplacement partiel (`assignContent` remplace tout l'objet). */
+/** Écart routé vers `assignContent` (`text`/`textAutoSize`) — fusionné sur le `Content` existant, jamais un remplacement partiel (`assignContent` remplace tout l'objet) ni une clé absente écrite à `undefined` (la persistance JSON la refuse). */
 function patchToContentArgs(patch: DecorPatch, existing: Content | undefined, itemType: Target['itemType']): Omit<Content, 'id'> | null {
   if (patch.text === undefined && patch.textAutoSize === undefined) return null
+  const { id, ...existingFields } = existing ?? {}
   return {
+    ...existingFields,
     type: itemType === 'capsule' ? 'text' : itemType,
-    source: existing?.source,
-    mediaId: existing?.mediaId,
-    text: patch.text ?? existing?.text,
-    textAutoSize: patch.textAutoSize ?? existing?.textAutoSize,
-    lang: existing?.lang,
-    waveform: existing?.waveform,
-    cues: existing?.cues,
+    ...(patch.text === undefined ? {} : { text: patch.text }),
+    ...(patch.textAutoSize === undefined ? {} : { textAutoSize: patch.textAutoSize }),
   }
 }
 
 /**
- * Commandes d'écriture pour `patch` sur `target` — fork-si-partagé (règle de copy-on-write) inclus. Commun à
+ * Commandes d'écriture pour `patch` sur `target` — le copy-on-write appartient à `setItemDecor`. Commun à
  * `onDecorChange` (édition continue via dedit — palette, CSS libre, presets) et au commit d'une
  * `DecorLiveSession` (fin de geste CS-family — `specs/decor-style-interpolation-spec.md` — fin de geste) : un seul endroit qui sait construire ces commandes, plus deux copies qui auraient pu diverger.
  */
 function buildDecorCommands(scene: EditorScene, target: Target, patch: DecorPatch): Command[] {
   const commands: Command[] = []
-  let writeDecorId = target.writeDecorId!
-  if (target.keyframeId && isDecorSharedByAnotherReference(scene, writeDecorId, target.keyframeId)) {
-    // Fork avant d'écrire, jamais après (règle de copy-on-write) — sinon la mutation en place a déjà atteint
-    // le keyframe voisin le temps que le fork soit décidé.
-    writeDecorId = freshDecorId()
-    commands.push({ name: 'registerDecor', args: { decorId: writeDecorId } })
-    commands.push({ name: 'assignKeyframeDecor', args: { itemId: target.itemId, keyframeId: target.keyframeId, decorId: writeDecorId } })
+  // `setItemDecor` owns the copy-on-write rule: the edit never reaches another reference.
+  const decorArgs = patchToDecorArgs(patch)
+  if (decorArgs) {
+    commands.push({ name: 'setItemDecor', args: {
+      itemId: target.itemId, keyframeId: target.keyframeId, patch: decorArgs, forkDecorId: createId('decor'),
+    } })
   }
-  const decorArgs = patchToDecorArgs(materializeExistingDecorPatch(scene, writeDecorId, patch))
-  if (decorArgs) commands.push({ name: 'setDecor', args: { decorId: writeDecorId, patch: decorArgs } })
 
   const existingContent = target.contentId ? scene.contents[target.contentId] : undefined
   const contentArgs = patchToContentArgs(patch, existingContent, target.itemType)
@@ -874,12 +834,13 @@ export function createDecorEditorBridge(
     const patch = modificationsToDecorPatch(state.modifications)
     const decorArgs = patchToDecorArgs(patch)
     if (decorArgs === null) return null
-    const keyframeId = `decor-kf-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+    const keyframeId = createId('kf')
+    const decorId = createId('decor')
     return {
       keyframeId,
       commands: [
-        { name: 'createNamedKeyframe', args: { itemId, keyframeId, timeMs, channel: 'decor' } },
-        { name: 'setDecor', args: { decorId: `decor-${keyframeId}`, patch: decorArgs } },
+        { name: 'createNamedKeyframe', args: { itemId, keyframeId, timeMs, decorId, channel: 'decor' } },
+        { name: 'setDecor', args: { decorId, patch: decorArgs } },
       ],
     }
   }
@@ -1126,9 +1087,10 @@ export function createDecorEditorBridge(
       button.type = 'button'
       button.className = 'capsule-editor__control-button'
       button.textContent = option.label
-      button.title = option.title
+      const allowed = canSetRootPlacementMode(scene, option.value)
+      button.title = allowed ? option.title : 'Retirer les zones racine avant de passer en grille 1 × 1'
       button.setAttribute('aria-pressed', String(mode === option.value))
-      button.disabled = playbackActive || activeCreationMode !== null
+      button.disabled = playbackActive || activeCreationMode !== null || !allowed
       button.addEventListener('click', () => machine.send({
         type: 'RUN_COMMAND',
         command: { name: 'setRootPlacementMode', args: { mode: option.value } },
@@ -2232,24 +2194,19 @@ export function createDecorEditorBridge(
     const item = scene.items.find((candidate) => candidate.id === itemId)
     const keyframe = item?.keyframes.find((candidate) => candidate.id === keyframeId)
     if (item === undefined || keyframe === undefined) return []
-    let decorId = keyframe.decorId
-    const commands: Command[] = []
-    if (isDecorSharedByAnotherReference(scene, decorId, keyframeId, { includeInitialDecor: true })) {
-      decorId = freshDecorId()
-      commands.push({ name: 'registerDecor', args: { decorId } })
-      commands.push({ name: 'assignKeyframeDecor', args: { itemId, keyframeId, decorId } })
-    }
-    // `undefined` is intentional here: setDecor's shallow merge clears the optional field while
-    // retaining every other property of the target decor. The builder treats it as a straight
-    // segment, so no null sentinel is introduced into the V2 document vocabulary.
-    commands.push({
-      name: 'setDecor',
-      args: { decorId, patch: {
-        path,
-        ...(endpointOffset === undefined ? {} : { offset: endpointOffset }),
-      } },
-    })
-    return commands
+    // `undefined` is intentional here: the edit clears the optional field while retaining every
+    // other property of the target decor. The builder treats it as a straight segment, so no null
+    // sentinel is introduced into the V2 document vocabulary. A path always belongs to a segment's
+    // target, never to the intro, so `setItemDecor` never writes it into the initial decor.
+    return [{
+      name: 'setItemDecor',
+      args: {
+        itemId,
+        keyframeId,
+        patch: { path, ...(endpointOffset === undefined ? {} : { offset: endpointOffset as OffsetData }) },
+        forkDecorId: createId('decor'),
+      },
+    }]
   }
 
   /** Commits one path control-point edit without touching the source pose or sequence-editor. */
@@ -2381,11 +2338,14 @@ export function createDecorEditorBridge(
     } }
     const gestureOffsetPatch = frameGesturePatch(sourceDocumentFrame, targetDocumentFrame, rootWidth)
 
-    if (sourceTarget.keyframeId !== null && !sourceTarget.isTemporary) {
-      // An exact real KF is edited at its own time. The common decor command builder supplies the
-      // copy-on-write fork, so a shared decor cannot move a neighbouring KF by accident.
-      const selectedKeyframe = item.keyframes.find((keyframe) => keyframe.id === sourceTarget.keyframeId)
-      if (selectedKeyframe === undefined) return null
+    if (!sourceTarget.isTemporary) {
+      // An exact real KF is edited at its own time; so is the initial state (no KF selected: before the
+      // intro, or an item without KF), which is the intro's own state. `setItemDecor` owns the
+      // copy-on-write, so a shared decor cannot move a neighbouring KF by accident.
+      const selectedKeyframe = sourceTarget.keyframeId === null
+        ? undefined
+        : item.keyframes.find((keyframe) => keyframe.id === sourceTarget.keyframeId)
+      if (sourceTarget.keyframeId !== null && selectedKeyframe === undefined) return null
       const editState = decorEditStates.get(decorEditStateKey(sourceTarget.itemId, lastKnownTimelineMs))
       const decorPatch = editState === undefined || editState.modifications.size === 0
         ? {}
@@ -2394,13 +2354,12 @@ export function createDecorEditorBridge(
       // It therefore needs the same complete pose capture as a newly-created middle KF. An
       // already-spatial KF keeps the historical sparse movement patch: its pose endpoint already
       // exists and untouched Decor values must continue to cascade.
-      const posePatch = resolveKeyframeChannel(selectedKeyframe) === 'decor'
-        ? capturedPosePatch
-        : gestureOffsetPatch
+      const promotesDecorKeyframe = selectedKeyframe !== undefined && resolveKeyframeChannel(selectedKeyframe) === 'decor'
+      const posePatch = promotesDecorKeyframe ? capturedPosePatch : gestureOffsetPatch
       const sparsePatch = { ...mergePatch(posePatch, decorPatch), ...splitPatch }
       const commands: Command[] = []
-      if (resolveKeyframeChannel(selectedKeyframe) === 'decor') {
-        commands.push({ name: 'setKeyframeChannel', args: { itemId: item.id, keyframeId: sourceTarget.keyframeId, channel: 'pose' } })
+      if (promotesDecorKeyframe) {
+        commands.push({ name: 'setKeyframeChannel', args: { itemId: item.id, keyframeId: sourceTarget.keyframeId!, channel: 'pose' } })
       }
       commands.push(...buildDecorCommands(
         scene,
@@ -2415,15 +2374,17 @@ export function createDecorEditorBridge(
       const committedScene = machine.getSnapshot().context.scene
       const committedItem = committedScene?.items.find((candidate) => candidate.id === item.id)
       if (committedScene === null || committedScene === undefined || committedItem === undefined) return null
-      const activeSegment = activateCommittedMotion(committedItem, sourceTarget.keyframeId, rootWidth)
+      // The initial state has no segment of its own: the overlay is simply reprojected.
+      const activeSegment = sourceTarget.keyframeId === null
+        ? null
+        : activateCommittedMotion(committedItem, sourceTarget.keyframeId, rootWidth)
       syncMotionOverlay()
       return activeSegment
     }
 
-    // With no explicit KF, a movement gesture is valid only in the strict interval between two real
-    // KFs. Its document time is the current author playhead; the provisional 500 ms value belongs
-    // to a future transition-window resolver and must never shift this keyframe's time.
-    if (!sourceTarget.isTemporary) return null
+    // A temporary target is valid only in the strict interval between two real KFs. Its document time
+    // is the current author playhead; the provisional 500 ms value belongs to a future
+    // transition-window resolver and must never shift this keyframe's time.
     const alignment = resolveKeyframeAlignment(item, lastKnownTimelineMs)
     if (alignment.kind !== 'between') return null
     const targetTimeMs = Math.max(0, Math.min(lastKnownTimelineMs, scene.meta.durationMs))
@@ -2439,10 +2400,10 @@ export function createDecorEditorBridge(
     const targetPatch = patchToDecorArgs(sparsePatch)
     if (targetPatch === null) return null
 
-    const targetKeyframeId = `motion-kf-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-    const targetDecorId = `decor-${targetKeyframeId}`
+    const targetKeyframeId = createId('kf')
+    const targetDecorId = createId('decor')
     const commands: Command[] = [
-      { name: 'createNamedKeyframe', args: { itemId: item.id, keyframeId: targetKeyframeId, timeMs: targetTimeMs, channel: 'pose' } },
+      { name: 'createNamedKeyframe', args: { itemId: item.id, keyframeId: targetKeyframeId, timeMs: targetTimeMs, decorId: targetDecorId, channel: 'pose' } },
       { name: 'setDecor', args: { decorId: targetDecorId, patch: targetPatch } },
       ...splitCommands,
     ]
@@ -2601,15 +2562,16 @@ export function createDecorEditorBridge(
         cancelZoneMovePreview(sourceFrame, false)
         return false
       }
-      createdKeyframeId = `zone-kf-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+      createdKeyframeId = createId('kf')
+      const createdDecorId = createId('decor')
       commands.push({
         name: 'createNamedKeyframe',
-        args: { itemId: item.id, keyframeId: createdKeyframeId, timeMs: targetTimeMs, channel: 'pose' },
+        args: { itemId: item.id, keyframeId: createdKeyframeId, timeMs: targetTimeMs, decorId: createdDecorId, channel: 'pose' },
       })
       commands.push(...buildDecorCommands(scene, {
         ...target,
         keyframeId: createdKeyframeId,
-        writeDecorId: `decor-${createdKeyframeId}`,
+        writeDecorId: createdDecorId,
         isTemporary: false,
       }, patch))
     } else {
@@ -2696,12 +2658,13 @@ export function createDecorEditorBridge(
       if (alignment.kind !== 'between') return
       targetTimeMs = Math.max(0, Math.min(lastKnownTimelineMs, scene.meta.durationMs))
       if (item.keyframes.some((keyframe) => keyframe.timeMs === targetTimeMs)) return
-      createdKeyframeId = `offset-kf-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+      createdKeyframeId = createId('kf')
+      const createdDecorId = createId('decor')
       const decorPatch = patchToDecorArgs(commitPatch)
       if (decorPatch === null) return
       commands = [
-        { name: 'createNamedKeyframe', args: { itemId: item.id, keyframeId: createdKeyframeId, timeMs: targetTimeMs, channel: 'pose' } },
-        { name: 'setDecor', args: { decorId: `decor-${createdKeyframeId}`, patch: decorPatch } },
+        { name: 'createNamedKeyframe', args: { itemId: item.id, keyframeId: createdKeyframeId, timeMs: targetTimeMs, decorId: createdDecorId, channel: 'pose' } },
+        { name: 'setDecor', args: { decorId: createdDecorId, patch: decorPatch } },
       ]
     } else {
       commands = buildDecorCommands(
@@ -3178,9 +3141,11 @@ export function createDecorEditorBridge(
       distribution: scene.rootCapsule?.distribution ?? { mode: 'stagger', staggerInMs: 0, staggerOutMs: 0 },
     }
     /** Builds the document command matching the active item type and trace result. */
+    const itemId = createId('item')
+    const introTimeMs = coordination.getAuthorTimeMs()
     const createItemCommand = (geometry: OffsetData, zoneId?: string): Command => creatingType === 'capsule'
-      ? { name: 'createCapsule', args: { geometry, capsuleDef, ...(zoneId === undefined ? {} : { zoneId }) } }
-      : { name: 'createItem', args: { geometry, ...(zoneId === undefined ? {} : { zoneId }) } }
+      ? { name: 'createCapsule', args: { itemId, introTimeMs, geometry, capsuleDef, ...(zoneId === undefined ? {} : { zoneId }) } }
+      : { name: 'createItem', args: { itemId, introTimeMs, geometry, ...(zoneId === undefined ? {} : { zoneId }) } }
     if (creatingPlacementMode === 'transform' && result.kind === 'rect') {
       const rootWidth = sceneHost.clientWidth
       if (rootWidth <= 0) return
@@ -3193,14 +3158,14 @@ export function createDecorEditorBridge(
       commands.push(createItemCommand(geometry))
     }
     if (creatingPlacementMode === 'fine-grid' && result.kind === 'cell-area') {
-      const zoneId = `zone-${crypto.randomUUID()}`
+      const zoneId = createId('zone')
       commands.push(
         { name: 'createRootZone', args: { zoneId, area: result.area } },
         createItemCommand({}, zoneId),
       )
     }
     if (commands.length === 0) return
-    actions.commitItemCreation(commands)
+    actions.commitItemCreation(itemId, commands)
   }
 
   /** Maps the persisted root placement mode to the selection-frame V2 drawing mode. */

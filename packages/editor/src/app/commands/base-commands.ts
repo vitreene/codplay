@@ -6,15 +6,13 @@
  */
 
 import type { CapsuleDef, Content, Decor, EditorScene, Item, ItemType, OffsetData } from './types'
+import { createId } from './ids'
+import { decorReferences } from './item-decor/decor-sharing'
 import { nextOrderKey, OrderKeyHardBoundaryError, orderKeyBetween, rebalanceOrderKeys } from './order-key'
 import { DEFAULT_DECOR_PRESET } from './default-decor-presets'
 import { hasExplicitPlacementGeometry, missingZoneFillStyle } from './offset-placement'
 import { capsuleGridForScene, clampZoneRectToGrid, isManualCapsuleType } from '../../capsule-editor/capsule-grid'
 
-/** Generates an author ID that stays distinct from IDs restored from persisted scenes. */
-function freshId(prefix: string): string {
-  return `${prefix}-${crypto.randomUUID()}`
-}
 
 /** Les items directement enfants de `parentId` (racine si `null`) — pour calculer la prochaine clé d'ordre. */
 function childrenOf(scene: EditorScene, parentId: string | null): Item[] {
@@ -28,7 +26,7 @@ function childrenOf(scene: EditorScene, parentId: string | null): Item[] {
  */
 export function createItem(
   scene: EditorScene,
-  args: { geometry: OffsetData; parentId?: string | null; zoneId?: string },
+  args: { geometry: OffsetData; parentId?: string | null; zoneId?: string; itemId?: string; introTimeMs?: number },
 ): { scene: EditorScene; itemId: string } {
   const parentId = args.parentId ?? null
   const zone = args.zoneId === undefined ? undefined : scene.zones[args.zoneId]
@@ -38,8 +36,9 @@ export function createItem(
   if (zone !== undefined && zone.capsuleId !== parentId) {
     throw new Error(`createItem: zone '${args.zoneId}' does not belong to the item's parent capsule`)
   }
-  const itemId = freshId('item')
-  const decorId = freshId('decor')
+  // The caller may choose the id (`createId`) so it can select the item it is creating.
+  const itemId = args.itemId ?? createId('item')
+  const decorId = createId('decor')
 
   const decor: Decor = {
     id: decorId,
@@ -59,7 +58,14 @@ export function createItem(
     visible: true,
     contentId: null,
     initialDecorId: decorId,
-    keyframes: [],
+    // The item is born at `introTimeMs`: its intro is a pose keyframe sharing the initial decor, and its
+    // outro keeps its automatic placement (computed by the parent capsule).
+    keyframes: args.introTimeMs === undefined ? [] : [{
+      id: createId('kf'),
+      timeMs: Math.max(0, Math.min(args.introTimeMs, scene.meta.durationMs)),
+      decorId,
+      channel: 'pose',
+    }],
   }
 
   return {
@@ -113,7 +119,7 @@ export function assignType(scene: EditorScene, args: { itemId: string; type: Ite
 /** Renseigne le contenu d'un item déjà typé — crée l'entrée `Content` et la relie via `contentId`. */
 export function assignContent(scene: EditorScene, args: { itemId: string; content: Omit<Content, 'id'> }): EditorScene {
   const item = requireItem(scene, args.itemId)
-  const contentId = item.contentId ?? freshId('content')
+  const contentId = item.contentId ?? createId('content')
   const content: Content = { ...args.content, id: contentId }
 
   return {
@@ -197,43 +203,21 @@ export function setDecor(scene: EditorScene, args: { decorId: string; patch: Par
  * et appelle `assignDecor` pour lier le keyframe à ce nouvel id, avant d'écrire les propriétés.
  * Toujours suivie d'un
  * `assignKeyframeDecor` puis d'un `setDecor` dans la même transaction (`decor-editor-bridge.ts`) —
- * jamais appelée seule, même convention que `createKeyframe`/`createNamedKeyframe` (entrée `{id}`
+ * jamais appelée seule, même convention que `createNamedKeyframe` (entrée `{id}`
  * vide, remplie par le `setDecor` qui suit).
  */
 export function registerDecor(scene: EditorScene, args: { decorId: string }): EditorScene {
   return { ...scene, decors: { ...scene.decors, [args.decorId]: { id: args.decorId } } }
 }
 
-/**
- * Pose un keyframe explicite sur l'item à l'instant donné — l'acte VOLONTAIRE qui seul fait naître
- * un kf (jamais un effet de bord de `setDecor`). Si `decorId` n'est pas fourni, un nouveau décor
- * vide est créé pour ce kf ; s'il est fourni, il doit référencer un décor déjà existant.
- */
-export function createKeyframe(scene: EditorScene, args: { itemId: string; timeMs: number; decorId?: string }): { scene: EditorScene; keyframeId: string; decorId: string } {
-  requireItem(scene, args.itemId)
-  const keyframeId = freshId('kf')
-
-  let nextScene = scene
-  let decorId = args.decorId
-  if (decorId === undefined) {
-    decorId = freshId('decor')
-    nextScene = { ...scene, decors: { ...scene.decors, [decorId]: { id: decorId } } }
-  } else if (!scene.decors[decorId]) {
-    throw new Error(`createKeyframe: no decor '${decorId}' in scene`)
-  }
-
-  const keyframe = { id: keyframeId, timeMs: args.timeMs, decorId, channel: 'pose' as const }
-  const updated = updateItem(nextScene, args.itemId, (i) => ({ ...i, keyframes: [...i.keyframes, keyframe] }))
-
-  return { scene: updated, keyframeId, decorId }
-}
-
 /** Crée un item capsule avec son `CapsuleDef` (statique, défini une fois — pas reconfigurable en cours de vie). */
 export function createCapsule(
   scene: EditorScene,
-  args: { geometry: OffsetData; capsuleDef: CapsuleDef; parentId?: string | null; zoneId?: string },
+  args: { geometry: OffsetData; capsuleDef: CapsuleDef; parentId?: string | null; zoneId?: string; itemId?: string; introTimeMs?: number },
 ): { scene: EditorScene; itemId: string } {
-  const created = createItem(scene, { geometry: args.geometry, parentId: args.parentId, zoneId: args.zoneId })
+  const created = createItem(scene, {
+    geometry: args.geometry, parentId: args.parentId, zoneId: args.zoneId, itemId: args.itemId, introTimeMs: args.introTimeMs,
+  })
   const withType = assignType(created.scene, { itemId: created.itemId, type: 'capsule' })
   const withCapsule = updateItem(withType, created.itemId, (i) => ({ ...i, capsule: args.capsuleDef }))
   return { scene: withCapsule, itemId: created.itemId }
@@ -297,7 +281,7 @@ export function setCapsuleDef(scene: EditorScene, args: { itemId: string; patch:
       ...(Object.keys(zoneFillStyle).length === 0 ? {} : { style: { ...decor.style, ...zoneFillStyle } }),
     }
     if (initialDecorIsShared(nextScene, child)) {
-      const decorId = freshId('decor')
+      const decorId = createId('decor')
       return {
         items: [...current.items, { ...child, initialDecorId: decorId }],
         decors: { ...current.decors, [decorId]: { ...decorWithZone, id: decorId } },
@@ -320,10 +304,8 @@ export function setCapsuleDef(scene: EditorScene, args: { itemId: string; patch:
 
 /** Reports whether a base decor is also used outside one item's initial state. */
 function initialDecorIsShared(scene: EditorScene, item: Item): boolean {
-  const decorId = item.initialDecorId
-  return scene.rootDecorId === decorId
-    || scene.items.some((candidate) => candidate.id !== item.id && candidate.initialDecorId === decorId)
-    || scene.items.some((candidate) => candidate.keyframes.some((keyframe) => keyframe.decorId === decorId))
+  return decorReferences(scene, item.initialDecorId)
+    .some((reference) => reference.kind !== 'initial' || reference.itemId !== item.id)
 }
 
 /** Removes an item and its descendants while preserving decor/content references still owned by the remaining scene. */

@@ -1,7 +1,11 @@
 import type { Actor } from 'xstate'
 import { DocumentHistory, type DocumentHistoryState } from '../history/document-history'
 import { applyDefaultTextFontSize, applyDefaultZonePlacementStyle } from '../commands/default-decor-presets'
-import type { EditorScene, RootPlacementMode } from '../commands/types'
+import type { EditorScene, OffsetData, RootPlacementMode } from '../commands/types'
+import { createId } from '../commands/ids'
+
+/** Placeholder content of a newly created text item. */
+const DEFAULT_TEXT_CONTENT = 'Nouveau texte'
 import type { controllerMachine } from '../controller/controller-machine'
 import type { Command } from '../controller/types'
 import type { EditorScenePersistence } from '../persistence/editor-scene-persistence'
@@ -50,18 +54,35 @@ export class EditorActionsFacade {
     this.controller.send({ type: 'CREATE_MODE_ENTER', itemType, placementMode })
   }
 
-  /** Commits one traced item, selects it, and closes creation through the central actor path. */
-  commitItemCreation(commands: Command[]): string | null {
-    const beforeItemIds = new Set(this.controller.getSnapshot().context.scene?.items.map((item) => item.id) ?? [])
+  /** Commits one traced item created under `itemId`, selects it, and closes the creation gesture. */
+  commitItemCreation(itemId: string, commands: Command[]): void {
     this.runTransaction(commands)
-    const itemId = this.controller.getSnapshot().context.scene?.items.find((item) => !beforeItemIds.has(item.id))?.id
-    if (itemId === undefined) {
+    if (!this.controller.getSnapshot().context.scene?.items.some((item) => item.id === itemId)) {
       this.cancelCreation()
-      return null
+      return
     }
     this.selectItem([itemId])
     this.controller.send({ type: 'CREATE_COMMIT' })
-    return itemId
+  }
+
+  /**
+   * Creates a block or a text item in one document transaction (one Undo step), then selects it. The
+   * item is born at `introTimeMs` (the author playhead). A text receives its type, default preset and
+   * placeholder content in the same transaction.
+   */
+  createItem(args: Readonly<{ type: 'bloc' | 'text'; geometry: OffsetData; introTimeMs: number; zoneId?: string }>): void {
+    const itemId = createId('item')
+    this.runTransaction([
+      {
+        name: 'createItem',
+        args: { itemId, geometry: args.geometry, introTimeMs: args.introTimeMs, ...(args.zoneId === undefined ? {} : { zoneId: args.zoneId }) },
+      },
+      ...(args.type === 'text' ? [
+        { name: 'assignType' as const, args: { itemId, type: args.type } },
+        { name: 'assignContent' as const, args: { itemId, content: { type: args.type, text: DEFAULT_TEXT_CONTENT } } },
+      ] : []),
+    ])
+    this.selectItem([itemId])
   }
 
   /** Leaves the current creation gesture without changing the document. */

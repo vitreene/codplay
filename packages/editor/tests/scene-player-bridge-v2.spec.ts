@@ -809,7 +809,7 @@ describe('V2 editor position seek integration', () => {
       actor.send({
         type: 'RUN_TRANSACTION',
         commands: [
-          { name: 'createNamedKeyframe', args: { itemId: 'item', keyframeId: 'middle', timeMs: 2_500 } },
+          { name: 'createNamedKeyframe', args: { itemId: 'item', keyframeId: 'middle', timeMs: 2_500, decorId: 'decor-middle' } },
           {
             name: 'setDecor',
             args: {
@@ -985,8 +985,8 @@ describe('V2 editor position seek integration', () => {
         commands: [
           { name: 'assignType', args: { itemId: itemId!, type: 'text' } },
           { name: 'assignContent', args: { itemId: itemId!, content: { type: 'text', text: 'Nouvel item' } } },
-          { name: 'createKeyframe', args: { itemId: itemId!, timeMs: 0 } },
-          { name: 'createKeyframe', args: { itemId: itemId!, timeMs: 5_000 } },
+          { name: 'createNamedKeyframe', args: { itemId: itemId!, keyframeId: `kf-1-${itemId}`, timeMs: 0, decorId: `decor-1-${itemId}` } },
+          { name: 'createNamedKeyframe', args: { itemId: itemId!, keyframeId: `kf-2-${itemId}`, timeMs: 5_000, decorId: `decor-2-${itemId}` } },
         ],
       })
       const generatedItem = actor.getSnapshot().context.scene?.items.find((item) => item.id === itemId)
@@ -1012,8 +1012,8 @@ describe('V2 editor position seek integration', () => {
         commands: [
           { name: 'assignType', args: { itemId: secondItemId!, type: 'text' } },
           { name: 'assignContent', args: { itemId: secondItemId!, content: { type: 'text', text: 'Item B' } } },
-          { name: 'createKeyframe', args: { itemId: secondItemId!, timeMs: 0 } },
-          { name: 'createKeyframe', args: { itemId: secondItemId!, timeMs: 5_000 } },
+          { name: 'createNamedKeyframe', args: { itemId: secondItemId!, keyframeId: `kf-3-${secondItemId}`, timeMs: 0, decorId: `decor-3-${secondItemId}` } },
+          { name: 'createNamedKeyframe', args: { itemId: secondItemId!, keyframeId: `kf-4-${secondItemId}`, timeMs: 5_000, decorId: `decor-4-${secondItemId}` } },
         ],
       })
       actor.send({ type: 'SELECT_ITEM', itemIds: [itemId!] })
@@ -1071,8 +1071,8 @@ describe('V2 editor position seek integration', () => {
       commands: [
         { name: 'assignType', args: { itemId: itemId!, type: 'text' } },
         { name: 'assignContent', args: { itemId: itemId!, content: { type: 'text', text: 'Nouvel item' } } },
-        { name: 'createKeyframe', args: { itemId: itemId!, timeMs: 0 } },
-        { name: 'createKeyframe', args: { itemId: itemId!, timeMs: 5_000 } },
+        { name: 'createNamedKeyframe', args: { itemId: itemId!, keyframeId: `kf-5-${itemId}`, timeMs: 0, decorId: `decor-5-${itemId}` } },
+        { name: 'createNamedKeyframe', args: { itemId: itemId!, keyframeId: `kf-6-${itemId}`, timeMs: 5_000, decorId: `decor-6-${itemId}` } },
       ],
     })
     actor.send({ type: 'SELECT_ITEM', itemIds: [itemId!] })

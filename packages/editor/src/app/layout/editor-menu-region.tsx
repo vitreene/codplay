@@ -14,6 +14,8 @@ type EditorMenuRegionProps = Readonly<{
   persistence: EditorScenePersistence
   scene: EditorScene | null
   history: DocumentHistoryState
+  /** Reads the author playhead, where a new item is born. */
+  getAuthorTimeMs: () => number
 }>
 
 const defaultItemGeometry = {
@@ -22,29 +24,10 @@ const defaultItemGeometry = {
   height: 18,
 }
 
-/** Creates an item in the selected zone through the existing command and history paths. */
-function createItemInZone(
-  controller: Actor<typeof controllerMachine>,
-  actions: EditorActionsFacade,
-  zoneId: string,
-  type: 'bloc' | 'text',
-): void {
-  const beforeItemIds = new Set((controller.getSnapshot().context.scene?.items ?? []).map((item) => item.id))
-  actions.runCommand({ name: 'createItem', args: { geometry: {}, zoneId } })
-  const itemId = controller.getSnapshot().context.scene?.items.find((item) => !beforeItemIds.has(item.id))?.id
-  if (itemId === undefined) return
-  if (type === 'text') {
-    actions.runTransaction([
-      { name: 'assignType', args: { itemId, type } },
-      { name: 'assignContent', args: { itemId, content: { type, text: 'Nouveau texte' } } },
-    ])
-  }
-  actions.selectItem([itemId])
-}
 
 /** Renders the compact authoring actions without the removed integration fixtures. */
 export function EditorMenuRegion(handle: Handle<EditorMenuRegionProps>) {
-  const { controller, actions, persistence } = handle.props
+  const { controller, actions, persistence, getAuthorTimeMs } = handle.props
   let switchingScene = false
 
   /** Serializes catalogue changes through the existing document and persistence owners. */
@@ -102,19 +85,10 @@ export function EditorMenuRegion(handle: Handle<EditorMenuRegionProps>) {
         return
       }
       if (placementMode === 'fine-grid') {
-        if (selectedRootZone !== undefined) createItemInZone(controller, actions, selectedRootZone.id, type)
+        if (selectedRootZone !== undefined) actions.createItem({ type, geometry: {}, introTimeMs: getAuthorTimeMs(), zoneId: selectedRootZone.id })
         return
       }
-
-      const beforeItemIds = new Set(controller.getSnapshot().context.scene?.items.map((item) => item.id) ?? [])
-      actions.runCommand({ name: 'createItem', args: { geometry: defaultItemGeometry } })
-      const itemId = controller.getSnapshot().context.scene?.items.find((item) => !beforeItemIds.has(item.id))?.id
-      if (itemId === undefined) return
-      actions.runTransaction([
-        { name: 'assignType', args: { itemId, type } },
-        { name: 'assignContent', args: { itemId, content: { type, text: 'Nouveau texte' } } },
-      ])
-      actions.selectItem([itemId])
+      actions.createItem({ type, geometry: defaultItemGeometry, introTimeMs: getAuthorTimeMs() })
     }
 
     const createCapsule = (): void => {

@@ -32,13 +32,13 @@ function scene(items: Item[] = []): EditorScene {
 }
 
 describe('createNamedKeyframe', () => {
-  it('creates a keyframe with a fresh decor when none is given', () => {
-    const s = commands.createNamedKeyframe(scene([item('t1')]), { itemId: 't1', keyframeId: 'kf-1', timeMs: 1000 })
+  it('creates an empty decor under the caller-provided id when it does not exist yet', () => {
+    const s = commands.createNamedKeyframe(scene([item('t1')]), { itemId: 't1', keyframeId: 'kf-1', timeMs: 1000, decorId: 'd-new' })
     const kf = s.items[0]!.keyframes[0]!
     expect(kf.id).toBe('kf-1')
     expect(kf.timeMs).toBe(1000)
-    expect(kf.decorId).toBeTruthy()
-    expect(s.decors[kf.decorId]).toBeDefined()
+    expect(kf.decorId).toBe('d-new')
+    expect(s.decors['d-new']).toEqual({ id: 'd-new' })
     expect(kf).not.toHaveProperty('name')
   })
 
@@ -52,7 +52,7 @@ describe('createNamedKeyframe', () => {
 
   it('sets name and keeps keyframes sorted by time', () => {
     const s0 = scene([item('t1', { keyframes: [{ id: 'kf-0', timeMs: 500, decorId: 'd0' }] })])
-    const s = commands.createNamedKeyframe(s0, { itemId: 't1', keyframeId: 'kf-1', timeMs: 100, name: 'intro' })
+    const s = commands.createNamedKeyframe(s0, { itemId: 't1', keyframeId: 'kf-1', timeMs: 100, decorId: 'd-intro', name: 'intro' })
     expect(s.items[0]!.keyframes.map((k) => k.id)).toEqual(['kf-1', 'kf-0'])
     expect(s.items[0]!.keyframes[0]!.name).toBe('intro')
   })
@@ -60,7 +60,7 @@ describe('createNamedKeyframe', () => {
   it('écrit le canal demandé et permet de promouvoir le KF sans toucher à son décor', () => {
     const s0 = scene([item('t1')])
     const withDecorKeyframe = commands.createNamedKeyframe(s0, {
-      itemId: 't1', keyframeId: 'kf-decor', timeMs: 1000, channel: 'decor',
+      itemId: 't1', keyframeId: 'kf-decor', timeMs: 1000, decorId: 'd-decor', channel: 'decor',
     })
     expect(withDecorKeyframe.items[0]!.keyframes[0]!.channel).toBe('decor')
 

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import * as commands from '../../src/app/commands/base-commands'
 import type { EditorScene } from '../../src/app/commands/types'
+import { createId } from '../../src/app/commands/ids'
+import { createNamedKeyframe } from '../../src/sequence-editor/commands'
 
 function emptyScene(): EditorScene {
   return {
@@ -62,7 +64,9 @@ describe('createItem', () => {
     const created = commands.createItem(restored, { geometry: {} })
     const typed = commands.assignType(created.scene, { itemId: created.itemId, type: 'text' })
     const withContent = commands.assignContent(typed, { itemId: created.itemId, content: { type: 'text', text: 'Nouveau' } })
-    const keyframe = commands.createKeyframe(withContent, { itemId: 'item-1', timeMs: 2000 })
+    // Keyframe and decor ids come from the single `createId` generator, as every editor caller does.
+    const keyframe = { keyframeId: createId('kf'), decorId: createId('decor') }
+    const withKeyframe = createNamedKeyframe(withContent, { itemId: 'item-1', timeMs: 2000, ...keyframe })
     const newItem = created.scene.items.find((item) => item.id === created.itemId)!
     const contentId = withContent.items.find((item) => item.id === created.itemId)!.contentId!
 
@@ -71,6 +75,37 @@ describe('createItem', () => {
     expect(contentId).not.toBe('content-3')
     expect(keyframe.keyframeId).not.toBe('kf-4')
     expect(keyframe.decorId).not.toBe('decor-2')
+    expect(withKeyframe.items.find((item) => item.id === 'item-1')!.keyframes.map((kf) => kf.id))
+      .toEqual(['kf-4', keyframe.keyframeId])
+  })
+})
+
+describe('createItem — born at the playhead', () => {
+  it('places the intro on the initial decor at the given time and leaves the outro automatic', () => {
+    const { scene, itemId } = commands.createItem(emptyScene(), { geometry: {}, introTimeMs: 2000 })
+    const item = scene.items.find((candidate) => candidate.id === itemId)!
+    expect(item.keyframes).toEqual([
+      { id: expect.stringMatching(/^kf-/), timeMs: 2000, decorId: item.initialDecorId, channel: 'pose' },
+    ])
+  })
+
+  it('keeps the intro inside the scene duration', () => {
+    const durationMs = emptyScene().meta.durationMs
+    const late = commands.createItem(emptyScene(), { geometry: {}, introTimeMs: durationMs + 900 })
+    const early = commands.createItem(emptyScene(), { geometry: {}, introTimeMs: -50 })
+    expect(late.scene.items[0]!.keyframes[0]!.timeMs).toBe(durationMs)
+    expect(early.scene.items[0]!.keyframes[0]!.timeMs).toBe(0)
+  })
+
+  it('gives a capsule the same birth', () => {
+    const { scene, itemId } = commands.createCapsule(emptyScene(), {
+      geometry: {}, capsuleDef: { kind: 'carousel', distribution: { mode: 'sequential' } }, introTimeMs: 1500,
+    })
+    expect(scene.items.find((candidate) => candidate.id === itemId)!.keyframes.map((keyframe) => keyframe.timeMs)).toEqual([1500])
+  })
+
+  it('creates no keyframe when no time is given', () => {
+    expect(commands.createItem(emptyScene(), { geometry: {} }).scene.items[0]!.keyframes).toEqual([])
   })
 })
 
@@ -230,27 +265,12 @@ describe('setDecor', () => {
   })
 })
 
-describe('createKeyframe', () => {
+describe('setDecor and keyframes', () => {
   it('never fires implicitly from setDecor — it is the only volitional act that creates a keyframe', () => {
     const created = commands.createItem(emptyScene(), { geometry: {} })
     const item = created.scene.items[0]!
     const afterSetDecor = commands.setDecor(created.scene, { decorId: item.initialDecorId, patch: { style: {} } })
     expect(afterSetDecor.items[0]!.keyframes).toHaveLength(0)
-  })
-
-  it('creates a keyframe with a fresh decor when none is given', () => {
-    const created = commands.createItem(emptyScene(), { geometry: {} })
-    const { scene, keyframeId, decorId } = commands.createKeyframe(created.scene, { itemId: created.itemId, timeMs: 1000 })
-
-    const item = scene.items.find((i) => i.id === created.itemId)!
-    expect(item.keyframes).toHaveLength(1)
-    expect(item.keyframes[0]!.id).toBe(keyframeId)
-    expect(scene.decors[decorId]).toBeDefined()
-  })
-
-  it('rejects a decorId that does not exist yet', () => {
-    const created = commands.createItem(emptyScene(), { geometry: {} })
-    expect(() => commands.createKeyframe(created.scene, { itemId: created.itemId, timeMs: 0, decorId: 'missing' })).toThrow()
   })
 })
 

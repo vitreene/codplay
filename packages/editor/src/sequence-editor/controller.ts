@@ -14,6 +14,7 @@ import type {
 import { resolveKeyframeChannel } from './types'
 import type { Command } from '../app/controller/types'
 import { timeToPixel, pixelToTime } from './render/geometry'
+import { createId } from '../app/commands/ids'
 
 // ─── Public snapshot type ────────────────────────────────────────────────────
 
@@ -24,17 +25,11 @@ export type SequenceEditorSnapshot = {
 
 export type Unsubscribe = () => void
 
-// ─── ID generator ────────────────────────────────────────────────────────────
-
-function genId(prefix: string): string {
-  return `${prefix}-${Math.random().toString(36).slice(2, 11)}`
-}
-
 // ─── Default empty scene ─────────────────────────────────────────────────────
 
 function emptyScene(): EditorScene {
   return {
-    id: genId('scene'),
+    id: createId('scene'),
     meta: {
       title: 'Untitled',
       durationMs: 10000,
@@ -281,6 +276,10 @@ export class SequenceEditorController {
     this.send({ type: 'DRAG.END' })
   }
 
+  dragCancel(): void {
+    this.send({ type: 'DRAG.CANCEL' })
+  }
+
   // ── Selection ───────────────────────────────────────────────────────────────
 
   selectTrack(trackId: string | null): void {
@@ -298,7 +297,7 @@ export class SequenceEditorController {
   // ── Keyframes ───────────────────────────────────────────────────────────────
 
   addKeyframe(trackId: string, timeMs: number): string {
-    const id = genId('kf')
+    const id = createId('kf')
     this.send({ type: 'KEYFRAME.ADD', trackId, timeMs, id })
     return id
   }
@@ -372,7 +371,7 @@ export class SequenceEditorController {
   // ── Markers ──────────────────────────────────────────────────────────────────
 
   addMarkerTrack(label: string, color?: string): string {
-    const id = genId('mtrack')
+    const id = createId('mtrack')
     this.send({ type: 'MARKER_TRACK.ADD', markerTrackId: id, label, color })
     return id
   }
@@ -390,7 +389,7 @@ export class SequenceEditorController {
   }
 
   addMarker(markerTrackId: string, timeMs: number, label?: string): string {
-    const id = genId('marker')
+    const id = createId('marker')
     this.send({ type: 'MARKER.ADD', markerTrackId, marker: { id, timeMs, label: label ?? '' } })
     return id
   }

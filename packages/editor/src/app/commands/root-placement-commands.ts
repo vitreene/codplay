@@ -14,12 +14,17 @@ export function rootPlacementModeForScene(scene: EditorScene): RootPlacementMode
   return null
 }
 
+/** Reports whether the root may use this placement mode: the 1 × 1 grid would reinterpret root zones. */
+export function canSetRootPlacementMode(scene: EditorScene, mode: RootPlacementMode): boolean {
+  return mode !== 'transform'
+    || rootPlacementModeForScene(scene) === 'transform'
+    || !Object.values(scene.zones).some((zone) => zone.capsuleId === null)
+}
+
 /** Stores the chosen root grid, refusing a grid reduction that would reinterpret existing zones. */
 export function setRootPlacementMode(scene: EditorScene, args: { mode: RootPlacementMode }): EditorScene {
   const grid = ROOT_PLACEMENT_GRID[args.mode]
-  const currentMode = rootPlacementModeForScene(scene)
-  const hasRootZones = Object.values(scene.zones).some((zone) => zone.capsuleId === null)
-  if (args.mode === 'transform' && hasRootZones && currentMode !== 'transform') {
+  if (!canSetRootPlacementMode(scene, args.mode)) {
     throw new Error('setRootPlacementMode: root zones must be removed before switching to the 1 × 1 grid')
   }
 

@@ -11,6 +11,7 @@ import { createCueRow, renderCueRow } from './render/cue-row'
 import { createMarkerTrackRows, renderMarkerTrackRows } from './render/marker-row'
 import { createWaveformRow, renderWaveformRow } from './render/waveform-row'
 import { descendantIds, findParentClipBounds } from './utils'
+import { runPointerSession } from './pointer-session'
 
 /**
  * Un `<button>` dont le `textContent` est un glyphe Unicode seul (▶/■/≫/⊡/×) expose ce nœud texte
@@ -330,26 +331,13 @@ export function mountSequenceEditor(
 
   // ── Keyframe drag ─────────────────────────────────────────────────────────────
 
-  function startKeyframeDrag(trackId: string, kfId: string): void {
-    dragOverlay.classList.add('active')
-
-    function onMove(ev: PointerEvent): void {
-      const rect = timeline.getBoundingClientRect()
-      const pointerMs = ctrl.pixelToMs(ev.clientX - rect.left)
-      ctrl.dragMove(pointerMs)
-    }
-
-    function onUp(): void {
-      ctrl.dragEnd()
-      dragOverlay.classList.remove('active')
-      dragOverlay.removeEventListener('pointermove', onMove)
-      dragOverlay.removeEventListener('pointerup', onUp)
-    }
-
-    dragOverlay.addEventListener('pointermove', onMove)
-    dragOverlay.addEventListener('pointerup', onUp)
-
+  /** Starts a keyframe drag: a release completes it, a cancellation abandons it without any edit. */
+  function startKeyframeDrag(trackId: string, kfId: string, e: PointerEvent): void {
     ctrl.dragStartKeyframe(trackId, kfId)
+    runPointerSession(dragOverlay, e.pointerId, {
+      onMove: (ev) => ctrl.dragMove(ctrl.pixelToMs(ev.clientX - timeline.getBoundingClientRect().left)),
+      onEnd: (apply) => (apply ? ctrl.dragEnd() : ctrl.dragCancel()),
+    })
   }
 
   /** Materializes one projected boundary at a bounded author time. */
@@ -589,6 +577,10 @@ export function mountSequenceEditor(
     btnZoomRange.style.display = hasRange ? '' : 'none'
     btnClearRange.style.display = hasRange ? '' : 'none'
 
+    // A time adopted from the player (pause, rewind, end of playback) is already presented: it is the
+    // new reference of the relay. Without it, a later author seek back to the previously relayed time
+    // (for example 0 after the scene ended) would look unchanged and never reach the player.
+    if (ctx.playheadOrigin === 'reconciled') lastPlayheadMs = ctx.playheadMs
     if (options.onPlayheadChange && ctx.playheadOrigin === 'author' && ctx.playheadMs !== lastPlayheadMs) {
       lastPlayheadMs = ctx.playheadMs
       options.onPlayheadChange(ctx.playheadMs)

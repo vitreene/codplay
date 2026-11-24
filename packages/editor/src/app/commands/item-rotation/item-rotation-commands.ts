@@ -1,4 +1,6 @@
 import type { EditorScene, Item } from '../types'
+import { createId } from '../ids'
+import { decorReferences } from '../item-decor/decor-sharing'
 
 /** Changes the whole item's rotation policy and clears manual angles on entry to tangent mode. */
 export function setItemRotationMode(
@@ -11,18 +13,16 @@ export function setItemRotationMode(
     return { ...scene, items: scene.items.map((candidate) => candidate === item ? { ...item, rotationMode: args.mode } : candidate) }
   }
 
-  const foreignDecorIds = new Set([
-    scene.rootDecorId,
-    ...scene.items.filter((candidate) => candidate !== item)
-      .flatMap((candidate) => [candidate.initialDecorId, ...candidate.keyframes.map((keyframe) => keyframe.decorId)]),
-  ])
+  /** A decor also referenced by the root or another item is copied before its angles are reset. */
+  const isForeign = (decorId: string): boolean => decorReferences(scene, decorId)
+    .some((reference) => reference.kind === 'root' || reference.itemId !== item.id)
   const decorIds = new Set([item.initialDecorId, ...item.keyframes.map((keyframe) => keyframe.decorId)])
   const replacements = new Map<string, string>()
   const decors = { ...scene.decors }
   decorIds.forEach((decorId) => {
     const decor = decors[decorId]
     if (decor?.offset?.rotate === undefined) return
-    const nextId = foreignDecorIds.has(decorId) ? `decor-${crypto.randomUUID()}` : decorId
+    const nextId = isForeign(decorId) ? createId('decor') : decorId
     const { rotate: _rotate, ...offset } = decor.offset
     decors[nextId] = { ...decor, id: nextId, offset }
     replacements.set(decorId, nextId)

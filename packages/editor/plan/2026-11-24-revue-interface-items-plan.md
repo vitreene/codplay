@@ -27,8 +27,10 @@ qu’après la revue manuelle et visuelle de l’utilisateur, qui suit ce test.
 | D-E2 | `Decor.zoneId` est une référence d’usage : l’item utilise une zone de son parent. Changer de parent libère les références aux zones de l’ancien parent. Après un déplacement dans la timeline, l’item suit le placement logique de la capsule (par ex. une rangée l’attribue selon l’ordre) ; une attribution faite par l’auteur le sort du placement automatique. Ce comportement correspond au modèle de Capsule Automation : placement explicite, ou placement automatique selon l’ordre (politique `auto`/`mixed`), ou zone fantôme pleine surface pour `card` (`explicit-only`). **Manque de contrat** : le document ne sait pas distinguer « automatique » d’« explicite » (`zoneId` absent ou `null` signifie aujourd’hui « surface pleine »), et le repli de `setCapsuleDef` écrit un `zoneId` explicite à chaque enfant. **Représentation retenue pour commencer** : `zoneId` absent = placement automatique par Capsule Automation ; `zoneId` présent = attribution explicite par l’auteur ; la pleine surface reste le comportement `card` (zone fantôme). Le repli de `setCapsuleDef` cesse d’écrire des `zoneId`. La « zone libre » et les autres types de placement pourront avoir leurs propres règles, à ajuster à l’usage. | Acceptée ; à réviser à l’usage |
 | D-E7 | Le tracé d’une plage conserve les décors des bornes remplacées. | Acceptée |
 | D-B2 | Une capsule est un item avec les mêmes caractéristiques que les autres : ses KF de pose et de décor sont compilés de la même façon, son composant `list` reçoit la même présentation Editor (`createItemComponent`) et son CS suit la même projection, sans branche dédiée dans le pont. | Acceptée |
+| D-NAISS | Un item naît à la tête de lecture. Intro et outro sont toujours des KF ; leur placement est manuel (KF réel, l’item est « locké » sur cette borne) ou automatique (KF virtuel calculé par la distribution de la capsule), sans différence de nature ([spec de distribution](../../authoring/scene-factory/2026-06-12-capsule-distribution-spec.md), §1, §2 et §9.2). À la création, pour tout type d’item (la zone n’est qu’une propriété de placement), l’intro est matérialisée à la tête de lecture, comme la matérialisation d’un KF virtuel (§9.2), et l’outro reste en placement automatique ; le décor de l’intro est le décor initial. Avant son intro, l’item n’existe pas. Un geste du cadre de sélection dont la cible est l’état initial (avant l’intro, ou item existant sans KF) écrit le décor initial, comme la palette (D-C ; corrige E12). | Acceptée (24 nov. 2026) |
 | D-VIS | Masquer un item est une étape d’édition, pas une suppression : les positions des autres items ne bougent pas (rang de placement automatique, compte des grilles dérivées, distribution du temps) ; l’item masqué n’a pas besoin d’être rendu. **Approche retenue : `visibility:hidden`**. Le Builder compile l’item masqué comme les autres et lui ajoute une classe de cadre `visibility:hidden` ; il n’a plus de filtre de visibilité. Une capsule masquée masque son sous-arbre par héritage de la propriété. Aucune contradiction à gérer : l’item garde sa place dans la grille et dans le temps, comme dans la timeline. Aucun changement de Capsule Automation. Conséquences : (1) les items masqués sont validés et comptés dans `preRollMs` ; (2) **un item média masqué doit être silencieux** (décidé) : `visibility:hidden` ne coupe pas le son, le Builder doit donc aussi le couper. Le composant média de CodPlay connaît `muted` et `volume` comme propriétés d’une transition média ; l’existence d’un état initial `muted` n’est pas vérifiée. À qualifier à l’implémentation : si la surface actuelle ne suffit pas, c’est une demande de modification de CodPlay, soumise aux portes d’AGENTS.md (justification, absence d’alternative côté Editor, autorisation) ; (3) les tests et la spec d’intégration qui décrivent le retrait de la `SceneDoc` sont à réécrire avec l’implémentation. | Acceptée ; mise en œuvre du silence à qualifier |
-| D-R | Refonte du pont Décor (lot 3). | A relire |
+| D-HORS-PLAGE | Quand la tête de lecture est hors de la plage d’existence de l’item sélectionné (avant son intro ou après son outro, bornes réelles ou virtuelles), une action sur le Selection Frame ou sur la palette recale d’abord la tête de lecture sur la borne la plus proche (intro ou outro) ; le geste s’applique ensuite à cette borne. Le cadre reste affiché hors plage : il porte l’action. La palette suit la même règle (confirmé le 24 nov. 2026) : une édition hors plage recale la tête de lecture puis écrit à la borne, au lieu d’écrire le décor initial ou celui du dernier KF réel. Le recalage est un déplacement de tête de lecture, hors historique. Réalisation : tranche 3, comme phase « recalage en attente du seek » de la machine de geste (M1/M3) ; le démarrage de geste actuel du pont capture sa base avant tout seek. À confirmer avant la tranche 3 : action sur une borne **virtuelle** (geste ou palette) : matérialiser la borne en KF réel avec un décor propre (D-C, spec de distribution §9.2) ou écrire le décor du dernier KF réel (comportement actuel). | Décidée pour le principe, palette incluse (24 nov. 2026) ; un point à confirmer |
+| D-R | Refonte du pont Décor (lot 3). | Acceptée avec le plan (24 nov. 2026) |
 
 ## Preuves acquises
 
@@ -119,6 +121,30 @@ pendant la rotation.
 - non-régression des tests tangente et motion-path ;
 - Safari MCP : même scénario que la preuve B, en Seek et en Play, avec CS
   aligné ; Undo/Redo et rechargement SQLite.
+
+**Fait — en attente de revue manuelle** (580 tests verts, typecheck et build
+propres) :
+- `buildStyleTransition` : pour `rotate` numérique, cible du tween
+  `from + normalizeAngleDegrees(to − from)`. Précision : seuls le décor et
+  l’angle auteur restent normalisés ; la cible du tween, et donc la valeur logique
+  présentée en fin de segment, peut sortir de [−180°, 180°) (194° pour 167° →
+  −166°), ce qui est visuellement identique.
+- `authoredRotationAtGestureStart` (pont) applique la même règle.
+- Mode tangente inchangé (le raccord `rotateOffset` normalisait déjà) ; tests
+  tangente et motion-path verts.
+- Tests : nouvelle régression dans `player-interpolation.spec.ts` (167° → −166°
+  donne la cible 194°, 180,5° à mi-segment ; −170° → 170° donne −190°).
+  `motion-path.spec.ts` attendait l’ancien chemin long d’un item manuel (−80° →
+  120°, +200°) : l’attente devient −240° (−160°).
+- Safari MCP, scène de test supprimée ensuite : KF à 167° et −166° ; en Seek,
+  167° → 171,2° → 180,5° → −170,2° → −166° aux quarts du segment, CS aligné sur
+  l’item ; en Play, progression dans un seul sens par pas de 2,3° au plus ; Undo
+  ramène l’item à 167° sans rotation, Redo rétablit 180,5° ; après rechargement
+  SQLite, 180,5° à mi-segment et −166° au KF 2.
+- Constat revu : le geste au KF 2 a de nouveau écrit −166° dans le décor initial
+  (D-C, corrigé en tranche 1).
+- À faire après la revue manuelle : consolider la règle dans la
+  [spec d’orientation](../specs/path-tangent-orientation-spec.md).
 
 ## Lot 2 — Points bénins hors refonte
 
@@ -236,7 +262,7 @@ Laissés volontairement :
   redéclaré dans `decor-editor/types.ts`, et la branche inutile de
   `projectItemStyle` (P3).
 
-## Lot 3 — Refonte du pont Décor (A relire)
+## Lot 3 — Refonte du pont Décor
 
 Objectif : réduire `createDecorEditorBridge` (une seule closure d’environ
 3 000 lignes, une quarantaine de variables `let`) à une coordination de
@@ -327,7 +353,7 @@ fonction ou une classe suffit.
 | M4 | Non | lecture directe du snapshot du contrôleur | les copies `playbackActive`, `activeCreationMode`, `suspended` |
 | M10 | Non | `EditorScenePersistence` reste une classe métier, avec un statut typé explicite, pilotée par l’état `switchingScene` | — |
 
-### Découpage cible (à valider)
+### Découpage cible
 
 - **Commandes** (`app/commands/`), couche métier :
   - une seule voie de création de KF, avec un id de décor explicite ;
@@ -371,13 +397,111 @@ fonction ou une classe suffit.
 1. Commandes (fondation) et état `failed` (E1).
 2. Gestes de la timeline (M7) et commandes sans effet (E3).
 3. Session Décor et découpage du pont (M1-M4, M6), sur la cascade unique (G) et
-   le temps des segments (B1, D-A).
+   le temps des segments (B1, D-A) ; recalage de la tête de lecture hors plage
+   (D-HORS-PLAGE).
 4. Cycle du player (M5) et états du contrôleur (M8, M9).
 5. Builder : découpage, capsule traitée comme tout item (B2), placement
    automatique (D-E2), orientations (B3).
 
 Le lot 1 (rotation au plus court chemin, D-B) reste indépendant et peut passer
 avant.
+
+### Tranche 1 — exécution (Faite — en attente de revue manuelle)
+
+- **E1 — échec visible.** `commands/facade.ts` enveloppe toute exception de
+  commande dans une `CommandError` qui nomme la commande. Le contrôleur l’attrape à
+  la frontière (`runCommand`/`runTransaction`), mémorise `failure` (commande,
+  message) et passe dans un état final `failed` : l’acteur s’arrête, comme
+  aujourd’hui, mais `AppLayout` affiche un bandeau bloquant qui dit quelle commande a
+  échoué et pourquoi. Cause corrigée : `canSetRootPlacementMode` (règle métier
+  partagée par la commande et l’interface) désactive « Libre » quand des zones
+  racine existent.
+- **Un seul générateur d’id** : `commands/ids.ts` (`createId(prefix)`, UUID),
+  utilisé par les commandes, la timeline et les ponts. Plus de convention implicite
+  `decor-${keyframeId}`.
+- **Une seule voie de création de KF** : `createNamedKeyframe` reçoit toujours un
+  `decorId` explicite (partagé s’il existe, créé sinon). `createKeyframe` est
+  retiré ; ses tests et fixtures passent à `createNamedKeyframe`.
+- **Une seule règle de copy-on-write (D-C)** : `commands/decor-sharing.ts` liste les
+  références d’un décor. Nouvelle commande `setItemDecor({ itemId, keyframeId |
+  null, patch, forkDecorId })` :
+  - un KF qui n’est pas l’intro et dont le décor est utilisé ailleurs reçoit un
+    nouveau décor (`forkDecorId`, patch clairsemé) ;
+  - l’intro (premier KF de pose partageant le décor initial) ou le décor initial
+    lui-même écrit dans le décor initial ; les autres références qui le partagent
+    reçoivent d’abord une copie de l’ancien contenu.
+  Le pont n’applique plus le copy-on-write lui-même. `setItemRotationMode` et
+  `setCapsuleDef` utilisent la même liste de références.
+- **Création d’items par la façade** : `createItem` et `createCapsule` acceptent
+  un `itemId` fourni par l’appelant. `EditorActionsFacade` reçoit l’opération de
+  création d’un bloc ou d’un texte (une transaction, puis la sélection) ; le menu
+  et le pont l’appellent au lieu de retrouver l’item par différence d’ids.
+
+**Acceptation** : tests, typecheck et build verts ; Safari MCP sur une scène de
+test : « Libre » désactivé avec une zone racine ; bandeau d’échec sur une
+commande refusée provoquée volontairement ; déplacer l’item au KF 2 ne déplace
+plus le KF 1 et laisse le décor initial intact ; création d’un texte = une seule
+étape Undo ; puis revue manuelle.
+
+**Résultat** (587 tests verts, typecheck et build propres) :
+- Nouveaux fichiers : `commands/ids.ts`, `commands/item-decor/decor-sharing.ts`,
+  `commands/item-decor/item-decor-commands.ts` ; tests
+  `commands/item-decor-commands.spec.ts`, `app/editor-actions-creation.spec.ts`,
+  état `failed` dans `controller/controller-machine.spec.ts`.
+- `createKeyframe` retiré ; le test d’unicité des ids après restauration passe par
+  `createId` et `createNamedKeyframe`. Les tests qui attendaient des commandes de
+  KF sans `decorId` attendent maintenant un id explicite. Une fixture du pont
+  player reposait sur la convention implicite `decor-${keyframeId}` (`setDecor`
+  sur `decor-middle`) : elle passe l’id explicitement.
+- Safari MCP, scène de test supprimée ensuite :
+  - « Créer un texte » en mode libre : une seule écriture SQLite, un seul Undo
+    retire l’item entièrement ;
+  - intro et KF 2 partageant le décor initial, déplacement de +60/+30 px au KF 2 :
+    le KF 2 reçoit son propre décor (position seule), le décor initial est
+    inchangé, l’item reste à (80, 100) au KF 1 et passe à (140, 130) au KF 2 ;
+  - grille fine avec une zone racine : « Libre » désactivé, avec l’explication en
+    survol ;
+  - bouton réactivé de force puis cliqué : bandeau plein écran « L’éditeur s’est
+    arrêté — la commande « setRootPlacementMode » a été refusée », document
+    inchangé, plus aucune commande prise en compte ; le rechargement rétablit
+    l’éditeur.
+- Le message technique de la commande reste en anglais dans le bandeau.
+- Non traité dans cette tranche : E7 (le tracé d’une plage efface encore les
+  décors des bornes), E3 (tranche 2).
+- Specs à consolider après la revue manuelle : modèle de document (règle de
+  copy-on-write, ids), intégration (arrêt visible sur commande refusée).
+
+### Tranche 2 — exécution (Faite en partie — en attente de revue manuelle)
+
+Faite (597 tests verts, typecheck et build propres) :
+- **E3 — une seule définition de « document modifié ».** Le comparateur de
+  l’historique devient `commands/scene-equality.ts` ; la façade de commandes
+  (`runCommand`, `transaction`) renvoie la référence précédente quand les valeurs
+  sont inchangées. Contrôleur, historique, persistance et pont player n’ont plus de
+  cas particulier : pas de commit, pas d’écriture, pas de reconstruction.
+- **E4 — glisser de KF.** `sequence-editor/pointer-session.ts` : une session de
+  pointeur sur la surface de glisser, avec capture du pointeur, `pointercancel`,
+  Échap (qui ne vide pas la sélection de l’application) et fin unique ;
+  `pointerup` et la perte de capture terminent le geste comme dans le Selection
+  Frame. La machine de la timeline reçoit `DRAG.CANCEL`, `DRAG.END` n’émet plus de
+  commande si le KF n’a pas bougé, et le garde `canCommitDrag` (qui laissait la
+  machine bloquée dans `dragging-keyframe`) et l’état `dragging-playhead` jamais
+  produit sont retirés.
+- Tests : `sequence-editor/keyframe-drag.spec.ts` (clic, glisser, `pointercancel`,
+  Échap, capture perdue) et `commands/unchanged-commands.spec.ts` (mêmes
+  références, transaction sans effet, contrôleur sans `documentCommitted`).
+- Safari MCP, scène de test supprimée ensuite : trois clics sur la poignée du KF 2
+  sans aucune écriture (révision 4 avant et après) ; glisser annulé par Échap puis
+  par `pointercancel`, KF et révision inchangés, événement tardif sans effet ;
+  glisser complet de 2 500 à 1 500 ms avec une seule écriture, puis Undo.
+
+Reportée, à valider : les états `scrubbing` et `dragging-virtual` de la machine
+(M7). Le scrub de la tête de lecture n’écrit pas dans le document, et le glisser
+d’un KF virtuel gère déjà annulation, `pointercancel` et Échap ; les passer dans la
+machine apporterait de la lisibilité, sans corriger de défaut constaté. Les glissers
+de marqueur, de panoramique et de tracé de plage gardent leur surface sans capture :
+à passer par la même session si on les retient.
+
 
 ### Machines d’état implicites à déclarer
 
@@ -491,6 +615,60 @@ réordonnancement des pistes).
   Le pont n’attache que `selection.itemIds[0]`, et aucun geste ne sélectionne
   plusieurs items. Les états « mixte » décrits par la spec d’intégration ne sont
   vérifiés que par un test de rendu.
+
+- **E11 — Un seek vers le dernier temps relayé n’atteint jamais le player**
+  (relevé par l’utilisateur lors de la revue manuelle, corrigé). Après une
+  lecture complète, `lastPlayheadMs` (`sequence-editor/mount.ts`) restait au dernier
+  temps relayé (0) pendant que le temps adopté en fin de lecture (5 000 ms) ne passait
+  pas par le relais. Un clic sur le ghost du premier KF, ou un retour de la tête
+  de lecture à 0, était jugé « inchangé » : la tête de lecture sautait, les items
+  restaient à leur pose finale. Le commentaire du bouton Stop décrivait ce piège et
+  ne le contournait que pour Stop. Correction : le temps adopté à la sortie de lecture
+  (`playheadOrigin: 'reconciled'`) devient la référence du relais. Tests :
+  `sequence-editor/playhead-relay.spec.ts`. Safari MCP : après une lecture complète,
+  clic sur le ghost, Stop et retour de la tête de lecture à 0 replacent les trois
+  items sur leurs poses initiales, sans écriture (en attente de revue manuelle).
+
+- **E12 — Un geste du cadre de sélection sur un item sans KF réel est perdu** (corrigé avec D-NAISS)
+  (relevé par l’utilisateur, confirmé dans Safari MCP). Texte créé en mode libre,
+  sans KF, tête de lecture à 2 s : une édition de palette est bien écrite dans le
+  décor initial (révision 2 → 3, aucun KF créé), mais un déplacement au cadre de
+  sélection ne produit aucune écriture (révision inchangée, position inchangée).
+  Cause : `commitMotionDrop` n’accepte une cible sans KF que « temporaire » (entre
+  deux KF réels) et renvoie `null` pour la cible « état initial » (`keyframeId`
+  nul, avant le premier KF ou sans KF), que `resolveTarget` produit pourtant et que
+  la palette sait écrire. Même cause pour le redimensionnement et la rotation.
+  Contredit D-C : l’état initial et l’intro sont un seul état. Voir D-NAISS.
+  Correction : `commitMotionDrop` accepte la cible « état initial » et écrit le
+  décor initial (`setItemDecor` avec `keyframeId` nul), comme la palette. Test
+  d’intégration : `decor-editor-bridge-integration-v2.spec.ts`.
+  Création à la tête de lecture : `EditorActionsFacade.createItem` écrit l’intro à
+  `introTimeMs` (`EditorCoordinationBridge.getAuthorTimeMs`) en une seule
+  transaction ; test `tests/app/editor-actions-creation.spec.ts`.
+  Safari MCP (scène de test supprimée ensuite, en attente de revue manuelle) :
+  texte créé avec la tête de lecture à 2 s → un KF d’intro réel à 2 000 ms sur le
+  décor initial, outro virtuel ; déplacements au cadre de sélection à 2 s, 4 s et
+  1 s (avant l’intro), puis édition de l’épaisseur par la palette à 1 s et à 4 s :
+  chaque geste écrit dans le décor initial (une révision par geste), toujours un
+  seul KF et un seul décor. Observation : avant son intro, le cadre de sélection
+  suit encore l’item et accepte un geste, alors que l’item n’existe pas à ce temps ;
+  la règle est décidée dans D-HORS-PLAGE.
+
+- **E13 — Modifier le contenu d’un texte échoue à la sauvegarde** (relevé par
+  l’utilisateur, corrigé). La persistance SQLite refusait le document :
+  `$["scene"]["contents"][…]["source"] (undefined)`. Cause : `patchToContentArgs`
+  (pont Décor) recopiait chaque champ du `Content` un par un, et écrivait ceux qui
+  n’existent pas (`source`, `mediaId`, `lang`, `waveform`, `cues`) comme des clés
+  valant `undefined` ; le garde `assertJsonCompatible` refuse ces clés. Défaut
+  antérieur à la revue, présent dès qu’un contenu texte est modifié par la palette
+  (texte ou `textAutoSize`). Correction : le patch est fusionné sur les champs
+  existants du contenu (`{ ...existingFields, type, text?, textAutoSize? }`), sans
+  énumération de champs ni clé absente. Test :
+  `decor-editor-bridge-integration-v2.spec.ts` (« keeps the document
+  JSON-compatible… », onglet Contenu, puis `assertJsonCompatible`). Safari MCP
+  (scène de test supprimée ensuite, en attente de revue manuelle) : texte créé, puis
+  modifié et « Auto » activé, « Modèle auteur sauvegardé dans SQLite. », contenu
+  persisté `{ id, type, text, textAutoSize }`.
 
 ### Duplications et code mort
 

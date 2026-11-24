@@ -9,19 +9,37 @@
 
 import * as base from './base-commands'
 import { setItemRotationMode } from './item-rotation/item-rotation-commands'
+import { setItemDecor } from './item-decor/item-decor-commands'
 import * as rootPlacement from './root-placement-commands'
 import * as sequenceEditor from '../../sequence-editor/commands'
 import type { Command } from '../controller/types'
 import type { EditorScene } from './types'
+import { editorScenesEqual } from './scene-equality'
 
 /**
  * Exécute une commande nommée sur le document. Commandes qui produisent aussi un id
- * (`createItem`, `createCapsule`, `createKeyframe`) retournent `{ scene, ...ids }` — leur `scene`
+ * (`createItem`, `createCapsule`) retournent `{ scene, ...ids }` — leur `scene`
  * est extraite ici pour que `runCommand` retourne toujours un `EditorScene` uniforme ; l'appelant
  * qui a besoin de l'id créé passe par `runCommandWithResult` (ci-dessous).
  */
 export function runCommand(scene: EditorScene, command: Command): EditorScene {
-  return runCommandWithResult(scene, command).scene
+  try {
+    return keepWhenUnchanged(scene, runCommandWithResult(scene, command).scene)
+  } catch (cause) {
+    throw new CommandError(command.name, cause)
+  }
+}
+
+/** A document command refused by its own validation; names the command for the failure display. */
+export class CommandError extends Error {
+  readonly commandName: string
+
+  /** Wraps the refusal raised by one named command. */
+  constructor(commandName: string, cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause })
+    this.name = 'CommandError'
+    this.commandName = commandName
+  }
 }
 
 /** Comme `runCommand`, mais renvoie aussi ce que la commande produit en plus du document (id créé…). */
@@ -45,10 +63,10 @@ export function runCommandWithResult(scene: EditorScene, command: Command): { sc
       return { scene: base.attachItem(scene, command.args) }
     case 'setDecor':
       return { scene: base.setDecor(scene, command.args) }
+    case 'setItemDecor':
+      return { scene: setItemDecor(scene, command.args) }
     case 'registerDecor':
       return { scene: base.registerDecor(scene, command.args) }
-    case 'createKeyframe':
-      return base.createKeyframe(scene, command.args)
     case 'createCapsule':
       return base.createCapsule(scene, command.args)
     case 'setCapsuleDef':
@@ -110,5 +128,10 @@ export function runCommandWithResult(scene: EditorScene, command: Command): { sc
  * le document final est retourné — pas d'état intermédiaire visible au contrôleur.
  */
 export function transaction(scene: EditorScene, commands: Command[]): EditorScene {
-  return base.transaction(scene, commands.map((command) => (s: EditorScene) => runCommand(s, command)))
+  return keepWhenUnchanged(scene, base.transaction(scene, commands.map((command) => (s: EditorScene) => runCommand(s, command))))
+}
+
+/** Returns the previous document when a command left its values unchanged: no commit, no write. */
+function keepWhenUnchanged(before: EditorScene, after: EditorScene): EditorScene {
+  return editorScenesEqual(before, after) ? before : after
 }

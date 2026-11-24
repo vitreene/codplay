@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { transaction, runCommand } from '../../src/app/commands/facade'
 import { createEmptyEditorScene } from '../../src/app/scenes/editor-scene'
-import { rootPlacementModeForScene } from '../../src/app/commands/root-placement-commands'
+import { canSetRootPlacementMode, rootPlacementModeForScene } from '../../src/app/commands/root-placement-commands'
 
 describe('root placement commands', () => {
   it('creates a root block and its spanning zone in one document transaction', () => {
@@ -52,6 +52,10 @@ describe('root placement commands', () => {
       args: { zoneId: 'zone-root', area: { row: 1, col: 1, rowSpan: 2, colSpan: 2 } },
     })
 
+    // The interface reads the same rule to disable « Libre » before the command can be refused.
+    expect(canSetRootPlacementMode(zonedScene, 'transform')).toBe(false)
+    expect(canSetRootPlacementMode(zonedScene, 'fine-grid')).toBe(true)
+    expect(canSetRootPlacementMode(fineGridScene, 'transform')).toBe(true)
     expect(() => runCommand(zonedScene, { name: 'setRootPlacementMode', args: { mode: 'transform' } }))
       .toThrow(/root zones must be removed/)
   })
