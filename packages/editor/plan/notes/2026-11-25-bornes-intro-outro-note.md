@@ -48,8 +48,8 @@ parente (qui peut elle-même hériter) ou fixé par l’auteur :
 | Transition d’apparition/disparition | défaut de la capsule (réglage, sinon type, sinon global) | `transitionIn` (intro) / `transitionOut` (outro) explicite | existe |
 
 Conséquence : le modèle ne sait pas représenter « décor propre, placement hérité ».
-La spec de distribution (§9.2) lie la matérialisation au verrouillage ; c’est ce lien
-que la décision du 2026-11-25 dissocie.
+La matérialisation (glisser, double-clic) produit un KF verrouillé ; la décision du
+2026-11-25 dissocie décor propre et verrouillage (borne liée, B-2).
 
 ## 3. KF virtuels : calcul et matérialisation
 
@@ -63,16 +63,18 @@ que la décision du 2026-11-25 dissocie.
   déjà pour l’aperçu. Historique : `git show 090e87fe^:packages/editor/plan/modules/2026-07-08-capsule-automation-reconciliation-plan.md`.
 - `CapsuleDistribution.compute()` calcule les bornes des enfants à partir de la durée
   du clip, du mode (`sequential`/`stagger`), de l’ordre et des bornes verrouillées
-  (`lockedIntroMs`/`lockedOutroMs`, indépendantes par borne, §11). Fonction pure.
+  (`lockedIntroMs`/`lockedOutroMs`, indépendantes par borne, §9). Fonction pure.
   `TransitionTiming` (retranche la durée d’entrée : une intro « se termine » à son KF)
   et `CapsulePreset` sont aussi purs. Depuis le 2026-11-25, ces trois modules et
   leur spec sont dans Capsule Automation (`src/timing/`,
   [spec de distribution](../../../authoring/capsule-automation/specs/capsule-distribution-spec.md)),
   hors de `scene-factory`, qui dépend de `codplay-v1` (obsolète).
-- La « source unique » n’est vraie qu’au niveau de `compute()` : la timeline
-  (`computeVirtualKeyframes`, `sequence-editor/machine.ts`) et le Builder
-  (`resolveCapsuleDistribution`, `build-scene.ts`) préparent chacun leurs entrées
-  (racine, ordre, durée d’entrée, défauts de transition) — d’où E8 et l’écart du §6.
+- Depuis le 2026-11-25, `CapsuleBounds.resolve` résout une seule fois toutes les
+  bornes (fenêtres, verrous, transition effective, fusion) ; la timeline et le Builder
+  la lisent via l’adaptateur `scene-bounds.ts`. Avant, chacun préparait ses entrées de
+  `compute()` (racine, ordre, durée d’entrée, défauts) — d’où E8, l’écart de durée
+  d’entrée et des enfants de capsule imbriquée placés sur `[0, dernier KF des
+  enfants]` par le Builder.
 - Matérialisation existante : glisser ou double-cliquer une borne virtuelle
   (`materializeVirtualKeyframe`, `mount.ts`) crée un KF réel verrouillé ; Échap avant
   le lâcher annule. Play, Seek, rebuild, resize et sélection ne matérialisent jamais.
@@ -106,7 +108,8 @@ que la décision du 2026-11-25 dissocie.
   héritée. Une transition explicite posée par l’auteur sur l’enfant est conservée :
   un choix de l’auteur prime sur un défaut (décision du 2026-11-25 ; la spec de
   grille historique l’annulait en `cut`). La règle relève des réglages de Capsule
-  Automation, pas d’une condition codée dans le Builder. Non implémentée aujourd’hui.
+  Automation, pas d’une condition codée dans le Builder. Implémentée par
+  `CapsuleBounds` (2026-11-25) ; la racine ne fusionne pas (B-12).
 - Décidé mais non implémenté (spec de grille historique) : `Sustain` (comportement
   continu entre deux KF, hors décor).
 
@@ -122,15 +125,8 @@ que la décision du 2026-11-25 dissocie.
 
 ## 6. Écarts constatés
 
-- **E8** : la timeline recalcule la distribution « à sa façon » (racine codée en dur
-  `card` / `stagger 0`, ordre lu dans une constante d’affichage).
-- **Transition effective d’une borne** : le Builder retranche la durée de la
-  transition par défaut de la capsule pour verrouiller une intro sans transition
-  explicite (`resolveIntroDuration` avec `transitionDefaults`) ; la timeline ne
-  retranche que celle d’une transition nommée explicite. Ni l’un ni l’autre
-  n’applique la fusion aux bords d’une capsule (§4). La transition effective d’une
-  borne (explicite, héritée, ou absorbée par la capsule) doit donc être résolue une
-  seule fois, puis servir au placement, au Builder et à l’affichage.
+- **E8 et transition effective** : corrigés le 2026-11-25 par la résolution unique
+  (§3) ; la fusion aux bords (§4) est appliquée, hors racine.
 - **D-HORS-PLAGE** : une action hors de la fenêtre doit recaler la tête sur la borne la
   plus proche ; aujourd’hui elle écrit le décor initial ou celui du dernier KF réel.
 - **Édition des transitions** : le type et les commandes existent

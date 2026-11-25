@@ -29,5 +29,4 @@ export interface LayoutProfile {
 
 export interface DisplayConfig {
   timeUnit: 's' | 'ms'
-  capsuleOrder: 'forward' | 'backward'
 }

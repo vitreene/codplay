@@ -120,9 +120,10 @@ describe('sequence-editor — bornes virtuelles de la capsule racine', () => {
     expect(virtual).not.toBeNull()
     virtual!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, detail: 2 }))
 
+    // No locked bound, so no pre-roll: the root fade starts at 0 and the item is entered at 300.
     expect(batches[0]?.[0]).toMatchObject({
       name: 'createNamedKeyframe',
-      args: { itemId: 'item-1', timeMs: 0, decorId: 'decor-1' },
+      args: { itemId: 'item-1', timeMs: 300, decorId: 'decor-1' },
     })
     expect(batches).toHaveLength(1)
   })

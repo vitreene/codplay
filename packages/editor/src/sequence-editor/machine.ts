@@ -4,16 +4,14 @@ import type {
 } from './types'
 import { resolveKeyframeChannel } from './types'
 import type { Command } from '../app/controller/types'
-import { CapsuleDistribution, CapsulePreset, TransitionTiming } from '@codplay/capsule-automation'
-import type { ChildInput } from '@codplay/capsule-automation'
 import {
   ZOOM_DEFAULT_PX_PER_SEC, ZOOM_MIN_PX_PER_SEC, ZOOM_MAX_PX_PER_SEC,
   TIME_STEP_MS,
 } from './constants'
 import { LAYOUT_PROFILE_DEFAULT } from './layout-profile'
 import { DISPLAY_CONFIG_DEFAULT } from './display-config'
-import { childrenOf, findParentClipBounds } from './utils'
-import { resolveMotionLifetime } from '../motion-editor/timing'
+import { findParentClipBounds } from './utils'
+import { resolveSceneBounds } from '../scene-bounds/scene-bounds'
 import { createId } from '../app/commands/ids'
 
 /**
@@ -222,109 +220,26 @@ function timelineBoundaryKeyframes(item: Item): { first?: Keyframe; last?: Keyfr
   }
 }
 
-/** Adds the distribution-computed virtual bounds for one capsule interval. */
-function appendVirtualKeyframes(
-  result: VirtualKeyframe[],
-  children: Item[],
-  clipStartMs: number,
-  clipDurationMs: number,
-  capsuleType: Parameters<typeof CapsulePreset.resolve>[0]['capsuleType'],
-  distribution: Parameters<typeof CapsulePreset.resolve>[0]['distribution'],
-  capsuleOrder: 'forward' | 'backward',
-): void {
-  if (children.length === 0 || clipDurationMs <= 0) return
-
-  // Même formule que `build-scene.ts::resolveCapsule()` (`TransitionTiming`,
-  // `@codplay/scene-factory`) — sans `preRollMs` (concept Builder/player, invisible ici par
-  // conception, l'éditeur reste dans son propre référentiel temporel local).
-  const childInputs: ChildInput[] = children.map((child) => {
-    const childKeyframes = sortTimelineKeyframes(child)
-    const ci = childKeyframes[0]
-    // One real keyframe fixes the entry boundary; the capsule still computes the missing exit
-    // boundary. Treating that same keyframe as both locks would collapse the child's slot to a
-    // zero-duration range and would disagree with the established virtual-outro behavior.
-    const co = childKeyframes.length > 1 ? childKeyframes.at(-1) : undefined
-    return {
-      trackId: child.id,
-      lockedIntroMs: TransitionTiming.lockedIntroMs(
-        ci !== undefined ? {
-          timeMs: ci.timeMs - clipStartMs,
-          transitionInDurationMs: ci.transitionIn?.kind === 'named' ? ci.transitionIn.durationMs : undefined,
-        } : undefined,
-      ),
-      lockedOutroMs: TransitionTiming.lockedOutroMs(co !== undefined ? { timeMs: co.timeMs - clipStartMs } : undefined),
+/**
+ * Projects the inherited (implicit) bounds resolved by Capsule Automation as virtual handles.
+ * A bound locked by a stored keyframe is drawn by that keyframe; an implicit outro that coincides
+ * with a stored keyframe is not duplicated.
+ */
+function computeVirtualKeyframes(scene: EditorScene): VirtualKeyframe[] {
+  const bounds = resolveSceneBounds(scene)
+  return scene.items.flatMap((item) => {
+    const node = bounds.nodes.get(item.id)
+    if (node === undefined || node.outro.timeMs < node.intro.timeMs) return []
+    const keyframes = sortTimelineKeyframes(item)
+    const virtual: VirtualKeyframe[] = []
+    if (node.intro.origin === 'implicit') {
+      virtual.push({ trackId: item.id, id: `vkf-${item.id}-intro`, timeMs: node.intro.timeMs, name: 'intro', visible: node.visible })
     }
+    if (node.outro.origin === 'implicit' && !keyframes.some((keyframe) => keyframe.timeMs === node.outro.timeMs)) {
+      virtual.push({ trackId: item.id, id: `vkf-${item.id}-outro`, timeMs: node.outro.timeMs, name: 'outro', visible: node.visible })
+    }
+    return virtual
   })
-
-  let preset: ReturnType<typeof CapsulePreset.resolve>
-  try {
-    preset = CapsulePreset.resolve({ capsuleType, distribution })
-  } catch {
-    return
-  }
-  const out = CapsuleDistribution.compute({
-    clipDurationMs,
-    ...preset,
-    order: capsuleOrder,
-    children: childInputs,
-  })
-
-  for (let i = 0; i < out.children.length; i++) {
-    const childOut = out.children[i]!
-    const child = children[i]!
-    const childKeyframes = sortTimelineKeyframes(child)
-    const lifetime = resolveMotionLifetime(childKeyframes, {
-      introTimeMs: clipStartMs + childOut.introMs,
-      outroTimeMs: clipStartMs + childOut.outroMs,
-    })
-    if (lifetime === null) continue
-
-    // Real first/last keyframes own the corresponding boundary. Only inherited boundaries are
-    // rendered as virtual handles; a virtual outro coinciding with a real KF is not duplicated.
-    if (lifetime.intro.kind === 'virtual') {
-      result.push({ trackId: child.id, id: `vkf-${child.id}-intro`, timeMs: lifetime.intro.timeMs, name: 'intro', visible: childOut.visible })
-    }
-    if (lifetime.outro.kind === 'virtual'
-      && !childKeyframes.some((keyframe) => keyframe.timeMs === lifetime.outro.timeMs)) {
-      result.push({ trackId: child.id, id: `vkf-${child.id}-outro`, timeMs: lifetime.outro.timeMs, name: 'outro', visible: childOut.visible })
-    }
-  }
-}
-
-function computeVirtualKeyframes(scene: EditorScene, capsuleOrder: 'forward' | 'backward' = 'forward'): VirtualKeyframe[] {
-  const result: VirtualKeyframe[] = []
-
-  // The scene root is an implicit `card` capsule. It has no item of its own, but its direct
-  // children still receive the same virtual-bound projection as children of an explicit capsule.
-  // The builder uses a stagger distribution with zero offsets for this root level.
-  appendVirtualKeyframes(
-    result,
-    childrenOf(scene.items, null),
-    0,
-    scene.meta.durationMs,
-    'card',
-    { mode: 'stagger', staggerInMs: 0, staggerOutMs: 0 },
-    capsuleOrder,
-  )
-
-  for (const capsule of scene.items) {
-    if (capsule.type !== 'capsule' || !capsule.capsule) continue
-    const children = childrenOf(scene.items, capsule.id)
-    const capsuleKeyframes = sortTimelineKeyframes(capsule)
-    const introKf = capsuleKeyframes[0]
-    const outroKf = capsuleKeyframes.at(-1)
-    if (!introKf || !outroKf) continue
-    appendVirtualKeyframes(
-      result,
-      children,
-      introKf.timeMs,
-      outroKf.timeMs - introKf.timeMs,
-      capsule.capsule.kind,
-      capsule.capsule.distribution,
-      capsuleOrder,
-    )
-  }
-  return result
 }
 
 function findNearestSnap(snapGrid: MachineSnapPoint[], timeMs: number): MachineSnapPoint | null {
@@ -403,10 +318,10 @@ export const sequenceEditorMachine = setup({
 
     // ── Synchronisation autoritaire — seul point d'écriture de scene/selection ──────────────
     'SCENE.SYNC': {
-      actions: assign(({ context, event }) => ({
+      actions: assign(({ event }) => ({
         scene: event.scene,
         snapGrid: computeSnapGrid(event.scene),
-        virtualKeyframes: computeVirtualKeyframes(event.scene, context.displayConfig.capsuleOrder),
+        virtualKeyframes: computeVirtualKeyframes(event.scene),
         selection: {
           trackId: event.selection.itemIds[0] ?? null,
           keyframeId: event.selection.keyframeId ?? null,
@@ -420,10 +335,10 @@ export const sequenceEditorMachine = setup({
     // Réservé au vrai changement de scène (sélecteur multi-scènes, étape 5) — jamais appelé dans
     // la boucle de commit. Voir note d'en-tête.
     'SCENE.LOAD': {
-      actions: assign(({ context, event }) => ({
+      actions: assign(({ event }) => ({
         scene: event.scene,
         snapGrid: computeSnapGrid(event.scene),
-        virtualKeyframes: computeVirtualKeyframes(event.scene, context.displayConfig.capsuleOrder),
+        virtualKeyframes: computeVirtualKeyframes(event.scene),
         playheadMs: 0,
         playheadOrigin: 'author',
         selection: { trackId: null, keyframeId: null, markerId: null },
@@ -449,7 +364,7 @@ export const sequenceEditorMachine = setup({
       displayConfig: DISPLAY_CONFIG_DEFAULT,
       viewMode: 'full-sequence',
       snapGrid: computeSnapGrid(input.scene),
-      virtualKeyframes: computeVirtualKeyframes(input.scene, DISPLAY_CONFIG_DEFAULT.capsuleOrder),
+      virtualKeyframes: computeVirtualKeyframes(input.scene),
     }
   },
 

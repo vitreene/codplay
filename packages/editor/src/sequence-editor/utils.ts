@@ -1,10 +1,10 @@
 import { resolveKeyframeChannel } from './types'
 import type { LayoutProfile, Item } from './types'
 
-/** Every item directly under `parentId` (root items when `null`), sorted by their fractional `order` key — same patron as `build-scene.ts::childrenOf`. */
-export function childrenOf(items: Item[], parentId: string | null): Item[] {
-  return items.filter((item) => item.parentId === parentId).sort((a, b) => (a.order < b.order ? -1 : a.order > b.order ? 1 : 0))
-}
+import { childrenOf } from '../scene-bounds/scene-bounds'
+
+/** Every item directly under `parentId`, in the same order as the bounds distribution and the Builder. */
+export { childrenOf }
 
 /** Returns siblings in the list's front-to-back display order. */
 export function childrenInFrontOrder(items: Item[], parentId: string | null): Item[] {

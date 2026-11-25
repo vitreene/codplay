@@ -345,22 +345,25 @@ describe('sequenceEditorMachine — virtual keyframes (calculées depuis la scè
     const actor = actorWithScene(baseScene([capsule, lockedChild, freeChild]))
     const vkfs = actor.getSnapshot().context.virtualKeyframes
 
+    // Capsule window [-300, 4300] (root fades). The free child's slot starts at 3000, where the
+    // locked child begins its exit; its own fade ends at 3300 (instant of the bound). Its exit sits
+    // on the capsule window edge, so it is fused there.
     expect(vkfs.filter((v) => v.trackId === 'locked-child')).toHaveLength(0)
-    expect(vkfs.find((v) => v.trackId === 'free-child' && v.name === 'intro')).toMatchObject({ timeMs: 3000 })
-    expect(vkfs.find((v) => v.trackId === 'free-child' && v.name === 'outro')).toMatchObject({ timeMs: 4000 })
+    expect(vkfs.find((v) => v.trackId === 'free-child' && v.name === 'intro')).toMatchObject({ timeMs: 3300 })
+    expect(vkfs.find((v) => v.trackId === 'free-child' && v.name === 'outro')).toMatchObject({ timeMs: 4300 })
   })
 
-  it('a locked child\'s own transitionIn duration shortens its distribution slot, same formula as build-scene.ts (TransitionTiming)', () => {
+  it('a locked child\'s own transitionIn duration shortens its distribution slot (resolved once by CapsuleBounds)', () => {
     const capsule = capsuleItem('cap', {
       keyframes: [
         { id: 'kf-intro', timeMs: 0, decorId: 'd0', name: 'intro' },
         { id: 'kf-outro', timeMs: 4000, decorId: 'd0', name: 'outro' },
       ],
     })
-    // child-a: real intro kf only (300ms transitionIn) — its own virtual outro, and the
-    // following free child's virtual intro, both fall at 2350 (not 2500) because the transition
-    // is subtracted before the remaining space is shared out (sequential, cursor stays at 0
-    // through a half-locked child, so only this subtraction moves the shared boundary).
+    // Capsule window [-300, 4300]. child-a: real intro kf only (300ms transitionIn), its slot
+    // starts at 700; the remaining 3600 ms are shared: child-a exits at 2500 (rangee: no default
+    // exit transition), child-b's slot starts there and its fade ends at 2800. child-b's exit sits
+    // on the capsule window edge (fused, 4300).
     const childA = elementItem('child-a', {
       parentId: 'cap',
       order: 'a',
@@ -370,9 +373,9 @@ describe('sequenceEditorMachine — virtual keyframes (calculées depuis la scè
     const actor = actorWithScene(baseScene([capsule, childA, childB]))
     const vkfs = actor.getSnapshot().context.virtualKeyframes
 
-    expect(vkfs.find((v) => v.trackId === 'child-a' && v.name === 'outro')).toMatchObject({ timeMs: 2350 })
-    expect(vkfs.find((v) => v.trackId === 'child-b' && v.name === 'intro')).toMatchObject({ timeMs: 2350 })
-    expect(vkfs.find((v) => v.trackId === 'child-b' && v.name === 'outro')).toMatchObject({ timeMs: 4000 })
+    expect(vkfs.find((v) => v.trackId === 'child-a' && v.name === 'outro')).toMatchObject({ timeMs: 2500 })
+    expect(vkfs.find((v) => v.trackId === 'child-b' && v.name === 'intro')).toMatchObject({ timeMs: 2800 })
+    expect(vkfs.find((v) => v.trackId === 'child-b' && v.name === 'outro')).toMatchObject({ timeMs: 4300 })
   })
 })
 

@@ -11,10 +11,13 @@ horloge, sans état partagé. Pour une capsule et ses enfants, il produit :
 - les classes de chaque élément et la feuille de style qui les définit.
 
 Le moteur `AutoCapsule` ne calcule pas le temps. Chaque enfant arrive avec son
-`timeRange` absolu, résolu en amont par `CapsuleDistribution`, que le paquet
-fournit aussi (`src/timing/`, avec `TransitionTiming` et `CapsulePreset` ;
-[spécification de distribution](./capsule-distribution-spec.md)). Le moteur le
-transmet tel quel aux événements.
+`timeRange` absolu, résolu en amont par `CapsuleBounds.resolve`, que le paquet
+fournit aussi : pour un arbre de capsules, elle résout une seule fois les bornes
+de chaque enfant (fenêtre, distribution par `CapsuleDistribution`, verrous,
+transition effective avec fusion aux bords), pour tous les appelants
+(`src/timing/`, avec `TransitionTiming` et `CapsulePreset` ;
+[spécification de distribution](./capsule-distribution-spec.md)). Le moteur
+transmet le `timeRange` tel quel aux événements.
 
 L’appelant décide ce qu’est un enfant. Editor, par exemple, déclare aussi chaque
 zone comme un enfant à placement explicite pour obtenir son emprise de grille
@@ -29,8 +32,11 @@ zone comme un enfant à placement explicite pour obtenir son emprise de grille
   - `options.autoResolveOnWrite` (défaut `true`) résout dès la construction ;
     `options.includeDiagnostics` (défaut `true`).
 - `resolveAutoCapsuleDefaults(type, overrides?)` : transitions par défaut d’une
-  capsule. Les appelants qui calculent des bornes avant d’appeler le moteur
-  l’utilisent pour appliquer les mêmes défauts que lui.
+  capsule ; `CapsuleBounds` l’utilise pour appliquer les mêmes défauts que le moteur.
+- `CapsuleBounds.resolve({ durationMs, order?, root })` : bornes résolues de tous
+  les enfants d’un arbre de capsules, entrées primitives ; `CapsuleDistribution`,
+  `CapsulePreset` et `TransitionTiming` en sont les briques. Contrat :
+  [spécification de distribution](./capsule-distribution-spec.md) §5 à §8.
 - `DEFAULT_AUTO_CAPSULE_CONFIG`, `DEFAULT_AUTO_CAPSULE_EVENT_DEFINITIONS` et les
   constantes `CAPSULE_TYPE`, `GRID_MODE`, `PLACEMENT_POLICY`, `AREA_KIND`,
   `EVENT_ACTION`, `ORIENTATION`, `DIAGNOSTIC_LEVEL`.
@@ -171,7 +177,7 @@ Limites de conception :
 
 ## Preuves
 
-Les 29 tests du paquet passent (`npm run test` depuis le dossier du paquet).
+Les tests du paquet passent (`npm run test` depuis le dossier du paquet).
 
 - [`build-grid.spec.ts`](../tests/build-grid.spec.ts) : les cinq modes de grille,
   les défauts 9 × 16, l’orientation de `rangee`, les gouttières, la racine de
@@ -185,3 +191,9 @@ Les 29 tests du paquet passent (`npm run test` depuis le dossier du paquet).
 - [`auto-capsule.spec.ts`](../tests/auto-capsule.spec.ts) : résolution de bout en
   bout, déduplication de la feuille de style, `renderStyleSheet()` sans résolution
   préalable.
+- [`capsule-bounds.spec.ts`](../tests/capsule-bounds.spec.ts),
+  [`capsule-distribution.spec.ts`](../tests/capsule-distribution.spec.ts),
+  [`capsule-preset.spec.ts`](../tests/capsule-preset.spec.ts),
+  [`transition-timing.spec.ts`](../tests/transition-timing.spec.ts) : résolution
+  des bornes (racine, capsule imbriquée, fusion, transitions explicites et par
+  défaut, ordre, durée minimale, diagnostic), distribution et préréglages.

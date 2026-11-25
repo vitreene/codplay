@@ -37,8 +37,8 @@ décor du keyframe ou au décor initial ; le contenu réglé depuis la palette
 existants.
 
 Le Builder traduit `EditorScene` en `SceneDoc` V2. Il délègue la construction
-du document à `SceneDocEditor`, la distribution temporelle à
-`CapsuleDistribution` et la résolution de grilles/placements aux capacités de
+du document à `SceneDocEditor`, la résolution des bornes à
+`CapsuleBounds` (voir [Résolution des bornes](#résolution-des-bornes)) et la résolution de grilles/placements aux capacités de
 Capsule Automation ; il ne crée pas de second calcul de timing ou de placement.
 La compilation et la présentation restent sur le chemin V2 `CodPlay.build()` →
 instance. Le test [`build-scene.spec.ts`](../tests/builder-v2/build-scene.spec.ts)
@@ -138,6 +138,44 @@ sont définis dans [`app-layout.css`](../src/app/layout/app-layout.css).
 - Une multi-sélection dont les couleurs divergent signale un état mixte et ne
   présente pas le gris interne du picker comme valeur commune.
 
+## Résolution des bornes
+
+Les bornes de tous les items sont résolues une seule fois par Capsule Automation
+(`CapsuleBounds.resolve`, [spécification de distribution](../../authoring/capsule-automation/specs/capsule-distribution-spec.md)).
+L'adaptateur [`scene-bounds.ts`](../src/scene-bounds/scene-bounds.ts)
+(`resolveSceneBounds`) est le seul à traduire `EditorScene` en entrées :
+
+- arbre des items par `parentId`, enfants dans l'ordre `order` puis `id`
+  (`childrenOf`, partagé par la timeline et le Builder) ;
+- premier KF de pose = intro verrouillée ; dernier KF de pose, s'il est distinct =
+  outro verrouillée ; sans KF, la borne est implicite ;
+- seule une transition `named` est explicite (`transitionIn` de l'intro,
+  `transitionOut` de l'outro), `cut`/`--` durant 0 ms ; les autres sont héritées ;
+- racine : `rootCapsule`, sinon type `card` et `stagger` 0/0 ; ordre
+  `scene.meta.capsuleOrder`.
+
+La timeline (`computeVirtualKeyframes`, `sequence-editor/machine.ts`) affiche une
+borne implicite comme poignée virtuelle à l'instant résolu — fin de la transition
+d'entrée pour l'intro, début de la transition de sortie pour l'outro — avec
+`visible` de la distribution ; une outro implicite qui coïncide avec un KF stocké
+n'est pas dupliquée. Le Builder pose chaque enfant sur
+`[window.startMs, outro.timeMs] + preRollMs` (`AutoCapsuleChildInput.timeRange`),
+passe une transition explicite comme événement nommé et une borne fusionnée comme
+événement `cut` (aucun fondu par défaut synthétisé) ; il prend le `preRollMs` de la
+résolution. Un perso, item simple ou capsule imbriquée, reçoit dans son style initial
+les valeurs de départ de sa transition d'entrée : il n'apparaît pas avant son intro,
+et un enfant fusionné reste caché avec sa capsule. Une propriété animée par la
+transition de sortie sans `from`, que l'entrée n'anime pas (entrée `cut`, fusionnée
+ou explicite), part de la valeur de repos de sa propre transition (le `to` de son
+entrée, par exemple `opacity: 1` pour `fade`), pour que le runtime ait une valeur
+de départ. Le test [`cut-entry-exit.spec.ts`](../tests/builder-v2/cut-entry-exit.spec.ts)
+crée l'instance CodPlay réelle et la parcourt par Seek. La timeline résout la scène complète ; le Builder, la scène de
+compilation, sans items masqués (voir ci-dessus).
+
+Le test [`scene-bounds.spec.ts`](../tests/scene-bounds/scene-bounds.spec.ts)
+vérifie que la timeline et le Builder placent aux mêmes instants les enfants d'une
+capsule imbriquée sans KF, les enfants de la racine et l'ordre inversé.
+
 ## Interaction des bornes de capsule
 
 - Chaque piste montre au plus une borne d'intro et une borne d'outro. Les bornes
@@ -146,6 +184,19 @@ sont définis dans [`app-layout.css`](../src/app/layout/app-layout.css).
   ouvrant vers la droite et fermant vers la gauche, sans libellé `intro` ou
   `outro` sur les KFs. Créer ou matérialiser une borne produit un KF sans nom ;
   les noms personnalisés des KFs intermédiaires restent affichés.
+- Une poignée virtuelle est creuse (`seq-kf--virtual`) ; un KF réel hors des
+  bornes de sa capsule parente, ou une borne virtuelle dont la distribution rend
+  `visible: false`, porte `seq-kf--out-of-bounds`.
+- Glisser ou double-cliquer une borne virtuelle la matérialise : un seul
+  `createNamedKeyframe` au temps lâché (ou au temps résolu), décor hérité ; Échap
+  avant le lâcher annule. Play, Seek, rebuild, resize et sélection ne
+  matérialisent jamais. La borne devient verrouillée et la distribution des
+  autres enfants est recalculée.
+- Les bornes virtuelles transitent par `MachineContext.virtualKeyframes`
+  (`{ trackId, id: 'vkf-<item>-intro|outro', timeMs, name, visible }`), non
+  persistées, recalculées à chaque `SCENE.SYNC`/`SCENE.LOAD`. Supprimer un KF
+  (`KEYFRAME.REMOVE`) ou vider ceux d'une piste (`KEYFRAME.CLEAR_TRACK`) rend la
+  borne implicite.
 - Un drag commencé sur une poignée de KF déplace uniquement le KF visé via le
   circuit de drag de la timeline. Pour une capsule à deux bornes, déplacer la
   borne de sortie conserve donc la borne d'entrée et n'émet pas de création ou
