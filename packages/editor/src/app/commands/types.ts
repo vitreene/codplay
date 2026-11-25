@@ -3,7 +3,7 @@
  * fait foi ; `sequence-editor/types.ts` le réexporte, ne le redéclare jamais.
  */
 
-import type { CapsuleKind } from '@codplay/scene-factory/capsule-preset'
+import type { CapsuleKind } from '@codplay/capsule-automation'
 
 // ─── Transitions ────────────────────────────────────────────────────────────
 
@@ -54,7 +54,7 @@ export type RootPlacementMode = 'transform' | 'fine-grid'
 
 /**
  * Réexporté depuis `@codplay/scene-factory` — source UNIQUE de vérité pour ce vocabulaire
- * (`2026-06-12-capsule-distribution-spec.md` §3.3). Une redéclaration séparée a déjà divergé une
+ * (`capsule-automation/specs/capsule-distribution-spec.md` §3.3). Une redéclaration séparée a déjà divergé une
  * fois dans ce repo (`sequence-editor/types.ts`, commentaire sur `CapsuleKind`) — jamais reproduite.
  */
 export type { CapsuleKind }

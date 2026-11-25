@@ -1,4 +1,4 @@
-import { TransitionTiming } from '@codplay/scene-factory/transition-timing'
+import { TransitionTiming } from '@codplay/capsule-automation'
 import type { Keyframe } from '../app/commands/types'
 import { DEFAULT_EASING } from '../sequence-editor/constants'
 import { normalizeMotionEasing } from '../motion-editor/easing'

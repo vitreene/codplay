@@ -12,11 +12,8 @@ import type {
   AutoCapsuleEventInput,
   AutoCapsuleType,
 } from '@codplay/capsule-automation'
-import { CapsuleDistribution } from '@codplay/scene-factory/capsule-distribution'
-import { CapsulePreset } from '@codplay/scene-factory/capsule-preset'
-import { TransitionTiming } from '@codplay/scene-factory/transition-timing'
-import type { CapsuleDistributionOutput } from '@codplay/scene-factory/capsule-distribution'
-import type { CapsuleKind } from '@codplay/scene-factory/capsule-preset'
+import { CapsuleDistribution, CapsulePreset, TransitionTiming } from '@codplay/capsule-automation'
+import type { CapsuleDistributionOutput, CapsuleKind } from '@codplay/capsule-automation'
 import type { Move, PersoDoc, SceneDoc } from 'codplay'
 import { parseEase, prepareSvgPath } from 'ace'
 import { resolveKeyframeChannel } from '../app/commands/types'

@@ -1,6 +1,6 @@
 // CapsulePreset — resolves a capsule's sub-type + author distribution setting into the concrete
 // mode/values `CapsuleDistribution.compute()` needs. Pure computation, no side effects.
-// `2026-06-12-capsule-distribution-spec.md` §3.3 — owns the ENTIRE CapsuleKind vocabulary and its
+// `specs/capsule-distribution-spec.md` §3.3 — owns the ENTIRE CapsuleKind vocabulary and its
 // resolution; neither `CapsuleDistribution` nor the ed2 Builder know about capsule sub-types at
 // all, this is the one place that knowledge lives.
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { CapsuleDistribution } from '@codplay/scene-factory'
+import { CapsuleDistribution } from '../src'
 
 const clip6 = (children: Parameters<typeof CapsuleDistribution.compute>[0]['children'], order?: 'forward' | 'backward') =>
   CapsuleDistribution.compute({ clipDurationMs: 6000, mode: 'sequential', order, children })

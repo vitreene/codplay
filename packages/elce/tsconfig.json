@@ -12,8 +12,6 @@
       "@codplay/capsule-automation/*": ["../authoring/capsule-automation/src/*"],
       "@codplay/audio-capture": ["../authoring/audio-capture/src/index.ts"],
       "@codplay/exclusive-sync": ["../authoring/exclusive-sync/src/index.ts"],
-      "@codplay/scene-factory/capsule-distribution": ["../authoring/scene-factory/src/capsule-distribution.ts"],
-      "@codplay/scene-factory/capsule-preset": ["../authoring/scene-factory/src/capsule-preset.ts"],
       "@codplay/story/rive-talking-avatar": ["../authoring/story/rive-talking-avatar/index.ts"],
       "@codplay/remote/remote": ["../authoring/remote/src/remote.ts"],
       "@codplay/sighty": ["../sighty/src/index.ts"],

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CapsuleDistribution, CapsulePreset } from '@codplay/scene-factory'
+import { CapsuleDistribution, CapsulePreset } from '../src'
 
 describe('CapsulePreset — resolves CapsuleKind + author setting into a concrete distribution', () => {
   it('carousel resolves to sequential even with no explicit distribution — its single-cell grid forces it', () => {

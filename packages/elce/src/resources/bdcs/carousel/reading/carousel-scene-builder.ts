@@ -1,6 +1,5 @@
 import { AutoCapsule, CAPSULE_TYPE, EVENT_ACTION } from '@codplay/capsule-automation'
-import { CapsuleDistribution } from '@codplay/scene-factory/capsule-distribution'
-import { CapsulePreset } from '@codplay/scene-factory/capsule-preset'
+import { CapsuleDistribution, CapsulePreset } from '@codplay/capsule-automation'
 import type { AuthorStrapCollection, PersoDoc, SceneListenRule, StoryDoc } from 'codplay/scene/types'
 import { TRACK_EVENT_DEACTIVATE } from 'codplay/runtime/player'
 import { CARD_BDC_TYPE, CARD_PRESET_ID } from '../../card/card-config'

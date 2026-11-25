@@ -1,5 +1,5 @@
 import { AutoCapsule, CAPSULE_TYPE, type AutoCapsuleResult } from '@codplay/capsule-automation'
-import { CapsuleDistribution, CapsulePreset } from '@codplay/scene-factory'
+import { CapsuleDistribution, CapsulePreset } from '@codplay/capsule-automation'
 import type { PersoDoc } from 'codplay'
 import {
   CAROUSEL_AUTHORING_HORIZON_MS,

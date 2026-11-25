@@ -252,7 +252,7 @@ changer la durée configurée.
 
 Le Builder ed2 (`packages/editor/src/builder/`, pas le builder Codplay `packages/codplay/src/builder/`) résout les kf virtuels en kf concrets **avant** de construire le `SceneDoc` — pas lors d'une compilation `SceneDoc → CompiledScene`, qui reste une étape Codplay généraliste sans connaissance des capsules :
 
-1. Pour chaque capsule avec un mode de distribution, le Builder appelle `CapsuleDistribution.compute()` (`packages/authoring/scene-factory/`).
+1. Pour chaque capsule avec un mode de distribution, le Builder appelle `CapsuleDistribution.compute()` (`packages/authoring/capsule-automation/src/timing/`).
 2. Le module retourne les positions concrètes pour chaque enfant libre.
 3. Le Builder pose ces positions comme `timeRange` réel sur chaque enfant (capsule-automation), puis comme eventimes réels dans le `SceneDoc` construit.
 4. Le `SceneDoc` remis au builder Codplay ne contient que des kf concrets — aucune notion de virtual à ce stade.
@@ -271,7 +271,7 @@ Le runtime ne voit que des kf résolus.
 - Bloque le drag de la borne de sortie capsule à `borne_entree.timeMs + min_duration`
 - Expose : `KEYFRAME.ADD`, `KEYFRAME.REMOVE`, `KEYFRAME.CLEAR_TRACK`, `KEYFRAME.CLEAR_CAPSULE`
 
-### `CapsuleDistribution` (implémentée, `packages/authoring/scene-factory/capsule-distribution.ts`) :
+### `CapsuleDistribution` (implémentée, `packages/authoring/capsule-automation/src/timing/capsule-distribution.ts`) :
 
 - Reçoit : durée clip, mode, paramètres (stagger_in_ms, stagger_out_ms), kf réels des enfants
 - Retourne : positions virtuelles + `min_duration`

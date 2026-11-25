@@ -11,3 +11,9 @@ export {
 	ORIENTATION,
 	PLACEMENT_POLICY
 } from "./types/public";
+export { CapsuleDistribution } from "./timing/capsule-distribution";
+export type { ChildInput, ChildOutput, CapsuleDistributionInput, CapsuleDistributionOutput } from "./timing/capsule-distribution";
+export { CapsulePreset } from "./timing/capsule-preset";
+export type { CapsuleKind, CapsuleDistributionSetting, CapsulePresetInput, CapsulePresetResolution } from "./timing/capsule-preset";
+export { TransitionTiming } from "./timing/transition-timing";
+export type { TransitionTimingKeyframe } from "./timing/transition-timing";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { TransitionTiming } from '@codplay/scene-factory'
+import { TransitionTiming } from '../src'
 
 describe('TransitionTiming.computeScenePreRollMs', () => {
   it('empty scene resolves to 0', () => {
