@@ -11,7 +11,7 @@ signale les écarts.
 - Intro et outro ne sont pas des types : ce sont le premier et le dernier KF de
   canal `pose` selon `timeMs`. Les noms `intro`/`outro` sont des étiquettes
   d’outillage ([modèle de document](../../specs/editor-document-model-spec.md),
-  [distribution §2](../../../authoring/scene-factory/2026-06-12-capsule-distribution-spec.md)).
+  [distribution §2](../../../authoring/capsule-automation/specs/capsule-distribution-spec.md)).
 - Les KF `decor` restent dans la fenêtre et ne la créent ni ne la prolongent.
 - Hors de ses bornes, l’item n’existe pas (D-NAISS) ; la fenêtre effective est
   l’intersection de ses bornes et de la fenêtre calculée par sa capsule parente.
@@ -65,9 +65,10 @@ que la décision du 2026-11-25 dissocie.
   du clip, du mode (`sequential`/`stagger`), de l’ordre et des bornes verrouillées
   (`lockedIntroMs`/`lockedOutroMs`, indépendantes par borne, §11). Fonction pure.
   `TransitionTiming` (retranche la durée d’entrée : une intro « se termine » à son KF)
-  et `CapsulePreset` sont aussi purs. Ces trois fichiers n’importent rien ; la
-  dépendance de `scene-factory` à `codplay-v1` (obsolète) vient seulement de
-  `SceneDocEditor` et de la validation.
+  et `CapsulePreset` sont aussi purs. Depuis le 2026-11-25, ces trois modules et
+  leur spec sont dans Capsule Automation (`src/timing/`,
+  [spec de distribution](../../../authoring/capsule-automation/specs/capsule-distribution-spec.md)),
+  hors de `scene-factory`, qui dépend de `codplay-v1` (obsolète).
 - La « source unique » n’est vraie qu’au niveau de `compute()` : la timeline
   (`computeVirtualKeyframes`, `sequence-editor/machine.ts`) et le Builder
   (`resolveCapsuleDistribution`, `build-scene.ts`) préparent chacun leurs entrées

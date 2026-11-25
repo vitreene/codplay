@@ -10,10 +10,11 @@ horloge, sans état partagé. Pour une capsule et ses enfants, il produit :
 - les événements d’intro et d’outro de chaque enfant ;
 - les classes de chaque élément et la feuille de style qui les définit.
 
-Le temps n’est pas calculé ici. Chaque enfant arrive avec son `timeRange`
-absolu, résolu en amont par `CapsuleDistribution`
-([spécification](../../scene-factory/2026-06-12-capsule-distribution-spec.md)).
-Le moteur le transmet tel quel aux événements.
+Le moteur `AutoCapsule` ne calcule pas le temps. Chaque enfant arrive avec son
+`timeRange` absolu, résolu en amont par `CapsuleDistribution`, que le paquet
+fournit aussi (`src/timing/`, avec `TransitionTiming` et `CapsulePreset` ;
+[spécification de distribution](./capsule-distribution-spec.md)). Le moteur le
+transmet tel quel aux événements.
 
 L’appelant décide ce qu’est un enfant. Editor, par exemple, déclare aussi chaque
 zone comme un enfant à placement explicite pour obtenir son emprise de grille
