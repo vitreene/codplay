@@ -440,6 +440,13 @@
   opacity: 0.75;
 }
 
+/* Linked bound: filled like a real KF (own decor), dashed outline (inherited instant) */
+.seq-kf.seq-kf--linked .seq-kf__diamond {
+  stroke: var(--seq-kf-fill-named);
+  stroke-width: 1.5;
+  stroke-dasharray: 2 2;
+}
+
 /* Keyframe outside parent clip bounds — specificity [0,3,0] to beat .seq-kf[data-kf-name] */
 .seq-kf.seq-kf--out-of-bounds .seq-kf__diamond {
   fill: #ef4444;

@@ -80,6 +80,7 @@ export function renderTrackRows(
   onDragStart?: (trackId: string, kfId: string, e: PointerEvent) => void,
   onMaterializeVirtual?: (vkf: VirtualKeyframe) => void,
   onVirtualDragStart?: (vkf: VirtualKeyframe, e: PointerEvent) => void,
+  onLockLinked?: (trackId: string, kfId: string) => void,
 ): void {
   container.innerHTML = ''
 
@@ -231,6 +232,16 @@ export function renderTrackRows(
       }
       if (isDragging) {
         handle.classList.add('seq-kf--dragging')
+      }
+      // Linked bound: own decor, instant placed by the parent capsule (B-2).
+      if (kf.autoBound !== undefined) {
+        handle.classList.add('seq-kf--linked')
+        if (onLockLinked) {
+          handle.addEventListener('dblclick', (e: MouseEvent) => {
+            e.stopPropagation()
+            onLockLinked(item.id, kf.id)
+          })
+        }
       }
       const { introMs, outroMs } = parentMarkers
       if (

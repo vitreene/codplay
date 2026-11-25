@@ -121,6 +121,7 @@ export type SequenceEditorEvent =
   | { type: 'KEYFRAME.CLEAR_TRACK'; trackId: string }
   | { type: 'KEYFRAME.CLEAR_CAPSULE'; trackId: string }
   | { type: 'KEYFRAME.RENAME'; trackId: string; keyframeId: string; name: string | null }
+  | { type: 'KEYFRAME.LOCK_BOUND'; trackId: string; keyframeId: string }
   | { type: 'KEYFRAME.ASSIGN_DECOR'; trackId: string; keyframeId: string; decorId: string }
   | { type: 'KEYFRAME.SET_TRANSITION_IN'; trackId: string; keyframeId: string; def: Transition | null }
   | { type: 'KEYFRAME.SET_TRANSITION_OUT'; trackId: string; keyframeId: string; def: Transition | null }
@@ -454,6 +455,13 @@ export const sequenceEditorMachine = setup({
           actions: emit(({ event }) => ({
             type: 'commandBatch' as const,
             commands: [{ name: 'renameKeyframe', args: { itemId: event.trackId, keyframeId: event.keyframeId, name: event.name } }],
+          })),
+        },
+
+        'KEYFRAME.LOCK_BOUND': {
+          actions: emit(({ event }) => ({
+            type: 'commandBatch' as const,
+            commands: [{ name: 'lockKeyframeBound', args: { itemId: event.trackId, keyframeId: event.keyframeId } }],
           })),
         },
 

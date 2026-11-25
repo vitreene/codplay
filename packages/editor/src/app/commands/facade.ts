@@ -96,6 +96,8 @@ function executeCommand(scene: EditorScene, command: Command): { scene: EditorSc
       return { scene: sequenceEditor.moveKeyframe(scene, command.args) }
     case 'renameKeyframe':
       return { scene: sequenceEditor.renameKeyframe(scene, command.args) }
+    case 'lockKeyframeBound':
+      return { scene: sequenceEditor.lockKeyframeBound(scene, command.args) }
     case 'assignKeyframeDecor':
       return { scene: sequenceEditor.assignKeyframeDecor(scene, command.args) }
     case 'setKeyframeTransitionIn':

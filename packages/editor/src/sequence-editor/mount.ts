@@ -351,7 +351,10 @@ export function mountSequenceEditor(
 
   let cancelVirtualKeyframeDrag: (() => void) | null = null
 
-  /** Drags a virtual boundary before materializing it; a click remains a non-writing gesture. */
+  /**
+   * Drags a virtual boundary before materializing it. A click does not write: it selects the item
+   * and places the playhead on the bound, where a Decor edit targets that inherited bound.
+   */
   function startVirtualKeyframeDrag(vkf: VirtualKeyframe, e: PointerEvent): void {
     cancelVirtualKeyframeDrag?.()
     const pointerId = e.pointerId
@@ -379,7 +382,11 @@ export function mountSequenceEditor(
     function onUp(ev: PointerEvent): void {
       if (ev.pointerId !== pointerId) return
       cleanup()
-      if (!moved) return
+      if (!moved) {
+        ctrl.selectTrack(vkf.trackId)
+        ctrl.seek(vkf.timeMs)
+        return
+      }
       const requestedTimeMs = ctrl.pixelToMs(ev.clientX - rect.left)
       materializeVirtualKeyframe(vkf, requestedTimeMs)
     }
@@ -660,6 +667,8 @@ export function mountSequenceEditor(
           materializeVirtualKeyframe(vkf)
         },
         startVirtualKeyframeDrag,
+        // Double-click on a linked bound fixes its current instant.
+        (trackId, kfId) => ctrl.lockKeyframeBound(trackId, kfId),
       )
     }
     renderCueRow(cueRow, ctx)

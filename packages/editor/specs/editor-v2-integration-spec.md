@@ -176,7 +176,12 @@ compilation, sans items masqués (voir ci-dessus).
 
 Le test [`linked-bounds.spec.ts`](../tests/scene-bounds/linked-bounds.spec.ts)
 vérifie une borne liée (instant calculé, transition explicite conservée), sa
-réécriture quand la capsule bouge et son verrouillage par `moveKeyframe`. Le test [`scene-bounds.spec.ts`](../tests/scene-bounds/scene-bounds.spec.ts)
+réécriture quand la capsule bouge et son verrouillage par `moveKeyframe` ou
+`lockKeyframeBound`. [`decor-edit-inherited-bound.spec.ts`](../tests/decor-edit-inherited-bound.spec.ts)
+vérifie, avec le contrôleur, le player et le pont Décor réels, la cible sur une
+outro héritée et la création du KF lié par la palette (canal `decor`) et par le
+cadre (canal `pose`) ; [`virtual-keyframes.spec.ts`](../tests/sequence-editor/virtual-keyframes.spec.ts)
+le clic sur une borne virtuelle, le rendu et le double-clic d'une borne liée. Le test [`scene-bounds.spec.ts`](../tests/scene-bounds/scene-bounds.spec.ts)
 vérifie que la timeline et le Builder placent aux mêmes instants les enfants d'une
 capsule imbriquée sans KF, les enfants de la racine et l'ordre inversé.
 
@@ -188,6 +193,19 @@ capsule imbriquée sans KF, les enfants de la racine et l'ordre inversé.
   ouvrant vers la droite et fermant vers la gauche, sans libellé `intro` ou
   `outro` sur les KFs. Créer ou matérialiser une borne produit un KF sans nom ;
   les noms personnalisés des KFs intermédiaires restent affichés.
+- Un clic sur une poignée virtuelle n'écrit rien : il demande la sélection de
+  l'item et place la tête de lecture à l'instant de la borne.
+- Une édition Décor (palette ou Selection Frame) quand la tête est sur une borne
+  implicite de l'item sélectionné (tolérance de l'instant auteur, aucun KF à cet
+  instant) vise cette borne (`Target.bound`, cible temporaire). Sa base est l'état
+  affiché : décor initial pour une intro, cascade du dernier KF pour une outro. Au
+  commit, une édition de palette crée un KF de canal `decor` marqué `autoBound`
+  (décor rattaché à l'instant de la borne, qui reste implicite pour le placement) ;
+  un geste du cadre (déplacement, offset, zone) crée le KF de pose lié, avec la pose
+  complète. Le décor est propre au nouveau KF ; le décor voisin n'est pas modifié.
+- Un KF lié (`autoBound`) est dessiné plein avec un contour pointillé
+  (`seq-kf--linked`). Le glisser (`moveKeyframe`) ou le double-clic
+  (`lockKeyframeBound`) le verrouille : la marque est retirée, l'instant conservé.
 - Une poignée virtuelle est creuse (`seq-kf--virtual`) ; un KF réel hors des
   bornes de sa capsule parente, ou une borne virtuelle dont la distribution rend
   `visible: false`, porte `seq-kf--out-of-bounds`.

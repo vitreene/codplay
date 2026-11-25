@@ -2,6 +2,7 @@ import { resolveKeyframeChannel } from '../../commands/types'
 import type { EditorScene, Item } from '../../commands/types'
 import type { Selection } from '../../controller/types'
 import { resolveMotionKeyframeAlignment, type MotionKeyframeAlignment } from '../../../motion-editor/timing'
+import { inheritedBoundAt } from '../../../scene-bounds/scene-bounds'
 
 /** Target of a Decor edit: the selected item, its keyframe alignment and the decor it writes. */
 
@@ -14,7 +15,8 @@ export type ItemVisualType = 'bloc' | 'text' | 'image' | 'media' | 'video' | 'ca
  * time-notes.md`, « initialDecorId ≈ kf1 »). `isTemporary: true` = aucun décor réel ne correspond
  * à l'instant courant (entre deux kf) : il n'y a pas encore de cible documentaire, mais la cible
  * reste éditable par preview V2. Son candidat est conservé par la coordination jusqu'à la création
- * d'un keyframe, qui est le seul acte le rendant persistant.
+ * d'un keyframe, qui est le seul acte le rendant persistant. `bound` : la tête est sur une borne
+ * héritée (implicite) de l'item ; la cible est temporaire et son commit crée un KF lié (B-4).
  */
 export type Target = {
   itemId: string
@@ -24,6 +26,7 @@ export type Target = {
   writeDecorId: string | null
   itemType: ItemVisualType
   isTemporary: boolean
+  bound?: 'intro' | 'outro'
 }
 
 /** Returns the keyframes that define the item's spatial chain in temporal order. */
@@ -50,6 +53,10 @@ export function resolveTarget(scene: EditorScene, selection: Selection, timeline
   // (`resolveKeyframeAlignment`) plutôt que de retomber systématiquement sur `initialDecorId`,
   // qui ne correspond à l'instant courant que si la tête est AVANT le premier keyframe.
   const alignment = resolveDecorationKeyframeAlignment(item, timelineMs)
+  const bound = alignment.kind === 'exact' ? undefined : inheritedBoundAt(scene, item.id, timelineMs)
+  if (bound !== undefined) {
+    return { itemId: item.id, keyframeId: null, contentId: item.contentId, writeDecorId: null, itemType: item.type, isTemporary: true, bound }
+  }
   if (alignment.kind === 'before-first' || alignment.kind === 'no-keyframes') {
     return { itemId: item.id, keyframeId: null, contentId: item.contentId, writeDecorId: item.initialDecorId, itemType: item.type, isTemporary: false }
   }

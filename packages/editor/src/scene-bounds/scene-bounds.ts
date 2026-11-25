@@ -2,6 +2,7 @@ import { CapsuleBounds } from '@codplay/capsule-automation'
 import type { BoundInput, BoundTransitionInput, BoundsNodeInput, CapsuleBoundsOutput } from '@codplay/capsule-automation'
 import { resolveKeyframeChannel } from '../app/commands/types'
 import type { CapsuleDef, EditorScene, Item, Keyframe, Transition } from '../app/commands/types'
+import { isSameAuthorTime } from '../app/config/author-time'
 
 /** Root capsule kind when the scene does not author one: a full-surface card. */
 export const ROOT_CAPSULE_DEFAULT_KIND = 'card'
@@ -14,6 +15,27 @@ export const ROOT_CAPSULE_DEFAULT_DISTRIBUTION: NonNullable<CapsuleDef['distribu
  * Builder both read this result, so a bound is placed at the same instant everywhere.
  */
 export function resolveSceneBounds(scene: EditorScene): CapsuleBoundsOutput {
+  const cached = resolvedBoundsByScene.get(scene)
+  if (cached !== undefined) return cached
+  const resolved = resolveBounds(scene)
+  resolvedBoundsByScene.set(scene, resolved)
+  return resolved
+}
+
+/** Documents are immutable: one resolution per scene object serves every reader of that revision. */
+const resolvedBoundsByScene = new WeakMap<EditorScene, CapsuleBoundsOutput>()
+
+/** Names the implicit (fully inherited) bound of `itemId` placed at `timeMs`, if any. */
+export function inheritedBoundAt(scene: EditorScene, itemId: string, timeMs: number): 'intro' | 'outro' | undefined {
+  const node = resolveSceneBounds(scene).nodes.get(itemId)
+  if (node === undefined) return undefined
+  if (node.intro.origin === 'implicit' && isSameAuthorTime(node.intro.timeMs, timeMs)) return 'intro'
+  if (node.outro.origin === 'implicit' && isSameAuthorTime(node.outro.timeMs, timeMs)) return 'outro'
+  return undefined
+}
+
+/** Maps the scene to Capsule Automation inputs and resolves them. */
+function resolveBounds(scene: EditorScene): CapsuleBoundsOutput {
   const root = scene.rootCapsule
   return CapsuleBounds.resolve({
     durationMs: scene.meta.durationMs,

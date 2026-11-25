@@ -54,4 +54,9 @@ describe('linked bounds — own decor and transition, computed instant', () => {
     expect(intro).toEqual({ id: 'a-in', timeMs: 900, decorId: 'own', channel: 'pose' })
     expect(resolveSceneBounds(moved).nodes.get('a')?.intro.origin).toBe('locked')
   })
+
+  it('locks a linked bound in place on lockKeyframeBound', () => {
+    const locked = runCommand(sceneWithLinkedIntro({ ...LINKED_INTRO, timeMs: 700 }), { name: 'lockKeyframeBound', args: { itemId: 'a', keyframeId: 'a-in' } })
+    expect(locked.items.find((item) => item.id === 'a')!.keyframes[0]).toEqual({ id: 'a-in', timeMs: 700, decorId: 'own', channel: 'pose' })
+  })
 })

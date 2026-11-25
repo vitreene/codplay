@@ -158,4 +158,41 @@ describe('sequence-editor — bornes virtuelles de la capsule racine', () => {
     window.dispatchEvent(pointerEvent('pointerup', 206))
     expect(batches).toHaveLength(0)
   })
+
+  it('place la tête et sélectionne l’item au clic sur une borne virtuelle, sans écrire', () => {
+    controller = new SequenceEditorController(sceneWithRootSingleKeyframe())
+    const batches: unknown[] = []
+    const selections: string[][] = []
+    controller.onCommand((commands) => batches.push(commands))
+    controller.onSelectionRequest((itemIds) => selections.push(itemIds))
+    const container = document.createElement('div')
+    document.body.append(container)
+    handle = mountSequenceEditor(container, controller)
+
+    const virtual = container.querySelector<SVGGElement>('[data-kf-id="vkf-item-1-outro"]')!
+    virtual.dispatchEvent(pointerEvent('pointerdown', 406))
+    window.dispatchEvent(pointerEvent('pointerup', 406))
+
+    const context = controller.getSnapshot().context
+    expect(context.playheadMs).toBe(5000)
+    expect(selections).toEqual([['item-1']])
+    expect(batches).toHaveLength(0)
+  })
+
+  it('dessine une borne liée en pointillés et la verrouille au double-clic', () => {
+    const scene = sceneWithRootSingleKeyframe()
+    scene.items[0]!.keyframes.push({ id: 'kf-linked', timeMs: 5000, decorId: 'decor-1', channel: 'pose', autoBound: 'outro' })
+    controller = new SequenceEditorController(scene)
+    const batches: Array<Array<{ name: string; args: Record<string, unknown> }>> = []
+    controller.onCommand((commands) => batches.push(commands as Array<{ name: string; args: Record<string, unknown> }>))
+    const container = document.createElement('div')
+    document.body.append(container)
+    handle = mountSequenceEditor(container, controller)
+
+    const linked = container.querySelector<SVGGElement>('[data-kf-id="kf-linked"]')!
+    expect(linked.classList.contains('seq-kf--linked')).toBe(true)
+    expect(container.querySelector('[data-kf-id="vkf-item-1-outro"]')).toBeNull()
+    linked.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, detail: 2 }))
+    expect(batches).toEqual([[{ name: 'lockKeyframeBound', args: { itemId: 'item-1', keyframeId: 'kf-linked' } }]])
+  })
 })

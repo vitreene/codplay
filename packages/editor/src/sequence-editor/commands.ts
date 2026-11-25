@@ -95,7 +95,7 @@ function detachKeyframesByMarkerIds(items: Item[], markerIds: ReadonlySet<string
  */
 export function createNamedKeyframe(
   scene: EditorScene,
-  args: { itemId: string; keyframeId: string; timeMs: number; decorId: string; channel?: KeyframeChannel; name?: string },
+  args: { itemId: string; keyframeId: string; timeMs: number; decorId: string; channel?: KeyframeChannel; name?: string; autoBound?: 'intro' | 'outro' },
 ): EditorScene {
   const { decorId } = args
   const nextScene = scene.decors[decorId] === undefined
@@ -107,6 +107,7 @@ export function createNamedKeyframe(
     decorId,
     channel: args.channel ?? 'pose',
     ...(args.name === undefined ? {} : { name: args.name }),
+    ...(args.autoBound === undefined ? {} : { autoBound: args.autoBound }),
   }
   return updateItemInScene(nextScene, args.itemId, (item) => ({
     ...item,
@@ -148,6 +149,14 @@ export function moveKeyframe(scene: EditorScene, args: { itemId: string; keyfram
       // Moving a linked bound fixes its instant: it becomes an ordinary (locked) keyframe.
       .map((k) => (k.id === args.keyframeId ? { ...omitKeyframeProperty(k, 'autoBound'), timeMs: args.timeMs } : k))
       .sort((a, b) => a.timeMs - b.timeMs),
+  }))
+}
+
+/** Locks a linked bound at its current instant: the keyframe becomes an ordinary one (B-4). */
+export function lockKeyframeBound(scene: EditorScene, args: { itemId: string; keyframeId: string }): EditorScene {
+  return updateItemInScene(scene, args.itemId, (item) => ({
+    ...item,
+    keyframes: item.keyframes.map((keyframe) => keyframe.id === args.keyframeId ? omitKeyframeProperty(keyframe, 'autoBound') : keyframe),
   }))
 }
 
@@ -320,6 +329,7 @@ export type SequenceEditorCommand =
   | { name: 'deleteKeyframe'; args: Parameters<typeof deleteKeyframe>[1] }
   | { name: 'moveKeyframe'; args: Parameters<typeof moveKeyframe>[1] }
   | { name: 'renameKeyframe'; args: Parameters<typeof renameKeyframe>[1] }
+  | { name: 'lockKeyframeBound'; args: Parameters<typeof lockKeyframeBound>[1] }
   | { name: 'assignKeyframeDecor'; args: Parameters<typeof assignKeyframeDecor>[1] }
   | { name: 'setKeyframeTransitionIn'; args: Parameters<typeof setKeyframeTransitionIn>[1] }
   | { name: 'setKeyframeTransitionOut'; args: Parameters<typeof setKeyframeTransitionOut>[1] }

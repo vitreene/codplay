@@ -239,8 +239,10 @@ export function resolveDocumentDecorBase(scene: EditorScene, target: Target, tim
   if (!target.isTemporary && target.keyframeId === null) {
     return resolveCurrentPatch(scene.decors[target.writeDecorId!] ?? { id: target.writeDecorId! }, content)
   }
+  // Temporary targets: between two KFs, or on an inherited bound (after the last KF for an outro,
+  // before the first one for an intro). The base is the cascade the item shows there.
   const alignment = resolveDecorationKeyframeAlignment(item, timeMs)
-  return alignment.kind === 'between'
-    ? resolveEffectiveKeyframePatch(scene, item, alignment.prevKeyframeId, content)
-    : resolveCurrentPatch(scene.decors[item.initialDecorId] ?? { id: item.initialDecorId }, content)
+  if (alignment.kind === 'between') return resolveEffectiveKeyframePatch(scene, item, alignment.prevKeyframeId, content)
+  if (alignment.kind === 'after-last') return resolveEffectiveKeyframePatch(scene, item, alignment.keyframeId, content)
+  return resolveCurrentPatch(scene.decors[item.initialDecorId] ?? { id: item.initialDecorId }, content)
 }

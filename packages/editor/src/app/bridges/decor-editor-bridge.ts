@@ -83,6 +83,7 @@ import { resolveContentInsetsPx, type FrameBorderInsetsPx } from '../../motion-e
 import { OVERLAY_LAYERS } from '../config/overlay-layers'
 
 import type { Target } from './decor-edit/decor-target'
+import { inheritedBoundAt } from '../../scene-bounds/scene-bounds'
 import { resolveDecorationKeyframeAlignment, resolveKeyframeAlignment, resolveTarget, sortPoseKeyframes } from './decor-edit/decor-target'
 import {
   itemUsesZonePlacement,
@@ -268,7 +269,9 @@ export function createDecorEditorBridge(
     const item = scene.items.find(candidate => candidate.id === itemId)
     if (item === undefined) return null
     const alignment = resolveDecorationKeyframeAlignment(item, timeMs)
-    if (alignment.kind !== 'between' || item.keyframes.some(keyframe => keyframe.timeMs === timeMs)) return null
+    const bound = inheritedBoundAt(scene, itemId, timeMs)
+    if (item.keyframes.some(keyframe => keyframe.timeMs === timeMs)) return null
+    if (alignment.kind !== 'between' && bound === undefined) return null
     if (state === undefined || state.modifications.size === 0) return null
     const patch = modificationsToDecorPatch(state.modifications)
     const decorArgs = patchToDecorArgs(patch)
@@ -278,7 +281,7 @@ export function createDecorEditorBridge(
     return {
       keyframeId,
       commands: [
-        { name: 'createNamedKeyframe', args: { itemId, keyframeId, timeMs, decorId, channel: 'decor' } },
+        { name: 'createNamedKeyframe', args: { itemId, keyframeId, timeMs, decorId, channel: 'decor', ...linkedBoundArgs(bound) } },
         { name: 'setDecor', args: { decorId, patch: decorArgs } },
       ],
     }
@@ -1307,7 +1310,7 @@ export function createDecorEditorBridge(
     // is the current author playhead; the provisional 500 ms value belongs to a future
     // transition-window resolver and must never shift this keyframe's time.
     const alignment = resolveKeyframeAlignment(item, lastKnownTimelineMs)
-    if (alignment.kind !== 'between') return null
+    if (alignment.kind !== 'between' && sourceTarget.bound === undefined) return null
     const targetTimeMs = Math.max(0, Math.min(lastKnownTimelineMs, scene.meta.durationMs))
     if (item.keyframes.some((keyframe) => keyframe.timeMs === targetTimeMs)) return null
 
@@ -1324,7 +1327,7 @@ export function createDecorEditorBridge(
     const targetKeyframeId = createId('kf')
     const targetDecorId = createId('decor')
     const commands: Command[] = [
-      { name: 'createNamedKeyframe', args: { itemId: item.id, keyframeId: targetKeyframeId, timeMs: targetTimeMs, decorId: targetDecorId, channel: 'pose' } },
+      { name: 'createNamedKeyframe', args: { itemId: item.id, keyframeId: targetKeyframeId, timeMs: targetTimeMs, decorId: targetDecorId, channel: 'pose', ...linkedBoundArgs(sourceTarget.bound) } },
       { name: 'setDecor', args: { decorId: targetDecorId, patch: targetPatch } },
       ...splitCommands,
     ]
@@ -1424,7 +1427,7 @@ export function createDecorEditorBridge(
     if (beforeTarget.isTemporary) {
       const targetTime = Math.max(0, Math.min(lastKnownTimelineMs, beforeScene.meta.durationMs))
       const hasPoseChain = sortPoseKeyframes(beforeItem).length > 0
-      if ((hasPoseChain && resolveKeyframeAlignment(beforeItem, lastKnownTimelineMs).kind !== 'between')
+      if ((hasPoseChain && beforeTarget.bound === undefined && resolveKeyframeAlignment(beforeItem, lastKnownTimelineMs).kind !== 'between')
         || beforeItem.keyframes.some((keyframe) => keyframe.timeMs === targetTime)) {
         cancelZoneMovePreview(sourceFrame)
         return false
@@ -1470,7 +1473,7 @@ export function createDecorEditorBridge(
       commands.push(...buildDecorCommands(scene, target, patch))
     } else if (target.isTemporary) {
       const alignment = resolveKeyframeAlignment(item, lastKnownTimelineMs)
-      if (alignment.kind !== 'between' && sortPoseKeyframes(item).length > 0) {
+      if (alignment.kind !== 'between' && target.bound === undefined && sortPoseKeyframes(item).length > 0) {
         cancelZoneMovePreview(sourceFrame, false)
         return false
       }
@@ -1483,7 +1486,7 @@ export function createDecorEditorBridge(
       const createdDecorId = createId('decor')
       commands.push({
         name: 'createNamedKeyframe',
-        args: { itemId: item.id, keyframeId: createdKeyframeId, timeMs: targetTimeMs, decorId: createdDecorId, channel: 'pose' },
+        args: { itemId: item.id, keyframeId: createdKeyframeId, timeMs: targetTimeMs, decorId: createdDecorId, channel: 'pose', ...linkedBoundArgs(target.bound) },
       })
       commands.push(...buildDecorCommands(scene, {
         ...target,
@@ -1569,7 +1572,7 @@ export function createDecorEditorBridge(
       ))
     } else if (target.isTemporary) {
       const alignment = resolveKeyframeAlignment(item, lastKnownTimelineMs)
-      if (alignment.kind !== 'between') return
+      if (alignment.kind !== 'between' && target.bound === undefined) return
       targetTimeMs = Math.max(0, Math.min(lastKnownTimelineMs, scene.meta.durationMs))
       if (item.keyframes.some((keyframe) => keyframe.timeMs === targetTimeMs)) return
       createdKeyframeId = createId('kf')
@@ -1577,7 +1580,7 @@ export function createDecorEditorBridge(
       const decorPatch = patchToDecorArgs(commitPatch)
       if (decorPatch === null) return
       commands = [
-        { name: 'createNamedKeyframe', args: { itemId: item.id, keyframeId: createdKeyframeId, timeMs: targetTimeMs, decorId: createdDecorId, channel: 'pose' } },
+        { name: 'createNamedKeyframe', args: { itemId: item.id, keyframeId: createdKeyframeId, timeMs: targetTimeMs, decorId: createdDecorId, channel: 'pose', ...linkedBoundArgs(target.bound) } },
         { name: 'setDecor', args: { decorId: createdDecorId, patch: decorPatch } },
       ]
     } else {
@@ -2501,4 +2504,9 @@ export function createDecorEditorBridge(
       controller.destroy()
     },
   }
+}
+
+/** Marks a keyframe created on an inherited bound as linked to it (B-4); nothing otherwise. */
+function linkedBoundArgs(bound: 'intro' | 'outro' | undefined): { autoBound?: 'intro' | 'outro' } {
+  return bound === undefined ? {} : { autoBound: bound }
 }

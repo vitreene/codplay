@@ -24,7 +24,7 @@ qu’après la revue manuelle et visuelle de l’utilisateur, qui suit ce test.
 | D-B | Entre deux KF de pose, la rotation suit le plus court chemin. Un changement d’orientation entre deux KF ne produit jamais de saut brut de 180°. Les valeurs stockées restent normalisées dans [−180°, 180°). Rotations multi-tours : future option volontaire de l’interface, hors de ce plan. | Acceptée |
 | D-C | Règle de contrat : éditer le décor d’un KF crée un nouveau décor pour porter la modification, dès que le décor attaché n’appartient pas en propre à ce KF (il est aussi utilisé par un autre KF, par le décor initial d’un item ou par `rootDecorId`). Une seule implémentation pour toutes les commandes, en remplacement des trois définitions actuelles (E6). Écart constaté : le pont ne crée pas ce décor quand l’autre utilisation est le décor initial ; un commentaire de code (non spécifié) invoque une exception « le premier KF partage volontairement `initialDecorId` ». **Exception retenue** : le premier KF de pose est toujours l’intro et modifie le décor initial. Elle se limite à ce KF ; aujourd’hui le pont l’applique à tous. Si un autre KF partage aussi ce décor initial, c’est lui qui reçoit d’abord sa copie, pour ne pas changer quand on édite l’intro. | Acceptée |
 | D-E1 | Une exception de commande est un défaut : elle reste un arrêt, mais devient immédiatement visible dans l’interface (commande, message), sans état figé silencieux. Le défaut qui la provoque est corrigé (contrôle non désactivé, validation absente). | Acceptée |
-| D-E2 | `Decor.zoneId` est une référence d’usage : l’item utilise une zone de son parent. Changer de parent libère les références aux zones de l’ancien parent. Après un déplacement dans la timeline, l’item suit le placement logique de la capsule (par ex. une rangée l’attribue selon l’ordre) ; une attribution faite par l’auteur le sort du placement automatique. Ce comportement correspond au modèle de Capsule Automation : placement explicite, ou placement automatique selon l’ordre (politique `auto`/`mixed`), ou zone fantôme pleine surface pour `card` (`explicit-only`). **Manque de contrat** : le document ne sait pas distinguer « automatique » d’« explicite » (`zoneId` absent ou `null` signifie aujourd’hui « surface pleine »), et le repli de `setCapsuleDef` écrit un `zoneId` explicite à chaque enfant. **Représentation retenue pour commencer** : `zoneId` absent = placement automatique par Capsule Automation ; `zoneId` présent = attribution explicite par l’auteur ; la pleine surface reste le comportement `card` (zone fantôme). Le repli de `setCapsuleDef` cesse d’écrire des `zoneId`. La « zone libre » et les autres types de placement pourront avoir leurs propres règles, à ajuster à l’usage. | Acceptée ; à réviser à l’usage |
+| D-E2 | Placement automatique ou explicite dans une capsule. Déplacée dans le [plan Capsules et zones](./2026-11-25-capsules-zones-plan.md), action 4. | Déplacée (2026-11-25) |
 | D-E7 | Le tracé d’une plage conserve les décors des bornes remplacées. | Acceptée |
 | D-B2 | Une capsule est un item avec les mêmes caractéristiques que les autres : ses KF de pose et de décor sont compilés de la même façon, son composant `list` reçoit la même présentation Editor (`createItemComponent`) et son CS suit la même projection, sans branche dédiée dans le pont. | Acceptée |
 | D-NAISS | Un item naît à la tête de lecture. Intro et outro sont toujours des KF ; leur placement est manuel (KF réel, l’item est « locké » sur cette borne) ou automatique (KF virtuel calculé par la distribution de la capsule), sans différence de nature ([spec de distribution](../../authoring/capsule-automation/specs/capsule-distribution-spec.md) §1 et §2 ; matérialisation : [intégration V2](../specs/editor-v2-integration-spec.md#interaction-des-bornes-de-capsule)). À la création, pour tout type d’item (la zone n’est qu’une propriété de placement), l’intro est matérialisée à la tête de lecture, comme la matérialisation d’une borne virtuelle, et l’outro reste en placement automatique ; le décor de l’intro est le décor initial. Avant son intro, l’item n’existe pas. Un geste du cadre de sélection dont la cible est l’état initial (avant l’intro, ou item existant sans KF) écrit le décor initial, comme la palette (D-C ; corrige E12). | Acceptée (24 nov. 2026) |
@@ -440,9 +440,10 @@ fonction ou une classe suffit.
    le temps des segments (B1, D-A) ; recalage de la tête de lecture hors plage
    (D-HORS-PLAGE).
 4. Cycle du player (M5) et états du contrôleur (M8, M9) ; E15 (saut à la première
-   lecture après une correction).
+   lecture après une correction) ; capture de KF différée de la timeline (M6, pas 5
+   de 3d) via un port de la coordination remplaçant `decorPreview`.
 5. Builder : découpage, capsule traitée comme tout item (B2), placement
-   automatique (D-E2), orientations (B3).
+   automatique (D-E2, désormais dans le [plan Capsules et zones](./2026-11-25-capsules-zones-plan.md)), orientations (B3).
 
 Le lot 1 (rotation au plus court chemin, D-B) reste indépendant et peut passer
 avant.
@@ -554,8 +555,8 @@ typecheck, build et Safari MCP, puis attend la revue manuelle.
 | 3a | Lectures uniques : temps des segments (D-A, B1), cascade des couches (G), lecture de la présentation (I), constantes, code mort et démontage (C) | Faite — en attente de revue manuelle |
 | 3b | Extraction : vues (onglets, barre Zone/Bloc, « Placement racine ») vers le layout ; `decor-target`, `frame-projection`, `motion-projection`, `zone-surface-binding` | Faite — en attente de revue manuelle (projections dépendant de l’état de geste reportées en 3d) |
 | 3c | Façade : les `machine.send` du pont Décor deviennent des intentions nommées de `EditorActionsFacade` | Faite — en attente de revue manuelle |
-| 3d | Machine `decorEditSessionMachine` (M1-M4, M6), selon le principe directeur | À faire |
-| 3e | D-HORS-PLAGE : phase « recalage en attente du seek » | À faire, après confirmation du point sur les bornes virtuelles |
+| 3d | Machine `decorEditSessionMachine` (M1-M4, M6), selon le principe directeur ; projections et commits dépendant du geste, reportés de 3b | Pas 1 à 4 faits — en attente de revue manuelle ; pas 5 (M6) reporté en tranche 4 ; reste reporté de 3b non fait (voir « Reste de 3d ») |
+| 3e | D-HORS-PLAGE : phase « recalage en attente du seek » | Repris dans le [plan des bornes](./2026-11-25-bornes-intro-outro-plan.md), action 4 |
 
 **Étape 3a — actions** (aucun changement de comportement atteignable depuis
 l’interface : les transitions personnalisées ne se saisissent pas encore) :
@@ -742,8 +743,7 @@ Ordre (chaque pas garde le comportement, tests et Safari MCP) :
 5. M6 : la capture différée du pont de la timeline (`pendingSnapshotCaptures`)
    passe par la même machine, via un port de la coordination qui remplace
    `decorPreview`.
-   Décision en attente de l’utilisateur : maintenant, ou en tranche 4 avec les
-   autres changements de la coordination.
+   Reporté en tranche 4, avec les autres changements de la coordination (2026-11-25).
 6. 3e : D-HORS-PLAGE — repris dans le [plan des bornes intro/outro](./2026-11-25-bornes-intro-outro-plan.md)
    (B-5, action 4), avec le modèle des bornes dont il dépend. Design initial
    (remplacé par ce plan) :
@@ -810,6 +810,15 @@ Avancement :
   écriture : KF sélectionné par son ghost puis seek, cadre aligné ; cadre masqué
   pendant la lecture et réaligné après Stop ; mode création ouvert puis annulé par
   Échap. Le pont garde 22 `let` : montages, abonnements et projections.
+
+- **Reste de 3d, non fait** (constat du 2026-11-25) : les projections et commits
+  qui lisent l’état du geste, reportés de 3b (« Reportées en 3d ») — segments,
+  ghosts, tangente, preview, commits de geste — sont toujours dans le pont, qui
+  compte 2 512 lignes. Ces commits forment quatre circuits parallèles (édition
+  temporaire de palette, geste de pose, attribution de zone, offset en zone) qui
+  répètent chacun la création du KF à la cible ; la cible « borne héritée » (B-4)
+  a dû être ajoutée aux quatre. La tranche 3 n’est close que lorsque
+  `decor-editor-bridge.ts` ne garde que la composition (découpage cible ci-dessus).
 
 Acceptation à chaque pas : la suite complète, un test de la machine seule par
 région (transitions et frontières), et Safari MCP sur une copie de scène :

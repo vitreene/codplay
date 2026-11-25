@@ -321,6 +321,11 @@ export class SequenceEditorController {
     this.send({ type: 'DRAG.END' })
   }
 
+  /** Locks a linked bound at its current instant (double-click on its handle). */
+  lockKeyframeBound(trackId: string, keyframeId: string): void {
+    this.send({ type: 'KEYFRAME.LOCK_BOUND', trackId, keyframeId })
+  }
+
   renameKeyframe(trackId: string, keyframeId: string, name: string | null): void {
     this.send({ type: 'KEYFRAME.RENAME', trackId, keyframeId, name })
   }

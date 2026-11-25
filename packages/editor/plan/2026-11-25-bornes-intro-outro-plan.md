@@ -49,16 +49,9 @@ la timeline.
      révélés et corrigés : sortie sans valeur de départ après une entrée `cut`
      (existait avec un `cut` explicite) ; capsule imbriquée visible avant son intro.
      **Reste** : Play complet, puis revue manuelle.
-   - **Bornes parentes de la timeline** (`findParentClipBounds`,
-     `getParentClipMarkers`, `sequence-editor/utils.ts`) : elles lisent encore les KF
-     de la capsule parente, pas sa fenêtre résolue (B-11) ; une capsule sans KF borne
-     ses enfants à `[0, durée]`. Concernent le bridage du glisser, la matérialisation
-     et le diamant « hors bornes ». À brancher sur `resolveSceneBounds` (action 3b).
-   - **Non implémenté, décrit par l’ancienne spec de distribution** (à décider, pas
-     un contrat) : bridage du glisser de l’outro d’une capsule à `minDurationMs`
-     (déjà rendu par la résolution) ; `KEYFRAME.CLEAR_CAPSULE` ; snap 2D sensible à la
-     ligne, avec les bornes virtuelles dans la grille de snap ; distinction de couleur
-     entre KF réel et borne virtuelle hors bornes.
+   - Bornes parentes de la timeline et points capsule non implémentés : déplacés
+     dans le [plan Capsules et zones](./2026-11-25-capsules-zones-plan.md)
+     (actions 3 et 5).
    - Écart assumé : un item à un seul KF n’émet plus le `transitionOut` nommé de ce KF
      (son outro est implicite) ; aucune interface ne pose ce cas aujourd’hui.
 
@@ -70,20 +63,27 @@ la timeline.
    SQLite, intégration V2. Reste : aucune commande ne crée encore de KF lié (actions 3
    et 3b) ; validation de cohérence (`autoBound` hors canal `pose`, double marque) non
    faite, faute de cas créé par l’interface.
-3. **Écriture sur une borne héritée (B-4).** Pont Décor (`decor-target`,
-   `setItemDecor`) : une cible sur une borne héritée produit la création du KF lié
-   avec décor propre ; timeline : rendu « hérité » d’une borne liée, verrouillage par
-   glisser/double-clic.
-3b. **Entrée dans une capsule (B-8, B-9).** Commande `attachItem` (et création dans
-   une capsule) : bornes verrouillées converties en bornes liées ; placement spatial
-   dans la zone par défaut. KF intermédiaires recalés à proportion de la nouvelle
-   fenêtre, sauf ceux rattachés à un marqueur. Builder : un KF hors de la fenêtre de
-   son item est ignoré (indisponible) ; timeline : signalé (`seq-kf--out-of-bounds`
-   existe déjà) ; bornes parentes de la timeline branchées sur la fenêtre résolue.
+3. **Écriture sur une borne héritée (B-4). Fait (2026-11-25)**, vérifié par tests
+   (éditeur 620), typecheck et build ; contrat : [intégration V2, « Interaction des
+   bornes »](../specs/editor-v2-integration-spec.md#interaction-des-bornes-de-capsule).
+   Décisions de l’utilisateur : la cible est la borne quand la tête est sur son
+   instant (un clic sur la poignée virtuelle y place la tête et sélectionne l’item) ;
+   une édition de palette crée un KF lié de canal **décor** (la borne reste implicite
+   pour le placement), un geste du cadre le KF lié de pose ; KF lié dessiné plein à
+   contour pointillé, verrouillé par glisser ou double-clic (`lockKeyframeBound`).
+   Safari (2026-11-25, copie « Test bornes (copie) ») : clic sur une borne virtuelle
+   (tête placée, item sélectionné, aucune écriture) ; palette → KF décor lié
+   enregistré ; geste du cadre → promu en KF de pose lié ; double-clic → verrouillé ;
+   Undo/Redo sur ces états ; capsule glissée de 1000 à 1500 ms → entrée liée de B
+   réécrite de 2800 à 3050 ms dans le même commit ; persistance au rechargement.
+   Reste : revue manuelle.
+3b. **Entrée dans une capsule et sortie (B-8, B-9).** Déplacée dans le
+   [plan Capsules et zones](./2026-11-25-capsules-zones-plan.md), action 2.
 4. **D-HORS-PLAGE (B-5).** Coordination : port en lecture de la fenêtre d’un item
    (action 1). Session Décor : état `gesture.relocating` et édition palette retenue
    jusqu’au seek acquitté.
-4b. **Instant en ms des bornes liées = projection (B-15).** Après l’action 4, quand
+4b. **Instant en ms des bornes liées = projection (B-15).** Après l’action 4 et
+   l’action 2 du [plan Capsules et zones](./2026-11-25-capsules-zones-plan.md), quand
    tous les lecteurs d’une borne liée existent. Commencer par un test qui fait bouger
    une capsule sans réécrire les instants liés. Recenser les lecteurs de `timeMs` qui
    peuvent tomber sur un KF lié (au moins : tri des KF de pose, cibles et seeks du pont
