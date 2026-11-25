@@ -8,6 +8,7 @@ import type { EditorScene } from '../commands/types'
 import type { controllerMachine } from '../controller/controller-machine'
 import type { BridgeHandle } from './types'
 import type { EditorCoordinationBridge } from './editor-coordination-bridge'
+import { isSameAuthorTime } from '../config/author-time'
 
 // Temporary until document settings persist a configurable scene aspect ratio.
 const TEMP_SCENE_ASPECT_RATIO = '16 / 9'
@@ -316,7 +317,7 @@ export function createScenePlayerBridge(
     if (
       seekRevision === seekRevisionAtStart &&
       seekResult.ok &&
-      Math.abs(seekResult.progress.timelineMs - authorTimeMs) <= 1
+      isSameAuthorTime(seekResult.progress.timelineMs, authorTimeMs)
     ) {
       machine.send({ type: 'SEEK_APPLIED' })
     }
@@ -390,7 +391,7 @@ export function createScenePlayerBridge(
     // adapted author time would falsely consider the instance aligned and start playback from the
     // pre-roll gap. Compare the runtime coordinate before deciding that no repair seek is needed.
     const expectedPlayerTimeMs = authorTimeMs + activePreRollMs
-    if (currentProgress === null || Math.abs(currentProgress.playerTimeMs - expectedPlayerTimeMs) > 1) {
+    if (currentProgress === null || !isSameAuthorTime(currentProgress.playerTimeMs, expectedPlayerTimeMs)) {
       const seekResult = await coordination.execute({ type: 'seek', timelineMs: authorTimeMs })
       if (
         requestRevision !== playbackRequestRevision
@@ -440,7 +441,7 @@ export function createScenePlayerBridge(
         requestRevision === seekRevision &&
         activeInstance === instanceAtRequest &&
         result.ok &&
-        Math.abs(result.progress.timelineMs - authorTimeMs) <= 1
+        isSameAuthorTime(result.progress.timelineMs, authorTimeMs)
       ) {
         machine.send({ type: 'SEEK_APPLIED' })
       }

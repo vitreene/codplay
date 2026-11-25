@@ -59,7 +59,7 @@ export function resolveKeyframeDecorStyle(
   item: Item,
   keyframe: Keyframe,
 ): Record<string, unknown> {
-  return resolveKeyframeLayers(scene, item, keyframe)
+  return resolveDecorLayers(scene, item, keyframe, 'decoration')
     .reduce<Record<string, unknown>>(
       (style, decor) => ({ ...style, ...resolveDecorChannelStyle(decor) }),
       {},
@@ -134,8 +134,7 @@ export function resolveKeyframePoseStyle(
   item: Item,
   keyframe: Keyframe,
 ): Record<string, unknown> {
-  const pose = resolveKeyframeLayers(scene, item, keyframe)
-    .filter((_decor, index) => index === 0 || resolveKeyframeChannel(resolveLayerKeyframe(item, keyframe, index - 1)) === 'pose')
+  const pose = resolveDecorLayers(scene, item, keyframe, 'pose')
     .reduce<Record<string, unknown>>((style, decor) => {
       const next = { ...style, ...resolvePoseChannelStyle(decor) }
       const offset = decor?.offset
@@ -157,30 +156,29 @@ export function resolveKeyframeOffset(
   item: Item,
   keyframe: Keyframe,
 ): Decor['offset'] {
-  return resolveKeyframeLayers(scene, item, keyframe)
-    .filter((_decor, index) => index === 0 || resolveKeyframeChannel(resolveLayerKeyframe(item, keyframe, index - 1)) === 'pose')
+  return resolveDecorLayers(scene, item, keyframe, 'pose')
     .reduce<Decor['offset']>((offset, decor) => mergeOffsetData(offset, decor?.offset), undefined)
 }
 
-/** Returns the initial decor followed by authored layers through the requested keyframe. */
-function resolveKeyframeLayers(scene: EditorScene, item: Item, keyframe: Keyframe): Array<Decor | undefined> {
+/**
+ * The single cascade of an item at one keyframe: its initial decor, then the decor of every
+ * keyframe up to and including `keyframe`, in temporal order. The `pose` channel keeps only pose
+ * keyframes; `decoration` keeps them all, since a pose keyframe may also carry decoration values.
+ * Each consumer folds these layers in its own representation (compiled style, editor patch).
+ */
+export function resolveDecorLayers(
+  scene: EditorScene,
+  item: Item,
+  keyframe: Keyframe,
+  channel: 'decoration' | 'pose',
+): Array<Decor | undefined> {
   const orderedKeyframes = [...item.keyframes].sort((left, right) => left.timeMs - right.timeMs)
   const keyframeIndex = orderedKeyframes.findIndex((candidate) => candidate.id === keyframe.id)
-  const layers = [scene.decors[item.initialDecorId]]
-  if (keyframeIndex >= 0) {
-    layers.push(...orderedKeyframes.slice(0, keyframeIndex + 1).map((candidate) => scene.decors[candidate.decorId]))
-  } else {
-    layers.push(scene.decors[keyframe.decorId])
-  }
-  return layers
-}
-
-/** Maps a resolved layer index back to its authored keyframe for channel filtering. */
-function resolveLayerKeyframe(item: Item, keyframe: Keyframe, layerIndex: number): Keyframe {
-  const orderedKeyframes = [...item.keyframes].sort((left, right) => left.timeMs - right.timeMs)
-  const keyframeIndex = orderedKeyframes.findIndex((candidate) => candidate.id === keyframe.id)
-  if (keyframeIndex >= 0) return orderedKeyframes[Math.max(0, Math.min(keyframeIndex, layerIndex))]!
-  return keyframe
+  const keyframes = keyframeIndex >= 0 ? orderedKeyframes.slice(0, keyframeIndex + 1) : [keyframe]
+  const layerKeyframes = channel === 'pose'
+    ? keyframes.filter((candidate) => resolveKeyframeChannel(candidate) === 'pose')
+    : keyframes
+  return [scene.decors[item.initialDecorId], ...layerKeyframes.map((candidate) => scene.decors[candidate.decorId])]
 }
 
 /** Resolves the item's initial decor when no keyframe exists yet. */
@@ -199,21 +197,10 @@ export function resolveKeyframeClassName(
   item: Item,
   keyframe: Keyframe,
 ): string | undefined {
-  const orderedKeyframes = [...item.keyframes].sort((left, right) => left.timeMs - right.timeMs)
-  const keyframeIndex = orderedKeyframes.findIndex((candidate) => candidate.id === keyframe.id)
-  const layers = [scene.decors[item.initialDecorId]]
-  if (keyframeIndex >= 0) {
-    layers.push(...orderedKeyframes.slice(0, keyframeIndex + 1).map((candidate) => scene.decors[candidate.decorId]))
-  } else {
-    layers.push(scene.decors[keyframe.decorId])
-  }
-
-  let className: string | undefined
-  for (const decor of layers) {
-    if (decor?.classes === undefined) continue
-    className = normalizeClassName(decor.classes)
-  }
-  return className
+  const classes = resolveDecorLayers(scene, item, keyframe, 'decoration')
+    .filter((decor) => decor?.classes !== undefined)
+    .at(-1)?.classes
+  return normalizeClassName(classes)
 }
 
 /** Resolves the static root decor without introducing an empty style value. */

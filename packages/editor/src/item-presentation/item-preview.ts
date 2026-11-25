@@ -1,17 +1,29 @@
 import { invertMatrix } from 'ace'
 import { selectionFrameLinearTransform, selectionFrameLocalToScene } from '@codplay/selection-frame/v2'
-import type { CodPlayPresentationPose } from 'codplay'
+import type { CodPlayPresentationItem } from 'codplay'
 import type { SelectionFrameValue } from '../decor-editor/types'
 
 export const ITEM_PREVIEW_TRANSFORM_PROPERTY = '--editor-item-preview-transform'
 export const ITEM_PREVIEW_WIDTH_PROPERTY = '--editor-item-preview-width'
 export const ITEM_PREVIEW_HEIGHT_PROPERTY = '--editor-item-preview-height'
 
-/** Projects a displayed frame through the inverse published pose into the item's local preview. */
+/**
+ * Local matrix that makes the item's private anchor show the displayed candidate frame:
+ * `inverse(runtimePose) × displayedFrame`, composed under the frame's runtime pose.
+ *
+ * Only a materialized presentation (`local`, `reparent`) keeps its runtime pose while the preview
+ * changes the snapshot geometry. An item presented in its own source node (`source`, e.g. at the
+ * end of a timed `move`) is placed by that geometry itself: the snapshot already moves its frame,
+ * so a matrix computed against the previous pose would apply the gesture a second time. No matrix
+ * is produced then. jsdom does not recompute the runtime pose, so only a browser shows that double
+ * application; this rule is the contract that prevents it.
+ */
 export function itemPreviewTransform(
-  pose: CodPlayPresentationPose,
+  presented: Pick<CodPlayPresentationItem, 'pose' | 'representation'>,
   frame: SelectionFrameValue,
 ): string | undefined {
+  if (presented.representation === 'source') return undefined
+  const { pose } = presented
   const inverse = invertMatrix({ ...pose.matrix, e: pose.origin.x, f: pose.origin.y })
   if (inverse === null) return undefined
 

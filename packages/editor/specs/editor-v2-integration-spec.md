@@ -18,6 +18,24 @@ Le Selection Frame est un outil d'interaction du `decor-editor`. Le présentateu
 CodPlay V2 reste la source de l'état logique et de la trajectoire. La verticale
 utilise les contrats V2 du player et ne lit ni n'écrit ses nœuds.
 
+## Décor et item
+
+Le décor, côté éditeur, est tout ce que l'auteur règle sur l'item sélectionné :
+chaque champ de la palette et chaque geste du Selection Frame (déplacement,
+taille, rotation, trajectoire, zone). Il est fortement couplé à l'item : on ne
+l'édite jamais sans item, et une modification a un effet immédiat sur l'élément
+présenté, au fil de l'`input` ou du geste, sans étape d'application. Le champ
+Texte fait exception : il applique sa valeur à sa validation (`change`), pas à
+chaque frappe. La palette et
+le cadre sont deux entrées d'un même état et suivent le même circuit : preview,
+puis commit à la frontière d'édition.
+
+Le routage documentaire distingue ensuite ce que l'auteur règle d'un seul
+tenant : les valeurs de décor (style, offset, zone, trajectoire, classes) vont au
+décor du keyframe ou au décor initial ; le contenu réglé depuis la palette
+(`text`, `textAutoSize`) va au `Content` de l'item, fusionné sur ses champs
+existants.
+
 Le Builder traduit `EditorScene` en `SceneDoc` V2. Il délègue la construction
 du document à `SceneDocEditor`, la distribution temporelle à
 `CapsuleDistribution` et la résolution de grilles/placements aux capacités de

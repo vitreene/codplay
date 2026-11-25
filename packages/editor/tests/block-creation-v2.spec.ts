@@ -164,9 +164,10 @@ describe('block creation V2 through Editor commands and player bridge', () => {
       clientHeight: { configurable: true, value: 450 },
     })
     const decorPanel = document.createElement('div')
-    document.body.append(sceneRoot, decorPanel)
+    const capsuleDefinitionHost = document.createElement('div')
+    document.body.append(sceneRoot, decorPanel, capsuleDefinitionHost)
     playerBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, actions)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, actions, { capsuleDefinitionHost })
     await waitTurns()
 
     actions.beginItemCreation('capsule', mode)
@@ -190,7 +191,7 @@ describe('block creation V2 through Editor commands and player bridge', () => {
       },
     })
     expect(actor.getSnapshot().context.selection.itemIds).toEqual([capsule.id])
-    expect(decorPanel.querySelector('#capsule-definition-editor')).not.toBeNull()
+    expect(capsuleDefinitionHost.querySelector('#capsule-definition-editor')).not.toBeNull()
 
     if (mode === 'transform') {
       expect(createdScene.zones).toEqual({})

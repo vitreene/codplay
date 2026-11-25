@@ -242,6 +242,27 @@ puis dans l’historique) :
    un réglage de scène, lié au ratio configurable prévu). Validation : Safari MCP,
    puis revue manuelle.
 
+3. **Saisie directe du texte** (décidé par l’utilisateur le 24 nov. 2026, non
+   appliqué). Objectif : deux entrées de plus sur le même état du décor, avec
+   effet immédiat : (a) saisie du texte directement dans le bloc sur la scène ;
+   (b) champ Texte de la palette synchronisé en direct avec le rendu, à chaque
+   frappe. Existant : le champ Texte de la palette n’applique sa valeur qu’à la
+   validation (`change`, `render.ts`) ; `text` et `textAutoSize` sont routés vers
+   `Content` par `patchToContentArgs` au commit. Prérequis : la machine de session
+   Décor (étape 3d), qui accueille ces événements sans second circuit. À analyser
+   avant de commencer : si la preview V2 (`snapshot.set`, façade V2) sait porter un
+   changement de contenu texte, sans quoi la preview passerait par un autre
+   moyen à décider ; la frontière de commit d’une saisie continue (validation,
+   perte de focus ou Échap, en cohérence avec les frontières existantes) ; la
+   cohabitation de la saisie dans le bloc avec le Selection Frame et ses gestes.
+   Validation : Safari MCP, puis revue manuelle.
+
+4. **Refonte de l’interface Décor** (décidé par l’utilisateur le 25 nov. 2026, non
+   appliqué). L’interface actuelle (palette, onglets, barre Zone/Bloc, réglages
+   racine) est provisoire et doit être revue entièrement. La tranche 3 n’y investit
+   pas : elle sort seulement ces vues du pont et sépare leurs règles d’affichage
+   (`decor-inspector-state.ts`) du rendu, base réutilisable pour la refonte.
+
 Remplacés, rien à reconstruire : `generateSnapPoints` par `computeSnapGrid`,
 `CapsulePatch` par `CapsuleDef`, `placeInZone` et `setRootZonesSurface` par la
 commande de zone du pont et `setZonesSurface({ capsuleId: null })`, les modes
@@ -267,6 +288,25 @@ Laissés volontairement :
 Objectif : réduire `createDecorEditorBridge` (une seule closure d’environ
 3 000 lignes, une quarantaine de variables `let`) à une coordination de
 propriétaires distincts, sans perdre les acquis vérifiés des specs.
+
+**Principe directeur** (utilisateur, 24 nov. 2026 ; décrit dans la
+[spec d’intégration](../specs/editor-v2-integration-spec.md), « Décor et item ») :
+le décor est fortement couplé à l’item. Il comprend tout ce que la palette
+règle et tout ce que les gestes du Selection Frame écrivent, et chaque
+modification a un effet immédiat sur l’item présenté. Conséquences pour la refonte :
+- palette et cadre entrent par les mêmes événements de la machine de session et
+  suivent le même circuit (preview, puis commit à la frontière) ; aucun second
+  chemin d’écriture ;
+- la preview reste synchrone : aucune phase d’attente ne s’intercale entre
+  l’intention de l’auteur et son effet sur l’item (c’est la seule justification
+  de `lastPreviewAccepted` aujourd’hui, que la machine doit rendre explicite sans
+  l’asynchroniser) ; seul le commit est différé à une frontière ;
+- la session est liée à l’item sélectionné (type, contenu, décor cible) : la
+  cible fait partie du contexte de la machine, pas d’une relecture à chaque appel ;
+- le routage vers `Decor` ou `Content` (E13) reste une étape du commit, pas une
+  distinction visible dans la session ; `text` et `textAutoSize` entrent dans la
+  machine par les mêmes événements que les autres champs, pour que la saisie
+  directe du texte (chantier 3, plus bas) n’exige aucun circuit nouveau.
 
 ### Constats à résoudre
 
@@ -399,7 +439,8 @@ fonction ou une classe suffit.
 3. Session Décor et découpage du pont (M1-M4, M6), sur la cascade unique (G) et
    le temps des segments (B1, D-A) ; recalage de la tête de lecture hors plage
    (D-HORS-PLAGE).
-4. Cycle du player (M5) et états du contrôleur (M8, M9).
+4. Cycle du player (M5) et états du contrôleur (M8, M9) ; E15 (saut à la première
+   lecture après une correction).
 5. Builder : découpage, capsule traitée comme tout item (B2), placement
    automatique (D-E2), orientations (B3).
 
@@ -502,6 +543,152 @@ machine apporterait de la lisibilité, sans corriger de défaut constaté. Les g
 de marqueur, de panoramique et de tracé de plage gardent leur surface sans capture :
 à passer par la même session si on les retient.
 
+
+### Tranche 3 — exécution (En cours)
+
+Cinq étapes livrées séparément ; chacune garde le comportement, passe tests,
+typecheck, build et Safari MCP, puis attend la revue manuelle.
+
+| Étape | Contenu | Statut |
+| --- | --- | --- |
+| 3a | Lectures uniques : temps des segments (D-A, B1), cascade des couches (G), lecture de la présentation (I), constantes, code mort et démontage (C) | Faite — en attente de revue manuelle |
+| 3b | Extraction : vues (onglets, barre Zone/Bloc, « Placement racine ») vers le layout ; `decor-target`, `frame-projection`, `motion-projection`, `zone-surface-binding` | Faite — en attente de revue manuelle (projections dépendant de l’état de geste reportées en 3d) |
+| 3c | Façade : les `machine.send` du pont Décor deviennent des intentions nommées de `EditorActionsFacade` | Faite — en attente de revue manuelle |
+| 3d | Machine `decorEditSessionMachine` (M1-M4, M6), selon le principe directeur | À faire |
+| 3e | D-HORS-PLAGE : phase « recalage en attente du seek » | À faire, après confirmation du point sur les bornes virtuelles |
+
+**Étape 3a — actions** (aucun changement de comportement atteignable depuis
+l’interface : les transitions personnalisées ne se saisissent pas encore) :
+
+1. **Temps des segments (D-A, B1).** Existant : `resolveKeyframeTransition`
+   (`builder-v2/keyframe-transition.ts`) pour les segments droits ; pour un segment
+   à chemin (`decor.path` du KF d’arrivée, ou chemin droit implicite en mode
+   tangente), `build-scene.ts` démarre au KF source et dure tout l’intervalle. Le
+   pont recalcule une progression sur tout l’intervalle avec sa propre copie de
+   l’easing (`resolveMotionEasing`, trois appels). Action : `keyframe-transition.ts`
+   expose `resolveSegmentTiming(scene, item, source, destination)` (début, durée,
+   easing, chemin oui/non, selon la règle actuelle du Builder) et
+   `resolveSegmentProgress(timing, timeMs)` ; `build-scene.ts` et le pont les
+   consomment ; `resolveMotionEasing` et les trois calculs locaux disparaissent.
+2. **Cascade des couches (G).** Existant : `resolveKeyframeLayers` et
+   `resolveLayerKeyframe` (Builder) ; `resolveEffectiveKeyframePatch` et
+   `resolveEffectivePosePatch` (pont) choisissent leurs couches autrement (KF
+   strictement antérieurs en temps, au lieu de l’ordre trié jusqu’au KF). Action :
+   `decor-resolution.ts` expose une seule sélection des couches par canal
+   (`decoration` : toutes les couches ; `pose` : décor initial et KF de pose) ; le
+   Builder (style, offset, classes) et le pont l’utilisent. Chaque consommateur
+   garde sa représentation : style compilé pour le Builder, `DecorPatch` pour la
+   palette et le cadre. Seul écart corrigé : deux KF au même instant suivent l’ordre
+   du Builder, donc la palette montre ce que le player présente.
+3. **Lecture de la présentation (I).** Nouveau `app/bridges/presentation-reading.ts`,
+   partagé par le pont Décor et `scene-selection` : état d’un item dans le
+   snapshot, valeurs logiques (longueur, nombre, couleur, `transform-origin`), id
+   runtime `${EDITOR_V2_STORY_ID}:${id}`. Remplace `snapshotState`,
+   `formatSnapshotValue`, `readLogicalLength`, `readNumber`, le `parseCqw` local de
+   `resolveTemporaryOffset` et les 9 reconstructions de l’id.
+4. **Constantes (`app/config/`).** `AUTHOR_TIME_TOLERANCE_MS = 1` avec
+   `isSameAuthorTime(a, b)` (18 comparaisons dans les ponts, la façade player et la
+   timeline) ; couches de superposition (1050, 1101, 1160, 1161) ; taille minimale
+   du cadre (4 px).
+5. **Code mort et démontage (C).** Retirer `patchDiffersFromBase` (tests migrés vers
+   `modificationsFromDecorPatch`), le paramètre `snapshot` inutile de
+   `resolveKeyframeInsertionPatch`, les doublons `resolveDecorEditBase` /
+   `resolveDocumentDecorBase` et les branches identiques de `syncSelection`, les
+   commentaires périmés. `destroy()` appelle le démontage du Selection Frame
+   (`unmountSelectionFrame`, qui détruit aussi `zoneEditor` et désabonne
+   `machine.subscribe`) au lieu d’en recopier une partie. `onPathActivate` reste :
+   point d’entrée de la sélection du tracé, à construire.
+
+**Acceptation 3a** : tests ciblés (timing : segment droit, à chemin, mode tangente,
+transition plus courte que l’intervalle et `before` ; couches : la valeur de palette
+à chaque KF égale l’extrémité compilée, y compris deux KF au même instant ;
+démontage : plus d’abonnement ni de `zoneEditor` après `destroy()`), suite complète,
+typecheck, build ; Safari MCP sur une scène de test : édition palette sur un KF et
+entre deux KF, déplacement au cadre sur un segment droit et sur un segment à chemin
+(ghosts, tangente), rotation, puis Undo/Redo, Seek, Play et rechargement.
+
+**Étape 3a — résultat** (617 tests verts, typecheck et build propres) :
+- `keyframe-transition.ts` : `resolveSegmentMotionPath`, `resolveSegmentTiming`,
+  `resolveSegmentProgress` ; le Builder (chemin et horloge du `move`) et le pont
+  (découpe du tracé, tangente, angle au début du geste) les consomment ;
+  `resolveMotionEasing` est retiré. Reste de B1, laissé au chantier des transitions
+  (seul à le rendre atteignable) : dans un segment à chemin, les tweens de style
+  démarrent au KF source avec la durée de la fenêtre de transition.
+- `decor-resolution.ts` : `resolveDecorLayers(scene, item, keyframe, canal)`, seule
+  sélection des couches, utilisée par le style, l’offset et les classes du Builder et
+  par `resolveEffectiveKeyframePatch` / `resolveEffectivePosePatch` du pont.
+- `app/bridges/presentation-reading.ts` (id runtime, entrée présentée au bon temps,
+  état et style du snapshot, longueurs, nombres, `transform-origin`, formatage) ;
+  `app/config/author-time.ts` (`isSameAuthorTime`, 18 comparaisons) ;
+  `app/config/overlay-layers.ts` ; `MIN_FRAME_SIZE_PX`.
+- Code mort retiré (`patchDiffersFromBase`, paramètre `snapshot`, branches
+  identiques) ; `resolveDecorEditBase` = base documentaire + état présenté ;
+  `destroy()` et le changement d’hôte passent par `unmountSelectionFrame()`.
+- Tests : `builder-v2/segment-timing.spec.ts`, `builder-v2/decor-cascade.spec.ts`
+  (accord palette/Builder à chaque KF, deux KF au même instant), démontage dans
+  `decor-editor-bridge-integration-v2.spec.ts` (échoue avec l’ancien démontage).
+- Safari MCP, copie de « Rotation — scène neuve » supprimée ensuite : cadre aligné
+  sur l’item (segment droit, segments à chemin) ; palette entre deux KF → KF décor
+  ne portant que l’épaisseur ; déplacement sur un KF, et entre deux KF d’un segment
+  à chemin (KF créé, chemin découpé) ; rotation à l’intro (décor initial) ; Undo,
+  Redo, Play, Pause, Seek sans écriture ; rechargement conservé.
+- **Écart constaté, antérieur à 3a** : sur « Départ décalé » (mode tangente, KF de
+  fin avec `rotationOrigin` 0,79/0,31 et hauteur différente), entre les KF le centre
+  du cadre s’écarte de l’item (9 px à 3 s, 23 px à 4,2 s), à taille égale. Le même
+  écart apparaît avec l’ancien lecteur du snapshot ; horloge et cascade sont
+  inchangées pour ce segment. Piste : interpolation de l’origine de rotation dans la
+  projection du cadre. À analyser avec `frame-projection` (3b).
+- Specs à consolider après la revue manuelle : horloge des segments et cascade
+  unique (spec d’intégration, « Autorité temporelle » et « Données et projection »).
+
+**Étape 3b — avancement** (622 tests verts, typecheck et build propres) :
+- Fonctions de module du pont réparties dans `app/bridges/decor-edit/` :
+  `decor-target.ts` (cible, alignement), `decor-patches.ts` (cascade, patches du
+  snapshot, insertion, lecture des zones), `decor-commands.ts` (commandes
+  d’écriture), `frame-delta.ts` (géométrie des gestes du cadre). Les tests importent
+  ces modules ; pas de baril.
+- Vues retirées du pont : `DecorEditorRegion` possède la barre Zone/Bloc
+  (`decor-inspector/authoring-tools.tsx`), les onglets Décor / Capsule-Scène, les
+  réglages « Placement racine » (`decor-inspector/root-settings.tsx`) et les hôtes
+  où le pont monte la palette et l’éditeur `CapsuleDef`. Règles d’affichage pures
+  dans `decor-inspector/decor-inspector-state.ts` (testées) ; actions par la façade
+  (`setAuthoringMode`, `toggleOffsetGesture`, `toggleZonesInBlockMode`,
+  `toggleZonesVisible`, `setRootPlacementMode`). L’onglet affiché est un état de la
+  région, transmis au pont par `setInspectorPanel` (visibilité de la grille de
+  zones) ; verrouillage lu sur l’état `playing`/`creating` du contrôleur (M4 pour
+  ces vues).
+- Safari MCP, sans écriture : onglet « Scène » et réglages racine sans sélection,
+  palette pour un item, bascule Zone/Bloc, outils verrouillés pendant la lecture.
+  Non vérifié faute de capsule dans la scène : onglet « Capsule » et grille de
+  zones de la capsule ; l’utilisateur fera une série de tests sur les capsules après
+  ce plan (les défauts corrigés ici les empêchaient jusqu’à présent).
+- `decor-edit/zone-surface-binding.ts` : classe `ZoneSurfaceBinding` (Zone Editor,
+  état, visibilité, commits, sélection) avec ports explicites ; `activeZoneCapsuleId`
+  et `hasZoneSurface` en fonctions pures. Safari MCP (copie en grille fine, supprimée
+  ensuite) : en mode Zone, grille, zones et libellés visibles et éditables ; en mode
+  Bloc, masqués et inertes ; aucune écriture.
+- `decor-edit/frame-projection.ts` (cadre logique, pixels, patch d’offset) et
+  `decor-edit/motion-projection.ts` (paire de KF du geste, `ActiveMotion`, commandes
+  de chemin) : fonctions sans état de la closure ; `resolveDocumentDecorBase` rejoint
+  `decor-patches.ts`. Pont : 3 524 → 2 560 lignes.
+- Reportées en 3d : les projections qui lisent l’état du geste (`displayFramePx`,
+  `authorFramePx`, insets, `activeMotion`, temps auteur : segments et ghosts,
+  tangente, preview, commits de geste). Les extraire avant la machine figerait des
+  signatures que la machine remplacera.
+- Safari MCP après extraction (copie supprimée ensuite) : déplacements alignés au KF1
+  et au KF2 pendant et après le geste, palette écrite dans le décor initial, lecture.
+
+**Étape 3c — résultat** (625 tests verts, typecheck et build propres) : le pont Décor
+et `ZoneSurfaceBinding` n’envoient plus aucun événement brut au contrôleur.
+Opérations nommées de `EditorActionsFacade` : `commitDecorEdit` (une édition Décor,
+une étape Undo), `abortDecorEdit`, `setCapsuleDef`, `setItemRotationMode`,
+`setZonesSurface`, `selectZone` ; la sélection d’un KF avec seek est une seule
+fonction du pont (`selectKeyframeAt` : façade + `requestAuthorSeek` de la
+coordination). La façade devient un paramètre obligatoire du pont ; les tests la
+fournissent. Test : `tests/app/editor-actions-decor.spec.ts`. Safari MCP (copie
+supprimée ensuite) : déplacement, palette, deux Undo revenant à l’état initial.
+Restent hors 3c : 5 envois de la coordination, 2 du pont player, 2 du pont de la
+timeline (transport et cycle de vie : tranche 4).
 
 ### Machines d’état implicites à déclarer
 
@@ -669,6 +856,45 @@ réordonnancement des pistes).
   (scène de test supprimée ensuite, en attente de revue manuelle) : texte créé, puis
   modifié et « Auto » activé, « Modèle auteur sauvegardé dans SQLite. », contenu
   persisté `{ id, type, text, textAutoSize }`.
+
+- **E14 — Au KF de fin d’un segment à chemin, le geste du cadre déplace l’item deux
+  fois** (relevé par l’utilisateur sur « Nouveau texte », KF2 ; corrigé, en attente de
+  revue manuelle). Régression déjà corrigée plusieurs fois : le test d’intégration
+  exigeait la matrice en `source` et passait, car jsdom ne recalcule pas la pose
+  runtime ; seul le navigateur montrait le double déplacement. Pendant un déplacement ou une rotation, le cadre suit le
+  pointeur mais l’item bouge du double ; le commit au `pointerup` réaligne tout.
+  Cause : à la fin d’un `move`, CodPlay présente l’item en représentation `source`,
+  dans son nœud structurel, dont la pose suit les coordonnées du snapshot (`x`, `y`,
+  `rotate`…). La preview envoie à la fois ces coordonnées (le cadre bouge) et la
+  matrice `inverse(poseRuntime) × cadreAffiché` calculée contre la pose d’avant
+  (l’ancre rebouge du même delta). En représentation `local` (rendu par le
+  matérialiseur du `move`), le snapshot ne déplace pas le cadre et la matrice porte
+  seule le candidat : aucun défaut. La spec de présentation (« Présentation et
+  preview ») suppose une pose runtime inchangée par la preview ; ce n’est vrai qu’en
+  `local`. Preuve (Safari MCP, copie de la scène supprimée ensuite) : écart cadre/item
+  de 20 px par pas de 20 px en `source` au KF2, nul en `local` au KF1 et entre les KF ;
+  sans la matrice en `source`, déplacement et rotation restent alignés pendant le
+  geste. Correction : `itemPreviewTransform` (`item-presentation/item-preview.ts`)
+  reçoit l’item présenté et porte seul la règle (aucune matrice en `source`) ; spec
+  de présentation amendée (« Présentation et preview »). Tests : la règle par
+  représentation (`item-component.spec.ts`), et les patches de preview en `source`
+  sans matrice pour la rotation, le déplacement et le redimensionnement
+  (`decor-editor-bridge-integration-v2.spec.ts`). Safari MCP sur une copie de la scène
+  (supprimée ensuite) : au KF2, déplacement, rotation et redimensionnement alignés à
+  chaque pas du geste ; au KF1 (`local`), déplacement aligné.
+
+- **E15 — « Manuel » saute à la première lecture qui suit une correction**
+  (relevé par l’utilisateur, fréquent, non reproduit). L’item n’est pas touché ;
+  les lectures suivantes sont justes. Non reproduit dans Safari MCP (trajectoires
+  de quatre items enregistrées image par image, première et deuxième lecture
+  comparées, écart ≤ 1 px) : après rechargement ; après une édition, Stop puis
+  lecture. Le cas « lecture lancée aussitôt après le geste, reconstruction en
+  cours » n’a pas pu être mesuré jusqu’au bout. Piste principale : le cycle
+  implicite de l’instance player (M5 : `rebuildInFlight`, `pendingPlayRequest`,
+  sonde des défauts CSS sur une occurrence native) quand Play arrive pendant la
+  reconstruction ; défaut dépendant du timing, cohérent avec son caractère rare.
+  À instrumenter et à fermer avec la machine de cycle de scène (tranche 4), dont
+  les transitions rendent cet ordre explicite.
 
 ### Duplications et code mort
 

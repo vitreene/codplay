@@ -1,12 +1,15 @@
 import type { Actor } from 'xstate'
 import { SequenceEditorController } from '../../sequence-editor/controller'
 import { mountSequenceEditor } from '../../sequence-editor/mount'
-import { resolveKeyframeAlignment, resolveKeyframeInsertionPatch, patchToDecorArgs } from './decor-editor-bridge'
+import { resolveKeyframeAlignment } from './decor-edit/decor-target'
+import { resolveKeyframeInsertionPatch } from './decor-edit/decor-patches'
+import { patchToDecorArgs } from './decor-edit/decor-commands'
 import type { controllerMachine } from '../controller/controller-machine'
 import type { Command } from '../controller/types'
 import type { BridgeHandle } from './types'
 import { createId } from '../commands/ids'
 import type { EditorCoordinationBridge, EditorDecorPreviewCandidate } from './editor-coordination-bridge'
+import { isSameAuthorTime } from '../config/author-time'
 
 /**
  * Pont `sequenceEditor` — `specs/editor-v2-integration-spec.md`. Module de câblage
@@ -49,12 +52,12 @@ export function createSequenceEditorBridge(
     const progress = coordination.transport.getProgress()
     const snapshot = coordination.snapshot.get()
     return progress !== null
-      && Math.abs(progress.timelineMs - timeMs) <= 1
+      && isSameAuthorTime(progress.timelineMs, timeMs)
       && snapshot !== null
       // `snapshot.timeMs` and `progress.playerTimeMs` share the player reference (the latter is
       // deliberately kept on the facade result); this check also rejects a stale snapshot whose
       // author progress happened to be updated first.
-      && Math.abs(snapshot.timeMs - progress.playerTimeMs) <= 1
+      && isSameAuthorTime(snapshot.timeMs, progress.playerTimeMs)
   }
 
   /** Defers an insertion until the seek acknowledgement has made its target snapshot readable. */
@@ -126,7 +129,7 @@ export function createSequenceEditorBridge(
     if (!scene || !item || item.type === 'bloc') return [command]
     const content = item.contentId ? scene.contents[item.contentId] : undefined
     const candidate = coordination.decorPreview.getForKeyframe(itemId, timeMs)
-    const patch = resolveKeyframeInsertionPatch(scene, item, timeMs, content, coordination.snapshot.get(), candidate?.patch)
+    const patch = resolveKeyframeInsertionPatch(scene, item, timeMs, content, candidate?.patch)
     if (patch === null) {
       captures.push({ itemId, keyframeId, candidate, persisted: false })
       return [command]

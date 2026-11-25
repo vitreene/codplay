@@ -122,6 +122,17 @@ translations et ses contributions linéaires. Le composant consomme ces champs
 privés avant de déléguer le style au composant natif. `snapshot.clear` retire la
 matrice et les dimensions de preview et restaure la projection CSS normale.
 
+Cette composition suppose une pose runtime que la preview ne déplace pas : c'est
+le cas d'une présentation matérialisée (`local`, `reparent`), où le `move` possède
+la trajectoire. Un item présenté dans son propre nœud (`source`, par exemple à la
+fin d'un `move` temporisé) est placé par la géométrie du snapshot elle-même : le
+patch de preview déplace déjà son cadre, et une matrice calculée contre la pose
+précédente appliquerait le geste une seconde fois. Dans ce cas, la preview ne porte
+que la géométrie complète du candidat, sans matrice d'ancre. `itemPreviewTransform`
+(`src/item-presentation/item-preview.ts`) porte seul cette règle. jsdom ne recalcule
+pas la pose runtime : les tests vérifient donc la règle sur le patch, et le parcours
+navigateur vérifie l'alignement du cadre et de l'item pendant le geste.
+
 Le champ `affineProjection` et ses opérations géométriques sont décrits dans la
 [spécification Selection Frame V2](../../authoring/selection-frame/specs/selection-frame-v2-spec.md).
 

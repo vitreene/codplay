@@ -1,6 +1,6 @@
 import type { Actor } from 'xstate'
 import { invertMatrix } from 'ace'
-import { EDITOR_V2_STORY_ID } from '../../builder-v2/types'
+import { documentItemId } from './presentation-reading'
 import type { EditorPlayerPresentationFrame } from '../commands/editor-player-command-facade'
 import type { EditorCoordinationBridge } from './editor-coordination-bridge'
 import type { controllerMachine } from '../controller/controller-machine'
@@ -12,8 +12,7 @@ type SceneSelectionCoordination = Pick<EditorCoordinationBridge, 'getSceneHost' 
 function resolveClickedItemId(target: Element, sceneItemIds: ReadonlySet<string>): string | null {
   const runtimeId = target.closest('[data-item-id]')?.getAttribute('data-item-id')
   if (runtimeId === undefined || runtimeId === null || runtimeId === '') return null
-  const prefix = `${EDITOR_V2_STORY_ID}:`
-  const itemId = runtimeId.startsWith(prefix) ? runtimeId.slice(prefix.length) : runtimeId
+  const itemId = documentItemId(runtimeId) ?? runtimeId
   return sceneItemIds.has(itemId) ? itemId : null
 }
 
@@ -35,17 +34,15 @@ function resolvePresentedItemId(
     x: (clientX - bounds.left) * width / bounds.width,
     y: (clientY - bounds.top) * height / bounds.height,
   }
-  const itemIdPrefix = `${EDITOR_V2_STORY_ID}:`
-  const hits = presentation.items.flatMap(({ itemId, pose }) => {
-    if (!itemId.startsWith(itemIdPrefix)
-      || !sceneItemIds.has(itemId.slice(itemIdPrefix.length))
-      || pose.localWidth <= 0 || pose.localHeight <= 0) return []
+  const hits = presentation.items.flatMap(({ itemId: runtimeId, pose }) => {
+    const itemId = documentItemId(runtimeId)
+    if (itemId === null || !sceneItemIds.has(itemId) || pose.localWidth <= 0 || pose.localHeight <= 0) return []
     const inverse = invertMatrix({ ...pose.matrix, e: pose.origin.x, f: pose.origin.y })
     if (inverse === null) return []
     const localX = inverse.a * point.x + inverse.c * point.y + inverse.e
     const localY = inverse.b * point.x + inverse.d * point.y + inverse.f
     return localX >= 0 && localX <= pose.localWidth && localY >= 0 && localY <= pose.localHeight
-      ? [itemId.slice(itemIdPrefix.length)]
+      ? [itemId]
       : []
   })
   return hits.length === 1 ? hits[0] ?? null : null

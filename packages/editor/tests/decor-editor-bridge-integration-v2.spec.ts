@@ -255,7 +255,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const panel = document.createElement('div')
     document.body.append(sceneRoot, panel)
     sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(panel, actor, coordination)
+    decorBridge = createDecorEditorBridge(panel, actor, coordination, new EditorActionsFacade(actor))
     await waitTurns(24)
     actions.selectItem(['item'], 'first-kf')
     actor.send({ type: 'SEEK', timelineMs: 0 })
@@ -336,7 +336,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const decorPanel = document.createElement('div')
     document.body.append(sceneRoot, decorPanel)
     sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, new EditorActionsFacade(actor))
     await waitTurns(24)
 
     actor.send({ type: 'SEEK', timelineMs: 0 })
@@ -409,7 +409,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const decorPanel = document.createElement('div')
     document.body.append(sceneRoot, decorPanel)
     sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, new EditorActionsFacade(actor))
     await waitTurns()
 
     actor.send({ type: 'SELECT_ITEM', itemIds: ['item'] })
@@ -491,7 +491,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const decorPanel = document.createElement('div')
     document.body.append(sceneRoot, decorPanel)
     sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, new EditorActionsFacade(actor))
     await waitTurns()
 
     actor.send({ type: 'SELECT_ITEM', itemIds: ['item'] })
@@ -595,7 +595,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const panel = document.createElement('div')
     document.body.append(sceneRoot, panel)
     sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(panel, actor, coordination)
+    decorBridge = createDecorEditorBridge(panel, actor, coordination, new EditorActionsFacade(actor))
     await waitTurns(24)
     actor.send({ type: 'SELECT_ITEM', itemIds: ['item'], keyframeId: 'middle-kf' })
     actor.send({ type: 'SEEK', timelineMs: 2500 })
@@ -626,9 +626,11 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     for (const property of ['width', 'height', 'scaleX', 'scaleY', 'transform-origin']) {
       expect(previewStyle).toHaveProperty(property)
     }
-    expect(previewStyle?.['--editor-item-preview-transform']).toEqual(expect.stringMatching(/^matrix\(/))
+    // In its source node, the item is placed by the snapshot geometry itself. An anchor matrix,
+    // computed against the pose before the preview, would apply the rotation a second time in a
+    // browser; jsdom does not recompute that pose, so the contract is checked on the patch.
+    expect(previewStyle).not.toHaveProperty('--editor-item-preview-transform')
     expect(readTransformRotationDegrees(native.parentElement!.parentElement!)).toBe(57)
-    // jsdom does not materialize the authored CSS transform into the presented pose matrix.
     // The affine rotation needle is covered independently by the V2 Selection Frame test.
     expect(current.decors.middle!.offset?.rotate).toBe(57)
     expect(current.decors.middle!.offset?.scale).toEqual({ x: 1.4, y: 0.7 })
@@ -668,7 +670,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const decorPanel = document.createElement('div')
     document.body.append(sceneRoot, decorPanel)
     sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, new EditorActionsFacade(actor))
     await waitTurns(24)
 
     const angle = 35 * Math.PI / 180
@@ -724,6 +726,8 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const previewStyle = snapshotPreviews.at(-1)?.[0]?.state.style
     expect(previewStyle?.x).toBeCloseTo(55)
     expect(previewStyle?.y).toBeCloseTo(53.75)
+    // Placed by its own snapshot geometry: no anchor matrix may repeat the move.
+    expect(previewStyle).not.toHaveProperty('--editor-item-preview-transform')
 
     frame.dispatchEvent(pointerEvent('pointercancel', 200, 190))
     await waitTurns(24)
@@ -739,6 +743,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     expect(resizeStyle?.height).toBeCloseTo(20 + heightDelta / 8)
     expect(resizeStyle?.x).toBeCloseTo(50 - Math.sin(angle) * heightDelta / 8)
     expect(resizeStyle?.y).toBeCloseTo(50 + (Math.cos(angle) - 1) * heightDelta / 8)
+    expect(resizeStyle).not.toHaveProperty('--editor-item-preview-transform')
     expect(actor.getSnapshot().context.scene).toBe(documentScene)
 
     southHandle.dispatchEvent(pointerEvent('pointerup', 160, 180))
@@ -781,7 +786,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const decorPanel = document.createElement('div')
     document.body.append(sceneRoot, decorPanel)
     sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, new EditorActionsFacade(actor))
     await waitTurns(24)
 
     actor.send({ type: 'SELECT_ITEM', itemIds: ['item'], keyframeId: 'last-kf' })
@@ -883,7 +888,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const decorPanel = document.createElement('div')
     document.body.append(sceneRoot, decorPanel)
     sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, new EditorActionsFacade(actor))
     await waitTurns(24)
 
     actor.send({ type: 'SEEK', timelineMs: 800 })
@@ -1000,7 +1005,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const decorPanel = document.createElement('div')
     document.body.append(sceneRoot, decorPanel)
     sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, new EditorActionsFacade(actor))
     await waitTurns(24)
 
     /** Reads persistent route geometry while excluding the moving selected frame. */
@@ -1064,7 +1069,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const decorPanel = document.createElement('div')
     document.body.append(sceneRoot, decorPanel)
     sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, new EditorActionsFacade(actor))
     await waitTurns(24)
 
     const tangentAngle = 35 * Math.PI / 180
@@ -1164,7 +1169,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const decorPanel = document.createElement('div')
     document.body.append(sceneRoot, decorPanel)
     sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, new EditorActionsFacade(actor))
     await waitTurns(24)
 
     actor.send({ type: 'SELECT_ITEM', itemIds: ['item'], keyframeId: 'first-kf' })
@@ -1298,7 +1303,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const decorPanel = document.createElement('div')
     document.body.append(sceneRoot, decorPanel)
     sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, new EditorActionsFacade(actor))
     await waitTurns()
 
     actor.send({ type: 'SELECT_ITEM', itemIds: ['item'] })
@@ -1373,7 +1378,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const decorPanel = document.createElement('div')
     document.body.append(sceneRoot, decorPanel)
     sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, new EditorActionsFacade(actor))
     await waitTurns()
 
     // The controller deliberately keeps the explicit KF selection during a scrub. The visual CS
@@ -1415,7 +1420,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const decorPanel = document.createElement('div')
     document.body.append(sceneRoot, decorPanel)
     sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, new EditorActionsFacade(actor))
     await waitTurns(24)
 
     actor.send({ type: 'SELECT_ITEM', itemIds: ['item'], keyframeId: 'last-kf' })
@@ -1468,7 +1473,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const decorPanel = document.createElement('div')
     document.body.append(sceneRoot, decorPanel)
     sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, new EditorActionsFacade(actor))
     await waitTurns(24)
 
     actor.send({ type: 'SELECT_ITEM', itemIds: ['item'] })
@@ -1517,7 +1522,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const decorPanel = document.createElement('div')
     document.body.append(sceneRoot, decorPanel)
     sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, new EditorActionsFacade(actor))
     await waitTurns(24)
 
     actor.send({ type: 'SELECT_ITEM', itemIds: ['item'] })
@@ -1572,7 +1577,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const decorPanel = document.createElement('div')
     document.body.append(sceneRoot, decorPanel)
     sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, new EditorActionsFacade(actor))
     await waitTurns()
 
     actor.send({ type: 'SELECT_ITEM', itemIds: ['item'] })
@@ -1678,7 +1683,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const decorPanel = document.createElement('div')
     document.body.append(sceneRoot, decorPanel)
     sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, new EditorActionsFacade(actor))
     await waitTurns()
 
     actor.send({ type: 'SELECT_ITEM', itemIds: ['item'], keyframeId: 'first-kf' })
@@ -1895,7 +1900,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const decorPanel = document.createElement('div')
     document.body.append(sceneRoot, decorPanel)
     sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, new EditorActionsFacade(actor))
     await waitTurns(24)
 
     const presentationPort = coordination.presentation as unknown as {
@@ -1973,7 +1978,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const decorPanel = document.createElement('div')
     document.body.append(sceneRoot, decorPanel)
     sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, new EditorActionsFacade(actor))
     await waitTurns(24)
 
     actor.send({ type: 'SELECT_ITEM', itemIds: ['item'], keyframeId: 'last-kf' })
@@ -2013,7 +2018,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const decorPanel = document.createElement('div')
     document.body.append(sceneRoot, decorPanel)
     sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, new EditorActionsFacade(actor))
     await waitTurns()
 
     actor.send({ type: 'SELECT_ITEM', itemIds: ['item'] })
@@ -2083,7 +2088,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const decorPanel = document.createElement('div')
     document.body.append(sceneRoot, decorPanel)
     sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, new EditorActionsFacade(actor))
     await waitTurns()
 
     actor.send({ type: 'SELECT_ITEM', itemIds: ['item'] })
@@ -2134,7 +2139,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const decorPanel = document.createElement('div')
     document.body.append(sceneRoot, decorPanel)
     sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, new EditorActionsFacade(actor))
     await waitTurns()
 
     actor.send({ type: 'SELECT_ITEM', itemIds: ['item'], keyframeId: 'last-kf' })
@@ -2221,7 +2226,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const decorPanel = document.createElement('div')
     document.body.append(sceneRoot, decorPanel)
     sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, new EditorActionsFacade(actor))
     await waitTurns(24)
 
     actor.send({ type: 'SELECT_ITEM', itemIds: ['item'], keyframeId: 'chain-kf-2' })
@@ -2304,7 +2309,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const decorPanel = document.createElement('div')
     document.body.append(sceneRoot, decorPanel)
     sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, new EditorActionsFacade(actor))
     await waitTurns(24)
 
     actor.send({ type: 'SELECT_ITEM', itemIds: ['item'], keyframeId: 'last-kf' })
@@ -2372,7 +2377,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const decorPanel = document.createElement('div')
     document.body.append(sceneRoot, decorPanel)
     sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, new EditorActionsFacade(actor))
     await waitTurns()
 
     actor.send({ type: 'SELECT_ITEM', itemIds: ['item'] })
@@ -2470,7 +2475,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const decorPanel = document.createElement('div')
     document.body.append(sceneRoot, decorPanel)
     sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, new EditorActionsFacade(actor))
     await waitTurns(24)
 
     // The runtime and decor bridges observe the same root. Give the staged player root the same
@@ -2568,7 +2573,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const decorPanel = document.createElement('div')
     document.body.append(sceneRoot, decorPanel)
     sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, new EditorActionsFacade(actor))
     await waitTurns()
 
     actor.send({ type: 'SELECT_ITEM', itemIds: ['item'], keyframeId: 'middle-kf' })
@@ -2627,7 +2632,7 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const decorPanel = document.createElement('div')
     document.body.append(sceneRoot, decorPanel)
     sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, new EditorActionsFacade(actor))
     await waitTurns()
 
     actor.send({ type: 'SELECT_ITEM', itemIds: ['item'] })
@@ -2648,5 +2653,43 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     expect(committedScene.contents.content?.text).toBe('Texte modifié')
     // The persistence boundary rejects any `undefined` value, including an absent optional field written as a key.
     expect(() => assertJsonCompatible(committedScene)).not.toThrow()
+  })
+
+  it('removes every scene overlay and stops following the tool state once destroyed', async () => {
+    originalResizeObserver = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class {
+      observe(): void {}
+      disconnect(): void {}
+    } as unknown as typeof ResizeObserver
+
+    actor = createActor(controllerMachine)
+    actor.start()
+    actor.send({ type: 'SCENE_LOADED', scene: scene() })
+    coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
+    const sceneRoot = document.createElement('div')
+    Object.defineProperty(sceneRoot, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }),
+    })
+    const decorPanel = document.createElement('div')
+    document.body.append(sceneRoot, decorPanel)
+    sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
+    await waitTurns()
+    const playerChildren = [...sceneRoot.children]
+
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination, new EditorActionsFacade(actor))
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item'] })
+    actor.send({ type: 'SET_AUTHORING_MODE', mode: 'zone' })
+    await waitTurns()
+    expect(sceneRoot.children.length).toBeGreaterThan(playerChildren.length)
+
+    decorBridge.destroy()
+    decorBridge = undefined
+    expect([...sceneRoot.children]).toEqual(playerChildren)
+
+    actor.send({ type: 'SET_AUTHORING_MODE', mode: 'block' })
+    actor.send({ type: 'TOGGLE_ZONES_VISIBLE' })
+    await waitTurns()
+    expect([...sceneRoot.children]).toEqual(playerChildren)
   })
 })

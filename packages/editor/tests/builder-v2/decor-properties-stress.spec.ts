@@ -5,7 +5,7 @@ import { EDITOR_ENGINE_OPTIONS } from '../../src/item-presentation/engine-option
 import { afterEach, describe, expect, it } from 'vitest'
 import { CodPlay } from 'codplay'
 import { buildSceneDocV2, EDITOR_V2_STORY_ID } from '../../src/builder-v2'
-import { resolveCurrentPatch } from '../../src/app/bridges/decor-editor-bridge'
+import { resolveCurrentPatch } from '../../src/app/bridges/decor-edit/decor-patches'
 import type { Content, Decor, EditorScene } from '../../src/app/commands/types'
 
 const SOURCE_STYLE: Record<string, string> = {

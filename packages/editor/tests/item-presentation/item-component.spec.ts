@@ -104,28 +104,35 @@ describe('Editor item presentation', () => {
     expect(presented.matrix).toEqual({ a: -0.25, b: 1, c: -1, d: 0.5 })
   })
 
-  it('projects the displayed affine through the inverse runtime pose', () => {
-    const transform = itemPreviewTransform({
-      origin: { x: 10, y: 20 },
-      matrix: { a: 0, b: 1, c: -1, d: 0 },
-      localWidth: 40,
-      localHeight: 20,
-    }, {
-      x: 40,
-      y: 60,
-      width: 10,
-      height: 10,
-      rotate: 14,
-      rotationOrigin: { fx: 0, fy: 0 },
-      affineProjection: {
-        origin: { x: 40, y: 60 },
-        matrix: { a: 1, b: 0.25, c: 0.5, d: 1 },
-      },
-    })
+  const previewPose = {
+    origin: { x: 10, y: 20 },
+    matrix: { a: 0, b: 1, c: -1, d: 0 },
+    localWidth: 40,
+    localHeight: 20,
+  }
+  const previewFrame = {
+    x: 40,
+    y: 60,
+    width: 10,
+    height: 10,
+    rotate: 14,
+    rotationOrigin: { fx: 0, fy: 0 },
+    affineProjection: {
+      origin: { x: 40, y: 60 },
+      matrix: { a: 1, b: 0.25, c: 0.5, d: 1 },
+    },
+  }
+
+  it.each(['local', 'reparent'] as const)('projects the displayed affine through the inverse runtime pose of a %s presentation', (representation) => {
+    const transform = itemPreviewTransform({ pose: previewPose, representation }, previewFrame)
 
     expect(transform?.match(/^matrix\(([^)]+)\)$/)?.[1]?.split(',').map(Number)).toEqual([
       0.25, -1, 1, -0.5, 40, -30,
     ])
+  })
+
+  it('adds no matrix to an item presented in its source node, whose snapshot geometry already moves it', () => {
+    expect(itemPreviewTransform({ pose: previewPose, representation: 'source' }, previewFrame)).toBeUndefined()
   })
 
   it('captures shear from the same CSS matrix used by the rendered transform anchor', () => {

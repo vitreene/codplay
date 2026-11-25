@@ -2,15 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { createActor } from 'xstate'
 import type { CodPlaySnapshot } from 'codplay'
 import { selectionFrameLocalToScene } from '@codplay/selection-frame/v2'
+import { applyFrameDelta } from '../src/app/bridges/decor-edit/frame-delta'
+import { resolveKeyframeAlignment } from '../src/app/bridges/decor-edit/decor-target'
 import {
-  applyFrameDelta,
   resolveEffectiveKeyframePatch,
   resolveEffectivePosePatch,
-  patchDiffersFromBase,
-  resolveKeyframeAlignment,
   resolveKeyframeInsertionPatch,
   resolveTemporaryPatch,
-} from '../src/app/bridges/decor-editor-bridge'
+} from '../src/app/bridges/decor-edit/decor-patches'
 import { EditorCoordinationBridge } from '../src/app/bridges/editor-coordination-bridge'
 import { EditorPlayerCommandFacade } from '../src/app/commands/editor-player-command-facade'
 import { controllerMachine } from '../src/app/controller/controller-machine'
@@ -236,7 +235,7 @@ describe('decor-editor bridge V2', () => {
       offset: { translate: { x: 32, y: 18 }, width: 24, height: 22 },
     }
     const patch = resolveKeyframeInsertionPatch(
-      sceneWithDecors(), item, 500, undefined, null, candidate,
+      sceneWithDecors(), item, 500, undefined, candidate,
     )
     expect(patch).toEqual(candidate)
   })
@@ -247,34 +246,17 @@ describe('decor-editor bridge V2', () => {
       item,
       500,
       undefined,
-      snapshotFor({
-        color: { kind: 'color', space: 'srgb', coords: [0.5, 0.25, 0.75], alpha: 1 },
-        opacity: 0.5,
-        x: { kind: 'length', unit: 'cqw', value: 30 },
-        y: { kind: 'length', unit: 'cqw', value: 30 },
-        width: { kind: 'length', unit: 'cqw', value: 20 },
-        height: { kind: 'length', unit: 'cqw', value: 20 },
-        'transform-origin': '25% 75%',
-      }),
       undefined,
     )
     expect(patch).toBeNull()
   })
 
-  it('fusionne l’intervention utilisateur avec les propriétés interpolées absentes du candidat', () => {
+  it('ne consigne que l’intervention de l’auteur, jamais une valeur interpolée', () => {
     const patch = resolveKeyframeInsertionPatch(
       sceneWithDecors(),
       item,
       500,
       undefined,
-      snapshotFor({
-        color: 'purple',
-        opacity: 0.5,
-        x: { kind: 'length', unit: 'cqw', value: 30 },
-        y: { kind: 'length', unit: 'cqw', value: 30 },
-        width: { kind: 'length', unit: 'cqw', value: 20 },
-        height: { kind: 'length', unit: 'cqw', value: 20 },
-      }),
       { style: { color: 'orange' }, offset: { translate: { x: 42, y: 18 } } },
     )
     expect(patch).toEqual({ style: { color: 'orange' }, offset: { translate: { x: 42, y: 18 } } })
@@ -287,11 +269,9 @@ describe('decor-editor bridge V2', () => {
       item,
       500,
       undefined,
-      null,
       { path },
     )
     expect(patch?.path).toBe(path)
-    expect(patchDiffersFromBase({}, { path })).toBe(true)
   })
 
   it('capture chaque propriété de Decor modifiée, pas seulement la pose', () => {
@@ -310,7 +290,6 @@ describe('decor-editor bridge V2', () => {
       item,
       500,
       undefined,
-      null,
       {
         style: { color: 'green' },
         classes: 'target-class',

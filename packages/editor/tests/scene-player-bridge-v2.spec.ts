@@ -6,6 +6,7 @@ import { controllerMachine } from '../src/app/controller/controller-machine'
 import { EditorCoordinationBridge } from '../src/app/bridges/editor-coordination-bridge'
 import { createScenePlayerBridge } from '../src/app/bridges/scene-player-bridge'
 import { createSequenceEditorBridge } from '../src/app/bridges/sequence-editor-bridge'
+import { EditorActionsFacade } from '../src/app/facades/editor-actions-facade'
 import { createDecorEditorBridge } from '../src/app/bridges/decor-editor-bridge'
 import { EditorPlayerCommandFacade } from '../src/app/commands/editor-player-command-facade'
 import type { EditorPlayerCommand } from '../src/app/commands/editor-player-command-facade'
@@ -376,7 +377,7 @@ describe('V2 editor position seek integration', () => {
       document.body.append(sceneRoot, timelineRoot, panelRoot)
       sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
       sequenceBridge = createSequenceEditorBridge(timelineRoot, actor, coordination)
-      decorBridge = createDecorEditorBridge(panelRoot, actor, coordination)
+      decorBridge = createDecorEditorBridge(panelRoot, actor, coordination, new EditorActionsFacade(actor))
       await waitTurns(32)
 
       // Reproduce a selection after the author has worked on a middle keyframe. The bridge must
@@ -480,7 +481,7 @@ describe('V2 editor position seek integration', () => {
       document.body.append(sceneRoot, timelineRoot, panelRoot)
       sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
       sequenceBridge = createSequenceEditorBridge(timelineRoot, actor, coordination)
-      decorBridge = createDecorEditorBridge(panelRoot, actor, coordination)
+      decorBridge = createDecorEditorBridge(panelRoot, actor, coordination, new EditorActionsFacade(actor))
       await waitTurns(32)
 
       actor.send({ type: 'SELECT_ITEM', itemIds: ['item'], keyframeId: 'b' })
@@ -591,7 +592,7 @@ describe('V2 editor position seek integration', () => {
       document.body.append(sceneRoot, timelineRoot, panelRoot)
       sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
       sequenceBridge = createSequenceEditorBridge(timelineRoot, actor, coordination)
-      decorBridge = createDecorEditorBridge(panelRoot, actor, coordination)
+      decorBridge = createDecorEditorBridge(panelRoot, actor, coordination, new EditorActionsFacade(actor))
       await waitTurns(32)
 
       await waitTurns(32)
@@ -897,7 +898,7 @@ describe('V2 editor position seek integration', () => {
       sequenceBridge = createSequenceEditorBridge(timelineRoot, actor, coordination)
       const panelRoot = document.createElement('div')
       document.body.append(panelRoot)
-      decorBridge = createDecorEditorBridge(panelRoot, actor, coordination)
+      decorBridge = createDecorEditorBridge(panelRoot, actor, coordination, new EditorActionsFacade(actor))
       await waitTurns(24)
 
       actor.send({ type: 'SELECT_ITEM', itemIds: ['item'], keyframeId: 'a' })
@@ -974,7 +975,7 @@ describe('V2 editor position seek integration', () => {
       document.body.append(sceneRoot, timelineRoot, panelRoot)
       sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
       sequenceBridge = createSequenceEditorBridge(timelineRoot, actor, coordination)
-      decorBridge = createDecorEditorBridge(panelRoot, actor, coordination)
+      decorBridge = createDecorEditorBridge(panelRoot, actor, coordination, new EditorActionsFacade(actor))
       await waitTurns(24)
 
       actor.send({ type: 'RUN_COMMAND', command: { name: 'createItem', args: { geometry: {} } } })
@@ -1059,7 +1060,7 @@ describe('V2 editor position seek integration', () => {
     const panelRoot = document.createElement('div')
     document.body.append(sceneRoot, panelRoot)
     sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
-    decorBridge = createDecorEditorBridge(panelRoot, actor, coordination)
+    decorBridge = createDecorEditorBridge(panelRoot, actor, coordination, new EditorActionsFacade(actor))
     await waitTurns(24)
 
     const geometry = { translate: { x: 20, y: 18 }, width: 60, height: 18 }
@@ -1131,7 +1132,7 @@ describe('V2 editor position seek integration', () => {
       document.body.append(sceneRoot, timelineRoot, panelRoot)
       sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
       sequenceBridge = createSequenceEditorBridge(timelineRoot, actor, coordination)
-      decorBridge = createDecorEditorBridge(panelRoot, actor, coordination)
+      decorBridge = createDecorEditorBridge(panelRoot, actor, coordination, new EditorActionsFacade(actor))
       await waitTurns(24)
 
       actor.send({ type: 'SELECT_ITEM', itemIds: ['item-a'], keyframeId: 'a-last-kf' })
@@ -1202,7 +1203,7 @@ describe('V2 editor position seek integration', () => {
       document.body.append(sceneRoot, timelineRoot, panelRoot)
       sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
       sequenceBridge = createSequenceEditorBridge(timelineRoot, actor, coordination)
-      decorBridge = createDecorEditorBridge(panelRoot, actor, coordination)
+      decorBridge = createDecorEditorBridge(panelRoot, actor, coordination, new EditorActionsFacade(actor))
       await waitTurns(24)
 
       actor.send({ type: 'SELECT_ITEM', itemIds: ['item-a'], keyframeId: 'a-last-kf' })

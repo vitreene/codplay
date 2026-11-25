@@ -6,7 +6,7 @@ import type { EditorScene } from '../../src/app/commands/types'
 import { buildSceneDocV2, EDITOR_V2_STORY_ID } from '../../src/builder-v2'
 import { EDITOR_ENGINE_OPTIONS } from '../../src/item-presentation/engine-options'
 import { ITEM_MOTION_REFERENCE_ANGLE, ITEM_MOTION_ROTATION_BASELINE } from '../../src/item-presentation/item-motion-reference'
-import { resolveTemporaryPatch } from '../../src/app/bridges/decor-editor-bridge'
+import { resolveTemporaryPatch } from '../../src/app/bridges/decor-edit/decor-patches'
 
 /** Owns a vertical then horizontal route with independent authored scale endpoints. */
 function referenceScene(): EditorScene {

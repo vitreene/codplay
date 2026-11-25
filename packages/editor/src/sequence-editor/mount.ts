@@ -12,6 +12,7 @@ import { createMarkerTrackRows, renderMarkerTrackRows } from './render/marker-ro
 import { createWaveformRow, renderWaveformRow } from './render/waveform-row'
 import { descendantIds, findParentClipBounds } from './utils'
 import { runPointerSession } from './pointer-session'
+import { isSameAuthorTime } from '../app/config/author-time'
 
 /**
  * Un `<button>` dont le `textContent` est un glyphe Unicode seul (▶/■/≫/⊡/×) expose ce nœud texte
@@ -511,7 +512,7 @@ export function mountSequenceEditor(
       && transportState !== null
       && transportState.status !== 'playing'
       && transportProgress !== null
-      && Math.abs(transportProgress.timelineMs) <= 1
+      && isSameAuthorTime(transportProgress.timelineMs, 0)
     ctrl.seek(0)
     if (lastPlayheadMs === lastRelayedPlayheadMs && !alreadyStoppedAtInitialFrame) {
       lastPlayheadMs = 0

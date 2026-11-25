@@ -20,10 +20,10 @@ import { resolveKeyframeChannel } from '../app/commands/types'
 import type { CapsuleDef, EditorScene, Item, Keyframe, Transition, Zone } from '../app/commands/types'
 import { hasExplicitPlacementGeometry } from '../app/commands/offset-placement'
 import { isItemVisible } from '../app/commands/item-visibility/item-visibility'
-import { resolveKeyframeTransition } from './keyframe-transition'
+import { resolveKeyframeTransition, resolveSegmentMotionPath, resolveSegmentTiming } from './keyframe-transition'
 import { normalizeMotionEasing } from '../motion-editor/easing'
 import { normalizeAngleDegrees } from '../motion-editor/geometry'
-import { resolveInitialPathRotation, STRAIGHT_MOTION_PATH } from '../motion-editor/item-rotation/item-rotation'
+import { resolveInitialPathRotation } from '../motion-editor/item-rotation/item-rotation'
 import { ITEM_MOTION_REFERENCE_ANGLE, ITEM_MOTION_ROTATION_BASELINE } from '../item-presentation/item-motion-reference'
 import {
   resolveTangentJoinRotationOffset,
@@ -863,9 +863,8 @@ function buildInterpolationActions(
     const fromStyle = resolvePlacementPoseStyle(scene, item, source, resolveKeyframePoseStyle(scene, item, source))
     const toStyle = resolveKeyframePoseStyle(scene, item, destination)
     const targetStyle = resolvePlacementPoseStyle(scene, item, destination, toStyle)
-    const path = scene.decors[destination.decorId]?.path
-      ?? (item.rotationMode === 'tangent' ? STRAIGHT_MOTION_PATH : undefined)
-    const hasMotionPath = typeof path === 'string' && path.trim() !== ''
+    const path = resolveSegmentMotionPath(scene, item, destination)
+    const hasMotionPath = path !== undefined
     let validMotionPath = true
     if (hasMotionPath && path !== undefined) {
       try {
@@ -979,22 +978,23 @@ function buildInterpolationActions(
     const zoneChanged = sourceZoneId !== destinationZoneId
     if (Object.keys(diff).length === 0 && !hasMotionPath && !zoneChanged) continue
 
-    const intervalMs = Math.max(0, destination.timeMs - source.timeMs)
     const { durationMs, ease, startAtMs } = resolveKeyframeTransition(source, destination)
+    // Pose clock of the segment: a timed path moves over its whole interval from the source KF.
+    const poseTiming = resolveSegmentTiming(scene, item, source, destination)
+    const hasTimedMotionPath = hasMotionPath && destination.timeMs > source.timeMs
     const startAt = startAtMs + preRollMs
-    const style = buildStyleTransition(fromStyle, diff, durationMs, ease, true, hasMotionPath && intervalMs > 0)
+    const style = buildStyleTransition(fromStyle, diff, durationMs, ease, true, hasTimedMotionPath)
     if (hasMotionPath && referenceAngle !== undefined) {
       style.interpolated[ITEM_MOTION_REFERENCE_ANGLE] = referenceAngle
     }
     const actionName = `${item.id}-kf-${destination.id}`
-    const hasTimedMotionPath = hasMotionPath && intervalMs > 0
     const move = hasTimedMotionPath || zoneChanged
       ? {
         target: resolveMoveTarget(parentPersoId, destinationZoneId),
         transition: hasTimedMotionPath
           ? {
-            duration: intervalMs,
-            ease,
+            duration: poseTiming.durationMs,
+            ease: poseTiming.ease,
             ...(path === undefined ? {} : { path }),
             ...(hasTimedMotionPath ? { orientToPath } : {}),
             ...(orientToPath ? {
@@ -1012,7 +1012,7 @@ function buildInterpolationActions(
         name: actionName,
         ...(Object.keys(style.interpolated).length === 0 ? {} : { style: style.interpolated }),
         ...(move === undefined ? {} : { move }),
-        startAt: hasTimedMotionPath ? source.timeMs + preRollMs : startAt,
+        startAt: hasTimedMotionPath ? poseTiming.startAtMs + preRollMs : startAt,
       })
     }
     if (Object.keys(style.discrete).length > 0) {

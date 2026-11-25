@@ -7,6 +7,7 @@ import type {
   CodPlaySnapshotSetResult,
   CodPlayTelcoState,
 } from 'codplay'
+import { isSameAuthorTime } from '../config/author-time'
 
 /** Command vocabulary exposed to the editor coordination layer. */
 export type EditorPlayerCommand =
@@ -113,7 +114,7 @@ export class EditorPlayerCommandFacade {
       await instance.telco.seek(expectedAuthorTime + this.preRollMs)
       const progress = this.getProgressFromInstance(instance)
       const state = this.getStateFromInstance(instance)
-      if (Math.abs(progress.timelineMs - expectedAuthorTime) > 1) {
+      if (!isSameAuthorTime(progress.timelineMs, expectedAuthorTime)) {
         return { ok: false, code: 'SEEK_NOT_APPLIED', state, progress }
       }
       return { ok: true, state, progress }
@@ -252,7 +253,7 @@ function commandPostconditionHolds(
 ): boolean {
   if (command.type === 'play') return state.status === 'playing'
   if (command.type === 'pause') return state.status !== 'playing'
-  if (command.type === 'rewind') return state.status !== 'playing' && Math.abs(progress.timelineMs) <= 1
+  if (command.type === 'rewind') return state.status !== 'playing' && isSameAuthorTime(progress.timelineMs, 0)
   if (command.type === 'setRate') return Math.abs(state.rate - command.rate) <= 0.001
   return true
 }

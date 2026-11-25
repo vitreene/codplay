@@ -13,6 +13,7 @@ import {
   type MotionPoint,
 } from './geometry'
 import type { MotionGeometryStore, MotionGeometryProjection } from './geometry-store'
+import { OVERLAY_LAYERS } from '../app/config/overlay-layers'
 
 export type MotionOverlayRole = 'source' | 'target'
 
@@ -97,7 +98,7 @@ export function createMotionOverlay(
   root.style.position = 'absolute'
   root.style.inset = '0'
   root.style.pointerEvents = 'none'
-  root.style.zIndex = '1050'
+  root.style.zIndex = OVERLAY_LAYERS.motionOverlay
   root.style.touchAction = 'none'
 
   const svg = doc.createElementNS('http://www.w3.org/2000/svg', 'svg')
@@ -138,7 +139,7 @@ export function createMotionOverlay(
   control.style.cursor = 'crosshair'
   // These controls sit above the Selection Frame so its body can own movement without masking
   // the trajectory-specific editing affordances at an interpolated pose.
-  control.style.zIndex = '1101'
+  control.style.zIndex = OVERLAY_LAYERS.motionControl
 
   const orientationButton = doc.createElement('button')
   orientationButton.id = 'editor-motion-path-orientation'
@@ -150,7 +151,7 @@ export function createMotionOverlay(
   orientationButton.style.position = 'absolute'
   orientationButton.style.display = 'none'
   // The Selection Frame is mounted at 1160; keep this action above its handles.
-  orientationButton.style.zIndex = '1161'
+  orientationButton.style.zIndex = OVERLAY_LAYERS.orientationToggle
   orientationButton.style.transform = 'translate(-50%, 0)'
   orientationButton.style.boxSizing = 'border-box'
   orientationButton.style.width = '28px'

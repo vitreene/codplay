@@ -1,5 +1,6 @@
 import { bindGestureSession } from '@codplay/selection-frame/gesture-session'
 import type { SelectionFrameValue } from '../../decor-editor/types'
+import { OVERLAY_LAYERS } from '../config/overlay-layers'
 
 type MoveDelta = Readonly<{ dx: number; dy: number }>
 
@@ -38,7 +39,7 @@ export function createBlockMoveControl(options: BlockMoveControlOptions): BlockM
   element.style.border = '1px solid #4a90d9'
   element.style.pointerEvents = 'auto'
   element.style.touchAction = 'none'
-  element.style.zIndex = '1160'
+  element.style.zIndex = OVERLAY_LAYERS.selectionFrame
   element.style.display = 'none'
   element.style.cursor = 'move'
   options.sceneRoot.appendChild(element)
