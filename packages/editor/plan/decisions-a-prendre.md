@@ -263,42 +263,14 @@ la capture est noire. Garder la correction `En cours` jusqu’à une preuve de
 rendu visible. Les transitions dont la géométrie dépend d’une zone ou n’a pas
 de projection résolue ne reçoivent pas encore cette correction.
 
-**Défaut d’échelle sur les trajectoires — En cours :** la rotation déforme
-l’échelle pendant un `move`, en mode manuel comme en mode tangente. Sur la scène
-Editor active, Safari MCP reproduit le défaut en mode manuel : pour le segment
-0–2 500 ms de l’item `Manuel`, les angles auteur passent de `15°` à `97°` et le
-scale de `1` à `0,793353`. Au milieu, l’échelle rendue est `0,680117`, alors que
-l’interpolation auteur attendue est `0,896677`. Un item sans scale auteur,
-rotaté de `0°` à `35°`, atteint `0,953717` au milieu au lieu de `1`. L’item
-`Tangente`, qui garde le même angle manuel sur son premier segment, reste à
-`1` : ce cas ne suffisait donc pas à couvrir la régression.
-
-La capture du `move` interpole les coefficients de la matrice affine complète.
-L’extraction de son scale dépend alors des angles source et cible ; une
-rotation peut ainsi créer ou réduire l’échelle rendue. L’interpolation d’un
-scale auteur doit rester indépendante de cette rotation.
-
-**Décision de correction acceptée :** la rotation ne change jamais le scale.
-Sans variation de scale auteur, le scale présenté reste constant ; lorsque
-l’auteur le fait varier, seul cet écart est interpolé. Cette règle s’applique
-aux deux modes de rotation. Le périmètre reste Editor : étendre la projection
-du composant item existant afin que la capture de trajectoire ne mélange pas
-rotation et scale, tout en restituant les transformations auteur via cette même
-présentation. Garder le `move`, le chemin, les keyframes et l’horloge existants ;
-ne pas créer de lecteur temporel ni compenser le scale avec une valeur calculée.
-Les angles manuels restent interpolés ; en tangente, le runtime conserve la
-tangente et le décalage initial. Les poses et ancres de chemin, insets, pivot,
-preview, CS/ghosts, resize, capsule et parent restent invariants. Ne pas toucher
-aux paquets partagés.
-
-**Actions :** ajouter une régression indépendante du mode pour rotation seule
-et rotation avec scale auteur ; modifier le Builder et le présentateur item
-Editor propriétaire pour isoler les transformations de la capture affine,
-avec scale identité `1` aux sources où l’auteur n’en a pas défini ; vérifier le
-CS/ghost, les trajectoires courbes et droites, rotation initiale, insertion,
-Play/Seek/replay, Undo/Redo, resize, capsule, parent/pivot/insets et persistance.
-Typecheck, tests, build et MCP Safari sur la scène Editor sont requis. Consolider
-la spec uniquement après cette preuve.
+**Défaut d’échelle sur les trajectoires — Résolu dans le cœur (2026-11-25) :** la
+rotation déformait l’échelle pendant un `move`, parce que CodPlay interpolait la
+matrice des poses de borne coefficient par coefficient. La correction a été faite
+dans `codplay` (autorisée par l’utilisateur), à la place de la correction Editor
+qui était prévue ici : la pose est décomposée en rotation, échelles et cisaillement,
+interpolés séparément ([spec CodPlay, « Interpolation de la pose »](../../codplay/specs/motion-frame-v2-spec.md)).
+Preuve Safari MCP : l’item `Tangente` garde une échelle de 1 après le glisser de son
+KF médian ([plan de revue, E16](./2026-11-24-revue-interface-items-plan.md)).
 
 **Capture de l’échelle au waypoint :** le bridge Decor utilise l’échelle du
 snapshot logique, avec la cascade auteur comme repli. Les gestes du CS sur pose

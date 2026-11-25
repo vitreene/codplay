@@ -119,6 +119,9 @@ d’items.
   « differently rotated endpoints », vérifie l’échelle unitaire entre bornes
   tournées (avec et sans orientation sur la tangente), le découplage d’une échelle
   auteur et le rejeu de la pose courante depuis la source virtuelle du retarget.
+  Dans l’éditeur (Safari), un item orienté sur son chemin garde une échelle de 1
+  entre deux KF après le déplacement d’un KF dans la timeline, à chaque instant
+  contrôlé ; son cadre de sélection garde la même boîte que l’item.
 - [motion-graph.spec.ts](../tests/runtime/motion/motion-graph.spec.ts) compare
   deux résolutions du même temps après des historiques d’évaluation distincts.
 - [pipeline.spec.ts](../tests/runtime/player/pipeline.spec.ts) vérifie le

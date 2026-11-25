@@ -742,8 +742,30 @@ Ordre (chaque pas garde le comportement, tests et Safari MCP) :
 5. M6 : la capture différée du pont de la timeline (`pendingSnapshotCaptures`)
    passe par la même machine, via un port de la coordination qui remplace
    `decorPreview`.
-6. 3e : D-HORS-PLAGE, état `gesture.relocating` (seek demandé, geste repris à
-   `SEEK_APPLIED`).
+   Décision en attente de l’utilisateur : maintenant, ou en tranche 4 avec les
+   autres changements de la coordination.
+6. 3e : D-HORS-PLAGE — repris dans le [plan des bornes intro/outro](./2026-11-25-bornes-intro-outro-plan.md)
+   (B-5, action 4), avec le modèle des bornes dont il dépend. Design initial
+   (remplacé par ce plan) :
+   - **Plage d’existence** : bornes réelles (premier et dernier KF de pose) ou
+     virtuelles. Les virtuelles ne sont calculées que par la timeline
+     (`virtualKeyframes` de `sequenceEditorMachine`) ; un port en lecture de la
+     coordination, `getItemLifetime(itemId)`, les expose au pont Décor (un seul
+     calcul, pas de copie de `computeVirtualKeyframes`).
+   - **Cadre** : au premier aperçu d’un geste hors plage, la session passe en
+     `gesture.relocating`, ignore les aperçus, demande
+     `coordination.requestAuthorSeek(borne)` ; à `SEEK_APPLIED`, la projection est
+     recalée sur la borne, la base du geste est capturée et le geste continue avec
+     le delta courant du pointeur.
+   - **Palette** : une édition hors plage est retenue, la tête est recalée, puis
+     l’édition est rejouée sur la borne à `SEEK_APPLIED`.
+   - **Borne virtuelle** (point à confirmer, recommandation) : le commit la
+     matérialise en KF réel par la timeline (`KEYFRAME.ADD`, comme le double-clic
+     sur la borne, spec de distribution §9.2), puis écrit son décor propre.
+   - Questions ouvertes : recaler dès le `pointerdown` (le cadre saute avant tout
+     mouvement) ou au premier mouvement (un simple clic ne recale pas) ; pour la
+     palette, recaler à `input` ou seulement à `change` (un champ couleur émet
+     `input` en continu).
 
 Avancement :
 - Pas 1 fait (en attente de revue manuelle) : `decor-edit-session-machine.ts`, région
@@ -1001,7 +1023,12 @@ réordonnancement des pistes).
   sonde des défauts CSS sur une occurrence native) quand Play arrive pendant la
   reconstruction ; défaut dépendant du timing, cohérent avec son caractère rare.
   À instrumenter et à fermer avec la machine de cycle de scène (tranche 4), dont
-  les transitions rendent cet ordre explicite.
+  les transitions rendent cet ordre explicite. Après la correction E16 du cœur
+  (interpolation des poses), première lecture juste après une édition au cadre,
+  relevée à chaque image : échelle 1 pour les quatre items ; les mesures
+  antérieures ne comparaient que les centres et ne pouvaient pas voir un
+  rétrécissement. Hypothèse : le « saut » était ce rétrécissement transitoire. À
+  confirmer par l’utilisateur à l’usage avant de clore.
 
 - **E16 — L’item rétrécit quand il tourne, après le glisser d’un KF** (relevé par
   l’utilisateur sur « Tangente », régression récurrente ; reproduit). Tête de lecture
@@ -1016,12 +1043,21 @@ réordonnancement des pistes).
     cos 32° ≈ 0,848). Défaut général, indépendant de l’éditeur (tout `move` entre
     deux poses tournées différemment). Correction robuste : interpoler une
     décomposition (rotation au plus court arc, échelles, cisaillement) puis
-    recomposer. Modification du cœur : demande d’autorisation à faire.
+    recomposer. **Corrigé dans le cœur** (autorisé, fait sur `develop`, remonté par
+    rebase) : spec CodPlay `motion-frame-v2-spec.md`, « Interpolation de la pose ».
+    Safari MCP (copie supprimée ensuite) : après le glisser du KF médian de
+    « Tangente », échelle 1 à 1,9 s et à huit instants entre 1,3 et 4,5 s, boîte du
+    cadre identique à celle de l’item.
   - **Éditeur** : en régime normal, les deux bornes ont la même rotation et l’échelle
     reste 1 ; juste après la reconstruction due au glisser, elles diffèrent
     (≈ 92° à 1,9 s). Capture des bornes dans un état transitoire après rebuild :
     même famille que E15 (saut à la première lecture après une correction), à
-    instrumenter avec le cycle du player (M5, tranche 4).
+    instrumenter avec le cycle du player (M5, tranche 4). Après la correction du
+    cœur, Safari MCP (copie supprimée ensuite) : glisser du KF médian de « Tangente »,
+    puis deux passages de six seeks (0,6 à 4,4 s) sur quatre items (orientés sur la
+    tangente et rotation manuelle) : rotation, échelle et position identiques entre le
+    passage juste après la reconstruction et le suivant. La capture transitoire n’a
+    plus d’effet visible ; E16 est clos.
 
 ### Duplications et code mort
 
