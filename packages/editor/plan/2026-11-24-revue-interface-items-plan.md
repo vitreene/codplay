@@ -690,6 +690,113 @@ supprimée ensuite) : déplacement, palette, deux Undo revenant à l’état ini
 Restent hors 3c : 5 envois de la coordination, 2 du pont player, 2 du pont de la
 timeline (transport et cycle de vie : tranche 4).
 
+**Étape 3d — design de la machine de session Décor** (à valider avant implémentation)
+
+Fichier : `app/bridges/decor-edit/decor-edit-session-machine.ts` (machine XState pure,
+sans DOM). Le pont la crée avec `machine.provide({ actions })` : les effets (preview
+runtime, commit par la façade, palette, cadre) restent des fonctions du pont, appelées
+comme actions de la machine. `actor.send` est synchrone : une intention de l’auteur
+produit son effet sur l’item dans le même tour (principe directeur), seul le commit
+attend une frontière.
+
+Régions parallèles :
+
+| Région | États | Remplace |
+| --- | --- | --- |
+| `edit` | `idle` · `pending` (édition palette en attente, cible exacte ou temporaire) | `pendingCommands`, `pendingTemporaryDecorCommit`, `decorEditStates`, `snapshotPreviewActive` |
+| `gesture` | `idle` · `active` · `cancelled` (Échap pendant le geste, jusqu’au relâchement) | `frameGestureBasePx`, `…Kind`, `…HasNetDelta`, `…Cancelled`, `…BaseDecorState`, `…BaseAuthorRotate`, `…BaseAuthorFrame` ; les 9 remises à zéro deviennent une seule sortie d’état |
+| `presentation` | `live` · `awaitingPresentation` (commit envoyé, preview gardée jusqu’à `seekApplied`) | `snapshotCommitAwaitingPresentation`, `frameCommitCandidatePx` |
+| `projection` | `followsSelection` · `followsTime` | `seekProjectionActive` |
+
+Contexte : `edit` (registre des modifications par `itemId`+temps, commandes en attente,
+KF temporaire en attente), `gesture` (un objet unique : base affichée, type, delta net,
+base de décor, angle et cadre auteur de départ), `commitCandidate`, `lastPreview`
+(`accepted` : résultat de la dernière preview, lu par `previewFrame` après
+`applyPatch` — le canal `lastPreviewAccepted` devient un champ explicite, toujours
+synchrone).
+
+Événements : `DECOR_CHANGED` (palette ou cadre, via `onDecorChange` de dedit : un seul
+circuit), `INTERACTION_END`, `GESTURE_PREVIEW` / `GESTURE_DROP` / `GESTURE_CANCEL`,
+`ESCAPE`, `SELECTION_CHANGED`, `DOCUMENT_CHANGED` (mutation externe), `SEEK`,
+`SEEK_APPLIED`, `PLAY_REQUESTED`, `SCENE_LOADED`, `SCENE_REVERTED`. Les frontières
+d’édition de la spec (sélection, seek, mutation externe, lancement de lecture,
+`notifyInteractionEnd`) sont les transitions qui sortent de `edit.pending` avec
+l’action `flush` ; Échap et `pointercancel` en sortent avec `abort`.
+
+Restent hors machine : les projections (cadre auteur et affiché, insets, segments,
+ghosts, `activeMotion`), recalculées par `syncSelection` ; montages et abonnements ;
+`lastKnownTimelineMs` (temps auteur reçu). M4 : `playbackActive` et
+`activeCreationMode` sont lus sur l’état du contrôleur, plus copiés.
+
+Ordre (chaque pas garde le comportement, tests et Safari MCP) :
+1. Région `gesture` : les 9 variables et leurs remises à zéro.
+2. Région `edit` : registre des modifications, commandes et KF temporaire en attente
+   dans le contexte ; `idle`/`pending` dérivé de ces données. `flushNow`/`abortPhase`
+   lisent l’instantané, envoient `FLUSHED`/`ABORTED`, puis exécutent les effets dans
+   le même ordre qu’aujourd’hui : le commit traverse le contrôleur et revient de façon
+   synchrone dans le pont (`sceneCommitted` → `syncSelection`, qui relit le registre),
+   donc l’entrée est effacée avant le commit. `DECOR_CHANGED` est reporté au pas 3,
+   avec la preview explicite.
+3. Région `presentation` et `lastPreview` explicite.
+4. Région `projection`, et M4.
+5. M6 : la capture différée du pont de la timeline (`pendingSnapshotCaptures`)
+   passe par la même machine, via un port de la coordination qui remplace
+   `decorPreview`.
+6. 3e : D-HORS-PLAGE, état `gesture.relocating` (seek demandé, geste repris à
+   `SEEK_APPLIED`).
+
+Avancement :
+- Pas 1 fait (en attente de revue manuelle) : `decor-edit-session-machine.ts`, région
+  `gesture` (`GESTURE_START`, `GESTURE_DELTA`, `GESTURE_ESCAPE`, `GESTURE_RESET`,
+  `GESTURE_END`). Les 7 variables `frameGesture*` et leurs 9 remises à zéro sont
+  remplacées par un objet `FrameGesture` et les sorties d’état. Le recalage de la
+  projection (`GESTURE_RESET`) garde l’annulation par Échap tant que le pointeur est
+  enfoncé ; le démontage du cadre termine le geste (avant : le drapeau d’annulation
+  survivait et faisait ignorer le début du geste suivant). Tests :
+  `tests/app/decor-edit-session-machine.spec.ts` ; 628 tests verts. Safari MCP (copie
+  supprimée ensuite) : clic sans écriture, Échap puis mouvements ignorés et aucune
+  écriture, `pointercancel` sans écriture ; déplacement, rotation et redimensionnement
+  au KF2 (`source`) et déplacement au KF1 (`local`) alignés à chaque pas ; quatre Undo
+  rendent une scène identique à l’originale.
+
+- Pas 2 fait (en attente de revue manuelle) : région `edit` (registre, commandes et
+  KF temporaire en attente dans le contexte ; `idle`/`pending` dérivé ; `FLUSHED`,
+  `ABORTED`, `REVERTED`, `TEMPORARY_CLEARED`…). `flushNow`/`abortPhase` lisent
+  l’instantané puis exécutent les effets dans l’ordre d’avant ;
+  `temporaryEditPendingAt` remplace trois copies du même test. 632 tests verts.
+  Safari MCP (copie supprimée ensuite ; « Fond » car seuls couleur et curseur
+  prévisualisent à `input`, les champs numériques valident à `change`) : édition entre
+  deux KF validée par changement de sélection (KF décor créé à 3,5 s), édition sur un
+  KF validée par seek puis par Play, Échap sans écriture, trois Undo rendant la scène
+  d’origine. Contrôle : même comportement avec le pont d’avant ce pas.
+
+- Pas 3 fait (en attente de revue manuelle) : région `presentation` (`live` ·
+  `awaitingPresentation`), `previewActive`, `commitCandidate` et
+  `lastPreviewAccepted` dans le contexte (`DECOR_PREVIEW_REQUESTED` /
+  `DECOR_PREVIEWED` : le résultat lu par `previewFrame` après `applyPatch` est un champ
+  explicite, toujours synchrone). 635 tests verts. Safari MCP (copie supprimée
+  ensuite) : cadre aligné sur l’item à 0, 40, 150, 600 et 1 200 ms après le relâchement
+  au KF2 (`source`) et au KF1 (`local`) ; couleur temporaire en preview, KF décor créé
+  par le seek suivant et couleur retrouvée au retour ; trois Undo rendent la scène
+  d’origine.
+
+- Pas 4 fait (en attente de revue manuelle) : région `projection`
+  (`followsSelection` · `followsTime`) à la place de `seekProjectionActive` ; M4 :
+  `playbackActive()` lit l’état `playing` du contrôleur et `activeCreationMode()` son
+  contexte de création (XState livre les événements émis après la mise à jour de
+  l’instantané). 636 tests verts. Safari MCP sur la scène de l’utilisateur, sans
+  écriture : KF sélectionné par son ghost puis seek, cadre aligné ; cadre masqué
+  pendant la lecture et réaligné après Stop ; mode création ouvert puis annulé par
+  Échap. Le pont garde 22 `let` : montages, abonnements et projections.
+
+Acceptation à chaque pas : la suite complète, un test de la machine seule par
+région (transitions et frontières), et Safari MCP sur une copie de scène :
+- palette sur un KF et entre deux KF, puis frontière par sélection, seek et Play ;
+- gestes de déplacement, rotation et redimensionnement, aux KF `local` et `source` ;
+- Échap pendant un geste, `pointercancel` ;
+- Undo et Redo ;
+- KF créé depuis la timeline après une édition temporaire (pas 5).
+
 ### Machines d’état implicites à déclarer
 
 Machines XState déjà déclarées : `controllerMachine` (`idle`/`creating`/`playing`),
@@ -895,6 +1002,26 @@ réordonnancement des pistes).
   reconstruction ; défaut dépendant du timing, cohérent avec son caractère rare.
   À instrumenter et à fermer avec la machine de cycle de scène (tranche 4), dont
   les transitions rendent cet ordre explicite.
+
+- **E16 — L’item rétrécit quand il tourne, après le glisser d’un KF** (relevé par
+  l’utilisateur sur « Tangente », régression récurrente ; reproduit). Tête de lecture
+  sur le KF médian, KF glissé vers la gauche dans la timeline : la tête se retrouve
+  entre deux KF, le cadre reste juste (121 × 81, rotation lue), mais la pose écrite
+  par le player sur le cadre de mouvement a une échelle de 0,849 (0,132 à 3 s) ; un
+  peu plus tard, aux mêmes instants, l’échelle redevient 1. Deux couches :
+  - **Cœur CodPlay** : `interpolateMotionPose` (`runtime/motion/motion-pose.ts`)
+    interpole la matrice 2×2 composante par composante entre les poses de borne ;
+    `alignMotionPoseToTangent` la tourne ensuite sans corriger son échelle. Deux
+    bornes de rotations différentes donnent une pose rétrécie (Δ = 64° à mi-course :
+    cos 32° ≈ 0,848). Défaut général, indépendant de l’éditeur (tout `move` entre
+    deux poses tournées différemment). Correction robuste : interpoler une
+    décomposition (rotation au plus court arc, échelles, cisaillement) puis
+    recomposer. Modification du cœur : demande d’autorisation à faire.
+  - **Éditeur** : en régime normal, les deux bornes ont la même rotation et l’échelle
+    reste 1 ; juste après la reconstruction due au glisser, elles diffèrent
+    (≈ 92° à 1,9 s). Capture des bornes dans un état transitoire après rebuild :
+    même famille que E15 (saut à la première lecture après une correction), à
+    instrumenter avec le cycle du player (M5, tranche 4).
 
 ### Duplications et code mort
 

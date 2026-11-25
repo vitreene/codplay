@@ -1,4 +1,4 @@
-import type { Actor } from 'xstate'
+import { createActor, type Actor } from 'xstate'
 import type { CodPlayPresentationPose, CodPlaySnapshot, CodPlaySnapshotPatch } from 'codplay'
 import { resolveSegmentProgress, resolveSegmentTiming, type SegmentTiming } from '../../builder-v2/keyframe-transition'
 import { createRotationModifier, createSelectionFrameV2, rotateSelectionFrameAffine } from '@codplay/selection-frame/v2'
@@ -45,6 +45,13 @@ import { STRAIGHT_MOTION_PATH } from '../../motion-editor/item-rotation/item-rot
 import type { MotionOverlayGhost, MotionOverlayHandle, MotionOverlayRole, MotionOverlaySegment } from '../../motion-editor/overlay'
 import { createMotionGeometryStore } from '../../motion-editor/geometry-store'
 import { createBlockMoveControl } from './block-move-control'
+import {
+  decorEditSessionMachine,
+  editRegistryKey,
+  type DecorEditState,
+  type FrameGesture,
+  type PendingTemporaryEdit,
+} from './decor-edit/decor-edit-session-machine'
 import { hasZoneSurface, ZoneSurfaceBinding } from './decor-edit/zone-surface-binding'
 import {
   presentedItemAt,
@@ -107,7 +114,6 @@ type MotionEndpointProjection = Readonly<{
   authorFrame: SelectionFrameValue
 }>
 
-type DecorEditState = Readonly<{ base: DecorPatch; modifications: DecorModificationMap }>
 
 
 /** Bridge handle owned by the Decor inspector region. */
@@ -139,8 +145,6 @@ export function createDecorEditorBridge(
   let unsubscribeSceneToolState: (() => void) | null = null
   let unsubscribeSelectionGeometry: (() => void) | null = null
   let motionOverlay: MotionOverlayHandle | null = null
-  let activeCreationMode: { itemType: ItemType; placementMode: RootPlacementMode } | null = null
-  let playbackActive = false
   let sceneHost: HTMLElement | null = null
   let resizeObserver: ResizeObserver | null = null
   let sceneRootContentWidthPx: number | null = null
@@ -149,24 +153,33 @@ export function createDecorEditorBridge(
   let authorFramePx: SelectionFrameValue | null = null
   let displayFramePx: SelectionFrameValue | null = null
   let frameLogicalValue: SelectionFrameValue | null = null
-  let frameGestureBasePx: SelectionFrameValue | null = null
-  let frameGestureKind: SelectionFrameDelta['kind'] | null = null
-  let frameGestureHasNetDelta = false
-  let frameGestureCancelled = false
-  /** Authored rotation offset paired with the displayed frame captured at gesture start. */
-  let frameGestureBaseAuthorRotate: number | null = null
-  let frameGestureBaseAuthorFrame: SelectionFrameValue | null = null
-  /** Keeps a just-released CS pose authoritative while the player presentation catches up. */
-  let frameCommitCandidatePx: SelectionFrameValue | null = null
-  /** Retains the live frame preview until the rebuilt document has been presented by the player. */
-  let snapshotCommitAwaitingPresentation = false
-  /** Prevents re-entrant presentation events from projecting stale host dimensions during a preview. */
+  /** Phases of the current Decor edit (étape 3d) ; read synchronously after each `send`. */
+  const session = createActor(decorEditSessionMachine).start()
+  /** Current frame gesture, kept while a cancelled gesture waits for its release. */
+  const gesture = (): FrameGesture | null => session.getSnapshot().context.gesture
+  /** Whether Escape cancelled the gesture whose pointer is still down. */
+  const gestureCancelled = (): boolean => session.getSnapshot().matches({ gesture: 'cancelled' })
+  /** Sparse edit registry, by item and author time. */
+  const editRegistry = (): ReadonlyMap<string, DecorEditState> => session.getSnapshot().context.registry
+  /** Edit between two keyframes waiting for the next boundary. */
+  const pendingTemporaryEdit = (): PendingTemporaryEdit | null => session.getSnapshot().context.pendingTemporary
+  /** Whether the pending temporary edit belongs to this item at the current author time. */
+  const temporaryEditPendingAt = (itemId: string | undefined): boolean => {
+    const pending = pendingTemporaryEdit()
+    return pending !== null && pending.itemId === itemId && isSameAuthorTime(pending.timeMs, lastKnownTimelineMs)
+  }
+  /** Whether a preview patch is applied to the runtime snapshot. */
+  const previewActive = (): boolean => session.getSnapshot().context.previewActive
+  /** Whether a committed preview waits for the rebuilt player to present it. */
+  const awaitingPresentation = (): boolean => session.getSnapshot().matches({ presentation: 'awaitingPresentation' })
+  /** Displayed frame kept authoritative after a commit, until the player presents it. */
+  const commitCandidate = (): SelectionFrameValue | null => session.getSnapshot().context.commitCandidate
+  /** Keeps (or drops, with `null`) the frame shown after a commit. */
+  const setCommitCandidate = (candidate: SelectionFrameValue | null): void => {
+    session.send({ type: 'COMMIT_CANDIDATE', candidate })
+  }
   /** Current border geometry used only to move between the outer pose origin and content-box origin. */
   let frameBorderInsetsPx: FrameBorderInsetsPx = ZERO_CONTENT_BOX_INSETS_PX
-  let lastPreviewAccepted = false
-  let snapshotPreviewActive = false
-  /** Makes the runtime presentation authoritative for the visible CS during an active seek. */
-  let seekProjectionActive = false
   let activeMotion: ActiveMotion | null = null
   /** Coalesced root-resize projection; runs after the runtime's own resize observer. */
   let resizeFrameRequest: number | null = null
@@ -177,10 +190,6 @@ export function createDecorEditorBridge(
   // Sélection, seek et mutation externe gardent leurs frontières immédiates ; Échap abandonne.
   // Aucun délai d'inactivité ne décide du commit. ───────────────────────────────────────────────
 
-  let pendingCommands: Command[] | null = null
-  const decorEditStates = new Map<string, DecorEditState>()
-  let frameGestureBaseDecorState: DecorEditState | null = null
-  let pendingTemporaryDecorCommit: { itemId: string; timeMs: number } | null = null
   /** Dernière scène/sélection observées — distingue une vraie mutation externe (signal 5) et un simple écho de notre propre flush (qui vide `pendingCommands` avant d'émettre). */
   let lastObservedScene: EditorScene | null = null
   let lastSelectionKey: string | null = null
@@ -194,20 +203,23 @@ export function createDecorEditorBridge(
    */
   let lastKnownTimelineMs = 0
 
+  /** Whether the controller plays the scene (read on its state, never copied). */
+  const playbackActive = (): boolean => machine.getSnapshot().matches('playing')
+  /** Item creation in progress on the controller, if any. */
+  const activeCreationMode = (): { itemType: ItemType; placementMode: RootPlacementMode } | null => {
+    const { creatingType, creatingPlacementMode } = machine.getSnapshot().context
+    return creatingType === null || creatingPlacementMode === null ? null : { itemType: creatingType, placementMode: creatingPlacementMode }
+  }
+
   /** Zone Editor overlay of the selected capsule or of the scene root. */
   const zones = new ZoneSurfaceBinding({
     machine,
     actions,
     presentation: () => coordination.presentation.get(),
-    isPlaybackActive: () => playbackActive,
-    isCreating: () => activeCreationMode !== null,
+    isPlaybackActive: playbackActive,
+    isCreating: () => activeCreationMode() !== null,
     inspectorPanel: () => inspectorPanel,
   })
-
-  /** Names one item/time pair without constraining the property paths stored inside it. */
-  function decorEditStateKey(itemId: string, timeMs: number): string {
-    return `${itemId}\u0000${timeMs}`
-  }
 
   /** Returns the snapshot only when it belongs to the author time currently being projected. */
   function presentedSnapshotAt(timeMs: number): CodPlaySnapshot | null {
@@ -235,30 +247,28 @@ export function createDecorEditorBridge(
   /** Updates the rendering projection and the sparse registry for the active Decor target. */
   function setDecorEditState(itemId: string, timeMs: number, base: DecorPatch, current: DecorPatch): DecorModificationMap {
     const modifications = collectDecorModifications(base, current)
-    const key = decorEditStateKey(itemId, timeMs)
-    if (modifications.size === 0) decorEditStates.delete(key)
-    else decorEditStates.set(key, { base, modifications })
+    session.send({ type: 'REGISTRY_SET', key: editRegistryKey(itemId, timeMs), state: modifications.size === 0 ? null : { base, modifications } })
     controller.setModifiedProperties(itemId, [...modifications.keys()])
     return modifications
   }
 
   /** Removes one temporary edit state and its preview candidate after a commit or cancellation. */
   function clearDecorEditState(itemId: string, timeMs: number): void {
-    decorEditStates.delete(decorEditStateKey(itemId, timeMs))
+    session.send({ type: 'TEMPORARY_CLEARED', itemId, timeMs })
     coordination.decorPreview.clear(itemId, timeMs)
-    if (pendingTemporaryDecorCommit?.itemId === itemId
-      && isSameAuthorTime(pendingTemporaryDecorCommit.timeMs, timeMs)) {
-      pendingTemporaryDecorCommit = null
-    }
   }
 
   /** Builds the sparse document transaction for a Decor edit made between two real keyframes. */
-  function buildTemporaryDecorCommit(scene: EditorScene, itemId: string, timeMs: number): { commands: Command[]; keyframeId: string } | null {
+  function buildTemporaryDecorCommit(
+    scene: EditorScene,
+    itemId: string,
+    timeMs: number,
+    state: DecorEditState | undefined,
+  ): { commands: Command[]; keyframeId: string } | null {
     const item = scene.items.find(candidate => candidate.id === itemId)
     if (item === undefined) return null
     const alignment = resolveDecorationKeyframeAlignment(item, timeMs)
     if (alignment.kind !== 'between' || item.keyframes.some(keyframe => keyframe.timeMs === timeMs)) return null
-    const state = decorEditStates.get(decorEditStateKey(itemId, timeMs))
     if (state === undefined || state.modifications.size === 0) return null
     const patch = modificationsToDecorPatch(state.modifications)
     const decorArgs = patchToDecorArgs(patch)
@@ -274,26 +284,20 @@ export function createDecorEditorBridge(
     }
   }
 
-  /** Commits the pending temporary Decor edit as one sparse keyframe, if it still has a target. */
-  function commitPendingTemporaryDecor(): void {
-    const pending = pendingTemporaryDecorCommit
-    if (pending === null) return
-    pendingTemporaryDecorCommit = null
+  /** Commits a temporary Decor edit as one sparse keyframe, if it still has a target. */
+  function commitTemporaryDecor(pending: PendingTemporaryEdit, state: DecorEditState | undefined): void {
+    coordination.decorPreview.clear(pending.itemId, pending.timeMs)
     const scene = machine.getSnapshot().context.scene
     if (scene === null) return
-    const transaction = buildTemporaryDecorCommit(scene, pending.itemId, pending.timeMs)
-    if (transaction === null) {
-      clearDecorEditState(pending.itemId, pending.timeMs)
-      return
-    }
-    clearDecorEditState(pending.itemId, pending.timeMs)
+    const transaction = buildTemporaryDecorCommit(scene, pending.itemId, pending.timeMs, state)
+    if (transaction === null) return
     retainSnapshotPreviewUntilPresentation()
     actions.commitDecorEdit(transaction.commands)
   }
 
   /** Drops temporary registry entries already consumed by an external timeline keyframe insertion. */
   function reconcileConsumedTemporaryDecor(scene: EditorScene): void {
-    const pending = pendingTemporaryDecorCommit
+    const pending = pendingTemporaryEdit()
     if (pending === null) return
     const item = scene.items.find(candidate => candidate.id === pending.itemId)
     if (item?.keyframes.some(keyframe => isSameAuthorTime(keyframe.timeMs, pending.timeMs))) {
@@ -311,36 +315,37 @@ export function createDecorEditorBridge(
    */
   function flushNow(): void {
     if (selectionFrame?.isGestureActive()) return
-    const commands = pendingCommands
-    pendingCommands = null
-    if (commands && commands.length > 0) {
+    const { pendingCommands: commands, pendingTemporary, registry } = session.getSnapshot().context
+    const temporaryState = pendingTemporary === null
+      ? undefined
+      : registry.get(editRegistryKey(pendingTemporary.itemId, pendingTemporary.timeMs))
+    // Taken before any commit: each commit re-enters this bridge through `sceneCommitted`.
+    session.send({ type: 'FLUSHED' })
+    if (commands !== null && commands.length > 0) {
       retainSnapshotPreviewUntilPresentation()
-      actions.commitDecorEdit(commands)
+      actions.commitDecorEdit([...commands])
     }
-    commitPendingTemporaryDecor()
+    if (pendingTemporary !== null) commitTemporaryDecor(pendingTemporary, temporaryState)
   }
 
   /** Clears the live snapshot and its target metadata as one phase operation. */
   function clearSnapshotPreview(clearRuntime = true): void {
-    if (clearRuntime && snapshotPreviewActive) coordination.snapshot.clear()
-    snapshotPreviewActive = false
+    if (clearRuntime && previewActive()) coordination.snapshot.clear()
+    session.send({ type: 'PREVIEW_CLEARED' })
   }
 
   /** Keeps the accepted display pose until the committed scene replaces the old player. */
   function retainSnapshotPreviewUntilPresentation(): void {
-    if (!snapshotPreviewActive) return
-    frameCommitCandidatePx ??= displayFramePx
-    snapshotCommitAwaitingPresentation = true
+    session.send({ type: 'COMMIT_SENT', fallback: displayFramePx })
   }
 
   /** Échap — abandon de phase (§Étape B.6) : jette l'écart en attente sans committer, puis force le pont `scenePlayer` à rejouer le document inchangé pour effacer la preview live devenue périmée. */
   function abortPhase(): void {
+    const { pendingCommands, pendingTemporary, registry } = session.getSnapshot().context
     const hadPendingCommands = pendingCommands !== null
-    const hadPreview = snapshotPreviewActive
-    const hadTemporaryEdit = pendingTemporaryDecorCommit !== null || decorEditStates.size > 0
-    pendingCommands = null
-    pendingTemporaryDecorCommit = null
-    decorEditStates.clear()
+    const hadPreview = previewActive()
+    const hadTemporaryEdit = pendingTemporary !== null || registry.size > 0
+    session.send({ type: 'ABORTED' })
     if (hadPreview) {
       clearSnapshotPreview()
     }
@@ -363,8 +368,8 @@ export function createDecorEditorBridge(
     if (selectionFrame?.isGestureActive()) {
       event.preventDefault()
       event.stopImmediatePropagation()
-      frameGestureCancelled = true
-      const restoredFrame = frameGestureBasePx ?? displayFramePx
+      session.send({ type: 'GESTURE_ESCAPE' })
+      const restoredFrame = gesture()?.basePx ?? displayFramePx
       selectionFrame.setValue(restoredFrame)
     }
     abortPhase()
@@ -399,7 +404,7 @@ export function createDecorEditorBridge(
   /** Refreshes the capsule definition editor and the zone overlay after a selection or playback change. */
   function syncInspectorPanels(): void {
     capsuleDefinitionEditor?.render()
-    capsuleDefinitionEditor?.setDisabled(playbackActive)
+    capsuleDefinitionEditor?.setDisabled(playbackActive())
     zones.syncVisibility()
   }
 
@@ -467,7 +472,7 @@ export function createDecorEditorBridge(
   /** Resolves the border belonging to one endpoint, including its current accepted preview. */
   function motionEndpointInsets(scene: EditorScene, item: Item, keyframeId: string, rootWidthPx: number): FrameBorderInsetsPx {
     const keyframe = item.keyframes.find((candidate) => candidate.id === keyframeId)
-    const isCurrentPreview = snapshotPreviewActive
+    const isCurrentPreview = previewActive()
       && frameTarget?.itemId === item.id
       && frameTarget.keyframeId === keyframeId
       && keyframe !== undefined
@@ -561,8 +566,8 @@ export function createDecorEditorBridge(
         : logicalFrameToPx(logicalFrame, rootWidthPx)
       // Endpoint anchors belong to the document, independently of selection/seek history.
       // Only an active or just-committed author gesture may replace its current endpoint.
-      const previewFrame = isSelectedEndpoint && (frameGestureBasePx !== null || snapshotCommitAwaitingPresentation)
-        ? frameCommitCandidatePx ?? displayFramePx
+      const previewFrame = isSelectedEndpoint && (gesture() !== null || awaitingPresentation())
+        ? commitCandidate() ?? displayFramePx
         : null
       const geometry = resolveMotionGeometryPose(previewFrame ?? authorFrame, insets)
       endpointGeometry.set(keyframe.id, {
@@ -649,7 +654,7 @@ export function createDecorEditorBridge(
         ...(isTemporary ? {
           isTemporary: true,
           splitProgress: resolveSegmentProgress(resolveSegmentTiming(scene, item, sourceKeyframe, targetKeyframe), timelineMs),
-          ...(frameGestureBasePx === null ? {} : { posePreview: true }),
+          ...(gesture() === null ? {} : { posePreview: true }),
         } : {}),
       })
     }
@@ -725,7 +730,7 @@ export function createDecorEditorBridge(
       if (geometry === undefined) return []
       const atCurrentKeyframe = frameTarget?.itemId === item.id
         && isSameAuthorTime(lastKnownTimelineMs, keyframe.timeMs)
-      const currentFrame = atCurrentKeyframe ? frameCommitCandidatePx ?? displayFramePx : null
+      const currentFrame = atCurrentKeyframe ? commitCandidate() ?? displayFramePx : null
       // At the current KF the acknowledged presentation (or accepted preview) owns the ghost,
       // including the compiler's path quantization. Other KFs use their owning segment projection.
       const usesSelectedGeometry = atCurrentKeyframe
@@ -832,7 +837,7 @@ export function createDecorEditorBridge(
     const timelineMs = selectedKeyframe?.timeMs ?? lastKnownTimelineMs
     const easedProgress = resolveSegmentProgress(motion.timing, timelineMs)
     const tangentProgress = candidateIsSource ? 0 : candidateIsTarget ? 1 : easedProgress
-    if (!candidateIsSource && !candidateIsTarget && frameGestureBasePx !== null) {
+    if (!candidateIsSource && !candidateIsTarget && gesture() !== null) {
       const waypoint = motionPathAnchorForFrame(candidateFrame, candidateInsets)
       const split = splitMotionPath(tangentPath, sourceAnchor, waypoint, targetAnchor, easedProgress)
       const angle = split.after === undefined
@@ -954,9 +959,7 @@ export function createDecorEditorBridge(
     if (snapshotPatches === null) return recordCandidate
     const result = coordination.snapshot.set(snapshotPatches)
     const accepted = result?.ok === true
-    if (accepted) {
-      snapshotPreviewActive = true
-    }
+    session.send({ type: 'PREVIEW_APPLIED', accepted })
     return accepted
   }
 
@@ -969,13 +972,35 @@ export function createDecorEditorBridge(
     return first !== undefined && isSameAuthorTime(lastKnownTimelineMs, first.timeMs)
   }
 
+  /** Captures the start of a frame gesture: displayed base, edit registry entry, authored rotation and frame. */
+  function startGesture(scene: EditorScene | null, target: Target, basePx: SelectionFrameValue, kind: SelectionFrameDelta['kind']): FrameGesture {
+    const editState = editRegistry().get(editRegistryKey(target.itemId, lastKnownTimelineMs))
+    const baseAuthorRotate = scene === null
+      ? authorFramePx?.rotate ?? basePx.rotate ?? 0
+      : authoredRotationAtGestureStart(scene, target, basePx)
+    const started: FrameGesture = {
+      basePx,
+      kind,
+      hasNetDelta: false,
+      baseDecorState: editState === undefined ? null : { base: editState.base, modifications: new Map(editState.modifications) },
+      baseAuthorRotate,
+      baseAuthorFrame: scene === null || authorFramePx === null
+        ? null
+        : target.isTemporary
+          ? authorFrameForGesture(basePx, baseAuthorRotate)
+          : { ...authorFramePx, rotationOrigin: authorFramePx.rotationOrigin === undefined ? undefined : { ...authorFramePx.rotationOrigin } },
+    }
+    session.send({ type: 'GESTURE_START', gesture: started })
+    return started
+  }
+
   /** Converts a frame delta to a controller patch and returns the accepted pixel candidate. */
   function previewFrame(delta: SelectionFrameDelta): SelectionFrameValue | null {
     const context = machine.getSnapshot().context
     if (context.authoringMode === 'zone') return null
     if ((delta.kind === 'rotate' || delta.kind === 'pivot') && !canRotateSelection()) return displayFramePx
     const target = frameTarget
-    const base = frameGestureBasePx ?? displayFramePx
+    const base = gesture()?.basePx ?? displayFramePx
     const rootWidth = sceneRootWidthPx()
     if (target === null || base === null || rootWidth === null) return null
     const scene = context.scene
@@ -985,25 +1010,10 @@ export function createDecorEditorBridge(
       && scene !== null
       && item !== undefined
       && itemUsesZonePlacement(scene, item, lastKnownTimelineMs, target.keyframeId)
-    if (frameGestureCancelled) return frameGestureBasePx ?? displayFramePx
-    if (frameGestureBasePx === null) {
-      frameGestureBasePx = base
-      frameGestureKind = delta.kind
-      const editState = decorEditStates.get(decorEditStateKey(target.itemId, lastKnownTimelineMs))
-      frameGestureBaseDecorState = editState === undefined
-        ? null
-        : { base: editState.base, modifications: new Map(editState.modifications) }
-      frameGestureBaseAuthorRotate = scene === null
-        ? authorFramePx?.rotate ?? base.rotate ?? 0
-        : authoredRotationAtGestureStart(scene, target, base)
-      frameGestureBaseAuthorFrame = scene === null || authorFramePx === null
-        ? null
-        : target.isTemporary
-          ? authorFrameForGesture(base, frameGestureBaseAuthorRotate)
-          : { ...authorFramePx, rotationOrigin: authorFramePx.rotationOrigin === undefined ? undefined : { ...authorFramePx.rotationOrigin } }
-    }
-    const displayedBase = frameGestureBasePx
-    frameGestureHasNetDelta = delta.kind === 'rotate'
+    if (gestureCancelled()) return gesture()?.basePx ?? displayFramePx
+    const currentGesture = gesture() ?? startGesture(scene, target, base, delta.kind)
+    const displayedBase = currentGesture.basePx
+    const hasNetDelta = delta.kind === 'rotate'
       ? delta.dr !== 0
         && normalizeAngleDegrees(Math.round((displayedBase.rotate ?? 0) + delta.dr))
           !== normalizeAngleDegrees(displayedBase.rotate ?? 0)
@@ -1011,11 +1021,12 @@ export function createDecorEditorBridge(
         ? delta.fx !== (displayedBase.rotationOrigin?.fx ?? 0.5)
           || delta.fy !== (displayedBase.rotationOrigin?.fy ?? 0.5)
         : delta.dx !== 0 || delta.dy !== 0
-    const authoredBaseRotate = frameGestureBaseAuthorRotate ?? authorFramePx?.rotate ?? displayedBase.rotate ?? 0
+    session.send({ type: 'GESTURE_DELTA', hasNetDelta })
+    const authoredBaseRotate = gesture()?.baseAuthorRotate ?? authorFramePx?.rotate ?? displayedBase.rotate ?? 0
     const tangentMotion = !zoneOffsetGesture && scene !== null && targetUsesTangent(scene, target)
     const rawDisplayCandidate = applyFrameDelta(displayedBase, delta)
     const tangentRotation = tangentMotion && delta.kind === 'rotate'
-    const authoredBase = frameGestureBaseAuthorFrame
+    const authoredBase = gesture()?.baseAuthorFrame
       ?? (tangentMotion ? authorFrameForGesture(displayedBase, authoredBaseRotate) : displayedBase)
     const represented = coordination.presentation.get()?.items.find((entry) => entry.itemId === runtimeItemId(target.itemId))
     const sourceRepresentation = represented?.representation === 'source'
@@ -1062,7 +1073,7 @@ export function createDecorEditorBridge(
       : tangentMotion && delta.kind === 'move' && scene !== null
         ? displayFrameForAuthorFrame(scene, target, candidateAuthorFrame)
         : rawDisplayCandidate
-    lastPreviewAccepted = false
+    session.send({ type: 'DECOR_PREVIEW_REQUESTED' })
     const patchBaseFrame = editsAuthorSource || delta.kind === 'move' || tangentRotation
       ? authoredBase
       : tangentMotion ? authorFrameForGesture(displayedBase, authoredBaseRotate) : displayedBase
@@ -1071,7 +1082,7 @@ export function createDecorEditorBridge(
       : frameGesturePatch(patchBaseFrame, candidateAuthorFrame, rootWidth)
     if (framePatch === null) return base
     controller.applyPatch(framePatch)
-    if (!lastPreviewAccepted) return base
+    if (!session.getSnapshot().context.lastPreviewAccepted) return base
     setAuthorFrame(candidateAuthorFrame, rootWidth)
     displayFramePx = displayCandidate
     syncMotionOverlay()
@@ -1089,7 +1100,7 @@ export function createDecorEditorBridge(
   ): DecorPatch | null {
     const item = scene.items.find((entry) => entry.id === target.itemId)
     if (item === undefined || !itemUsesZonePlacement(scene, item, lastKnownTimelineMs, target.keyframeId)) return null
-    const baseState = frameGestureBaseDecorState
+    const baseState = gesture()?.baseDecorState ?? null
     const basePatch = baseState === null
       ? resolveDecorEditBase(scene, target, lastKnownTimelineMs)
       : applyDecorModifications(baseState.base, baseState.modifications)
@@ -1155,24 +1166,25 @@ export function createDecorEditorBridge(
     const gestureUsesTangent = beforeFlush.scene !== null
       && gestureTarget !== null
       && targetUsesTangent(beforeFlush.scene, gestureTarget)
-    const gestureUsesAuthorSource = frameGestureBasePx !== null
+    const dropGesture = gesture()
+    const gestureUsesAuthorSource = dropGesture !== null
       && gestureTarget !== null
       && !gestureUsesTangent
       && coordination.presentation.get()?.items.some(item =>
         item.itemId === runtimeItemId(gestureTarget.itemId) && item.representation === 'source',
       ) === true
     const convertDisplayedFrames = gestureUsesTangent
-    const gestureAuthorRotate = frameGestureBaseAuthorRotate
+    const gestureAuthorRotate = dropGesture?.baseAuthorRotate
       ?? (beforeFlush.scene !== null && gestureTarget !== null && convertDisplayedFrames
         ? authoredRotationAtGestureStart(beforeFlush.scene, gestureTarget, drop.sourceFrame)
         : authorFramePx?.rotate ?? drop.sourceFrame.rotate ?? 0)
     const sourceDocumentFrame = convertDisplayedFrames
-      ? frameGestureKind === 'rotate' && frameGestureBaseAuthorFrame !== null
-        ? frameGestureBaseAuthorFrame
+      ? dropGesture?.kind === 'rotate' && dropGesture.baseAuthorFrame !== null
+        ? dropGesture.baseAuthorFrame
         : authorFrameForGesture(drop.sourceFrame, gestureAuthorRotate)
-      : gestureUsesAuthorSource ? frameGestureBaseAuthorFrame ?? drop.sourceFrame : drop.sourceFrame
+      : gestureUsesAuthorSource ? dropGesture?.baseAuthorFrame ?? drop.sourceFrame : drop.sourceFrame
     const requestedTargetDocumentFrame = convertDisplayedFrames
-      ? frameGestureBasePx !== null && authorFramePx !== null
+      ? dropGesture !== null && authorFramePx !== null
         ? authorFramePx
         : authorFrameForGesture(drop.targetFrame, gestureAuthorRotate)
       : gestureUsesAuthorSource ? authorFramePx ?? drop.targetFrame : drop.targetFrame
@@ -1180,10 +1192,8 @@ export function createDecorEditorBridge(
     // resolving the drop so this gesture cannot be overwritten by an older pending command.
     // The current temporary pose gesture itself is committed below from the same sparse registry;
     // do not let the generic phase flush create an intermediate Decor KF before that transaction.
-    const currentTemporaryEdit = pendingTemporaryDecorCommit !== null
-      && pendingTemporaryDecorCommit.itemId === frameTarget?.itemId
-      && isSameAuthorTime(pendingTemporaryDecorCommit.timeMs, lastKnownTimelineMs)
-    if (currentTemporaryEdit) pendingTemporaryDecorCommit = null
+    const currentTemporaryEdit = temporaryEditPendingAt(frameTarget?.itemId)
+    if (currentTemporaryEdit) session.send({ type: 'TEMPORARY_DISCARDED' })
     flushNow()
     const { scene, selection } = machine.getSnapshot().context
     if (scene === null || selection.itemIds.length !== 1) return null
@@ -1257,7 +1267,7 @@ export function createDecorEditorBridge(
         ? undefined
         : item.keyframes.find((keyframe) => keyframe.id === sourceTarget.keyframeId)
       if (sourceTarget.keyframeId !== null && selectedKeyframe === undefined) return null
-      const editState = decorEditStates.get(decorEditStateKey(sourceTarget.itemId, lastKnownTimelineMs))
+      const editState = editRegistry().get(editRegistryKey(sourceTarget.itemId, lastKnownTimelineMs))
       const decorPatch = editState === undefined || editState.modifications.size === 0
         ? {}
         : modificationsToDecorPatch(editState.modifications)
@@ -1301,7 +1311,7 @@ export function createDecorEditorBridge(
     const targetTimeMs = Math.max(0, Math.min(lastKnownTimelineMs, scene.meta.durationMs))
     if (item.keyframes.some((keyframe) => keyframe.timeMs === targetTimeMs)) return null
 
-    const editState = decorEditStates.get(decorEditStateKey(sourceTarget.itemId, lastKnownTimelineMs))
+    const editState = editRegistry().get(editRegistryKey(sourceTarget.itemId, lastKnownTimelineMs))
     const sparsePatch = {
       ...(editState === undefined
         ? capturedPosePatch
@@ -1356,10 +1366,9 @@ export function createDecorEditorBridge(
   function restoreFrameGestureDecorEdit(): DecorPatch {
     const target = frameTarget
     if (target === null) return {}
-    const editKey = decorEditStateKey(target.itemId, lastKnownTimelineMs)
-    const baseState = frameGestureBaseDecorState
-    if (baseState === null) decorEditStates.delete(editKey)
-    else decorEditStates.set(editKey, baseState)
+    const editKey = editRegistryKey(target.itemId, lastKnownTimelineMs)
+    const baseState = gesture()?.baseDecorState ?? null
+    session.send({ type: 'REGISTRY_SET', key: editKey, state: baseState })
     controller.setModifiedProperties(target.itemId, baseState === null ? [] : [...baseState.modifications.keys()])
     if (target.isTemporary) {
       if (baseState === null || baseState.modifications.size === 0) {
@@ -1378,7 +1387,7 @@ export function createDecorEditorBridge(
   /** Cancels a zone-mode preview and restores staged author edits only before the phase flush consumes them. */
   function cancelZoneMovePreview(sourceFrame: SelectionFrameValue, restoreAuthorEdits = true): void {
     if (restoreAuthorEdits) restoreFrameGestureDecorEdit()
-    frameCommitCandidatePx = sourceFrame
+    setCommitCandidate(sourceFrame)
     displayFramePx = sourceFrame
     const rootWidth = sceneRootWidthPx()
     if (rootWidth !== null) setAuthorFrame(sourceFrame, rootWidth)
@@ -1422,12 +1431,10 @@ export function createDecorEditorBridge(
       }
     }
 
-    const currentTemporaryEdit = beforeTarget.isTemporary
-      && pendingTemporaryDecorCommit?.itemId === beforeTarget.itemId
-      && isSameAuthorTime(pendingTemporaryDecorCommit.timeMs, lastKnownTimelineMs)
+    const currentTemporaryEdit = beforeTarget.isTemporary && temporaryEditPendingAt(beforeTarget.itemId)
     const gestureDecorPatch = restoreFrameGestureDecorEdit()
     const carriedTemporaryPatch = beforeTarget.isTemporary ? gestureDecorPatch : {}
-    if (currentTemporaryEdit) pendingTemporaryDecorCommit = null
+    if (currentTemporaryEdit) session.send({ type: 'TEMPORARY_DISCARDED' })
     flushNow()
 
     const { scene, selection } = machine.getSnapshot().context
@@ -1520,9 +1527,9 @@ export function createDecorEditorBridge(
     if (before.scene === null) return
     const beforeTarget = resolveTarget(before.scene, before.selection, lastKnownTimelineMs)
     if (beforeTarget === null) return
-    const editKey = decorEditStateKey(beforeTarget.itemId, lastKnownTimelineMs)
-    const currentState = decorEditStates.get(editKey)
-    const gestureBaseState = frameGestureBaseDecorState
+    const editKey = editRegistryKey(beforeTarget.itemId, lastKnownTimelineMs)
+    const currentState = editRegistry().get(editKey)
+    const gestureBaseState = gesture()?.baseDecorState ?? null
     const basePatch = gestureBaseState === null
       ? currentState?.base ?? resolveDecorEditBase(before.scene, beforeTarget, lastKnownTimelineMs)
       : applyDecorModifications(gestureBaseState.base, gestureBaseState.modifications)
@@ -1530,13 +1537,11 @@ export function createDecorEditorBridge(
       ? basePatch
       : applyDecorModifications(currentState.base, currentState.modifications)
     const gesturePatch = modificationsToDecorPatch(modificationsFromDecorPatch(basePatch, currentPatch))
-    const previousTemporaryEdit = beforeTarget.isTemporary
-      && pendingTemporaryDecorCommit?.itemId === beforeTarget.itemId
-      && isSameAuthorTime(pendingTemporaryDecorCommit.timeMs, lastKnownTimelineMs)
+    const previousTemporaryEdit = beforeTarget.isTemporary && temporaryEditPendingAt(beforeTarget.itemId)
     const temporaryPatch = previousTemporaryEdit && currentState !== undefined
       ? modificationsToDecorPatch(currentState.modifications)
       : gesturePatch
-    if (previousTemporaryEdit) pendingTemporaryDecorCommit = null
+    if (previousTemporaryEdit) session.send({ type: 'TEMPORARY_DISCARDED' })
     flushNow()
 
     const { scene, selection } = machine.getSnapshot().context
@@ -1596,44 +1601,27 @@ export function createDecorEditorBridge(
   /** Commits every Selection Frame affine gesture through the pose-KF path immediately. */
   function commitSelectionFrameDrop(targetFrame: SelectionFrameValue): void {
     if (machine.getSnapshot().context.authoringMode === 'zone') {
-      if (frameGestureBasePx !== null) abortPhase()
-      frameGestureBasePx = null
-      frameGestureKind = null
-      frameGestureHasNetDelta = false
-      frameGestureBaseDecorState = null
-      frameGestureBaseAuthorRotate = null
-      frameGestureBaseAuthorFrame = null
-      frameCommitCandidatePx = null
-      frameGestureCancelled = false
+      if (gesture() !== null) abortPhase()
+      session.send({ type: 'GESTURE_END' })
+      setCommitCandidate(null)
       controller.notifyInteractionEnd()
       return
     }
-    if (frameGestureCancelled) {
-      frameGestureCancelled = false
-      frameGestureBasePx = null
-      frameGestureKind = null
-      frameGestureHasNetDelta = false
-      frameGestureBaseDecorState = null
-      frameGestureBaseAuthorRotate = null
-      frameGestureBaseAuthorFrame = null
-      frameCommitCandidatePx = null
+    if (gestureCancelled()) {
+      session.send({ type: 'GESTURE_END' })
+      setCommitCandidate(null)
       controller.notifyInteractionEnd()
       return
     }
-    if (frameGestureKind === null || !frameGestureHasNetDelta) {
+    if (gesture()?.hasNetDelta !== true) {
       flushNow()
-      frameCommitCandidatePx = null
-      frameGestureBasePx = null
-      frameGestureKind = null
-      frameGestureHasNetDelta = false
-      frameGestureBaseDecorState = null
-      frameGestureBaseAuthorRotate = null
-      frameGestureBaseAuthorFrame = null
+      setCommitCandidate(null)
+      session.send({ type: 'GESTURE_END' })
       controller.notifyInteractionEnd()
       return
     }
-    const sourceFrame = frameGestureBasePx ?? displayFramePx
-    frameCommitCandidatePx = targetFrame
+    const sourceFrame = gesture()?.basePx ?? displayFramePx
+    setCommitCandidate(targetFrame)
     try {
       if (sourceFrame !== null) {
         const { scene, selection } = machine.getSnapshot().context
@@ -1645,7 +1633,7 @@ export function createDecorEditorBridge(
         const zoneOffset = context.authoringMode === 'block'
           && context.editGesture === 'offset'
           && selectedZoneItem
-        const zoneMove = frameGestureKind === 'move'
+        const zoneMove = gesture()?.kind === 'move'
           && context.authoringMode === 'block'
           && context.editGesture !== 'offset'
           && selectedZoneItem
@@ -1660,14 +1648,8 @@ export function createDecorEditorBridge(
         }
       }
     } finally {
-      if (!snapshotCommitAwaitingPresentation) frameCommitCandidatePx = null
-      frameGestureBasePx = null
-      frameGestureKind = null
-      frameGestureHasNetDelta = false
-      frameGestureBaseDecorState = null
-      frameGestureBaseAuthorRotate = null
-      frameGestureBaseAuthorFrame = null
-      frameGestureCancelled = false
+      if (!awaitingPresentation()) setCommitCandidate(null)
+      session.send({ type: 'GESTURE_END' })
     }
     controller.notifyInteractionEnd()
   }
@@ -1772,7 +1754,7 @@ export function createDecorEditorBridge(
     // A pending CS/palette phase is not in the document yet. Keep its logical candidate, but
     // project it through the same width boundary and let syncMotionOverlay reproject both path
     // endpoints around it. Calling syncSelection here would discard that candidate.
-    if ((pendingCommands !== null || pendingTemporaryDecorCommit !== null) && frameLogicalValue !== null) {
+    if (session.getSnapshot().matches({ edit: 'pending' }) && frameLogicalValue !== null) {
       const target = resolveTarget(scene, selection, lastKnownTimelineMs)
       const attachedPatch = target === null
         ? null
@@ -1849,19 +1831,19 @@ export function createDecorEditorBridge(
     const usesZonePlacement = context.scene !== null
       && item !== undefined
       && itemUsesZonePlacement(context.scene, item, lastKnownTimelineMs, target?.keyframeId)
-    const selectionFrameActive = activeCreationMode === null
+    const selectionFrameActive = activeCreationMode() === null
       && (context.authoringMode === null
         || (context.authoringMode === 'block' && item !== undefined
           && (!usesZonePlacement || context.editGesture === 'offset')))
     const displayedFrame = selectionFrameActive ? displayFramePx ?? frame : null
-    selectionFrame?.setSuspended(playbackActive)
+    selectionFrame?.setSuspended(playbackActive())
     selectionFrame?.setValue(displayedFrame)
     if (selectionFrame !== null) selectionFrame.element.style.pointerEvents = selectionFrameActive ? 'auto' : 'none'
 
     const zoneMoveActive = context.authoringMode === 'block'
       && context.editGesture !== 'offset'
-      && activeCreationMode === null
-      && !playbackActive
+      && activeCreationMode() === null
+      && !playbackActive()
       && context.scene !== null
       && item !== undefined
       && usesZonePlacement
@@ -1895,13 +1877,7 @@ export function createDecorEditorBridge(
       onPreview: previewFrame,
       onCommit: commitSelectionFrameDrop,
       onCancel: () => {
-        frameGestureBasePx = null
-        frameGestureKind = null
-        frameGestureHasNetDelta = false
-        frameGestureBaseDecorState = null
-        frameGestureBaseAuthorRotate = null
-        frameGestureBaseAuthorFrame = null
-        frameGestureCancelled = false
+        session.send({ type: 'GESTURE_END' })
         abortPhase()
       },
       creation: { onCreate: commitItemCreation },
@@ -1930,7 +1906,7 @@ export function createDecorEditorBridge(
       const context = machine.getSnapshot().context
       syncControlSurfaces(motionGeometry.get().selection?.geometry.frame ?? null)
       zones.syncVisibility()
-      motionOverlay?.setSuspended(playbackActive || activeCreationMode !== null || context.authoringMode === 'zone')
+      motionOverlay?.setSuspended(playbackActive() || activeCreationMode() !== null || context.authoringMode === 'zone')
     }
     syncToolState()
     const toolStateSubscription = machine.subscribe((snapshot) => {
@@ -1987,9 +1963,9 @@ export function createDecorEditorBridge(
       onPathOrientationChange: commitMotionPathOrientation,
     }, motionGeometry)
     syncToolState()
-    if (activeCreationMode !== null) {
+    if (activeCreationMode() !== null) {
       selectionFrame.setCreationMode(selectionModeFor())
-      motionOverlay.setSuspended(playbackActive || machine.getSnapshot().context.authoringMode === 'zone')
+      motionOverlay.setSuspended(playbackActive() || machine.getSnapshot().context.authoringMode === 'zone')
     }
     if (typeof ResizeObserver !== 'undefined') {
       resizeObserver = new ResizeObserver(([entry]) => {
@@ -2048,7 +2024,7 @@ export function createDecorEditorBridge(
 
   /** Maps the persisted root placement mode to the selection-frame V2 drawing mode. */
   function selectionModeFor() {
-    return activeCreationMode?.placementMode === 'fine-grid'
+    return activeCreationMode()?.placementMode === 'fine-grid'
       ? { kind: 'grid' as const, ...ROOT_PLACEMENT_GRID['fine-grid'] }
       : { kind: 'free' as const }
   }
@@ -2075,14 +2051,9 @@ export function createDecorEditorBridge(
     authorFramePx = null
     displayFramePx = null
     frameLogicalValue = null
-    seekProjectionActive = false
-    frameGestureBasePx = null
-    frameGestureKind = null
-    frameGestureHasNetDelta = false
-    frameGestureBaseDecorState = null
-    frameGestureBaseAuthorRotate = null
-    frameGestureBaseAuthorFrame = null
-    frameCommitCandidatePx = null
+    session.send({ type: 'PROJECTION_FOLLOWS_SELECTION' })
+    session.send({ type: 'GESTURE_END' })
+    setCommitCandidate(null)
     frameBorderInsetsPx = ZERO_CONTENT_BOX_INSETS_PX
     activeMotion = null
     motionGeometry.publish({ selection: null, segments: [], ghosts: [], initialGhost: null })
@@ -2098,14 +2069,9 @@ export function createDecorEditorBridge(
       authorFramePx = null
       displayFramePx = null
       frameLogicalValue = null
-      seekProjectionActive = false
-      frameGestureBasePx = null
-      frameGestureKind = null
-      frameGestureHasNetDelta = false
-      frameGestureBaseDecorState = null
-      frameGestureBaseAuthorRotate = null
-      frameGestureBaseAuthorFrame = null
-      frameCommitCandidatePx = null
+      session.send({ type: 'PROJECTION_FOLLOWS_SELECTION' })
+      session.send({ type: 'GESTURE_RESET' })
+      setCommitCandidate(null)
       frameBorderInsetsPx = ZERO_CONTENT_BOX_INSETS_PX
       publishMotionGeometrySnapshot(null, [], [], false)
       controller.detach()
@@ -2117,12 +2083,11 @@ export function createDecorEditorBridge(
     const visible = isItemVisible(item, itemsById)
     if (!visible) {
       activeMotion = null
-      frameCommitCandidatePx = null
-      snapshotCommitAwaitingPresentation = false
+      session.send({ type: 'PRESENTATION_SETTLED' })
     }
     // A document-backed target no longer needs the temporary snapshot contribution. This also
     // closes the preview left by a temporary edit when a freshly created keyframe is selected.
-    if ((!visible || !target.isTemporary) && snapshotPreviewActive && !snapshotCommitAwaitingPresentation) {
+    if ((!visible || !target.isTemporary) && previewActive() && !awaitingPresentation()) {
       clearSnapshotPreview()
     }
 
@@ -2137,12 +2102,12 @@ export function createDecorEditorBridge(
     let modifiedProperties: DecorModificationMap = new Map()
     if (target.isTemporary) {
       const base = resolveDecorEditBase(scene, target, lastKnownTimelineMs)
-      const editKey = decorEditStateKey(target.itemId, lastKnownTimelineMs)
+      const editKey = editRegistryKey(target.itemId, lastKnownTimelineMs)
       if (temporaryCandidate !== null) {
-        const previousState = decorEditStates.get(editKey)
+        const previousState = editRegistry().get(editKey)
         const candidateBase = previousState?.base ?? base
         modifiedProperties = modificationsFromDecorPatch(candidateBase, temporaryCandidate.patch)
-        decorEditStates.set(editKey, { base: candidateBase, modifications: modifiedProperties })
+        session.send({ type: 'REGISTRY_SET', key: editKey, state: { base: candidateBase, modifications: modifiedProperties } })
         patch = applyDecorModifications(candidateBase, modifiedProperties)
         controller.setModifiedProperties(target.itemId, [...modifiedProperties.keys()])
         // A scene rebuild destroys the runtime preview. Re-apply the accepted candidate only when
@@ -2153,12 +2118,12 @@ export function createDecorEditorBridge(
         }
       } else {
         patch = base
-        decorEditStates.delete(editKey)
+        session.send({ type: 'REGISTRY_SET', key: editKey, state: null })
         controller.setModifiedProperties(target.itemId, [])
       }
     } else {
       patch = resolveDecorEditBase(scene, target, lastKnownTimelineMs)
-      decorEditStates.set(decorEditStateKey(target.itemId, lastKnownTimelineMs), { base: patch, modifications: new Map() })
+      session.send({ type: 'REGISTRY_SET', key: editRegistryKey(target.itemId, lastKnownTimelineMs), state: { base: patch, modifications: new Map() } })
     }
     const rootWidth = sceneRootWidthPx()
     const targetKeyframe = target.keyframeId === null
@@ -2176,7 +2141,7 @@ export function createDecorEditorBridge(
     // same snapshot unless it already has a live candidate of its own.
     const readsPresentedSnapshot = target.isTemporary
       || (targetIsDecorOnly && targetIsAtTimeline)
-      || (seekProjectionActive && !targetIsAtTimeline)
+      || (session.getSnapshot().matches({ projection: 'followsTime' }) && !targetIsAtTimeline)
     const currentLogicalSnapshot = readsPresentedSnapshot
       ? presentedSnapshotAt(lastKnownTimelineMs)
       : null
@@ -2210,18 +2175,13 @@ export function createDecorEditorBridge(
       : presentedContentBoxFrameForItem(target.itemId, authorFramePx.rotationOrigin)
     const nextDisplayFrame = authorFramePx === null
       ? null
-      : frameCommitCandidatePx
+      : commitCandidate()
         ?? presentedFrame
         ?? authorFramePx
     displayFramePx = nextDisplayFrame === null
       ? null
       : { ...nextDisplayFrame, rotate: normalizeAngleDegrees(nextDisplayFrame.rotate ?? 0) }
-    frameGestureBasePx = null
-    frameGestureKind = null
-    frameGestureHasNetDelta = false
-    frameGestureBaseDecorState = null
-    frameGestureBaseAuthorRotate = null
-    frameGestureBaseAuthorFrame = null
+    session.send({ type: 'GESTURE_RESET' })
     controller.attachItems([
       {
         itemId: target.itemId,
@@ -2247,20 +2207,19 @@ export function createDecorEditorBridge(
     // but do not arm the generic Decor-KF flush; `commitSelectionFrameDrop` captures the affine
     // pose synchronously on pointer release. A palette edit already pending before the gesture is
     // left intact so the pose commit can merge its sparse decoration patch.
-    const isFramePoseGesture = frameGestureBasePx !== null
+    const isFramePoseGesture = gesture() !== null
 
-    const editKey = decorEditStateKey(target.itemId, lastKnownTimelineMs)
-    const currentState = decorEditStates.get(editKey)
+    const editKey = editRegistryKey(target.itemId, lastKnownTimelineMs)
+    const currentState = editRegistry().get(editKey)
     const base = currentState?.base ?? resolveDecorEditBase(scene, target, lastKnownTimelineMs)
     const modifications = setDecorEditState(entry.itemId, lastKnownTimelineMs, base, entry.patch)
     const sparsePatch = modificationsToDecorPatch(modifications)
 
     if (modifications.size === 0) {
-      pendingCommands = null
-      if (target.isTemporary) pendingTemporaryDecorCommit = null
+      session.send({ type: 'PENDING_DISCARDED', temporary: target.isTemporary })
       coordination.decorPreview.clear(entry.itemId, lastKnownTimelineMs)
       clearSnapshotPreview()
-      lastPreviewAccepted = true
+      session.send({ type: 'DECOR_PREVIEWED', accepted: true })
       return
     }
 
@@ -2271,7 +2230,7 @@ export function createDecorEditorBridge(
     const nextBorderInsets = rootWidth === null
       ? null
       : resolveFrameBorderInsets(null, entry.itemId, entry.patch, rootWidth)
-    const authorBase = frameGestureBaseAuthorFrame
+    const authorBase = gesture()?.baseAuthorFrame
       ?? (displayFramePx !== null && target.isTemporary && targetUsesTangent(scene, target)
         ? authorFrameForGesture(displayFramePx, authoredRotationAtGestureStart(scene, target, displayFramePx))
         : authorFramePx)
@@ -2285,8 +2244,9 @@ export function createDecorEditorBridge(
     const displayedCandidate = authorCandidate === null || nextBorderInsets === null || rootWidth === null
       ? displayFramePx
       : displayFrameForAuthorFrame(scene, target, authorCandidate, nextBorderInsets)
-    lastPreviewAccepted = previewPatch(entry.itemId, sparsePatch, target.isTemporary, displayedCandidate)
-    if (lastPreviewAccepted && nextBorderInsets !== null) {
+    const previewAccepted = previewPatch(entry.itemId, sparsePatch, target.isTemporary, displayedCandidate)
+    session.send({ type: 'DECOR_PREVIEWED', accepted: previewAccepted })
+    if (previewAccepted && nextBorderInsets !== null) {
       frameBorderInsetsPx = nextBorderInsets
       if (!isFramePoseGesture && rootWidth !== null && authorCandidate !== null && displayedCandidate !== null) {
         setAuthorFrame(authorCandidate, rootWidth)
@@ -2296,7 +2256,7 @@ export function createDecorEditorBridge(
     }
     if (target.isTemporary) {
       if (!isFramePoseGesture) {
-        pendingTemporaryDecorCommit = { itemId: entry.itemId, timeMs: lastKnownTimelineMs }
+        session.send({ type: 'TEMPORARY_EDIT_PENDING', edit: { itemId: entry.itemId, timeMs: lastKnownTimelineMs } })
         // The explicit control-end signal commits this temporary edit; movement creation is
         // handled by `commitMotionDrop`, which materializes a pose KF on pointer release.
       }
@@ -2313,7 +2273,7 @@ export function createDecorEditorBridge(
       materializeZoneFillStyle(resolveDocumentDecorBase(scene, target, lastKnownTimelineMs), sparsePatch),
     )
     if (!isFramePoseGesture && commands.length > 0) {
-      pendingCommands = commands
+      session.send({ type: 'EXACT_EDIT_PENDING', commands })
     }
   })
 
@@ -2368,8 +2328,8 @@ export function createDecorEditorBridge(
       flushNow()
       // A deliberate selection (timeline item/KF or ghost) re-establishes its own target. A seek
       // without a selection change must keep following the runtime time instead of the last KF.
-      seekProjectionActive = false
-    } else if (scene !== lastObservedScene && pendingCommands !== null) {
+      session.send({ type: 'PROJECTION_FOLLOWS_SELECTION' })
+    } else if (scene !== lastObservedScene && session.getSnapshot().context.pendingCommands !== null) {
       // Frontière d'édition « mutation documentaire externe » (ex. édition timeline) survenue pendant une phase
       // décor en cours : notre propre flush vide `pendingCommands` AVANT d'émettre son propre
       // commit, donc son écho ne peut jamais retomber dans cette branche (pas de boucle).
@@ -2384,14 +2344,11 @@ export function createDecorEditorBridge(
     // Un chargement de document supplante toute phase en cours — rien à committer, rien à préserver.
     // The active segment is derived state; reload it from the new document even when IDs match.
     activeMotion = null
-    pendingCommands = null
-    pendingTemporaryDecorCommit = null
-    decorEditStates.clear()
+    session.send({ type: 'ABORTED' })
     coordination.snapshot.clear()
-    snapshotPreviewActive = false
-    seekProjectionActive = false
-    snapshotCommitAwaitingPresentation = false
-    frameCommitCandidatePx = null
+    session.send({ type: 'PREVIEW_CLEARED' })
+    session.send({ type: 'PROJECTION_FOLLOWS_SELECTION' })
+    session.send({ type: 'PRESENTATION_SETTLED' })
     coordination.decorPreview.clearAll()
     ensureMounted()
     const selection = machine.getSnapshot().context.selection
@@ -2400,13 +2357,11 @@ export function createDecorEditorBridge(
     lastSelectionKey = selectionKey(selection)
   })
   const unsubscribeReverted = machine.on('sceneReverted', ({ scene }) => {
-    pendingTemporaryDecorCommit = null
-    decorEditStates.clear()
+    session.send({ type: 'REVERTED' })
     coordination.snapshot.clear()
-    snapshotPreviewActive = false
-    seekProjectionActive = false
-    snapshotCommitAwaitingPresentation = false
-    frameCommitCandidatePx = null
+    session.send({ type: 'PREVIEW_CLEARED' })
+    session.send({ type: 'PROJECTION_FOLLOWS_SELECTION' })
+    session.send({ type: 'PRESENTATION_SETTLED' })
     coordination.decorPreview.clearAll()
     const selection = machine.getSnapshot().context.selection
     syncSelection(scene, selection)
@@ -2417,16 +2372,15 @@ export function createDecorEditorBridge(
   // un seek qui ne flush rien (rien en attente) laisserait la palette affichant l'instant précédent.
   const unsubscribeSeek = machine.on('seek', ({ timelineMs }) => {
     lastKnownTimelineMs = timelineMs
-    snapshotCommitAwaitingPresentation = false
-    frameCommitCandidatePx = null
+    session.send({ type: 'PRESENTATION_SETTLED' })
     // The controller intentionally retains the last explicit KF until scrub release. The visual
     // CS must nevertheless follow the time being sought, including when that selection is stale.
-    seekProjectionActive = true
+    session.send({ type: 'PROJECTION_FOLLOWS_TIME' })
     flushNow()
     // A temporary snapshot belongs to the old presented time. Keep its coordination candidate
     // for a possible return to that time, but clear the runtime preview before the asynchronous
     // seek so it cannot paint the old edit over the new base frame.
-    if (snapshotPreviewActive) {
+    if (previewActive()) {
       clearSnapshotPreview()
     }
     const { scene, selection } = machine.getSnapshot().context
@@ -2443,9 +2397,8 @@ export function createDecorEditorBridge(
    * `telco.seek()`.
    */
   const unsubscribeSeekApplied = machine.on('seekApplied', () => {
-    if (snapshotCommitAwaitingPresentation) {
-      snapshotCommitAwaitingPresentation = false
-      frameCommitCandidatePx = null
+    if (awaitingPresentation()) {
+      session.send({ type: 'PRESENTATION_SETTLED' })
       // The contribution belonged to the old instance, which the rebuild has now discarded.
       clearSnapshotPreview(false)
     }
@@ -2469,7 +2422,6 @@ export function createDecorEditorBridge(
    * déjà à jour.
    */
   const unsubscribePlaybackActive = machine.on('playbackActiveChanged', ({ active }) => {
-    playbackActive = active
     if (active) {
       mountHandle?.setPreviewSuspended(true)
       capsuleDefinitionEditor?.setDisabled(true)
@@ -2484,7 +2436,7 @@ export function createDecorEditorBridge(
     if (scene) syncSelection(scene, selection)
     mountHandle?.setPreviewSuspended(false)
     const authoringMode = machine.getSnapshot().context.authoringMode
-    motionOverlay?.setSuspended(authoringMode === 'zone' || activeCreationMode !== null)
+    motionOverlay?.setSuspended(authoringMode === 'zone' || activeCreationMode() !== null)
     syncControlSurfaces(motionGeometry.get().selection?.geometry.frame ?? null)
   })
   const unsubscribePlaybackReconciled = coordination.onPlaybackReconciled((timelineMs) => {
@@ -2494,11 +2446,10 @@ export function createDecorEditorBridge(
   })
 
   const unsubscribeCreationMode = machine.on('creationModeChanged', ({ mode }) => {
-    activeCreationMode = mode
     selectionFrame?.setCreationMode(mode === null ? null : selectionModeFor())
     zones.syncVisibility()
     syncControlSurfaces(motionGeometry.get().selection?.geometry.frame ?? null)
-    motionOverlay?.setSuspended(playbackActive || mode !== null || machine.getSnapshot().context.authoringMode === 'zone')
+    motionOverlay?.setSuspended(playbackActive() || mode !== null || machine.getSnapshot().context.authoringMode === 'zone')
     if (mode === null) {
       const { scene, selection } = machine.getSnapshot().context
       if (scene) syncSelection(scene, selection)
@@ -2534,9 +2485,6 @@ export function createDecorEditorBridge(
       unsubscribePlaybackActive.unsubscribe()
       unsubscribeCreationMode.unsubscribe()
       unsubscribePlaybackReconciled()
-      pendingCommands = null
-      pendingTemporaryDecorCommit = null
-      decorEditStates.clear()
       unsubscribeCommitted.unsubscribe()
       unsubscribeLoaded.unsubscribe()
       unsubscribeReverted.unsubscribe()
@@ -2549,7 +2497,7 @@ export function createDecorEditorBridge(
       mountHandle?.destroy()
       capsuleDefinitionEditor?.destroy()
       container.replaceChildren()
-      snapshotCommitAwaitingPresentation = false
+      session.stop()
       controller.destroy()
     },
   }
