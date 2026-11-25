@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { preparePath, resolvePath, resolvePathFrame, createRotateMatrix } from '../../../src/ace'
 import { deriveRelativeMotionPose, interpolateMotionPose } from '../../../src/runtime/motion'
+import { extrapolateMotionPoseAtProgress } from '../../../src/runtime/motion/motion-pose'
 import type { HtmlMatrix, HtmlPose } from '../../../src/runtime/motion/html-types'
 
 const IDENTITY: HtmlMatrix = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
@@ -123,6 +124,60 @@ describe('motion pose path anchors', () => {
     const path = preparePath({ control: [0.5, 1] }, { traversal: 'parameter' })
 
     expect(interpolateMotionPose(from, to, 1, path).matrix).toEqual(to.matrix)
+  })
+})
+
+describe('motion pose interpolation between differently rotated endpoints', () => {
+  const box = (matrix: HtmlMatrix, x: number) => pose({
+    origin: { x, y: 0 },
+    matrix,
+    localWidth: 40,
+    localHeight: 20,
+    rect: { left: x, top: 0, width: 40, height: 20 },
+  })
+  const scaleOf = (matrix: HtmlMatrix) => [Math.hypot(matrix.a, matrix.b), Math.hypot(matrix.c, matrix.d)]
+  const angleOf = (matrix: HtmlMatrix) => Math.atan2(matrix.b, matrix.a) * 180 / Math.PI
+
+  it('keeps a unit scale and turns by the shortest arc without path', () => {
+    const frame = interpolateMotionPose(box(IDENTITY, 0), box(createRotateMatrix(Math.PI / 2), 100), 0.5)
+    const [scaleX, scaleY] = scaleOf(frame.matrix)
+    expect(scaleX).toBeCloseTo(1, 6)
+    expect(scaleY).toBeCloseTo(1, 6)
+    expect(angleOf(frame.matrix)).toBeCloseTo(45, 6)
+  })
+
+  it('keeps a unit scale when the pose is oriented along its path tangent', () => {
+    const path = preparePath({ control: [0.5, 1] }, { traversal: 'parameter' })
+    const frame = interpolateMotionPose(
+      box(createRotateMatrix(-Math.PI / 3), 0),
+      box(createRotateMatrix((2 * Math.PI) / 3), 100),
+      0.3,
+      path,
+      { rotateOffset: { from: 0, to: 0 } },
+    )
+    const [scaleX, scaleY] = scaleOf(frame.matrix)
+    expect(scaleX).toBeCloseTo(1, 6)
+    expect(scaleY).toBeCloseTo(1, 6)
+  })
+
+  it('interpolates distinct authored scales without coupling them to the rotation', () => {
+    const scaled: HtmlMatrix = { a: 0, b: 2, c: -0.5, d: 0, e: 0, f: 0 }
+    const frame = interpolateMotionPose(box(IDENTITY, 0), box(scaled, 100), 0.5)
+    const [scaleX, scaleY] = scaleOf(frame.matrix)
+    expect(scaleX).toBeCloseTo(1.5, 6)
+    expect(scaleY).toBeCloseTo(0.75, 6)
+    expect(angleOf(frame.matrix)).toBeCloseTo(45, 6)
+  })
+
+  it('reproduces the current pose from the virtual source a retarget derives', () => {
+    const from = box(createRotateMatrix(Math.PI / 6), 0)
+    const to = box(createRotateMatrix(Math.PI / 2), 120)
+    const current = interpolateMotionPose(from, to, 0.4)
+    const virtualSource = extrapolateMotionPoseAtProgress(current, to, 0.4)
+    const replayed = interpolateMotionPose(virtualSource, to, 0.4)
+    for (const key of ['a', 'b', 'c', 'd'] as const) expect(replayed.matrix[key]).toBeCloseTo(current.matrix[key], 6)
+    expect(replayed.origin.x).toBeCloseTo(current.origin.x, 6)
+    expect(replayed.origin.y).toBeCloseTo(current.origin.y, 6)
   })
 })
 

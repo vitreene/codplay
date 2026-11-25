@@ -51,14 +51,7 @@ export function interpolateMotionPose(
   path?: Parameters<typeof resolvePath>[0],
   orientation?: Readonly<{ rotateOffset?: Readonly<{ from: number; to: number }> }>,
 ): HtmlPose {
-  const matrix: HtmlMatrix = {
-    a: lerp(from.matrix.a, to.matrix.a, progress),
-    b: lerp(from.matrix.b, to.matrix.b, progress),
-    c: lerp(from.matrix.c, to.matrix.c, progress),
-    d: lerp(from.matrix.d, to.matrix.d, progress),
-    e: 0,
-    f: 0,
-  }
+  const matrix = interpolateLinearMatrix(from.matrix, to.matrix, progress)
   const width = lerp(from.localWidth, to.localWidth, progress)
   const height = lerp(from.localHeight, to.localHeight, progress)
   const fromAnchor = visualCenter(from)
@@ -97,14 +90,16 @@ export function extrapolateMotionPoseAtProgress(
 ): HtmlPose {
   const clamped = Math.min(1 - 1e-6, Math.max(1e-6, progress))
   const inverseRemaining = 1 / (1 - clamped)
-  const matrix: HtmlMatrix = {
-    a: (current.matrix.a - destination.matrix.a * clamped) * inverseRemaining,
-    b: (current.matrix.b - destination.matrix.b * clamped) * inverseRemaining,
-    c: (current.matrix.c - destination.matrix.c * clamped) * inverseRemaining,
-    d: (current.matrix.d - destination.matrix.d * clamped) * inverseRemaining,
-    e: 0,
-    f: 0,
-  }
+  const currentParts = decomposeLinearMatrix(current.matrix)
+  const destinationParts = decomposeLinearMatrix(destination.matrix)
+  // Inverse of `interpolateLinearMatrix`: replaying the segment from this source at `progress`
+  // yields the current pose, provided the remaining turn stays within π·(1 − progress).
+  const matrix = composeLinearMatrix({
+    angle: destinationParts.angle - wrapAngle(destinationParts.angle - currentParts.angle) * inverseRemaining,
+    scaleX: (currentParts.scaleX - destinationParts.scaleX * clamped) * inverseRemaining,
+    scaleY: (currentParts.scaleY - destinationParts.scaleY * clamped) * inverseRemaining,
+    shear: (currentParts.shear - destinationParts.shear * clamped) * inverseRemaining,
+  })
   const width = (current.localWidth - destination.localWidth * clamped) * inverseRemaining
   const height = (current.localHeight - destination.localHeight * clamped) * inverseRemaining
   const currentAnchor = visualCenter(current)
@@ -270,6 +265,58 @@ function linear(matrix: HtmlMatrix): HtmlMatrix {
 /** Creates one affine identity. */
 function identityMatrix(): HtmlMatrix {
   return { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
+}
+
+/** Linear part of a pose split as `R(angle) · [[scaleX, shear], [0, scaleY]]`. */
+type LinearMatrixParts = Readonly<{ angle: number; scaleX: number; scaleY: number; shear: number }>
+
+/**
+ * Interpolates two linear matrices through their rotation, scales and shear: the rotation turns by
+ * the shortest arc and never shrinks the pose, unlike a component-wise blend of two rotations.
+ * The endpoints are returned unchanged.
+ */
+function interpolateLinearMatrix(from: HtmlMatrix, to: HtmlMatrix, progress: number): HtmlMatrix {
+  if (progress === 0) return linear(from)
+  if (progress === 1) return linear(to)
+  const start = decomposeLinearMatrix(from)
+  const end = decomposeLinearMatrix(to)
+  return composeLinearMatrix({
+    angle: start.angle + wrapAngle(end.angle - start.angle) * progress,
+    scaleX: lerp(start.scaleX, end.scaleX, progress),
+    scaleY: lerp(start.scaleY, end.scaleY, progress),
+    shear: lerp(start.shear, end.shear, progress),
+  })
+}
+
+/** Splits a linear matrix into rotation, scales and shear; a reflection keeps a negative `scaleY`. */
+function decomposeLinearMatrix(matrix: HtmlMatrix): LinearMatrixParts {
+  const scaleX = Math.hypot(matrix.a, matrix.b)
+  if (scaleX < 1e-12) return { angle: 0, scaleX: 0, scaleY: matrix.d, shear: matrix.c }
+  return {
+    angle: Math.atan2(matrix.b, matrix.a),
+    scaleX,
+    scaleY: (matrix.a * matrix.d - matrix.b * matrix.c) / scaleX,
+    shear: (matrix.a * matrix.c + matrix.b * matrix.d) / scaleX,
+  }
+}
+
+/** Recomposes `R(angle) · [[scaleX, shear], [0, scaleY]]` as a linear matrix. */
+function composeLinearMatrix(parts: LinearMatrixParts): HtmlMatrix {
+  const cosine = Math.cos(parts.angle)
+  const sine = Math.sin(parts.angle)
+  return {
+    a: cosine * parts.scaleX,
+    b: sine * parts.scaleX,
+    c: cosine * parts.shear - sine * parts.scaleY,
+    d: sine * parts.shear + cosine * parts.scaleY,
+    e: 0,
+    f: 0,
+  }
+}
+
+/** Brings an angle difference into ]−π, π], the shortest arc. */
+function wrapAngle(radians: number): number {
+  return radians - 2 * Math.PI * Math.ceil((radians - Math.PI) / (2 * Math.PI))
 }
 
 /** Interpolates one scalar component. */

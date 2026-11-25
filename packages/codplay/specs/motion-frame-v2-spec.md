@@ -53,6 +53,22 @@ l’ordre des évaluations précédentes. Le test compare un seek direct à 820 
 une évaluation après des demandes à 100 ms et 700 ms ; les résultats sont
 identiques.
 
+## Interpolation de la pose
+
+Entre deux poses de borne, la partie linéaire de la matrice est décomposée en
+`R(θ) · [[sx, k], [0, sy]]` : rotation, échelles et cisaillement (une réflexion
+garde `sy` négatif). La rotation tourne au plus court arc, les échelles et le
+cisaillement sont interpolés linéairement, puis la matrice est recomposée. Deux
+bornes de rotations différentes ne rétrécissent donc pas la pose intermédiaire,
+et une échelle auteur n’est pas couplée à la rotation. Aux progressions 0 et 1,
+les matrices de borne sont rendues telles quelles. La position (chemin et centre
+visuel) garde son calcul.
+
+La source virtuelle d’un retarget inverse cette interpolation : rejouée à la
+progression courante, elle redonne la pose courante. Cette exactitude suppose que
+la rotation restante vers la destination ne dépasse pas `π·(1 − p)` ; c’est
+toujours le cas vers la même destination.
+
 ## Orientation sur la tangente
 
 Pour un `move` avec chemin préparé et `orientToPath: true`, la frame motion
@@ -99,6 +115,10 @@ d’items.
   portent l’occurrence issue de la matérialisation canonique ; le
   [contrôleur motion HTML](../src/runtime/runner-html/player-runner/motion-controller.ts)
   la consomme.
+- [motion-pose.spec.ts](../tests/runtime/motion/motion-pose.spec.ts), cas
+  « differently rotated endpoints », vérifie l’échelle unitaire entre bornes
+  tournées (avec et sans orientation sur la tangente), le découplage d’une échelle
+  auteur et le rejeu de la pose courante depuis la source virtuelle du retarget.
 - [motion-graph.spec.ts](../tests/runtime/motion/motion-graph.spec.ts) compare
   deux résolutions du même temps après des historiques d’évaluation distincts.
 - [pipeline.spec.ts](../tests/runtime/player/pipeline.spec.ts) vérifie le
