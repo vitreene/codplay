@@ -32,6 +32,7 @@ import {
 } from './item-rotation/tangent-reference'
 import { OFFSET_STYLE_PROPERTIES } from '../decor-editor/units'
 import {
+  alignColorSpaces,
   computeStyleDiff,
   hasZoneAssignment,
   isInterpolableStylePair,
@@ -1061,10 +1062,11 @@ function buildStyleTransition(
     }
     // Authored angles are stored normalized in [−180°, 180°). Between two pose keyframes the
     // rotation takes the shortest arc: only the tween target is unwrapped, never the Decor.
+    const [colorFrom, colorTo] = alignColorSpaces(from, value)
     const to = property === 'rotate' && typeof from === 'number' && typeof value === 'number'
       ? from + normalizeAngleDegrees(value - from)
-      : value
-    interpolated[property] = { from, to, duration: durationMs, ease }
+      : colorTo
+    interpolated[property] = { from: colorFrom, to, duration: durationMs, ease }
   }
   return { interpolated, discrete }
 }

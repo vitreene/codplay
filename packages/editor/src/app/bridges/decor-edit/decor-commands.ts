@@ -1,6 +1,6 @@
 import type { DecorPatch } from '../../../decor-editor/types'
 import { createId } from '../../commands/ids'
-import type { Content, Decor, EditorScene, OffsetData } from '../../commands/types'
+import type { Content, Decor, EditorScene, KeyframeChannel, OffsetData } from '../../commands/types'
 import type { Command } from '../../controller/types'
 import { mergePatch } from '../../../decor-editor/merge'
 import { hasExplicitPlacementGeometry, missingZoneFillStyle } from '../../commands/offset-placement'
@@ -45,6 +45,35 @@ export function patchToContentArgs(patch: DecorPatch, existing: Content | undefi
  * `onDecorChange` (édition continue via dedit — palette, CSS libre, presets) et au commit d'une
  * `DecorLiveSession` (fin de geste CS-family — `specs/decor-style-interpolation-spec.md` — fin de geste) : un seul endroit qui sait construire ces commandes, plus deux copies qui auraient pu diverger.
  */
+/**
+ * The single way a Decor edit creates a keyframe: new ids, its own new decor, and — on an inherited
+ * bound — the link to that bound (B-4). The caller adds the commands that fill the decor.
+ */
+export function keyframeCreationAt(args: Readonly<{
+  itemId: string
+  timeMs: number
+  channel: KeyframeChannel
+  bound?: 'intro' | 'outro'
+}>): { keyframeId: string; decorId: string; command: Command } {
+  const keyframeId = createId('kf')
+  const decorId = createId('decor')
+  return {
+    keyframeId,
+    decorId,
+    command: {
+      name: 'createNamedKeyframe',
+      args: {
+        itemId: args.itemId,
+        keyframeId,
+        timeMs: args.timeMs,
+        decorId,
+        channel: args.channel,
+        ...(args.bound === undefined ? {} : { autoBound: args.bound }),
+      },
+    },
+  }
+}
+
 export function buildDecorCommands(scene: EditorScene, target: Target, patch: DecorPatch): Command[] {
   const commands: Command[] = []
   // `setItemDecor` owns the copy-on-write rule: the edit never reaches another reference.

@@ -1,8 +1,9 @@
 import { invertMatrix } from 'ace'
 import { rotateSelectionFrameAffine, selectionFrameLinearTransform, selectionFrameLocalToScene, updateSelectionFrameAffineOrigin } from '@codplay/selection-frame/v2'
 import type { SelectionFrameDelta, SelectionFrameHandleId } from '@codplay/selection-frame/v2'
-import type { SelectionFrameValue } from '../../../decor-editor/types'
-import { normalizeAngleDegrees } from '../../../motion-editor/geometry'
+import type { DecorPatch, OffsetPatch, SelectionFrameValue } from '../../../decor-editor/types'
+import { pxToCqw } from '../../../decor-editor/units'
+import { frameVisualCenter, normalizeAngleDegrees } from '../../../motion-editor/geometry'
 
 /** Selection Frame gesture geometry: resize, rotation and pivot deltas applied to a displayed frame. */
 
@@ -88,4 +89,45 @@ export function applyRotationOriginDelta(base: SelectionFrameValue, fx: number, 
     y: base.y + deltaY,
     rotationOrigin: nextOrigin,
   })
+}
+
+/**
+ * Maps one Selection Frame gesture on a zone-placed item to zone-relative transforms, measured from
+ * the edit's base decor: the zone stays the reference geometry and is never overridden.
+ */
+export function zoneOffsetGesturePatch(
+  delta: SelectionFrameDelta,
+  base: SelectionFrameValue,
+  candidate: SelectionFrameValue,
+  rootWidth: number,
+  basePatch: DecorPatch,
+): DecorPatch | null {
+  const original = basePatch.offset ?? {}
+  const translate = original.translate ?? {}
+  const offset: OffsetPatch = {}
+
+  if (delta.kind === 'move') {
+    offset.translate = {
+      x: (translate.x ?? 0) + pxToCqw(candidate.x - base.x, rootWidth),
+      y: (translate.y ?? 0) + pxToCqw(candidate.y - base.y, rootWidth),
+    }
+  }
+  if (delta.kind === 'rotate') offset.rotate = candidate.rotate ?? 0
+  if (delta.kind === 'pivot') offset.rotationOrigin = candidate.rotationOrigin ?? { fx: 0.5, fy: 0.5 }
+  if (delta.kind === 'resize') {
+    if (base.width <= 0 || base.height <= 0) return null
+    const resizeX = delta.handle.includes('e') || delta.handle.includes('w')
+    const resizeY = delta.handle.includes('n') || delta.handle.includes('s')
+    const scaleX = (original.scale?.x ?? base.scaleX ?? 1) * (resizeX ? candidate.width / base.width : 1)
+    const scaleY = (original.scale?.y ?? base.scaleY ?? 1) * (resizeY ? candidate.height / base.height : 1)
+    const scaledBase = { ...base, scaleX, scaleY }
+    const targetCenter = frameVisualCenter(candidate)
+    const scaledCenter = frameVisualCenter(scaledBase)
+    offset.scale = { x: scaleX, y: scaleY }
+    offset.translate = {
+      x: (translate.x ?? 0) + pxToCqw(targetCenter.x - scaledCenter.x, rootWidth),
+      y: (translate.y ?? 0) + pxToCqw(targetCenter.y - scaledCenter.y, rootWidth),
+    }
+  }
+  return { offset }
 }

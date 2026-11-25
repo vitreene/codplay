@@ -16,12 +16,24 @@ import Color from 'color'
  */
 interface ColorInstanceWithOklch {
   oklch(): { color: [number, number, number] }
+  alpha(): number
 }
 
+/** Converts the native picker's hex value to the stored CSS `oklch(L C H)` form. */
 export function hexToCssOklch(hex: string): string {
-  const instance = new Color(hex) as unknown as ColorInstanceWithOklch
+  return cssColorToCssOklch(hex)
+}
+
+/**
+ * Converts any CSS color `color` understands (hex, rgb, named, `transparent`) to CSS oklch; a
+ * translucent color keeps its alpha as `oklch(L C H / A)`.
+ */
+export function cssColorToCssOklch(value: string): string {
+  const instance = new Color(value) as unknown as ColorInstanceWithOklch
   const [l, c, h] = instance.oklch().color
-  return `oklch(${(l / 100).toFixed(4)} ${(c / 100).toFixed(4)} ${h.toFixed(1)})`
+  const alpha = instance.alpha()
+  const channels = `${(l / 100).toFixed(4)} ${(c / 100).toFixed(4)} ${h.toFixed(1)}`
+  return alpha < 1 ? `oklch(${channels} / ${Number(alpha.toFixed(4))})` : `oklch(${channels})`
 }
 
 /** Approximation hex pour l'affichage dans un <input type="color"> (aucune reparse du CSS oklch). */

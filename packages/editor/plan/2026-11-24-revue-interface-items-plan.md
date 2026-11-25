@@ -18,19 +18,19 @@ qu’après la revue manuelle et visuelle de l’utilisateur, qui suit ce test.
 
 ## Décisions
 
-| Id | Décision | Statut |
-| --- | --- | --- |
-| D-A | Les gestes (angle au début du geste, découpe d’un waypoint, tangente) utilisent la fenêtre de transition du player, `resolveKeyframeTransition` (`builder-v2/keyframe-transition.ts`). Le pont supprime sa copie de l’easing (`resolveMotionEasing`) et sa progression calculée sur tout l’intervalle KF→KF. | Acceptée |
-| D-B | Entre deux KF de pose, la rotation suit le plus court chemin. Un changement d’orientation entre deux KF ne produit jamais de saut brut de 180°. Les valeurs stockées restent normalisées dans [−180°, 180°). Rotations multi-tours : future option volontaire de l’interface, hors de ce plan. | Acceptée |
-| D-C | Règle de contrat : éditer le décor d’un KF crée un nouveau décor pour porter la modification, dès que le décor attaché n’appartient pas en propre à ce KF (il est aussi utilisé par un autre KF, par le décor initial d’un item ou par `rootDecorId`). Une seule implémentation pour toutes les commandes, en remplacement des trois définitions actuelles (E6). Écart constaté : le pont ne crée pas ce décor quand l’autre utilisation est le décor initial ; un commentaire de code (non spécifié) invoque une exception « le premier KF partage volontairement `initialDecorId` ». **Exception retenue** : le premier KF de pose est toujours l’intro et modifie le décor initial. Elle se limite à ce KF ; aujourd’hui le pont l’applique à tous. Si un autre KF partage aussi ce décor initial, c’est lui qui reçoit d’abord sa copie, pour ne pas changer quand on édite l’intro. | Acceptée |
-| D-E1 | Une exception de commande est un défaut : elle reste un arrêt, mais devient immédiatement visible dans l’interface (commande, message), sans état figé silencieux. Le défaut qui la provoque est corrigé (contrôle non désactivé, validation absente). | Acceptée |
-| D-E2 | Placement automatique ou explicite dans une capsule. Déplacée dans le [plan Capsules et zones](./2026-11-25-capsules-zones-plan.md), action 4. | Déplacée (2026-11-25) |
-| D-E7 | Le tracé d’une plage conserve les décors des bornes remplacées. | Acceptée |
-| D-B2 | Une capsule est un item avec les mêmes caractéristiques que les autres : ses KF de pose et de décor sont compilés de la même façon, son composant `list` reçoit la même présentation Editor (`createItemComponent`) et son CS suit la même projection, sans branche dédiée dans le pont. | Acceptée |
-| D-NAISS | Un item naît à la tête de lecture. Intro et outro sont toujours des KF ; leur placement est manuel (KF réel, l’item est « locké » sur cette borne) ou automatique (KF virtuel calculé par la distribution de la capsule), sans différence de nature ([spec de distribution](../../authoring/capsule-automation/specs/capsule-distribution-spec.md) §1 et §2 ; matérialisation : [intégration V2](../specs/editor-v2-integration-spec.md#interaction-des-bornes-de-capsule)). À la création, pour tout type d’item (la zone n’est qu’une propriété de placement), l’intro est matérialisée à la tête de lecture, comme la matérialisation d’une borne virtuelle, et l’outro reste en placement automatique ; le décor de l’intro est le décor initial. Avant son intro, l’item n’existe pas. Un geste du cadre de sélection dont la cible est l’état initial (avant l’intro, ou item existant sans KF) écrit le décor initial, comme la palette (D-C ; corrige E12). | Acceptée (24 nov. 2026) |
-| D-VIS | Masquer un item est une étape d’édition, pas une suppression : les positions des autres items ne bougent pas (rang de placement automatique, compte des grilles dérivées, distribution du temps) ; l’item masqué n’a pas besoin d’être rendu. **Approche retenue : `visibility:hidden`**. Le Builder compile l’item masqué comme les autres et lui ajoute une classe de cadre `visibility:hidden` ; il n’a plus de filtre de visibilité. Une capsule masquée masque son sous-arbre par héritage de la propriété. Aucune contradiction à gérer : l’item garde sa place dans la grille et dans le temps, comme dans la timeline. Aucun changement de Capsule Automation. Conséquences : (1) les items masqués sont validés et comptés dans `preRollMs` ; (2) **un item média masqué doit être silencieux** (décidé) : `visibility:hidden` ne coupe pas le son, le Builder doit donc aussi le couper. Le composant média de CodPlay connaît `muted` et `volume` comme propriétés d’une transition média ; l’existence d’un état initial `muted` n’est pas vérifiée. À qualifier à l’implémentation : si la surface actuelle ne suffit pas, c’est une demande de modification de CodPlay, soumise aux portes d’AGENTS.md (justification, absence d’alternative côté Editor, autorisation) ; (3) les tests et la spec d’intégration qui décrivent le retrait de la `SceneDoc` sont à réécrire avec l’implémentation. | Acceptée ; mise en œuvre du silence à qualifier |
-| D-HORS-PLAGE | Quand la tête de lecture est hors de la plage d’existence de l’item sélectionné (avant son intro ou après son outro, bornes réelles ou virtuelles), une action sur le Selection Frame ou sur la palette recale d’abord la tête de lecture sur la borne la plus proche (intro ou outro) ; le geste s’applique ensuite à cette borne. Le cadre reste affiché hors plage : il porte l’action. La palette suit la même règle (confirmé le 24 nov. 2026) : une édition hors plage recale la tête de lecture puis écrit à la borne, au lieu d’écrire le décor initial ou celui du dernier KF réel. Le recalage est un déplacement de tête de lecture, hors historique. Réalisation : tranche 3, comme phase « recalage en attente du seek » de la machine de geste (M1/M3) ; le démarrage de geste actuel du pont capture sa base avant tout seek. Action sur une borne héritée : tranchée par B-4 du [plan des bornes](./2026-11-25-bornes-intro-outro-plan.md) (KF lié avec décor propre, placement automatique) ; réalisation : action 4 de ce plan. | Décidée (24 et 25 nov. 2026) |
-| D-R | Refonte du pont Décor (lot 3). | Acceptée avec le plan (24 nov. 2026) |
+| Id           | Décision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Statut                                          |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| D-A          | Les gestes (angle au début du geste, découpe d’un waypoint, tangente) utilisent la fenêtre de transition du player, `resolveKeyframeTransition` (`builder-v2/keyframe-transition.ts`). Le pont supprime sa copie de l’easing (`resolveMotionEasing`) et sa progression calculée sur tout l’intervalle KF→KF.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Acceptée                                        |
+| D-B          | Entre deux KF de pose, la rotation suit le plus court chemin. Un changement d’orientation entre deux KF ne produit jamais de saut brut de 180°. Les valeurs stockées restent normalisées dans [−180°, 180°). Rotations multi-tours : future option volontaire de l’interface, hors de ce plan.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Acceptée                                        |
+| D-C          | Règle de contrat : éditer le décor d’un KF crée un nouveau décor pour porter la modification, dès que le décor attaché n’appartient pas en propre à ce KF (il est aussi utilisé par un autre KF, par le décor initial d’un item ou par `rootDecorId`). Une seule implémentation pour toutes les commandes, en remplacement des trois définitions actuelles (E6). Écart constaté : le pont ne crée pas ce décor quand l’autre utilisation est le décor initial ; un commentaire de code (non spécifié) invoque une exception « le premier KF partage volontairement `initialDecorId` ». **Exception retenue** : le premier KF de pose est toujours l’intro et modifie le décor initial. Elle se limite à ce KF ; aujourd’hui le pont l’applique à tous. Si un autre KF partage aussi ce décor initial, c’est lui qui reçoit d’abord sa copie, pour ne pas changer quand on édite l’intro.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Acceptée                                        |
+| D-E1         | Une exception de commande est un défaut : elle reste un arrêt, mais devient immédiatement visible dans l’interface (commande, message), sans état figé silencieux. Le défaut qui la provoque est corrigé (contrôle non désactivé, validation absente).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Acceptée                                        |
+| D-E2         | Placement automatique ou explicite dans une capsule. Déplacée dans le [plan Capsules et zones](./2026-11-25-capsules-zones-plan.md), action 4.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Déplacée (2026-11-25)                           |
+| D-E7         | Le tracé d’une plage conserve les décors des bornes remplacées.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Acceptée                                        |
+| D-B2         | Une capsule est un item avec les mêmes caractéristiques que les autres : ses KF de pose et de décor sont compilés de la même façon, son composant `list` reçoit la même présentation Editor (`createItemComponent`) et son CS suit la même projection, sans branche dédiée dans le pont.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Acceptée                                        |
+| D-NAISS      | Un item naît à la tête de lecture. Intro et outro sont toujours des KF ; leur placement est manuel (KF réel, l’item est « locké » sur cette borne) ou automatique (KF virtuel calculé par la distribution de la capsule), sans différence de nature ([spec de distribution](../../authoring/capsule-automation/specs/capsule-distribution-spec.md) §1 et §2 ; matérialisation : [intégration V2](../specs/editor-v2-integration-spec.md#interaction-des-bornes-de-capsule)). À la création, pour tout type d’item (la zone n’est qu’une propriété de placement), l’intro est matérialisée à la tête de lecture, comme la matérialisation d’une borne virtuelle, et l’outro reste en placement automatique ; le décor de l’intro est le décor initial. Avant son intro, l’item n’existe pas. Un geste du cadre de sélection dont la cible est l’état initial (avant l’intro, ou item existant sans KF) écrit le décor initial, comme la palette (D-C ; corrige E12).                                                                                                                                                                                                                                                                                                                                                                                                                                             | Acceptée (24 nov. 2026)                         |
+| D-VIS        | Masquer un item est une étape d’édition, pas une suppression : les positions des autres items ne bougent pas (rang de placement automatique, compte des grilles dérivées, distribution du temps) ; l’item masqué n’a pas besoin d’être rendu. **Approche retenue : `visibility:hidden`**. Le Builder compile l’item masqué comme les autres et lui ajoute une classe de cadre `visibility:hidden` ; il n’a plus de filtre de visibilité. Une capsule masquée masque son sous-arbre par héritage de la propriété. Aucune contradiction à gérer : l’item garde sa place dans la grille et dans le temps, comme dans la timeline. Aucun changement de Capsule Automation. Conséquences : (1) les items masqués sont validés et comptés dans `preRollMs` ; (2) **un item média masqué doit être silencieux** (décidé) : `visibility:hidden` ne coupe pas le son, le Builder doit donc aussi le couper. Le composant média de CodPlay connaît `muted` et `volume` comme propriétés d’une transition média ; l’existence d’un état initial `muted` n’est pas vérifiée. À qualifier à l’implémentation : si la surface actuelle ne suffit pas, c’est une demande de modification de CodPlay, soumise aux portes d’AGENTS.md (justification, absence d’alternative côté Editor, autorisation) ; (3) les tests et la spec d’intégration qui décrivent le retrait de la `SceneDoc` sont à réécrire avec l’implémentation. | Acceptée ; mise en œuvre du silence à qualifier |
+| D-HORS-PLAGE | Quand la tête de lecture est hors de la plage d’existence de l’item sélectionné (avant son intro ou après son outro, bornes réelles ou virtuelles), une action sur le Selection Frame ou sur la palette recale d’abord la tête de lecture sur la borne la plus proche (intro ou outro) ; le geste s’applique ensuite à cette borne. Le cadre reste affiché hors plage : il porte l’action. La palette suit la même règle (confirmé le 24 nov. 2026) : une édition hors plage recale la tête de lecture puis écrit à la borne, au lieu d’écrire le décor initial ou celui du dernier KF réel. Le recalage est un déplacement de tête de lecture, hors historique. Réalisation : tranche 3, comme phase « recalage en attente du seek » de la machine de geste (M1/M3) ; le démarrage de geste actuel du pont capture sa base avant tout seek. Action sur une borne héritée : tranchée par B-4 du [plan des bornes](./2026-11-25-bornes-intro-outro-plan.md) (KF lié avec décor propre, placement automatique) ; réalisation : action 4 de ce plan.                                                                                                                                                                                                                                                                                                                                                               | Décidée (24 et 25 nov. 2026)                    |
+| D-R          | Refonte du pont Décor (lot 3).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Acceptée avec le plan (24 nov. 2026)            |
 
 ## Preuves acquises
 
@@ -81,6 +81,7 @@ test périmé, ou défaut du code.
 
 **Fait** (601 tests verts, typecheck propre ; aucun fichier source modifié, huit
 tests corrigés) : les huit échecs étaient des tests périmés.
+
 - `zone` → `zoneId` : le champ désigne l’identité stable de la zone
   (`decor-editor-field-state`, `decor-editor-strip-inherited`, `decor-properties-stress`),
   et `resolveCurrentPatch` n’a plus de paramètre de scène.
@@ -116,6 +117,7 @@ pas de lecteur temporel ajouté, alignement du CS et de l’item, scale constant
 pendant la rotation.
 
 **Acceptation** :
+
 - régression Builder : 167° → −166° donne un tween qui passe par environ 180,5°
   au milieu du segment ;
 - non-régression des tests tangente et motion-path ;
@@ -124,6 +126,7 @@ pendant la rotation.
 
 **Fait — en attente de revue manuelle** (580 tests verts, typecheck et build
 propres) :
+
 - `buildStyleTransition` : pour `rotate` numérique, cible du tween
   `from + normalizeAngleDegrees(to − from)`. Précision : seuls le décor et
   l’angle auteur restent normalisés ; la cible du tween, et donc la valeur logique
@@ -167,6 +170,7 @@ propres) :
 **Acceptation** : tests et typecheck verts, aucun changement de comportement.
 
 **Avancement du lot 2** (597 tests verts, typecheck et build propres) :
+
 - Points 1, 2 et 3 faits. Point 1 : les sept méthodes et les trois éléments de
   machine sont retirés, ainsi que `getZones`/`onZonesChange` du contrôleur, que ce
   retrait rendait orphelines ; les tests de la machine qui exerçaient les
@@ -190,6 +194,7 @@ propres) :
 Comparaison Safari MCP avant/après sur la sélection d’« Tangente » : cadre
 identique (62,64 × 41,76, même matrice), aucune écriture (en attente de revue
 manuelle).
+
 - Commandes jamais émises : `placeInZone` et `setRootZonesSurface` (fonctions,
   façade, union `Command`, tests).
 - `sequence-editor` : `generateSnapPoints`, `clampMs` et les types hérités
@@ -213,12 +218,12 @@ manuelle).
 récupérable avec `git show HEAD:<chemin>` tant que le nettoyage n’est pas commité,
 puis dans l’historique) :
 
-| Retiré (origine) | Fonctionnalité |
-| --- | --- |
-| `resolveMotionTransitionWindow`, `clampMotionDuration` (motion editor, 3-4 sept. 2026) | Édition des transitions de KF. Le document porte déjà `Transition` (durée, direction) et les commandes `setKeyframeTransitionIn/Out` existent, sans interface. À reconstruire avec cette interface, sur le résolveur unique de D-A. À arbitrer : fenêtre par défaut de 500 ms (code retiré) contre 400 ms (`DEFAULT_TRANSITION_DURATION_MS`). Le commentaire de `commitMotionDrop` renvoie encore à ce « futur résolveur ». |
-| `distanceToSegment`, `translateFrame` (« visual move », 3 sept. 2026) | Sélection du tracé au clic et panneau secondaire d’un segment (`onPathActivate` est vide : seul le point de contrôle existe). |
-| `orientationFromRatio`, `coordsForContext`, `updateZoneCoords`, `OrientationContext` (decor v1, 7 juil. 2026) | Choix de la surface de zone portrait ou paysage selon la forme de l’hôte. Le Builder ne compile que `landscape` (B3), et l’orientation reste à nommer (`portrait/landscape` contre `vertical/horizontal`). |
-| `ZoneCard` et `applyCard` (decor v1) | Modèles de zones prêts à appliquer, non repris par le modèle actuel. |
+| Retiré (origine)                                                                                              | Fonctionnalité                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `resolveMotionTransitionWindow`, `clampMotionDuration` (motion editor, 3-4 sept. 2026)                        | Édition des transitions de KF. Le document porte déjà `Transition` (durée, direction) et les commandes `setKeyframeTransitionIn/Out` existent, sans interface. À reconstruire avec cette interface, sur le résolveur unique de D-A. À arbitrer : fenêtre par défaut de 500 ms (code retiré) contre 400 ms (`DEFAULT_TRANSITION_DURATION_MS`). Le commentaire de `commitMotionDrop` renvoie encore à ce « futur résolveur ». |
+| `distanceToSegment`, `translateFrame` (« visual move », 3 sept. 2026)                                         | Sélection du tracé au clic et panneau secondaire d’un segment (`onPathActivate` est vide : seul le point de contrôle existe).                                                                                                                                                                                                                                                                                               |
+| `orientationFromRatio`, `coordsForContext`, `updateZoneCoords`, `OrientationContext` (decor v1, 7 juil. 2026) | Choix de la surface de zone portrait ou paysage selon la forme de l’hôte. Le Builder ne compile que `landscape` (B3), et l’orientation reste à nommer (`portrait/landscape` contre `vertical/horizontal`).                                                                                                                                                                                                                  |
+| `ZoneCard` et `applyCard` (decor v1)                                                                          | Modèles de zones prêts à appliquer, non repris par le modèle actuel.                                                                                                                                                                                                                                                                                                                                                        |
 
 **Chantiers retenus par l’utilisateur (à reprendre, hors tranches de la revue)** :
 
@@ -269,6 +274,7 @@ commande de zone du pont et `setZonesSurface({ capsuleId: null })`, les modes
 `visualPosition`/`zoneMode` par les modes Zone et Bloc.
 
 Laissés volontairement :
+
 - `createKeyframe` : le test d’unicité des ids après restauration, cité par la spec
   du modèle de document, passe par lui, et les tests d’intégration du pont player
   s’en servent comme fixture. À retirer en tranche 1 (un seul générateur d’id, une
@@ -294,6 +300,7 @@ propriétaires distincts, sans perdre les acquis vérifiés des specs.
 le décor est fortement couplé à l’item. Il comprend tout ce que la palette
 règle et tout ce que les gestes du Selection Frame écrivent, et chaque
 modification a un effet immédiat sur l’item présenté. Conséquences pour la refonte :
+
 - palette et cadre entrent par les mêmes événements de la machine de session et
   suivent le même circuit (preview, puis commit à la frontière) ; aucun second
   chemin d’écriture ;
@@ -383,15 +390,15 @@ Critère : une machine XState se justifie quand un cycle combine plusieurs étap
 de l’asynchrone, une annulation ou des frontières entre modules. Sinon, une
 fonction ou une classe suffit.
 
-| Cycle | Machine explicite ? | Où | Ce qu’elle remplace |
-| --- | --- | --- | --- |
-| M1-M3 | Oui, priorité 1 | `decorEditSessionMachine` (dossier `app/bridges/decor-edit/`) : `idle` · `editing.exact` / `editing.temporary` · `gesture.previewing` / `gesture.committing` · `awaitingPresentation` ; événements palette, CS, bloc, sélection, seek, Play, frontière d’historique, Échap, chargement | une vingtaine de variables, les 9 remises à zéro, `lastPreviewAccepted` |
-| M6 | Oui, dans la même machine | le candidat temporaire et sa capture à la création d’un KF par la timeline appartiennent à la même session d’édition | la file `pendingSnapshotCaptures` et le port `decorPreview` dédoublé |
-| M7 | Oui, priorité 1 (petite tranche) | `sequenceEditorMachine` : `DRAG.CANCEL`, état `scrubbing`, état `dragging-virtual` ; aucune commande émise pour un glisser sans déplacement ; `mount.ts` ne fait que traduire les événements DOM, via `bindGestureSession` | écouteurs DOM de `mount.ts` ; corrige E4 et en partie E3 |
-| M5 | Oui, priorité 2 | `scenePlayerMachine` : `empty` · `building` (acteurs `fromPromise` : build, preload, sonde) · `published.idle` / `.seeking` / `.starting` | les trois compteurs de révision (une transition annule l’acteur appelé) et la garde répétée 4 fois |
-| M8, M9, E1 | Oui, priorité 2 | contrôleur : `playing.pausing`, `switchingScene` (appelle flush, chargement, activation), `failed` (arrêt explicite et visible, avec commande et message) | chaînes `.then` du pont de coordination, `switchingScene` local au menu, gel silencieux |
-| M4 | Non | lecture directe du snapshot du contrôleur | les copies `playbackActive`, `activeCreationMode`, `suspended` |
-| M10 | Non | `EditorScenePersistence` reste une classe métier, avec un statut typé explicite, pilotée par l’état `switchingScene` | — |
+| Cycle      | Machine explicite ?              | Où                                                                                                                                                                                                                                                                                     | Ce qu’elle remplace                                                                                |
+| ---------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| M1-M3      | Oui, priorité 1                  | `decorEditSessionMachine` (dossier `app/bridges/decor-edit/`) : `idle` · `editing.exact` / `editing.temporary` · `gesture.previewing` / `gesture.committing` · `awaitingPresentation` ; événements palette, CS, bloc, sélection, seek, Play, frontière d’historique, Échap, chargement | une vingtaine de variables, les 9 remises à zéro, `lastPreviewAccepted`                            |
+| M6         | Oui, dans la même machine        | le candidat temporaire et sa capture à la création d’un KF par la timeline appartiennent à la même session d’édition                                                                                                                                                                   | la file `pendingSnapshotCaptures` et le port `decorPreview` dédoublé                               |
+| M7         | Oui, priorité 1 (petite tranche) | `sequenceEditorMachine` : `DRAG.CANCEL`, état `scrubbing`, état `dragging-virtual` ; aucune commande émise pour un glisser sans déplacement ; `mount.ts` ne fait que traduire les événements DOM, via `bindGestureSession`                                                             | écouteurs DOM de `mount.ts` ; corrige E4 et en partie E3                                           |
+| M5         | Oui, priorité 2                  | `scenePlayerMachine` : `empty` · `building` (acteurs `fromPromise` : build, preload, sonde) · `published.idle` / `.seeking` / `.starting`                                                                                                                                              | les trois compteurs de révision (une transition annule l’acteur appelé) et la garde répétée 4 fois |
+| M8, M9, E1 | Oui, priorité 2                  | contrôleur : `playing.pausing`, `switchingScene` (appelle flush, chargement, activation), `failed` (arrêt explicite et visible, avec commande et message)                                                                                                                              | chaînes `.then` du pont de coordination, `switchingScene` local au menu, gel silencieux            |
+| M4         | Non                              | lecture directe du snapshot du contrôleur                                                                                                                                                                                                                                              | les copies `playbackActive`, `activeCreationMode`, `suspended`                                     |
+| M10        | Non                              | `EditorScenePersistence` reste une classe métier, avec un statut typé explicite, pilotée par l’état `switchingScene`                                                                                                                                                                   | —                                                                                                  |
 
 ### Découpage cible
 
@@ -413,7 +420,7 @@ fonction ou une classe suffit.
   - `motion-projection.ts` (segments et ghosts) ;
   - `presentation-reading.ts` (valeurs logiques, id runtime, fraîcheur), partagé avec `scene-selection` ;
   - `zone-surface-binding.ts`.
-  `decor-editor-bridge.ts` ne garde que la composition et un seul chemin de démontage (C).
+    `decor-editor-bridge.ts` ne garde que la composition et un seul chemin de démontage (C).
 - **Façades entre modules** : les grandes opérations d’un module à l’autre passent
   par les façades existantes.
   - `EditorActionsFacade` pour les intentions documentaires et de sélection :
@@ -422,11 +429,11 @@ fonction ou une classe suffit.
   - `EditorPlayerCommandFacade`, à travers les ports de `EditorCoordinationBridge`,
     pour le transport.
   - `commands/facade.ts` pour l’écriture du document.
-  Aujourd’hui, les ponts envoient 31 événements directement au contrôleur
-  (`machine.send`) : 22 dans le pont Décor (9 `RUN_TRANSACTION`, 5 `SELECT_ITEM`,
-  3 `RUN_COMMAND`, …), 5 dans la coordination, 2 dans le pont player et 2 dans le
-  pont de la timeline. Chaque opération reçoit un nom métier dans la façade ; les
-  événements bruts du contrôleur restent internes aux façades.
+    Aujourd’hui, les ponts envoient 31 événements directement au contrôleur
+    (`machine.send`) : 22 dans le pont Décor (9 `RUN_TRANSACTION`, 5 `SELECT_ITEM`,
+    3 `RUN_COMMAND`, …), 5 dans la coordination, 2 dans le pont player et 2 dans le
+    pont de la timeline. Chaque opération reçoit un nom métier dans la façade ; les
+    événements bruts du contrôleur restent internes aux façades.
 - **Vues** : la barre Zone/Bloc et les réglages racine deviennent des composants
   du layout qui lisent le contrôleur et appellent la façade.
 - **Configuration** (`app/config/`) : tolérances temporelles, couches de
@@ -436,12 +443,12 @@ fonction ou une classe suffit.
 
 1. Commandes (fondation) et état `failed` (E1).
 2. Gestes de la timeline (M7) et commandes sans effet (E3).
-3. Session Décor et découpage du pont (M1-M4, M6), sur la cascade unique (G) et
+3. Session Décor et découpage du pont (M1-M4), sur la cascade unique (G) et
    le temps des segments (B1, D-A) ; recalage de la tête de lecture hors plage
    (D-HORS-PLAGE).
 4. Cycle du player (M5) et états du contrôleur (M8, M9) ; E15 (saut à la première
-   lecture après une correction) ; capture de KF différée de la timeline (M6, pas 5
-   de 3d) via un port de la coordination remplaçant `decorPreview`.
+   lecture après une correction) ; M6 (capture différée de la timeline), reporté
+   de la tranche 3 avec les autres changements de la coordination.
 5. Builder : découpage, capsule traitée comme tout item (B2), placement
    automatique (D-E2, désormais dans le [plan Capsules et zones](./2026-11-25-capsules-zones-plan.md)), orientations (B3).
 
@@ -466,14 +473,14 @@ avant.
   retiré ; ses tests et fixtures passent à `createNamedKeyframe`.
 - **Une seule règle de copy-on-write (D-C)** : `commands/decor-sharing.ts` liste les
   références d’un décor. Nouvelle commande `setItemDecor({ itemId, keyframeId |
-  null, patch, forkDecorId })` :
+null, patch, forkDecorId })` :
   - un KF qui n’est pas l’intro et dont le décor est utilisé ailleurs reçoit un
     nouveau décor (`forkDecorId`, patch clairsemé) ;
   - l’intro (premier KF de pose partageant le décor initial) ou le décor initial
     lui-même écrit dans le décor initial ; les autres références qui le partagent
     reçoivent d’abord une copie de l’ancien contenu.
-  Le pont n’applique plus le copy-on-write lui-même. `setItemRotationMode` et
-  `setCapsuleDef` utilisent la même liste de références.
+    Le pont n’applique plus le copy-on-write lui-même. `setItemRotationMode` et
+    `setCapsuleDef` utilisent la même liste de références.
 - **Création d’items par la façade** : `createItem` et `createCapsule` acceptent
   un `itemId` fourni par l’appelant. `EditorActionsFacade` reçoit l’opération de
   création d’un bloc ou d’un texte (une transaction, puis la sélection) ; le menu
@@ -486,6 +493,7 @@ plus le KF 1 et laisse le décor initial intact ; création d’un texte = une s
 étape Undo ; puis revue manuelle.
 
 **Résultat** (587 tests verts, typecheck et build propres) :
+
 - Nouveaux fichiers : `commands/ids.ts`, `commands/item-decor/decor-sharing.ts`,
   `commands/item-decor/item-decor-commands.ts` ; tests
   `commands/item-decor-commands.spec.ts`, `app/editor-actions-creation.spec.ts`,
@@ -516,6 +524,7 @@ plus le KF 1 et laisse le décor initial intact ; création d’un texte = une s
 ### Tranche 2 — exécution (Faite en partie — en attente de revue manuelle)
 
 Faite (597 tests verts, typecheck et build propres) :
+
 - **E3 — une seule définition de « document modifié ».** Le comparateur de
   l’historique devient `commands/scene-equality.ts` ; la façade de commandes
   (`runCommand`, `transaction`) renvoie la référence précédente quand les valeurs
@@ -544,19 +553,18 @@ machine apporterait de la lisibilité, sans corriger de défaut constaté. Les g
 de marqueur, de panoramique et de tracé de plage gardent leur surface sans capture :
 à passer par la même session si on les retient.
 
-
 ### Tranche 3 — exécution (En cours)
 
 Cinq étapes livrées séparément ; chacune garde le comportement, passe tests,
 typecheck, build et Safari MCP, puis attend la revue manuelle.
 
-| Étape | Contenu | Statut |
-| --- | --- | --- |
-| 3a | Lectures uniques : temps des segments (D-A, B1), cascade des couches (G), lecture de la présentation (I), constantes, code mort et démontage (C) | Faite — en attente de revue manuelle |
-| 3b | Extraction : vues (onglets, barre Zone/Bloc, « Placement racine ») vers le layout ; `decor-target`, `frame-projection`, `motion-projection`, `zone-surface-binding` | Faite — en attente de revue manuelle (projections dépendant de l’état de geste reportées en 3d) |
-| 3c | Façade : les `machine.send` du pont Décor deviennent des intentions nommées de `EditorActionsFacade` | Faite — en attente de revue manuelle |
-| 3d | Machine `decorEditSessionMachine` (M1-M4, M6), selon le principe directeur ; projections et commits dépendant du geste, reportés de 3b | Pas 1 à 4 faits — en attente de revue manuelle ; pas 5 (M6) reporté en tranche 4 ; reste reporté de 3b non fait (voir « Reste de 3d ») |
-| 3e | D-HORS-PLAGE : phase « recalage en attente du seek » | Repris dans le [plan des bornes](./2026-11-25-bornes-intro-outro-plan.md), action 4 |
+| Étape | Contenu                                                                                                                                                             | Statut                                                                                                                                   |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| 3a    | Lectures uniques : temps des segments (D-A, B1), cascade des couches (G), lecture de la présentation (I), constantes, code mort et démontage (C)                    | Faite — en attente de revue manuelle                                                                                                     |
+| 3b    | Extraction : vues (onglets, barre Zone/Bloc, « Placement racine ») vers le layout ; `decor-target`, `frame-projection`, `motion-projection`, `zone-surface-binding` | Faite — en attente de revue manuelle (projections dépendant de l’état de geste reportées en 3d)                                          |
+| 3c    | Façade : les `machine.send` du pont Décor deviennent des intentions nommées de `EditorActionsFacade`                                                                | Faite — en attente de revue manuelle                                                                                                     |
+| 3d    | Machine `decorEditSessionMachine` (M1-M4, M6), selon le principe directeur ; projections et commits dépendant du geste, reportés de 3b                              | Pas 1 à 4 et reste reporté de 3b faits — Safari fait sauf offset en zone, puis revue manuelle ; pas 5 (M6) reporté en tranche 4 |
+| 3e    | D-HORS-PLAGE : phase « recalage en attente du seek »                                                                                                                | Repris dans le [plan des bornes](./2026-11-25-bornes-intro-outro-plan.md), action 4                                                      |
 
 **Étape 3a — actions** (aucun changement de comportement atteignable depuis
 l’interface : les transitions personnalisées ne se saisissent pas encore) :
@@ -609,6 +617,7 @@ entre deux KF, déplacement au cadre sur un segment droit et sur un segment à c
 (ghosts, tangente), rotation, puis Undo/Redo, Seek, Play et rechargement.
 
 **Étape 3a — résultat** (617 tests verts, typecheck et build propres) :
+
 - `keyframe-transition.ts` : `resolveSegmentMotionPath`, `resolveSegmentTiming`,
   `resolveSegmentProgress` ; le Builder (chemin et horloge du `move`) et le pont
   (découpe du tracé, tangente, angle au début du geste) les consomment ;
@@ -643,6 +652,7 @@ entre deux KF, déplacement au cadre sur un segment droit et sur un segment à c
   unique (spec d’intégration, « Autorité temporelle » et « Données et projection »).
 
 **Étape 3b — avancement** (622 tests verts, typecheck et build propres) :
+
 - Fonctions de module du pont réparties dans `app/bridges/decor-edit/` :
   `decor-target.ts` (cible, alignement), `decor-patches.ts` (cascade, patches du
   snapshot, insertion, lecture des zones), `decor-commands.ts` (commandes
@@ -702,12 +712,12 @@ attend une frontière.
 
 Régions parallèles :
 
-| Région | États | Remplace |
-| --- | --- | --- |
-| `edit` | `idle` · `pending` (édition palette en attente, cible exacte ou temporaire) | `pendingCommands`, `pendingTemporaryDecorCommit`, `decorEditStates`, `snapshotPreviewActive` |
-| `gesture` | `idle` · `active` · `cancelled` (Échap pendant le geste, jusqu’au relâchement) | `frameGestureBasePx`, `…Kind`, `…HasNetDelta`, `…Cancelled`, `…BaseDecorState`, `…BaseAuthorRotate`, `…BaseAuthorFrame` ; les 9 remises à zéro deviennent une seule sortie d’état |
-| `presentation` | `live` · `awaitingPresentation` (commit envoyé, preview gardée jusqu’à `seekApplied`) | `snapshotCommitAwaitingPresentation`, `frameCommitCandidatePx` |
-| `projection` | `followsSelection` · `followsTime` | `seekProjectionActive` |
+| Région         | États                                                                                 | Remplace                                                                                                                                                                          |
+| -------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `edit`         | `idle` · `pending` (édition palette en attente, cible exacte ou temporaire)           | `pendingCommands`, `pendingTemporaryDecorCommit`, `decorEditStates`, `snapshotPreviewActive`                                                                                      |
+| `gesture`      | `idle` · `active` · `cancelled` (Échap pendant le geste, jusqu’au relâchement)        | `frameGestureBasePx`, `…Kind`, `…HasNetDelta`, `…Cancelled`, `…BaseDecorState`, `…BaseAuthorRotate`, `…BaseAuthorFrame` ; les 9 remises à zéro deviennent une seule sortie d’état |
+| `presentation` | `live` · `awaitingPresentation` (commit envoyé, preview gardée jusqu’à `seekApplied`) | `snapshotCommitAwaitingPresentation`, `frameCommitCandidatePx`                                                                                                                    |
+| `projection`   | `followsSelection` · `followsTime`                                                    | `seekProjectionActive`                                                                                                                                                            |
 
 Contexte : `edit` (registre des modifications par `itemId`+temps, commandes en attente,
 KF temporaire en attente), `gesture` (un objet unique : base affichée, type, delta net,
@@ -730,6 +740,7 @@ ghosts, `activeMotion`), recalculées par `syncSelection` ; montages et abonneme
 `activeCreationMode` sont lus sur l’état du contrôleur, plus copiés.
 
 Ordre (chaque pas garde le comportement, tests et Safari MCP) :
+
 1. Région `gesture` : les 9 variables et leurs remises à zéro.
 2. Région `edit` : registre des modifications, commandes et KF temporaire en attente
    dans le contexte ; `idle`/`pending` dérivé de ces données. `flushNow`/`abortPhase`
@@ -743,7 +754,7 @@ Ordre (chaque pas garde le comportement, tests et Safari MCP) :
 5. M6 : la capture différée du pont de la timeline (`pendingSnapshotCaptures`)
    passe par la même machine, via un port de la coordination qui remplace
    `decorPreview`.
-   Reporté en tranche 4, avec les autres changements de la coordination (2026-11-25).
+   Reporté en tranche 4, avec les autres changements de la coordination.
 6. 3e : D-HORS-PLAGE — repris dans le [plan des bornes intro/outro](./2026-11-25-bornes-intro-outro-plan.md)
    (B-5, action 4), avec le modèle des bornes dont il dépend. Design initial
    (remplacé par ce plan) :
@@ -768,6 +779,7 @@ Ordre (chaque pas garde le comportement, tests et Safari MCP) :
      `input` en continu).
 
 Avancement :
+
 - Pas 1 fait (en attente de revue manuelle) : `decor-edit-session-machine.ts`, région
   `gesture` (`GESTURE_START`, `GESTURE_DELTA`, `GESTURE_ESCAPE`, `GESTURE_RESET`,
   `GESTURE_END`). Les 7 variables `frameGesture*` et leurs 9 remises à zéro sont
@@ -811,17 +823,39 @@ Avancement :
   pendant la lecture et réaligné après Stop ; mode création ouvert puis annulé par
   Échap. Le pont garde 22 `let` : montages, abonnements et projections.
 
-- **Reste de 3d, non fait** (constat du 2026-11-25) : les projections et commits
-  qui lisent l’état du geste, reportés de 3b (« Reportées en 3d ») — segments,
-  ghosts, tangente, preview, commits de geste — sont toujours dans le pont, qui
-  compte 2 512 lignes. Ces commits forment quatre circuits parallèles (édition
-  temporaire de palette, geste de pose, attribution de zone, offset en zone) qui
-  répètent chacun la création du KF à la cible ; la cible « borne héritée » (B-4)
-  a dû être ajoutée aux quatre. La tranche 3 n’est close que lorsque
-  `decor-editor-bridge.ts` ne garde que la composition (découpage cible ci-dessus).
+- **Reste de 3d — fait, Safari fait sauf offset en zone, puis revue manuelle**
+  (2026-11-25). Pont : 2 512 → 2 039 lignes ; tests, typecheck et build verts.
+  - `motion-projection.ts` : paire du geste (`resolveGestureMotion`), segments et
+    ghosts de l’overlay (`resolveMotionOverlaySegments`, `resolveMotionOverlayGhosts`,
+    état du geste passé par `MotionProjectionView`), tangente et angle auteur
+    (`targetUsesTangent`, `resolveTangentGestureProjection`,
+    `displayFrameForAuthorFrame`, `authoredRotationAtGestureStart`, état passé par
+    `GestureMotionContext`), découpe du chemin à l’insertion d’un point
+    (`resolveWaypointSplit`).
+  - `frame-projection.ts` : `authorFrameForGesture`, style de preview
+    (`previewStyle`), candidat d’un geste (`resolveGestureCandidate` : cadre auteur,
+    cadre affiché, base du patch).
+  - `frame-delta.ts` : offset relatif à la zone (`zoneOffsetGesturePatch`).
+  - Une seule voie de création de KF pour les quatre circuits de commit
+    (`keyframeCreationAt`, `decor-commands.ts`) et une seule règle d’instant
+    d’insertion pour les trois circuits du cadre (`temporaryInsertionTimeMs`,
+    `decor-target.ts`) ; la palette garde sa règle (chaîne décor).
+  - Reste dans le pont : l’orchestration (commits par la session et la façade,
+    montage du cadre et des overlays, abonnements au contrôleur).
+  - Safari sur « Test 3d (copie de Rotation) » : palette sur un KF et entre deux
+    KF ; déplacement, redimensionnement, rotation au KF ; découpe d’un arc entre
+    deux KF, en manuel et en tangente (rotation inerte entre KF en tangente,
+    conforme à `path-tangent-orientation-spec.md`) ; Undo/Redo, Seek, Play.
+    Document écrit identique à celui de HEAD pour les deux découpes. Reste :
+    **offset en zone** (la copie n’a pas de zone).
+  - Défaut préexistant relevé pendant ce contrôle et corrigé au Builder (décision
+    utilisateur) : tween de couleur entre hex et oklch ; règle dans
+    `editor-v2-integration-spec.md` (« Données et projection »), vérifiée en
+    Safari (palette entre KF après une couleur oklch, Seek, Play sans erreur).
 
 Acceptation à chaque pas : la suite complète, un test de la machine seule par
 région (transitions et frontières), et Safari MCP sur une copie de scène :
+
 - palette sur un KF et entre deux KF, puis frontière par sélection, seek et Play ;
 - gestes de déplacement, rotation et redimensionnement, aux KF `local` et `source` ;
 - Échap pendant un geste, `pointercancel` ;
@@ -834,18 +868,18 @@ Machines XState déjà déclarées : `controllerMachine` (`idle`/`creating`/`pla
 `sequenceEditorMachine` et `decorEditorMachine`. Les cycles ci-dessous sont portés
 par des variables mutables, des compteurs de révision ou des chaînes de promesses.
 
-| # | Cycle implicite | Porteur actuel | Proposition |
-| --- | --- | --- | --- |
-| M1 | Phase d’un geste de cadre ou de bloc : repos → preview → commit → attente de présentation, plus annulation | pont Décor : `frameGestureBasePx`, `…Kind`, `…HasNetDelta`, `…Cancelled`, `…BaseDecorState`, `…BaseAuthorRotate`, `…BaseAuthorFrame`, `frameCommitCandidatePx`, `snapshotCommitAwaitingPresentation`, `snapshotPreviewActive`, `lastPreviewAccepted`, `blockMoveGestureActive` ; remise à zéro copiée 9 fois | Machine de geste du pont Décor (direction 1). |
-| M2 | Édition Décor en attente : aucune → exacte en attente / temporaire en attente → flush aux frontières | `pendingCommands`, `pendingTemporaryDecorCommit`, `decorEditStates` ; frontières dispersées dans six abonnements | Même machine que M1 (une phase d’édition avec ses frontières déclarées). |
-| M3 | Projection du CS : suit la sélection ou suit le temps | `seekProjectionActive`, `lastKnownTimelineMs`, `lastSelectionKey`, `lastObservedScene` | État de la même machine. |
-| M4 | Copies locales d’états du contrôleur | `playbackActive`, `activeCreationMode` (pont Décor), `suspended` (overlay) | À lire depuis le snapshot du contrôleur, plus de copie locale. |
-| M5 | Cycle de l’instance player : vide → construction(révision) → sonde des défauts → publiée → seek ; lecture en file | `scene-player-bridge` : `rebuildRevision`, `seekRevision`, `playbackRequestRevision`, `rebuildInFlight`, `pendingPlayRequest`, `seekInFlight` ; garde répétée 4 fois | Machine de cycle de scène (acteur appelé, `fromPromise` pour build et seek). |
-| M6 | Capture de KF différée jusqu’au seek acquitté | `sequence-editor-bridge` : file `pendingSnapshotCaptures`, `requestedSnapshotTimeMs`, `committingDeferredCapture` | État « attente de seek » déclaré. |
-| M7 | Gestes de la timeline hors machine : glisser de KF (surface et écouteurs DOM en parallèle de l’état `dragging-keyframe`), scrub de la tête de lecture (le type `dragging-playhead` est déclaré mais jamais utilisé), glisser d’un KF virtuel | `sequence-editor/mount.ts` | Dans `sequenceEditorMachine`, avec annulation (corrige E4). |
-| M8 | Passage de main à la pause et au rewind : en lecture → en pause → temps adopté | `EditorCoordinationBridge` : chaînes `.then`, lecture de `machine.getSnapshot().value` dans la promesse | Sous-état de `playing` dans le contrôleur. |
-| M9 | Changement de scène : enregistrement → chargement → activation | Trois endroits : `switchingScene` (local à `EditorMenuRegion`), `EditorActionsFacade.selectScene` (async), `EditorScenePersistence.flush` ; le contrôleur l’ignore | État du contrôleur (la spec exige déjà de bloquer le catalogue pendant ce parcours). |
-| M10 | Persistance : prêt/erreur, écriture en cours/en attente par scène, suppression en cours | `EditorScenePersistence` : `status`, `writeQueues`, `pendingSnapshots`, `deletingSceneId`, `activation` | À déclarer si M9 passe au contrôleur ; sinon garder la classe et rendre ses états explicites. |
+| #   | Cycle implicite                                                                                                                                                                                                                              | Porteur actuel                                                                                                                                                                                                                                                                                               | Proposition                                                                                   |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| M1  | Phase d’un geste de cadre ou de bloc : repos → preview → commit → attente de présentation, plus annulation                                                                                                                                   | pont Décor : `frameGestureBasePx`, `…Kind`, `…HasNetDelta`, `…Cancelled`, `…BaseDecorState`, `…BaseAuthorRotate`, `…BaseAuthorFrame`, `frameCommitCandidatePx`, `snapshotCommitAwaitingPresentation`, `snapshotPreviewActive`, `lastPreviewAccepted`, `blockMoveGestureActive` ; remise à zéro copiée 9 fois | Machine de geste du pont Décor (direction 1).                                                 |
+| M2  | Édition Décor en attente : aucune → exacte en attente / temporaire en attente → flush aux frontières                                                                                                                                         | `pendingCommands`, `pendingTemporaryDecorCommit`, `decorEditStates` ; frontières dispersées dans six abonnements                                                                                                                                                                                             | Même machine que M1 (une phase d’édition avec ses frontières déclarées).                      |
+| M3  | Projection du CS : suit la sélection ou suit le temps                                                                                                                                                                                        | `seekProjectionActive`, `lastKnownTimelineMs`, `lastSelectionKey`, `lastObservedScene`                                                                                                                                                                                                                       | État de la même machine.                                                                      |
+| M4  | Copies locales d’états du contrôleur                                                                                                                                                                                                         | `playbackActive`, `activeCreationMode` (pont Décor), `suspended` (overlay)                                                                                                                                                                                                                                   | À lire depuis le snapshot du contrôleur, plus de copie locale.                                |
+| M5  | Cycle de l’instance player : vide → construction(révision) → sonde des défauts → publiée → seek ; lecture en file                                                                                                                            | `scene-player-bridge` : `rebuildRevision`, `seekRevision`, `playbackRequestRevision`, `rebuildInFlight`, `pendingPlayRequest`, `seekInFlight` ; garde répétée 4 fois                                                                                                                                         | Machine de cycle de scène (acteur appelé, `fromPromise` pour build et seek).                  |
+| M6  | Capture de KF différée jusqu’au seek acquitté                                                                                                                                                                                                | `sequence-editor-bridge` : file `pendingSnapshotCaptures`, `requestedSnapshotTimeMs`, `committingDeferredCapture`                                                                                                                                                                                            | État « attente de seek » déclaré.                                                             |
+| M7  | Gestes de la timeline hors machine : glisser de KF (surface et écouteurs DOM en parallèle de l’état `dragging-keyframe`), scrub de la tête de lecture (le type `dragging-playhead` est déclaré mais jamais utilisé), glisser d’un KF virtuel | `sequence-editor/mount.ts`                                                                                                                                                                                                                                                                                   | Dans `sequenceEditorMachine`, avec annulation (corrige E4).                                   |
+| M8  | Passage de main à la pause et au rewind : en lecture → en pause → temps adopté                                                                                                                                                               | `EditorCoordinationBridge` : chaînes `.then`, lecture de `machine.getSnapshot().value` dans la promesse                                                                                                                                                                                                      | Sous-état de `playing` dans le contrôleur.                                                    |
+| M9  | Changement de scène : enregistrement → chargement → activation                                                                                                                                                                               | Trois endroits : `switchingScene` (local à `EditorMenuRegion`), `EditorActionsFacade.selectScene` (async), `EditorScenePersistence.flush` ; le contrôleur l’ignore                                                                                                                                           | État du contrôleur (la spec exige déjà de bloquer le catalogue pendant ce parcours).          |
+| M10 | Persistance : prêt/erreur, écriture en cours/en attente par scène, suppression en cours                                                                                                                                                      | `EditorScenePersistence` : `status`, `writeQueues`, `pendingSnapshots`, `deletingSceneId`, `activation`                                                                                                                                                                                                      | À déclarer si M9 passe au contrôleur ; sinon garder la classe et rendre ses états explicites. |
 
 Restent locaux et acceptables : le séparateur de `AppLayout`, la session de
 `block-move-control` (passe par `bindGestureSession`) et le glisser de l’overlay.
@@ -888,13 +922,13 @@ réordonnancement des pistes).
   `setRootPlacementMode`, et le bouton n’est désactivé que pendant la lecture ou la
   création. Autres commandes qui lèvent : `setZonesSurface`, `createRootZone`,
   `attachItem`, `assignType`, `setCapsuleDef`, `createItem`, `setDecor`.
-  *Décision à prendre* : refuser la commande en préservant l’acteur (résultat
+  _Décision à prendre_ : refuser la commande en préservant l’acteur (résultat
   d’erreur ou diagnostic), et désactiver aussi les contrôles en amont.
 - **E2 — Changement de parent d’un item placé en zone** (confirmé à la lecture,
   à confirmer dans le navigateur). `attachItem` ne touche pas à `Decor.zoneId`. Un
   bloc tracé en grille fine (racine, zone racine) et déposé dans une capsule
   produit `EDITOR_V2_ZONE_PARENT_MISMATCH` : le rebuild échoue, le player garde
-  l’ancienne scène, et la validation SQLite lève une erreur. *Manque de contrat* :
+  l’ancienne scène, et la validation SQLite lève une erreur. _Manque de contrat_ :
   la spec ne dit pas ce que devient la zone lors d’un changement de parent.
 - **E3 — Trois définitions de « document modifié »** (confirmé). Le contrôleur
   émet `documentCommitted` dès que la référence de l’objet scène change ;
@@ -913,7 +947,7 @@ réordonnancement des pistes).
   l’interdit), et un KF peut tomber, par aimantation, sur l’instant d’un autre KF
   du même item. Or le pont suppose les instants uniques par item. Dépasser un autre
   KF de pose change aussi le segment auquel s’applique son `path`.
-  *À qualifier par un test.*
+  _À qualifier par un test._
 - **E6 — Le copy-on-write a trois définitions différentes du « décor
   partagé »** : `isDecorSharedByAnotherReference` (pont : ignore `rootDecorId` et,
   hors `path`, `initialDecorId`), `initialDecorIsShared` (`setCapsuleDef`) et
@@ -921,7 +955,7 @@ réordonnancement des pistes).
   partage volontairement le décor adjacent, y compris `initialDecorId`.
 - **E7 — Le tracé d’une plage efface les poses des bornes.** `CLIP.DRAW_END`
   supprime les KF d’entrée et de sortie, puis les recrée avec un décor vide :
-  géométrie et habillage de ces bornes sont perdus. *Question* : remplacement
+  géométrie et habillage de ces bornes sont perdus. _Question_ : remplacement
   voulu, ou conservation des décors ?
 - **E8 — La timeline recalcule la distribution des capsules à sa façon**
   (`computeVirtualKeyframes`, « même formule que `resolveCapsule` »).
@@ -1166,7 +1200,7 @@ que survolés) et `overlay.ts` (gestion des événements seulement).
 - **P1 — Lecture du transform dans le DOM.** `recordItemTransformProjection` stocke
   la matrice dans une `WeakMap` de module, indexée par un nœud DOM, que le pont relit
   en cherchant le nœud (`presentedItemPose`). La spec de présentation l’autorise,
-  mais cela lie le pont au nœud rendu. *Pour le lot 3* : faire publier cette
+  mais cela lie le pont au nœud rendu. _Pour le lot 3_ : faire publier cette
   contribution par le port de présentation plutôt que par le DOM.
 - **P2 — Trois analyseurs de `transform-origin`** (`parseRotationOrigin` du pont,
   `parseTransformOrigin` de la projection, celui de `tangent-reference`, qui

@@ -128,6 +128,14 @@ sont définis dans [`app-layout.css`](../src/app/layout/app-layout.css).
   constant suivent la [spec d’orientation](./path-tangent-orientation-spec.md).
 - Le cadre et la palette partagent le même état du décor. L'interpolation d'un
   décor et de sa position/taille ne crée pas d'action de pose supplémentaire.
+- La palette écrit les couleurs en oklch ; un document peut garder des couleurs
+  sRGB (hex, rgb, nommées, `transparent`). Une couleur garde son espace dans le
+  Builder. Quand les deux extrémités d'un tween de couleur sont dans des espaces
+  différents, l'extrémité sRGB est convertie en oklch, alpha conservé
+  (`alignColorSpaces`, [`decor-resolution.ts`](../src/builder-v2/decor-resolution.ts)),
+  pour le tween émis au player comme pour la résolution du style à un instant.
+  Deux extrémités sRGB restent interpolées en sRGB. Vérifié par
+  [`mixed-color-spaces.spec.ts`](../tests/builder-v2/mixed-color-spaces.spec.ts).
 - La palette Décor suit l’item sélectionné et le même état logique que son
   élément natif présenté. Un fond absent reste transparent des deux côtés ; une
   couleur choisie s’applique à l’élément au fil de la preview et la valeur

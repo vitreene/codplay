@@ -68,6 +68,27 @@ export function resolveTarget(scene: EditorScene, selection: Selection, timeline
   return { itemId: item.id, keyframeId: alignment.keyframeId, contentId: item.contentId, writeDecorId: decorId, itemType: item.type, isTemporary: false }
 }
 
+/**
+ * Author time at which a temporary target inserts its pose keyframe, or `null` when it can no
+ * longer: the playhead must be strictly between two pose keyframes or on an inherited bound (B-4)
+ * — or, with `allowWithoutPoseChain`, the item has no pose keyframe yet — and no keyframe may
+ * already exist at that time. The time is the author playhead, kept within the scene.
+ */
+export function temporaryInsertionTimeMs(
+  scene: EditorScene,
+  item: Item,
+  target: Target,
+  timelineMs: number,
+  options: Readonly<{ allowWithoutPoseChain?: boolean }> = {},
+): number | null {
+  const placeable = target.bound !== undefined
+    || resolveKeyframeAlignment(item, timelineMs).kind === 'between'
+    || (options.allowWithoutPoseChain === true && sortPoseKeyframes(item).length === 0)
+  if (!placeable) return null
+  const timeMs = Math.max(0, Math.min(timelineMs, scene.meta.durationMs))
+  return item.keyframes.some((keyframe) => keyframe.timeMs === timeMs) ? null : timeMs
+}
+
 export type KeyframeAlignment = MotionKeyframeAlignment
 
 /**

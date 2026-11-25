@@ -1,8 +1,9 @@
 import type { Decor, EditorScene, Item, Keyframe } from '../app/commands/types'
 import { resolveKeyframeChannel } from '../app/commands/types'
-import { parseColor, prepareTween, resolveTween, type InterpolationValue } from 'ace'
+import { parseColor, prepareTween, resolveTween, type ColorValue, type InterpolationValue } from 'ace'
 import { resolveKeyframeTransition } from './keyframe-transition'
 import type { StyleDefaultCapture } from './types'
+import { cssColorToCssOklch } from '../decor-editor/color-adapter'
 import { normalizeAngleDegrees } from '../motion-editor/geometry'
 import { resolveInitialPathRotation } from '../motion-editor/item-rotation/item-rotation'
 
@@ -100,9 +101,10 @@ export function resolveDecorationStyleAtTime(
   const { durationMs, startAtMs, ease } = resolveKeyframeTransition(source, target)
   return Object.entries(computeStyleDiff(fromStyle, toStyle)).reduce((resolved, [property, value]) => {
     if (durationMs <= 0 || !isInterpolableStylePair(fromStyle[property], value)) return resolved
+    const [from, to] = alignColorSpaces(fromStyle[property], value)
     const tween = prepareTween({
-      from: fromStyle[property] as InterpolationValue,
-      to: value as InterpolationValue,
+      from: from as InterpolationValue,
+      to: to as InterpolationValue,
       duration: durationMs,
       ease,
     })
@@ -310,6 +312,28 @@ function isColorString(value: string): boolean {
   } catch {
     return false
   }
+}
+
+/**
+ * Puts the two endpoints of one color tween in a single ACE color space. Documents may hold sRGB
+ * colors (hex, rgb, named) next to the oklch the palette writes, and ACE only tweens within one
+ * space: the sRGB endpoint facing an oklch one is converted to oklch. Any other pair is unchanged.
+ */
+export function alignColorSpaces(from: unknown, to: unknown): [unknown, unknown] {
+  if (!isColorValue(from) || !isColorValue(to) || from.space === to.space) return [from, to]
+  return [toOklch(from), toOklch(to)]
+}
+
+/** Narrows one resolved style value to an ACE color. */
+function isColorValue(value: unknown): value is ColorValue {
+  return typeof value === 'object' && value !== null && (value as { kind?: unknown }).kind === 'color'
+}
+
+/** Converts one ACE sRGB color (normalized channels) to its oklch equivalent, keeping alpha. */
+function toOklch(color: ColorValue): ColorValue {
+  if (color.space === 'oklch') return color
+  const [red, green, blue] = color.coords.map((channel) => Math.round(channel * 255))
+  return parseColor(cssColorToCssOklch(`rgba(${red}, ${green}, ${blue}, ${color.alpha})`))
 }
 
 /** Counts numeric components used by ACE's generic compound-value interpolation. */

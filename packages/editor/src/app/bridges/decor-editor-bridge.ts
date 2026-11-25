@@ -1,7 +1,6 @@
 import { createActor, type Actor } from 'xstate'
 import type { CodPlayPresentationPose, CodPlaySnapshot, CodPlaySnapshotPatch } from 'codplay'
-import { resolveSegmentProgress, resolveSegmentTiming, type SegmentTiming } from '../../builder-v2/keyframe-transition'
-import { createRotationModifier, createSelectionFrameV2, rotateSelectionFrameAffine } from '@codplay/selection-frame/v2'
+import { createRotationModifier, createSelectionFrameV2 } from '@codplay/selection-frame/v2'
 import type { SelectionFrameDelta, SelectionFrameV2CreationResult, SelectionFrameV2Handle } from '@codplay/selection-frame/v2'
 import { DecorEditorController } from '../../decor-editor/controller'
 import { mountDecorEditor } from '../../decor-editor/mount'
@@ -10,7 +9,7 @@ import type { DecorEditorCatalogs } from '../../decor-editor/controller'
 import type { DecorEditorMountHandle } from '../../decor-editor/mount'
 import { mountCapsuleDefinitionEditor } from '../../capsule-editor/mount'
 import type { CapsuleDefinitionEditorHandle, CapsuleEditorSelection } from '../../capsule-editor/mount'
-import type { DecorPatch, OffsetPatch, SelectionFrameValue } from '../../decor-editor/types'
+import type { DecorPatch, SelectionFrameValue } from '../../decor-editor/types'
 import {
   applyDecorModifications,
   collectDecorModifications,
@@ -32,16 +31,9 @@ import { offsetValuesPxToPatch, pxToCqw, } from '../../decor-editor/units'
 import { clearOffsetPlacementGeometry, hasExplicitPlacementGeometry, missingZoneFillStyle } from '../commands/offset-placement'
 // Read the stable identifier without importing the builder barrel, which loads the whole compiler.
 import { EDITOR_V2_STORY_ID } from '../../builder-v2/types'
-import {
-  ITEM_PREVIEW_HEIGHT_PROPERTY,
-  ITEM_PREVIEW_TRANSFORM_PROPERTY,
-  ITEM_PREVIEW_WIDTH_PROPERTY,
-  itemPreviewTransform,
-} from '../../item-presentation/item-preview'
 import { composeItemPresentationPose, readItemTransformProjection } from '../../item-presentation/item-style-projection'
-import { resolveDecorationStyleAtTime, resolveOffsetAsStyle } from '../../builder-v2/decor-resolution'
+import { resolveDecorationStyleAtTime } from '../../builder-v2/decor-resolution'
 import { createMotionOverlay } from '../../motion-editor/overlay'
-import { STRAIGHT_MOTION_PATH } from '../../motion-editor/item-rotation/item-rotation'
 import type { MotionOverlayGhost, MotionOverlayHandle, MotionOverlayRole, MotionOverlaySegment } from '../../motion-editor/overlay'
 import { createMotionGeometryStore } from '../../motion-editor/geometry-store'
 import { createBlockMoveControl } from './block-move-control'
@@ -63,17 +55,10 @@ import { isSameAuthorTime } from '../config/author-time'
 import type { BlockMoveControlHandle } from './block-move-control'
 import {
   frameVisualCenter,
-  frameWithRotationAtPathAnchor,
-  midpoint,
-  motionControlFromPath,
-  motionPathTangentAngle,
-  motionPathAnchorForFrame,
   resolveMotionGeometryPose,
-  frameWithTangentAtPathAnchor,
   normalizeAngleDegrees,
   presentationItemPoseToContentFrame,
   presentationPoseToSelectionFrame,
-  splitMotionPath,
   type MotionGeometryPose,
 } from '../../motion-editor/geometry'
 import {
@@ -84,38 +69,46 @@ import { OVERLAY_LAYERS } from '../config/overlay-layers'
 
 import type { Target } from './decor-edit/decor-target'
 import { inheritedBoundAt } from '../../scene-bounds/scene-bounds'
-import { resolveDecorationKeyframeAlignment, resolveKeyframeAlignment, resolveTarget, sortPoseKeyframes } from './decor-edit/decor-target'
+import { resolveDecorationKeyframeAlignment, resolveTarget, sortPoseKeyframes, temporaryInsertionTimeMs } from './decor-edit/decor-target'
 import {
   itemUsesZonePlacement,
   resolveDocumentDecorBase,
-  resolveEffectiveKeyframePatch,
   resolveEffectivePosePatch,
-  resolveMotionPath,
   resolveTemporaryOffset,
   resolveTemporaryPatch,
   resolveZoneIdAtPoseKeyframe,
   resolveZoneIdAtTime,
-  zonePlacementAtPoseKeyframe,
 } from './decor-edit/decor-patches'
-import { buildDecorCommands, materializeZoneFillStyle, patchToDecorArgs } from './decor-edit/decor-commands'
-import { frameGesturePatch, frameToOffsetPatch, logicalFrameToPx, readLogicalFrame } from './decor-edit/frame-projection'
-import { activeMotionFromSegment, buildMotionPathCommands, resolveMotionPair, type ActiveMotion } from './decor-edit/motion-projection'
-import { applyFrameDelta, } from './decor-edit/frame-delta'
+import { buildDecorCommands, keyframeCreationAt, materializeZoneFillStyle, patchToDecorArgs } from './decor-edit/decor-commands'
+import {
+  authorFrameForGesture,
+  frameGesturePatch,
+  frameToOffsetPatch,
+  logicalFrameToPx,
+  previewStyle,
+  readLogicalFrame,
+  resolveGestureCandidate,
+} from './decor-edit/frame-projection'
+import {
+  activeMotionFromSegment,
+  buildMotionPathCommands,
+  resolveMotionOverlayGhosts,
+  resolveMotionOverlaySegments,
+  resolveWaypointSplit,
+  authoredRotationAtGestureStart,
+  displayFrameForAuthorFrame,
+  targetUsesTangent,
+  type ActiveMotion,
+  type GestureMotionContext,
+  type MotionProjectionView,
+} from './decor-edit/motion-projection'
+import { zoneOffsetGesturePatch } from './decor-edit/frame-delta'
 
 /**
  * Pont `decorEditor` — `specs/editor-v2-integration-spec.md`. `defaults`/`chain`
  * restent vides : aucune chaîne d'héritage (capsule/zone) n'est modélisée côté document
  * aujourd'hui — `patch` porte donc, à lui seul, le décor résolu.
  */
-
-
-type MotionEndpointProjection = Readonly<{
-  geometry: MotionGeometryPose
-  insets: FrameBorderInsetsPx
-  authorFrame: SelectionFrameValue
-}>
-
-
 
 /** Bridge handle owned by the Decor inspector region. */
 export type DecorEditorBridgeHandle = BridgeHandle & Readonly<{
@@ -276,14 +269,10 @@ export function createDecorEditorBridge(
     const patch = modificationsToDecorPatch(state.modifications)
     const decorArgs = patchToDecorArgs(patch)
     if (decorArgs === null) return null
-    const keyframeId = createId('kf')
-    const decorId = createId('decor')
+    const created = keyframeCreationAt({ itemId, timeMs, channel: 'decor', bound })
     return {
-      keyframeId,
-      commands: [
-        { name: 'createNamedKeyframe', args: { itemId, keyframeId, timeMs, decorId, channel: 'decor', ...linkedBoundArgs(bound) } },
-        { name: 'setDecor', args: { decorId, patch: decorArgs } },
-      ],
+      keyframeId: created.keyframeId,
+      commands: [created.command, { name: 'setDecor', args: { decorId: created.decorId, patch: decorArgs } }],
     }
   }
 
@@ -420,8 +409,6 @@ export function createDecorEditorBridge(
     return Number.isFinite(width) && width > 0 ? width : null
   }
 
-
-
   /** Composes one runtime pose with the CSS matrix and axis captured by its transform anchor. */
   function presentedItemPose(itemId: string, pose: CodPlayPresentationPose) {
     const itemNode = [...(sceneHost?.querySelectorAll<HTMLElement>('[data-item-id]') ?? [])]
@@ -472,6 +459,33 @@ export function createDecorEditorBridge(
     return resolveContentInsetsPx(style, rootWidthPx, coordination.getSceneHost()?.ownerDocument.defaultView?.devicePixelRatio ?? 1)
   }
 
+  /** Gesture state read by the tangent and authored-rotation projections, at the time of the call. */
+  function gestureContext(): GestureMotionContext {
+    return {
+      activeMotion,
+      authorTimeMs: lastKnownTimelineMs,
+      gestureActive: gesture() !== null,
+      projectedSegments: motionGeometry.get().segments,
+      frameInsets: frameBorderInsetsPx,
+      authorFrame: authorFramePx,
+    }
+  }
+
+  /** Gesture state read by the motion overlay projection, at the time of the call. */
+  function motionView(): MotionProjectionView {
+    return {
+      authorTimeMs: lastKnownTimelineMs,
+      frameTarget,
+      displayFrame: displayFramePx,
+      authorFrame: authorFramePx,
+      frameInsets: frameBorderInsetsPx,
+      commitCandidate: commitCandidate(),
+      frameOwnsEndpoint: gesture() !== null || awaitingPresentation(),
+      gestureActive: gesture() !== null,
+      endpointInsets: motionEndpointInsets,
+    }
+  }
+
   /** Resolves the border belonging to one endpoint, including its current accepted preview. */
   function motionEndpointInsets(scene: EditorScene, item: Item, keyframeId: string, rootWidthPx: number): FrameBorderInsetsPx {
     const keyframe = item.keyframes.find((candidate) => candidate.id === keyframeId)
@@ -492,178 +506,6 @@ export function createDecorEditorBridge(
     )
   }
 
-  /** Resolves the selected path owner before falling back to the keyframe/time default pair. */
-  function resolveGestureMotion(
-    scene: EditorScene,
-    item: Item,
-    target: Target,
-  ): {
-    sourceKeyframe: Item['keyframes'][number]
-    targetKeyframe: Item['keyframes'][number]
-    path: string | undefined
-    orientToPath: boolean
-    timing: SegmentTiming
-  } | null {
-    const motion = activeMotion
-    const motionContainsTarget = motion !== null
-      && motion.itemId === item.id
-      && (target.keyframeId === null
-        ? lastKnownTimelineMs > motion.sourceTimeMs && lastKnownTimelineMs < motion.targetTimeMs
-        : target.keyframeId === motion.sourceKeyframeId || target.keyframeId === motion.targetKeyframeId)
-    const pair = motionContainsTarget
-      ? {
-        sourceKeyframe: item.keyframes.find((keyframe) => keyframe.id === motion.sourceKeyframeId),
-        targetKeyframe: item.keyframes.find((keyframe) => keyframe.id === motion.targetKeyframeId),
-      }
-      : resolveMotionPair(item, target.keyframeId, lastKnownTimelineMs)
-    if (pair === null || pair.sourceKeyframe === undefined || pair.targetKeyframe === undefined) return null
-    return {
-      sourceKeyframe: pair.sourceKeyframe,
-      targetKeyframe: pair.targetKeyframe,
-      path: motionContainsTarget ? motion.path : resolveMotionPath(scene, item, pair.targetKeyframe.id),
-      orientToPath: item.rotationMode === 'tangent',
-      timing: motionContainsTarget
-        ? motion.timing
-        : resolveSegmentTiming(scene, item, pair.sourceKeyframe, pair.targetKeyframe),
-    }
-  }
-
-  /** Builds all adjacent document segments for the selected item in one shared overlay projection. */
-  function resolveMotionOverlaySegments(
-    scene: EditorScene,
-    item: Item,
-    selectedKeyframeId: string | null,
-    rootWidthPx: number,
-    currentMotion: ActiveMotion | null,
-    timelineMs: number,
-  ): { selection: MotionGeometryPose | null; segments: MotionOverlaySegment[] } {
-    const selectionGeometry = displayFramePx === null
-      ? null
-      : resolveMotionGeometryPose(displayFramePx, frameBorderInsetsPx)
-    if (itemUsesZonePlacement(scene, item, timelineMs, selectedKeyframeId)) return { selection: selectionGeometry, segments: [] }
-    const keyframes = sortPoseKeyframes(item)
-    const selectedPair = resolveMotionPair(item, selectedKeyframeId, timelineMs)
-    const activeSourceId = currentMotion?.sourceKeyframeId ?? selectedPair?.sourceKeyframe.id
-    const activeTargetId = currentMotion?.targetKeyframeId ?? selectedPair?.targetKeyframe.id
-    const content = item.contentId === null ? undefined : scene.contents[item.contentId]
-    const selectedKeyframe = selectedKeyframeId === null
-      ? undefined
-      : item.keyframes.find((keyframe) => keyframe.id === selectedKeyframeId)
-    const selectedTargetIsAtTimeline = selectedKeyframe !== undefined
-      && isSameAuthorTime(selectedKeyframe.timeMs, timelineMs)
-    const endpointGeometry = new Map<string, MotionEndpointProjection>()
-    for (const keyframe of keyframes) {
-      const logicalFrame = readLogicalFrame(
-        null,
-        item.id,
-        resolveEffectiveKeyframePatch(scene, item, keyframe.id, content),
-      )
-      if (logicalFrame === null) continue
-      const isSelectedEndpoint = frameTarget?.itemId === item.id
-        && !frameTarget.isTemporary
-        && frameTarget.keyframeId === keyframe.id
-        && selectedTargetIsAtTimeline
-      const insets = motionEndpointInsets(scene, item, keyframe.id, rootWidthPx)
-      const authorFrame = isSelectedEndpoint && authorFramePx !== null
-        ? authorFramePx
-        : logicalFrameToPx(logicalFrame, rootWidthPx)
-      // Endpoint anchors belong to the document, independently of selection/seek history.
-      // Only an active or just-committed author gesture may replace its current endpoint.
-      const previewFrame = isSelectedEndpoint && (gesture() !== null || awaitingPresentation())
-        ? commitCandidate() ?? displayFramePx
-        : null
-      const geometry = resolveMotionGeometryPose(previewFrame ?? authorFrame, insets)
-      endpointGeometry.set(keyframe.id, {
-        geometry,
-        insets,
-        authorFrame,
-      })
-    }
-    const segments: MotionOverlaySegment[] = []
-
-    for (let index = 0; index < keyframes.length - 1; index += 1) {
-      const sourceKeyframe = keyframes[index]!
-      const targetKeyframe = keyframes[index + 1]!
-      if (zonePlacementAtPoseKeyframe(scene, item, sourceKeyframe.id) !== null
-        && zonePlacementAtPoseKeyframe(scene, item, targetKeyframe.id) !== null) continue
-      const sourceEndpoint = endpointGeometry.get(sourceKeyframe.id)
-      const targetEndpoint = endpointGeometry.get(targetKeyframe.id)
-      if (sourceEndpoint === undefined || targetEndpoint === undefined) continue
-      const sourceGeometry = sourceEndpoint.geometry
-      const targetGeometry = targetEndpoint.geometry
-
-      const pairIsActive = activeSourceId === sourceKeyframe.id && activeTargetId === targetKeyframe.id
-      const sourceDocumentFrame = sourceEndpoint.authorFrame
-      const targetDocumentFrame = targetEndpoint.authorFrame
-      const path = pairIsActive && currentMotion !== null
-        ? currentMotion.path
-        : resolveMotionPath(scene, item, targetKeyframe.id)
-      const orientToPath = item.rotationMode === 'tangent'
-      const sourceInsets = sourceEndpoint.insets
-      const targetInsets = targetEndpoint.insets
-      const sourceCenter = sourceGeometry.pathAnchor
-      const targetCenter = targetGeometry.pathAnchor
-      const tangentPath = orientToPath ? path ?? STRAIGHT_MOTION_PATH : undefined
-      const sourceTangent = tangentPath === undefined
-        ? undefined
-        : motionPathTangentAngle(tangentPath, sourceCenter, targetCenter, 0)
-      const targetTangent = tangentPath === undefined
-        ? undefined
-        : motionPathTangentAngle(tangentPath, sourceCenter, targetCenter, 1)
-      const sourceFrame = sourceTangent === undefined
-        ? sourceDocumentFrame
-        : frameWithTangentAtPathAnchor(
-          sourceDocumentFrame,
-          sourceCenter,
-          sourceTangent,
-          sourceInsets,
-        )
-      const targetFrame = targetTangent === undefined
-        ? targetDocumentFrame
-        : frameWithTangentAtPathAnchor(
-          targetDocumentFrame,
-          targetCenter,
-          targetTangent,
-          targetInsets,
-        )
-      const control = path === undefined
-        ? midpoint(sourceCenter, targetCenter)
-        : motionControlFromPath(path, sourceCenter, targetCenter) ?? midpoint(sourceCenter, targetCenter)
-      const role = pairIsActive
-        ? currentMotion?.role ?? (selectedPair?.sourceKeyframe.id === sourceKeyframe.id ? 'source' : 'target')
-        : undefined
-      const isTemporary = pairIsActive
-        && (selectedKeyframe === undefined || resolveKeyframeChannel(selectedKeyframe) === 'decor')
-        && timelineMs > sourceKeyframe.timeMs
-        && timelineMs < targetKeyframe.timeMs
-      const sourcePose = sourceTangent === undefined
-        ? sourceGeometry
-        : resolveMotionGeometryPose(sourceFrame, sourceInsets)
-      const targetPose = targetTangent === undefined
-        ? targetGeometry
-        : resolveMotionGeometryPose(targetFrame, targetInsets)
-      segments.push({
-        id: `${item.id}:${sourceKeyframe.id}->${targetKeyframe.id}`,
-        sourceKeyframeId: sourceKeyframe.id,
-        targetKeyframeId: targetKeyframe.id,
-        sourceGeometry: sourcePose,
-        targetGeometry: targetPose,
-        ...(selectionGeometry === null ? {} : { selectionGeometry }),
-        control,
-        ...(path === undefined ? {} : { path }),
-        ...(orientToPath ? { orientToPath: true } : {}),
-        active: pairIsActive,
-        ...(role === undefined ? {} : { role }),
-        ...(isTemporary ? {
-          isTemporary: true,
-          splitProgress: resolveSegmentProgress(resolveSegmentTiming(scene, item, sourceKeyframe, targetKeyframe), timelineMs),
-          ...(gesture() === null ? {} : { posePreview: true }),
-        } : {}),
-      })
-    }
-    return { selection: selectionGeometry, segments }
-  }
-
   /** Rebuilds the active motion projection from the committed document and selected keyframe. */
   function activateCommittedMotion(item: Item, selectedKeyframeId: string, rootWidthPx: number): MotionOverlaySegment | null {
     const projectedSegments = resolveMotionOverlaySegments(
@@ -673,88 +515,13 @@ export function createDecorEditorBridge(
       rootWidthPx,
       null,
       lastKnownTimelineMs,
+      motionView(),
     )
     const activeSegment = projectedSegments.segments.find((candidate) => candidate.active === true) ?? null
     activeMotion = activeSegment === null
       ? null
       : activeMotionFromSegment(machine.getSnapshot().context.scene!, item, activeSegment)
     return activeSegment
-  }
-
-  /** Builds one ghost projection for every real keyframe in the item's temporal chain. */
-  function resolveMotionOverlayGhosts(
-    scene: EditorScene,
-    item: Item,
-    selectedKeyframeId: string | null,
-    rootWidthPx: number,
-    timelineMs: number,
-    projectedSegments: readonly MotionOverlaySegment[],
-    selectionGeometry: MotionGeometryPose | null,
-  ): MotionOverlayGhost[] {
-    if (itemUsesZonePlacement(scene, item, timelineMs, selectedKeyframeId)) return []
-    const keyframes = sortPoseKeyframes(item)
-    const content = item.contentId === null ? undefined : scene.contents[item.contentId]
-    const activeSegment = projectedSegments.find((candidate) => candidate.active === true)
-    const selectedIndex = selectedKeyframeId === null
-      ? -1
-      : keyframes.findIndex((keyframe) => keyframe.id === selectedKeyframeId)
-    const activeSourceIndex = activeSegment?.sourceKeyframeId === undefined
-      ? -1
-      : keyframes.findIndex((keyframe) => keyframe.id === activeSegment.sourceKeyframeId)
-    const activeTargetIndex = activeSegment?.targetKeyframeId === undefined
-      ? -1
-      : keyframes.findIndex((keyframe) => keyframe.id === activeSegment.targetKeyframeId)
-    const anchorIndices = selectedIndex >= 0
-      ? [selectedIndex]
-      : [activeSourceIndex, activeTargetIndex].filter((index) => index >= 0)
-
-    return keyframes.flatMap((keyframe, index) => {
-      if (zonePlacementAtPoseKeyframe(scene, item, keyframe.id) !== null) return []
-      const outgoingSegment = projectedSegments.find((segment) =>
-        segment.sourceKeyframeId === keyframe.id && segment.path !== undefined)
-      const incomingSegment = projectedSegments.find((segment) => segment.targetKeyframeId === keyframe.id)
-      const ownerSegment = outgoingSegment ?? incomingSegment
-      const projectedGeometry = ownerSegment === undefined
-        ? undefined
-        : ownerSegment === outgoingSegment
-          ? ownerSegment.sourceGeometry
-          : ownerSegment.targetGeometry
-      const fallbackPatch = resolveEffectiveKeyframePatch(scene, item, keyframe.id, content)
-      const fallbackFrame = projectedGeometry === undefined
-        ? readLogicalFrame(null, item.id, fallbackPatch)
-        : null
-      const fallbackInsets = projectedGeometry === undefined
-        ? motionEndpointInsets(scene, item, keyframe.id, rootWidthPx)
-        : undefined
-      const geometry = projectedGeometry
-        ?? (fallbackFrame === null ? undefined : resolveMotionGeometryPose(
-          logicalFrameToPx(fallbackFrame, rootWidthPx), fallbackInsets!,
-        ))
-      if (geometry === undefined) return []
-      const atCurrentKeyframe = frameTarget?.itemId === item.id
-        && isSameAuthorTime(lastKnownTimelineMs, keyframe.timeMs)
-      const currentFrame = atCurrentKeyframe ? commitCandidate() ?? displayFramePx : null
-      // At the current KF the acknowledged presentation (or accepted preview) owns the ghost,
-      // including the compiler's path quantization. Other KFs use their owning segment projection.
-      const usesSelectedGeometry = atCurrentKeyframe
-        && frameTarget?.keyframeId === keyframe.id
-        && selectionGeometry !== null
-      const ghostGeometry = usesSelectedGeometry
-        ? selectionGeometry
-        : currentFrame === null
-          ? geometry
-          : resolveMotionGeometryPose(currentFrame, geometry.insets)
-      const chainDistance = anchorIndices.length === 0
-        ? index
-        : Math.min(...anchorIndices.map((anchorIndex) => Math.abs(index - anchorIndex)))
-      return [{
-        id: `${item.id}:ghost:${keyframe.id}`,
-        keyframeId: keyframe.id,
-        geometry: ghostGeometry,
-        chainDistance,
-        ...(index === 0 ? { isInitial: true } : {}),
-      }]
-    })
   }
 
   /** Projects the current runtime pose and its affine content inset into the visible CS. */
@@ -791,117 +558,6 @@ export function createDecorEditorBridge(
     }
   }
 
-  /** Stores the authored tangent-relative offset while keeping its gesture path anchor fixed. */
-  function authorFrameForGesture(
-    displayedFrame: SelectionFrameValue,
-    authoredRotate: number,
-    pathAnchor = motionPathAnchorForFrame(displayedFrame, frameBorderInsetsPx),
-  ): SelectionFrameValue {
-    return frameWithRotationAtPathAnchor(
-      displayedFrame,
-      normalizeAngleDegrees(authoredRotate),
-      pathAnchor,
-      frameBorderInsetsPx,
-    )
-  }
-
-  /** Reports whether the target pose is presented on a path-owned tangent segment. */
-  function targetUsesTangent(scene: EditorScene, target: Target): boolean {
-    const item = scene.items.find((candidate) => candidate.id === target.itemId)
-    if (item === undefined) return false
-    const motion = resolveGestureMotion(scene, item, target)
-    return motion !== null && motion.orientToPath
-  }
-
-  /** Resolves the path tangent for a gesture candidate using the document endpoint frames. */
-  function resolveTangentGestureProjection(
-    scene: EditorScene,
-    target: Target,
-    candidateFrame: SelectionFrameValue,
-    candidateInsets = frameBorderInsetsPx,
-  ): { angle: number; pathAnchor: { x: number; y: number } } | null {
-    const item = scene.items.find((candidate) => candidate.id === target.itemId)
-    if (item === undefined) return null
-    const motion = resolveGestureMotion(scene, item, target)
-    if (motion === null || !motion.orientToPath) return null
-    const tangentPath = motion.path ?? STRAIGHT_MOTION_PATH
-    const projectedSegment = motionGeometry.get().segments.find((segment) =>
-      segment.sourceKeyframeId === motion.sourceKeyframe.id
-      && segment.targetKeyframeId === motion.targetKeyframe.id)
-    if (projectedSegment === undefined) return null
-    const candidateIsSource = target.keyframeId === motion.sourceKeyframe.id
-    const candidateIsTarget = target.keyframeId === motion.targetKeyframe.id
-    const pathAnchor = motionPathAnchorForFrame(candidateFrame, candidateInsets)
-    const sourceAnchor = candidateIsSource ? pathAnchor : projectedSegment.sourceGeometry.pathAnchor
-    const targetAnchor = candidateIsTarget ? pathAnchor : projectedSegment.targetGeometry.pathAnchor
-    const selectedKeyframe = target.keyframeId === null
-      ? undefined
-      : item.keyframes.find((keyframe) => keyframe.id === target.keyframeId)
-    const timelineMs = selectedKeyframe?.timeMs ?? lastKnownTimelineMs
-    const easedProgress = resolveSegmentProgress(motion.timing, timelineMs)
-    const tangentProgress = candidateIsSource ? 0 : candidateIsTarget ? 1 : easedProgress
-    if (!candidateIsSource && !candidateIsTarget && gesture() !== null) {
-      const waypoint = motionPathAnchorForFrame(candidateFrame, candidateInsets)
-      const split = splitMotionPath(tangentPath, sourceAnchor, waypoint, targetAnchor, easedProgress)
-      const angle = split.after === undefined
-        ? undefined
-        : motionPathTangentAngle(split.after, split.waypoint, targetAnchor, 0)
-      return angle === undefined ? null : { angle, pathAnchor: split.waypoint }
-    }
-    const angle = motionPathTangentAngle(tangentPath, sourceAnchor, targetAnchor, tangentProgress)
-    return angle === undefined ? null : { angle, pathAnchor }
-  }
-
-  /** Projects every author-frame candidate through the same path, border and tangent conversion. */
-  function displayFrameForAuthorFrame(
-    scene: EditorScene,
-    target: Target,
-    value: SelectionFrameValue,
-    insets = frameBorderInsetsPx,
-  ): SelectionFrameValue {
-    const projection = resolveTangentGestureProjection(scene, target, value, insets)
-    const displayedFrame = projection === null ? value : frameWithTangentAtPathAnchor(
-      value, projection.pathAnchor, projection.angle, insets,
-    )
-    return { ...displayedFrame, rotate: normalizeAngleDegrees(displayedFrame.rotate ?? 0) }
-  }
-
-  /** Resolves the offset angle for the pose currently shown by the Selection Frame. */
-  function authoredRotationAtGestureStart(
-    scene: EditorScene,
-    target: Target,
-    displayedBase: SelectionFrameValue,
-  ): number {
-    const item = scene.items.find((candidate) => candidate.id === target.itemId)
-    if (item === undefined) return authorFramePx?.rotate ?? displayedBase.rotate ?? 0
-
-    const content = item.contentId === null ? undefined : scene.contents[item.contentId]
-    const selectedKeyframe = target.keyframeId === null
-      ? undefined
-      : item.keyframes.find((keyframe) => keyframe.id === target.keyframeId)
-    if (selectedKeyframe !== undefined && resolveKeyframeChannel(selectedKeyframe) === 'pose') {
-      const documentFrame = readLogicalFrame(
-        null,
-        item.id,
-        resolveEffectivePosePatch(scene, item, selectedKeyframe.id, content),
-      )
-      return documentFrame?.rotate ?? 0
-    }
-
-    const motion = resolveGestureMotion(scene, item, target)
-    if (motion === null) return authorFramePx?.rotate ?? displayedBase.rotate ?? 0
-    const sourcePatch = resolveEffectivePosePatch(scene, item, motion.sourceKeyframe.id, content)
-    const targetPatch = resolveEffectivePosePatch(scene, item, motion.targetKeyframe.id, content)
-    const sourceFrame = readLogicalFrame(null, item.id, sourcePatch)
-    const targetFrame = readLogicalFrame(null, item.id, targetPatch)
-    const sourceAngle = sourceFrame?.rotate ?? 0
-    const targetAngle = targetFrame?.rotate ?? 0
-    const easedProgress = resolveSegmentProgress(motion.timing, lastKnownTimelineMs)
-
-    // Same shortest-arc rule as the Builder's rotation tween, so the gesture starts from the shown angle.
-    return sourceAngle + normalizeAngleDegrees(targetAngle - sourceAngle) * easedProgress
-  }
-
   /** Projects a complete displayed pose while keeping the authored Decor contribution sparse. */
   function toSnapshotPatches(
     itemId: string,
@@ -910,34 +566,13 @@ export function createDecorEditorBridge(
   ): CodPlaySnapshotPatch[] | null {
     const progress = coordination.transport.getProgress()
     if (progress === null) return null
-    const style: Record<string, unknown> = {
-      ...(patch.style ?? {}),
-      ...resolveOffsetAsStyle(patch.offset),
-    }
-    const contentFrame = previewFrame === undefined ? displayFramePx : previewFrame
-    const rootWidth = sceneRootWidthPx()
-    if (rootWidth !== null && contentFrame !== null && frameTarget?.itemId === itemId) {
-      Object.assign(style, {
-        x: pxToCqw(contentFrame.x, rootWidth),
-        y: pxToCqw(contentFrame.y, rootWidth),
-        width: pxToCqw(contentFrame.width, rootWidth),
-        height: pxToCqw(contentFrame.height, rootWidth),
-        rotate: contentFrame.rotate ?? 0,
-        scaleX: contentFrame.scaleX ?? 1,
-        scaleY: contentFrame.scaleY ?? 1,
-        'transform-origin': `${(contentFrame.rotationOrigin?.fx ?? 0.5) * 100}% ${(contentFrame.rotationOrigin?.fy ?? 0.5) * 100}%`,
-      })
-      const presentation = coordination.presentation.get()
-      const presented = presentation?.items.find((item) => item.itemId === runtimeItemId(itemId))
-      if (presented !== undefined && frameTarget.itemType !== 'capsule') {
-        const transform = itemPreviewTransform(presented, contentFrame)
-        if (transform !== undefined) {
-          style[ITEM_PREVIEW_TRANSFORM_PROPERTY] = transform
-          style[ITEM_PREVIEW_WIDTH_PROPERTY] = `${contentFrame.width}px`
-          style[ITEM_PREVIEW_HEIGHT_PROPERTY] = `${contentFrame.height}px`
-        }
-      }
-    }
+    const style = previewStyle(
+      patch,
+      previewFrame === undefined ? displayFramePx : previewFrame,
+      sceneRootWidthPx(),
+      frameTarget?.itemId === itemId ? frameTarget : null,
+      coordination.presentation.get()?.items.find((item) => item.itemId === runtimeItemId(itemId)),
+    )
     return Object.keys(style).length === 0 ? null : [{
       target: { storyId: EDITOR_V2_STORY_ID, persoId: itemId },
       timeMs: progress.playerTimeMs,
@@ -980,7 +615,7 @@ export function createDecorEditorBridge(
     const editState = editRegistry().get(editRegistryKey(target.itemId, lastKnownTimelineMs))
     const baseAuthorRotate = scene === null
       ? authorFramePx?.rotate ?? basePx.rotate ?? 0
-      : authoredRotationAtGestureStart(scene, target, basePx)
+      : authoredRotationAtGestureStart(scene, target, basePx, gestureContext())
     const started: FrameGesture = {
       basePx,
       kind,
@@ -990,7 +625,7 @@ export function createDecorEditorBridge(
       baseAuthorFrame: scene === null || authorFramePx === null
         ? null
         : target.isTemporary
-          ? authorFrameForGesture(basePx, baseAuthorRotate)
+          ? authorFrameForGesture(basePx, baseAuthorRotate, frameBorderInsetsPx)
           : { ...authorFramePx, rotationOrigin: authorFramePx.rotationOrigin === undefined ? undefined : { ...authorFramePx.rotationOrigin } },
     }
     session.send({ type: 'GESTURE_START', gesture: started })
@@ -1026,60 +661,25 @@ export function createDecorEditorBridge(
         : delta.dx !== 0 || delta.dy !== 0
     session.send({ type: 'GESTURE_DELTA', hasNetDelta })
     const authoredBaseRotate = gesture()?.baseAuthorRotate ?? authorFramePx?.rotate ?? displayedBase.rotate ?? 0
-    const tangentMotion = !zoneOffsetGesture && scene !== null && targetUsesTangent(scene, target)
-    const rawDisplayCandidate = applyFrameDelta(displayedBase, delta)
-    const tangentRotation = tangentMotion && delta.kind === 'rotate'
-    const authoredBase = gesture()?.baseAuthorFrame
-      ?? (tangentMotion ? authorFrameForGesture(displayedBase, authoredBaseRotate) : displayedBase)
+    const tangentMotion = !zoneOffsetGesture && scene !== null && targetUsesTangent(scene, target, gestureContext())
     const represented = coordination.presentation.get()?.items.find((entry) => entry.itemId === runtimeItemId(target.itemId))
-    const sourceRepresentation = represented?.representation === 'source'
-    const editsAuthorSource = sourceRepresentation && !zoneOffsetGesture && !tangentMotion
-    const rotationDelta = normalizeAngleDegrees((rawDisplayCandidate.rotate ?? 0) - (displayedBase.rotate ?? 0))
-    const candidateAuthorFrame = tangentRotation
-      ? frameWithRotationAtPathAnchor(
-        authoredBase,
-        normalizeAngleDegrees(authoredBaseRotate + rotationDelta),
-        motionPathAnchorForFrame(authoredBase, frameBorderInsetsPx),
-        frameBorderInsetsPx,
-      )
-      : editsAuthorSource
-        ? {
-          ...authoredBase,
-          x: authoredBase.x + (rawDisplayCandidate.x - displayedBase.x),
-          y: authoredBase.y + (rawDisplayCandidate.y - displayedBase.y),
-          ...(delta.kind === 'resize' ? {
-            width: authoredBase.width + (rawDisplayCandidate.width - displayedBase.width),
-            height: authoredBase.height + (rawDisplayCandidate.height - displayedBase.height),
-          } : {}),
-          ...(delta.kind === 'rotate' ? {
-            rotate: normalizeAngleDegrees(Math.round(authoredBaseRotate + rotationDelta)),
-          } : {}),
-          ...(delta.kind === 'pivot' ? { rotationOrigin: rawDisplayCandidate.rotationOrigin } : {}),
-        }
-        : delta.kind === 'move' && sourceRepresentation
-          ? applyFrameDelta(authoredBase, delta)
-          : tangentMotion
-            ? authorFrameForGesture(rawDisplayCandidate, authoredBaseRotate)
-            : rawDisplayCandidate
-    const displayCandidate = tangentRotation
-      ? rotateSelectionFrameAffine(
-        displayedBase,
-        rawDisplayCandidate.rotate ?? 0,
-        frameWithRotationAtPathAnchor(
-          displayedBase,
-          rawDisplayCandidate.rotate ?? 0,
-          motionPathAnchorForFrame(displayedBase, frameBorderInsetsPx),
-          frameBorderInsetsPx,
-        ),
-      )
-      // Size and pivot edits keep the live affine orientation; only a path move recalculates its tangent.
-      : tangentMotion && delta.kind === 'move' && scene !== null
-        ? displayFrameForAuthorFrame(scene, target, candidateAuthorFrame)
-        : rawDisplayCandidate
+    const {
+      authorFrame: candidateAuthorFrame,
+      displayFrame: displayCandidate,
+      patchBaseFrame,
+    } = resolveGestureCandidate({
+      delta,
+      displayedBase,
+      authoredBase: gesture()?.baseAuthorFrame
+        ?? (tangentMotion ? authorFrameForGesture(displayedBase, authoredBaseRotate, frameBorderInsetsPx) : displayedBase),
+      authoredBaseRotate,
+      tangentMotion,
+      sourceRepresentation: represented?.representation === 'source',
+      zoneOffsetGesture,
+      insets: frameBorderInsetsPx,
+      displayForAuthor: (frame) => scene === null ? frame : displayFrameForAuthorFrame(scene, target, frame, gestureContext()),
+    })
     session.send({ type: 'DECOR_PREVIEW_REQUESTED' })
-    const patchBaseFrame = editsAuthorSource || delta.kind === 'move' || tangentRotation
-      ? authoredBase
-      : tangentMotion ? authorFrameForGesture(displayedBase, authoredBaseRotate) : displayedBase
     const framePatch = zoneOffsetGesture && scene !== null
       ? zoneOffsetPatchForFrameGesture(delta, displayedBase, candidateAuthorFrame, rootWidth, scene, target)
       : frameGesturePatch(patchBaseFrame, candidateAuthorFrame, rootWidth)
@@ -1107,34 +707,7 @@ export function createDecorEditorBridge(
     const basePatch = baseState === null
       ? resolveDecorEditBase(scene, target, lastKnownTimelineMs)
       : applyDecorModifications(baseState.base, baseState.modifications)
-    const original = basePatch.offset ?? {}
-    const translate = original.translate ?? {}
-    const offset: OffsetPatch = {}
-
-    if (delta.kind === 'move') {
-      offset.translate = {
-        x: (translate.x ?? 0) + pxToCqw(candidate.x - base.x, rootWidth),
-        y: (translate.y ?? 0) + pxToCqw(candidate.y - base.y, rootWidth),
-      }
-    }
-    if (delta.kind === 'rotate') offset.rotate = candidate.rotate ?? 0
-    if (delta.kind === 'pivot') offset.rotationOrigin = candidate.rotationOrigin ?? { fx: 0.5, fy: 0.5 }
-    if (delta.kind === 'resize') {
-      if (base.width <= 0 || base.height <= 0) return null
-      const resizeX = delta.handle.includes('e') || delta.handle.includes('w')
-      const resizeY = delta.handle.includes('n') || delta.handle.includes('s')
-      const scaleX = (original.scale?.x ?? base.scaleX ?? 1) * (resizeX ? candidate.width / base.width : 1)
-      const scaleY = (original.scale?.y ?? base.scaleY ?? 1) * (resizeY ? candidate.height / base.height : 1)
-      const scaledBase = { ...base, scaleX, scaleY }
-      const targetCenter = frameVisualCenter(candidate)
-      const scaledCenter = frameVisualCenter(scaledBase)
-      offset.scale = { x: scaleX, y: scaleY }
-      offset.translate = {
-        x: (translate.x ?? 0) + pxToCqw(targetCenter.x - scaledCenter.x, rootWidth),
-        y: (translate.y ?? 0) + pxToCqw(targetCenter.y - scaledCenter.y, rootWidth),
-      }
-    }
-    return { offset }
+    return zoneOffsetGesturePatch(delta, base, candidate, rootWidth, basePatch)
   }
 
   /** Commits one path control-point edit without touching the source pose or sequence-editor. */
@@ -1168,7 +741,7 @@ export function createDecorEditorBridge(
       : resolveTarget(beforeFlush.scene, beforeFlush.selection, lastKnownTimelineMs)
     const gestureUsesTangent = beforeFlush.scene !== null
       && gestureTarget !== null
-      && targetUsesTangent(beforeFlush.scene, gestureTarget)
+      && targetUsesTangent(beforeFlush.scene, gestureTarget, gestureContext())
     const dropGesture = gesture()
     const gestureUsesAuthorSource = dropGesture !== null
       && gestureTarget !== null
@@ -1179,17 +752,17 @@ export function createDecorEditorBridge(
     const convertDisplayedFrames = gestureUsesTangent
     const gestureAuthorRotate = dropGesture?.baseAuthorRotate
       ?? (beforeFlush.scene !== null && gestureTarget !== null && convertDisplayedFrames
-        ? authoredRotationAtGestureStart(beforeFlush.scene, gestureTarget, drop.sourceFrame)
+        ? authoredRotationAtGestureStart(beforeFlush.scene, gestureTarget, drop.sourceFrame, gestureContext())
         : authorFramePx?.rotate ?? drop.sourceFrame.rotate ?? 0)
     const sourceDocumentFrame = convertDisplayedFrames
       ? dropGesture?.kind === 'rotate' && dropGesture.baseAuthorFrame !== null
         ? dropGesture.baseAuthorFrame
-        : authorFrameForGesture(drop.sourceFrame, gestureAuthorRotate)
+        : authorFrameForGesture(drop.sourceFrame, gestureAuthorRotate, frameBorderInsetsPx)
       : gestureUsesAuthorSource ? dropGesture?.baseAuthorFrame ?? drop.sourceFrame : drop.sourceFrame
     const requestedTargetDocumentFrame = convertDisplayedFrames
       ? dropGesture !== null && authorFramePx !== null
         ? authorFramePx
-        : authorFrameForGesture(drop.targetFrame, gestureAuthorRotate)
+        : authorFrameForGesture(drop.targetFrame, gestureAuthorRotate, frameBorderInsetsPx)
       : gestureUsesAuthorSource ? authorFramePx ?? drop.targetFrame : drop.targetFrame
     // A previous palette/CS phase may still be waiting for its host-level flush. Finish it before
     // resolving the drop so this gesture cannot be overwritten by an older pending command.
@@ -1211,38 +784,12 @@ export function createDecorEditorBridge(
     const insertsPose = sourceTarget.isTemporary
       || (selectedKeyframe !== undefined && resolveKeyframeChannel(selectedKeyframe) === 'decor')
     const originalSegment = insertsPose
-      ? resolveMotionOverlaySegments(scene, item, sourceTarget.keyframeId, rootWidth, null, lastKnownTimelineMs)
+      ? resolveMotionOverlaySegments(scene, item, sourceTarget.keyframeId, rootWidth, null, lastKnownTimelineMs, motionView())
         .segments.find((segment) => segment.active === true)
       : undefined
-    const requestedWaypoint = motionPathAnchorForFrame(requestedTargetDocumentFrame, frameBorderInsetsPx)
-    const split = originalSegment?.path === undefined ? null : splitMotionPath(
-      originalSegment.path,
-      originalSegment.sourceGeometry.pathAnchor,
-      requestedWaypoint,
-      originalSegment.targetGeometry.pathAnchor,
-      originalSegment.splitProgress ?? 0.5,
+    const { targetDocumentFrame, splitPatch, splitCommands } = resolveWaypointSplit(
+      scene, item, originalSegment, requestedTargetDocumentFrame, frameBorderInsetsPx, rootWidth,
     )
-    const targetDocumentFrame = split === null
-      ? requestedTargetDocumentFrame
-      : frameWithRotationAtPathAnchor(
-        requestedTargetDocumentFrame,
-        requestedTargetDocumentFrame.rotate ?? 0,
-        split.waypoint,
-        frameBorderInsetsPx,
-      )
-    const splitPatch: DecorPatch = split === null ? {} : {
-      ...(split.before === undefined ? {} : { path: split.before }),
-    }
-    const preservedTargetPatch = originalSegment?.targetKeyframeId === undefined ? null : resolveEffectivePosePatch(
-      scene, item, originalSegment.targetKeyframeId,
-    )
-    const preservedTargetFrame = preservedTargetPatch === null ? null : readLogicalFrame(null, item.id, preservedTargetPatch)
-    const preservedTargetOffset = preservedTargetFrame === null ? undefined : mergePatch(preservedTargetPatch!, {
-      offset: frameToOffsetPatch(logicalFrameToPx(preservedTargetFrame, rootWidth), rootWidth),
-    }).offset
-    const splitCommands = split === null || originalSegment?.targetKeyframeId === undefined
-      ? []
-      : buildMotionPathCommands(scene, item.id, originalSegment.targetKeyframeId, split.after, preservedTargetOffset)
 
     // Movement-surface frames are already content-box frames. Persist those author coordinates;
     // the builder derives the border-box layout translation at runtime.
@@ -1309,10 +856,8 @@ export function createDecorEditorBridge(
     // A temporary target is valid only in the strict interval between two real KFs. Its document time
     // is the current author playhead; the provisional 500 ms value belongs to a future
     // transition-window resolver and must never shift this keyframe's time.
-    const alignment = resolveKeyframeAlignment(item, lastKnownTimelineMs)
-    if (alignment.kind !== 'between' && sourceTarget.bound === undefined) return null
-    const targetTimeMs = Math.max(0, Math.min(lastKnownTimelineMs, scene.meta.durationMs))
-    if (item.keyframes.some((keyframe) => keyframe.timeMs === targetTimeMs)) return null
+    const targetTimeMs = temporaryInsertionTimeMs(scene, item, sourceTarget, lastKnownTimelineMs)
+    if (targetTimeMs === null) return null
 
     const editState = editRegistry().get(editRegistryKey(sourceTarget.itemId, lastKnownTimelineMs))
     const sparsePatch = {
@@ -1324,11 +869,11 @@ export function createDecorEditorBridge(
     const targetPatch = patchToDecorArgs(sparsePatch)
     if (targetPatch === null) return null
 
-    const targetKeyframeId = createId('kf')
-    const targetDecorId = createId('decor')
+    const created = keyframeCreationAt({ itemId: item.id, timeMs: targetTimeMs, channel: 'pose', bound: sourceTarget.bound })
+    const targetKeyframeId = created.keyframeId
     const commands: Command[] = [
-      { name: 'createNamedKeyframe', args: { itemId: item.id, keyframeId: targetKeyframeId, timeMs: targetTimeMs, decorId: targetDecorId, channel: 'pose', ...linkedBoundArgs(sourceTarget.bound) } },
-      { name: 'setDecor', args: { decorId: targetDecorId, patch: targetPatch } },
+      created.command,
+      { name: 'setDecor', args: { decorId: created.decorId, patch: targetPatch } },
       ...splitCommands,
     ]
     clearDecorEditState(sourceTarget.itemId, lastKnownTimelineMs)
@@ -1424,14 +969,10 @@ export function createDecorEditorBridge(
       return false
     }
 
-    if (beforeTarget.isTemporary) {
-      const targetTime = Math.max(0, Math.min(lastKnownTimelineMs, beforeScene.meta.durationMs))
-      const hasPoseChain = sortPoseKeyframes(beforeItem).length > 0
-      if ((hasPoseChain && beforeTarget.bound === undefined && resolveKeyframeAlignment(beforeItem, lastKnownTimelineMs).kind !== 'between')
-        || beforeItem.keyframes.some((keyframe) => keyframe.timeMs === targetTime)) {
-        cancelZoneMovePreview(sourceFrame)
-        return false
-      }
+    if (beforeTarget.isTemporary
+      && temporaryInsertionTimeMs(beforeScene, beforeItem, beforeTarget, lastKnownTimelineMs, { allowWithoutPoseChain: true }) === null) {
+      cancelZoneMovePreview(sourceFrame)
+      return false
     }
 
     const currentTemporaryEdit = beforeTarget.isTemporary && temporaryEditPendingAt(beforeTarget.itemId)
@@ -1472,26 +1013,19 @@ export function createDecorEditorBridge(
       targetTimeMs = keyframe.timeMs
       commands.push(...buildDecorCommands(scene, target, patch))
     } else if (target.isTemporary) {
-      const alignment = resolveKeyframeAlignment(item, lastKnownTimelineMs)
-      if (alignment.kind !== 'between' && target.bound === undefined && sortPoseKeyframes(item).length > 0) {
+      const insertionTimeMs = temporaryInsertionTimeMs(scene, item, target, lastKnownTimelineMs, { allowWithoutPoseChain: true })
+      if (insertionTimeMs === null) {
         cancelZoneMovePreview(sourceFrame, false)
         return false
       }
-      targetTimeMs = Math.max(0, Math.min(lastKnownTimelineMs, scene.meta.durationMs))
-      if (item.keyframes.some((keyframe) => keyframe.timeMs === targetTimeMs)) {
-        cancelZoneMovePreview(sourceFrame, false)
-        return false
-      }
-      createdKeyframeId = createId('kf')
-      const createdDecorId = createId('decor')
-      commands.push({
-        name: 'createNamedKeyframe',
-        args: { itemId: item.id, keyframeId: createdKeyframeId, timeMs: targetTimeMs, decorId: createdDecorId, channel: 'pose', ...linkedBoundArgs(target.bound) },
-      })
+      targetTimeMs = insertionTimeMs
+      const created = keyframeCreationAt({ itemId: item.id, timeMs: targetTimeMs, channel: 'pose', bound: target.bound })
+      createdKeyframeId = created.keyframeId
+      commands.push(created.command)
       commands.push(...buildDecorCommands(scene, {
         ...target,
-        keyframeId: createdKeyframeId,
-        writeDecorId: createdDecorId,
+        keyframeId: created.keyframeId,
+        writeDecorId: created.decorId,
         isTemporary: false,
       }, patch))
     } else {
@@ -1571,18 +1105,14 @@ export function createDecorEditorBridge(
         materializeZoneFillStyle(resolveDocumentDecorBase(scene, target, lastKnownTimelineMs), commitPatch),
       ))
     } else if (target.isTemporary) {
-      const alignment = resolveKeyframeAlignment(item, lastKnownTimelineMs)
-      if (alignment.kind !== 'between' && target.bound === undefined) return
-      targetTimeMs = Math.max(0, Math.min(lastKnownTimelineMs, scene.meta.durationMs))
-      if (item.keyframes.some((keyframe) => keyframe.timeMs === targetTimeMs)) return
-      createdKeyframeId = createId('kf')
-      const createdDecorId = createId('decor')
+      const insertionTimeMs = temporaryInsertionTimeMs(scene, item, target, lastKnownTimelineMs)
+      if (insertionTimeMs === null) return
+      targetTimeMs = insertionTimeMs
       const decorPatch = patchToDecorArgs(commitPatch)
       if (decorPatch === null) return
-      commands = [
-        { name: 'createNamedKeyframe', args: { itemId: item.id, keyframeId: createdKeyframeId, timeMs: targetTimeMs, decorId: createdDecorId, channel: 'pose', ...linkedBoundArgs(target.bound) } },
-        { name: 'setDecor', args: { decorId: createdDecorId, patch: decorPatch } },
-      ]
+      const created = keyframeCreationAt({ itemId: item.id, timeMs: targetTimeMs, channel: 'pose', bound: target.bound })
+      createdKeyframeId = created.keyframeId
+      commands = [created.command, { name: 'setDecor', args: { decorId: created.decorId, patch: decorPatch } }]
     } else {
       commands = buildDecorCommands(
         scene,
@@ -1719,6 +1249,7 @@ export function createDecorEditorBridge(
         rootWidth,
         motion,
         lastKnownTimelineMs,
+        motionView(),
       )
       const projectedSegments = projected.segments
       if (motion === null && target.keyframeId !== null) {
@@ -1733,6 +1264,7 @@ export function createDecorEditorBridge(
         lastKnownTimelineMs,
         projectedSegments,
         projected.selection,
+        motionView(),
       )
       publishMotionGeometrySnapshot(projected.selection, projectedSegments, projectedGhosts, canDraw)
       return
@@ -1775,7 +1307,7 @@ export function createDecorEditorBridge(
         frameBorderInsetsPx = resolveFrameBorderInsets(snapshot, target.itemId, patch, rootWidth)
       }
       authorFramePx = logicalFrameToPx(frameLogicalValue, rootWidth)
-      displayFramePx = target === null ? authorFramePx : displayFrameForAuthorFrame(scene, target, authorFramePx)
+      displayFramePx = target === null ? authorFramePx : displayFrameForAuthorFrame(scene, target, authorFramePx, gestureContext())
       syncMotionOverlay()
       return
     }
@@ -2234,8 +1766,8 @@ export function createDecorEditorBridge(
       ? null
       : resolveFrameBorderInsets(null, entry.itemId, entry.patch, rootWidth)
     const authorBase = gesture()?.baseAuthorFrame
-      ?? (displayFramePx !== null && target.isTemporary && targetUsesTangent(scene, target)
-        ? authorFrameForGesture(displayFramePx, authoredRotationAtGestureStart(scene, target, displayFramePx))
+      ?? (displayFramePx !== null && target.isTemporary && targetUsesTangent(scene, target, gestureContext())
+        ? authorFrameForGesture(displayFramePx, authoredRotationAtGestureStart(scene, target, displayFramePx, gestureContext()), frameBorderInsetsPx)
         : authorFramePx)
     const authorPatch = rootWidth === null || authorBase === null
       ? null
@@ -2246,7 +1778,7 @@ export function createDecorEditorBridge(
       : logicalFrameToPx(logicalCandidate, rootWidth)
     const displayedCandidate = authorCandidate === null || nextBorderInsets === null || rootWidth === null
       ? displayFramePx
-      : displayFrameForAuthorFrame(scene, target, authorCandidate, nextBorderInsets)
+      : displayFrameForAuthorFrame(scene, target, authorCandidate, gestureContext(), nextBorderInsets)
     const previewAccepted = previewPatch(entry.itemId, sparsePatch, target.isTemporary, displayedCandidate)
     session.send({ type: 'DECOR_PREVIEWED', accepted: previewAccepted })
     if (previewAccepted && nextBorderInsets !== null) {
@@ -2504,9 +2036,4 @@ export function createDecorEditorBridge(
       controller.destroy()
     },
   }
-}
-
-/** Marks a keyframe created on an inherited bound as linked to it (B-4); nothing otherwise. */
-function linkedBoundArgs(bound: 'intro' | 'outro' | undefined): { autoBound?: 'intro' | 'outro' } {
-  return bound === undefined ? {} : { autoBound: bound }
 }
