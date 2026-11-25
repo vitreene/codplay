@@ -137,6 +137,7 @@ function createSceneFixture(): EditorScene {
             transitionIn: { kind: 'named', name: 'fade', durationMs: 300 },
             name: 'entrée',
             markerId: 'marker-start',
+            autoBound: 'intro',
           },
           {
             id: 'kf-media-end',

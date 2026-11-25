@@ -36,7 +36,7 @@ function updateItemInScene(scene: EditorScene, itemId: string, updater: (item: I
 /** Removes one optional keyframe field so the author document remains JSON-compatible. */
 function omitKeyframeProperty(
   keyframe: Keyframe,
-  property: 'name' | 'markerId' | 'transitionIn' | 'transitionOut',
+  property: 'name' | 'markerId' | 'transitionIn' | 'transitionOut' | 'autoBound',
 ): Keyframe {
   const nextKeyframe = { ...keyframe }
   delete nextKeyframe[property]
@@ -145,7 +145,8 @@ export function moveKeyframe(scene: EditorScene, args: { itemId: string; keyfram
   return updateItemInScene(scene, args.itemId, (item) => ({
     ...item,
     keyframes: item.keyframes
-      .map((k) => (k.id === args.keyframeId ? { ...k, timeMs: args.timeMs } : k))
+      // Moving a linked bound fixes its instant: it becomes an ordinary (locked) keyframe.
+      .map((k) => (k.id === args.keyframeId ? { ...omitKeyframeProperty(k, 'autoBound'), timeMs: args.timeMs } : k))
       .sort((a, b) => a.timeMs - b.timeMs),
   }))
 }

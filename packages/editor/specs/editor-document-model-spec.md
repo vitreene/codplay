@@ -266,6 +266,7 @@ Keyframe {
   transitionOut?: Transition
   name?: string
   markerId?: string                   // rattachement à un marqueur (timeline)
+  autoBound?: 'intro' | 'outro'       // borne liée : instant calculé par la capsule ; absent = KF ordinaire
 }
 
 // Contrat des canaux :
@@ -377,6 +378,17 @@ Cue {                                 // repère temporel PONCTUEL, aimanté
 - **`Item.label` est un libellé d'affichage, pas du contenu** — distinct de `Content.text` : renommer une piste dans la timeline ne change jamais ce que l'item montre. Optionnel : l'éditeur dérive un affichage par défaut (troncature de `Content.text`, nom de source, badge de type) quand absent, plutôt que d'imposer sa saisie.
 - **`markerTracks` est une table indépendante, pas liée aux items/médias** — contrairement à `Cue` (qui vit dans `Content`, parce qu'une cue est la transcription d'une source précise), un marqueur est posé librement par l'auteur sur la timeline, sans rattachement à un média. D'où sa place à côté de `zones` (autre table référencée indépendante des items), pas dans `Content`.
 - Le comportement vérifié de la timeline V2 pour ces repères — Cue fixe attachée à sa source, Marker mobile auteur, snap partagé des KFs — est décrit dans la [spécification Sequence Editor V2](./sequence-editor-v2-cues-markers-spec.md).
+- **`Keyframe.autoBound` marque une borne liée.** Une borne (intro, outro) est
+  implicite (aucun KF), liée (KF de pose `autoBound`) ou verrouillée (KF de pose
+  ordinaire, instant fixé par l’auteur). Un KF lié porte son décor et, s’il y a lieu,
+  sa transition explicite ; son instant reste calculé par la distribution de la
+  capsule parente. Son `timeMs` n’en est que la projection en millisecondes : la
+  façade de commandes la réécrit après chaque commande (`syncLinkedBoundTimes`,
+  [`scene-bounds.ts`](../src/scene-bounds/scene-bounds.ts)), dans le même commit, donc
+  dans la même étape d’historique. Le KF marqué `intro` est l’intro de l’item, celui
+  marqué `outro` son outro, quel que soit l’ordre des `timeMs`. Déplacer un KF lié
+  (`moveKeyframe`) le verrouille : la marque est retirée. Résolution :
+  [intégration V2, « Résolution des bornes »](./editor-v2-integration-spec.md#résolution-des-bornes).
 - **`Item.rotationMode`** est un réglage statique propre à l’item, indépendant
   des décors et de leurs références partagées. Le reset des angles à l’entrée
   en tangente et l’orientation initiale constante sont décrits dans la

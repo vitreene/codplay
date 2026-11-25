@@ -44,7 +44,7 @@ par la [spécification Sequence Editor V2](../specs/sequence-editor-v2-cues-mark
 | `items` | Type, libellé, visibilité, référence de contenu, décor initial et mode global de rotation nullable (`manual` / `tangent`). |
 | `capsules` | Réglages statiques de capsule associés à l'item : type, distribution, grille, transitions par défaut et comportement. |
 | `capsule_items` | Parent capsule et clé d'ordre des enfants. Un parent SQL `NULL` désigne un enfant direct de la racine implicite. |
-| `keyframes` | Ordre, instant, canal, décor référencé, transitions, nom et marqueur. |
+| `keyframes` | Ordre, instant, canal, décor référencé, transitions, nom, marqueur et borne liée (`auto_bound`). |
 | `contents` | Type, source, texte et options de texte, langue, waveform, cues et `mediaId`. Les cues restent avec le contenu qui porte ces timestamps. |
 | `decors` | Le `Decor` complet en JSON, indexé par son id. Ses propriétés ne sont ni éclatées en colonnes ni interrogées par SQLite. |
 | `zones` | Identité, capsule propriétaire nullable, nom, géométrie paysage/portrait et éventuelle configuration du conteneur. |
@@ -76,7 +76,9 @@ dossier de données et `EDITOR_API_PORT` le port de l'API.
 - `PUT /api/active-scene` met à jour la scène active.
 
 La migration additive `20261117090000_add_item_rotation_mode` conserve les
-items historiques sans mode explicite (`NULL`, lu comme manuel).
+items historiques sans mode explicite (`NULL`, lu comme manuel). La migration
+additive `20261125120000_add_keyframe_auto_bound` ajoute `keyframes.auto_bound`
+(`'intro'`, `'outro'` ou `NULL`) ; les KF historiques restent des KF ordinaires.
 Le démarrage applique les migrations Remix `remix/data-table` à la base SQLite.
 Le serveur ferme la connexion lors de son arrêt.
 

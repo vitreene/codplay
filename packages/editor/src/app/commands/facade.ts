@@ -15,6 +15,7 @@ import * as sequenceEditor from '../../sequence-editor/commands'
 import type { Command } from '../controller/types'
 import type { EditorScene } from './types'
 import { editorScenesEqual } from './scene-equality'
+import { syncLinkedBoundTimes } from '../../scene-bounds/scene-bounds'
 
 /**
  * Exécute une commande nommée sur le document. Commandes qui produisent aussi un id
@@ -42,8 +43,18 @@ export class CommandError extends Error {
   }
 }
 
-/** Comme `runCommand`, mais renvoie aussi ce que la commande produit en plus du document (id créé…). */
+/**
+ * Comme `runCommand`, mais renvoie aussi ce que la commande produit en plus du document (id créé…).
+ * Chaque commande se termine par la projection en ms des bornes liées (`syncLinkedBoundTimes`) : leur
+ * instant suit la distribution dans le même commit, donc dans la même étape d'historique.
+ */
 export function runCommandWithResult(scene: EditorScene, command: Command): { scene: EditorScene; [key: string]: unknown } {
+  const result = executeCommand(scene, command)
+  return { ...result, scene: syncLinkedBoundTimes(result.scene) }
+}
+
+/** Dispatches one named command to its owner. */
+function executeCommand(scene: EditorScene, command: Command): { scene: EditorScene; [key: string]: unknown } {
   switch (command.name) {
     case 'createItem':
       return base.createItem(scene, command.args)

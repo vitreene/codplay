@@ -316,8 +316,8 @@ async function insertKeyframe(
   await queryRows(database, `
     INSERT INTO keyframes (
       scene_id, item_id, keyframe_id, ordinal, time_ms, channel, decor_id,
-      transition_in_json, transition_out_json, name, marker_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      transition_in_json, transition_out_json, name, marker_id, auto_bound
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     sceneId,
     itemId,
@@ -330,6 +330,7 @@ async function insertKeyframe(
     optionalJson(keyframe.transitionOut),
     keyframe.name ?? null,
     keyframe.markerId ?? null,
+    keyframe.autoBound ?? null,
   ])
 }
 
@@ -470,6 +471,7 @@ function capsuleFromRow(row: SqlRow): CapsuleDef {
 /** Reconstructs one keyframe while preserving an omitted legacy channel. */
 function keyframeFromRow(row: SqlRow): Keyframe {
   const channel = nullableText(row, 'channel')
+  const autoBound = nullableText(row, 'auto_bound') as Keyframe['autoBound'] | null
   return {
     id: stringValue(row, 'keyframe_id'),
     timeMs: numberValue(row, 'time_ms'),
@@ -479,6 +481,7 @@ function keyframeFromRow(row: SqlRow): Keyframe {
     ...optionalJsonProperty(row, 'transition_out_json', 'transitionOut'),
     ...(nullableText(row, 'name') === null ? {} : { name: nullableText(row, 'name')! }),
     ...(nullableText(row, 'marker_id') === null ? {} : { markerId: nullableText(row, 'marker_id')! }),
+    ...(autoBound === null ? {} : { autoBound }),
   }
 }
 

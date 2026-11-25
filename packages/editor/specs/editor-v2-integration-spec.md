@@ -147,8 +147,10 @@ L'adaptateur [`scene-bounds.ts`](../src/scene-bounds/scene-bounds.ts)
 
 - arbre des items par `parentId`, enfants dans l'ordre `order` puis `id`
   (`childrenOf`, partagé par la timeline et le Builder) ;
-- premier KF de pose = intro verrouillée ; dernier KF de pose, s'il est distinct =
-  outro verrouillée ; sans KF, la borne est implicite ;
+- intro = KF de pose marqué `autoBound: 'intro'`, sinon le premier KF de pose ;
+  outro = KF marqué `'outro'`, sinon le dernier KF de pose s'il est distinct ; un
+  KF marqué est une borne liée, un autre KF de borne une borne verrouillée ; sans
+  KF, la borne est implicite ;
 - seule une transition `named` est explicite (`transitionIn` de l'intro,
   `transitionOut` de l'outro), `cut`/`--` durant 0 ms ; les autres sont héritées ;
 - racine : `rootCapsule`, sinon type `card` et `stagger` 0/0 ; ordre
@@ -172,7 +174,9 @@ de départ. Le test [`cut-entry-exit.spec.ts`](../tests/builder-v2/cut-entry-exi
 crée l'instance CodPlay réelle et la parcourt par Seek. La timeline résout la scène complète ; le Builder, la scène de
 compilation, sans items masqués (voir ci-dessus).
 
-Le test [`scene-bounds.spec.ts`](../tests/scene-bounds/scene-bounds.spec.ts)
+Le test [`linked-bounds.spec.ts`](../tests/scene-bounds/linked-bounds.spec.ts)
+vérifie une borne liée (instant calculé, transition explicite conservée), sa
+réécriture quand la capsule bouge et son verrouillage par `moveKeyframe`. Le test [`scene-bounds.spec.ts`](../tests/scene-bounds/scene-bounds.spec.ts)
 vérifie que la timeline et le Builder placent aux mêmes instants les enfants d'une
 capsule imbriquée sans KF, les enfants de la racine et l'ordre inversé.
 

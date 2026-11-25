@@ -81,6 +81,12 @@ export interface Keyframe {
   transitionOut?: Transition
   name?: string
   markerId?: string
+  /**
+   * Linked bound: this pose keyframe is the item's intro or outro, owns its decor and transition,
+   * while its instant stays computed by the parent capsule; `timeMs` is that instant's projection,
+   * rewritten after each command. Absent: an ordinary keyframe, which locks its bound.
+   */
+  autoBound?: 'intro' | 'outro'
 }
 
 /** Resolves the channel of a keyframe while keeping legacy documents readable. */

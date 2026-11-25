@@ -29,6 +29,7 @@ la timeline.
 | B-12 | La fusion aux bords (B-7) ne s’applique pas à la racine : ses enfants gardent la transition par défaut de la racine, jouée dans le pré-roll. Fenêtre de la racine inchangée : `[−pré-roll, max(durée de la scène, dernier KF)]`. | Décidée par l’utilisateur (2026-11-25) |
 | B-13 | L’instant d’une borne est celui d’un KF réel : fin de la transition d’entrée pour l’intro, début de la transition de sortie pour l’outro. La timeline affiche une borne héritée à cet instant (aujourd’hui : au début de la transition d’entrée). | Décidée par l’utilisateur (2026-11-25) |
 | B-14 | L’ordre de distribution est `scene.meta.capsuleOrder`, pour la timeline et le Builder ; `DisplayConfig.capsuleOrder` disparaît. | Décidée par l’utilisateur (2026-11-25) |
+| B-15 | L’instant en millisecondes d’une borne liée est une projection, due en principe au seul Builder et à l’export. Par défaut, elle est écrite dans `timeMs` après chaque commande (façade de commandes, même commit) ; l’éditeur ne devrait pas, à terme, raisonner sur cette valeur. | Décidée par l’utilisateur (2026-11-25) ; cible : étape 4b. Règle dès l’action 3 : tout nouveau lecteur prend l’instant d’une borne dans la résolution (`resolveSceneBounds`), jamais dans `timeMs`. |
 | B-10 | Lien durable d’un KF à un label. **Cues de texte** : reporté au chantier des cues (prématuré). **Nom de KF** : deux sens retenus — un KF qui suit un autre KF nommé (prématuré) ; un nom qui sert de repère global sur lequel plusieurs KF s’alignent (à traiter en premier). L’existant fournit déjà un repère global durable : `Marker` (`label`) et `Keyframe.markerId`. Reste à décider, au moment de le traiter, comment un nom de KF devient ou rejoint un tel repère. | Décidée par l’utilisateur (2026-11-25) : cues reportées, repère nommé global en premier |
 
 ## Actions (dans l’ordre)
@@ -61,10 +62,14 @@ la timeline.
    - Écart assumé : un item à un seul KF n’émet plus le `transitionOut` nommé de ce KF
      (son outro est implicite) ; aucune interface ne pose ce cas aujourd’hui.
 
-2. **Modèle (B-2).** Éditeur seul (la résolution des bornes liées et la spec de
-   distribution sont faites à l’action 1). Spec du modèle de document ;
-   `commands/types.ts`, commandes de KF, migration SQLite et persistance ;
-   l’adaptateur passe un KF `autoBound` comme borne liée, son décor lu par l’éditeur.
+2. **Modèle (B-2). Fait (2026-11-25)**, vérifié par tests (éditeur 614, dont
+   `tests/scene-bounds/linked-bounds.spec.ts` et l’aller-retour SQLite), typecheck et
+   build : `Keyframe.autoBound`, migration `20261125120000_add_keyframe_auto_bound`,
+   persistance, adaptateur (borne liée), projection B-15 après chaque commande,
+   `moveKeyframe` verrouille une borne liée. Specs : modèle de document, persistance
+   SQLite, intégration V2. Reste : aucune commande ne crée encore de KF lié (actions 3
+   et 3b) ; validation de cohérence (`autoBound` hors canal `pose`, double marque) non
+   faite, faute de cas créé par l’interface.
 3. **Écriture sur une borne héritée (B-4).** Pont Décor (`decor-target`,
    `setItemDecor`) : une cible sur une borne héritée produit la création du KF lié
    avec décor propre ; timeline : rendu « hérité » d’une borne liée, verrouillage par
@@ -78,6 +83,14 @@ la timeline.
 4. **D-HORS-PLAGE (B-5).** Coordination : port en lecture de la fenêtre d’un item
    (action 1). Session Décor : état `gesture.relocating` et édition palette retenue
    jusqu’au seek acquitté.
+4b. **Instant en ms des bornes liées = projection (B-15).** Après l’action 4, quand
+   tous les lecteurs d’une borne liée existent. Commencer par un test qui fait bouger
+   une capsule sans réécrire les instants liés. Recenser les lecteurs de `timeMs` qui
+   peuvent tomber sur un KF lié (au moins : tri des KF de pose, cibles et seeks du pont
+   Décor, sélection au temps de la tête de lecture, segments du Builder) et les faire
+   passer par la résolution ; puis retirer `syncLinkedBoundTimes` de la façade de
+   commandes, la projection n’ayant lieu qu’à l’entrée du Builder et à l’export. À
+   décider alors : `timeMs` d’un KF lié conservé comme indication ou supprimé.
 5a. **Repère nommé global (B-10).** Design à soumettre : relation entre nom de KF et
    repère global (`Marker`/`markerId` existants), alignement durable de plusieurs KF,
    comportement hors fenêtre (B-9).
