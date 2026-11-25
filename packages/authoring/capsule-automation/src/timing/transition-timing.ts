@@ -1,10 +1,9 @@
 // TransitionTiming — resolves keyframe timeMs + transition data into the concrete trigger bounds
-// consumers need. Pure computation, no side effects, no editor types imported (same convention as
-// `CapsuleDistribution`/`CapsulePreset`: primitives only, `timeMs`/`durationMs`/`direction`).
-// `2026-06-11-sequence-editor-grid-spec.md` §2.2 — the normative source for every formula here:
-// `transitionIn` ends AT its keyframe (plays before), `transitionOut` starts AT its keyframe
-// (plays after), an interpolated (decor-state) transition between two arbitrary keyframes can be
-// shortened via `direction: 'before'|'after'` with the same "ends at"/"starts at" split.
+// consumers need. Pure computation, no side effects, primitives only (`timeMs`/`durationMs`/
+// `direction`), like `CapsuleDistribution`/`CapsulePreset`. Contract: `specs/capsule-distribution-spec.md`
+// §6 — `transitionIn` ends AT its keyframe (plays before), `transitionOut` starts AT its keyframe
+// (plays after); an interpolated (decor-state) transition between two keyframes can be shortened
+// via `direction: 'before'|'after'` with the same "ends at"/"starts at" split.
 
 export interface TransitionTimingKeyframe {
   timeMs: number
@@ -14,8 +13,9 @@ export interface TransitionTimingKeyframe {
 export class TransitionTiming {
   /**
    * The scene-wide time reserved before the user-facing timeline's own `0`, so that no item's
-   * `transitionIn` (which ends AT its keyframe, per §2.2) ever needs to start at a negative time.
-   * `0` when no item's first keyframe carries a `transitionIn` — never a wasted margin.
+   * `transitionIn` (which ends AT its keyframe) ever needs to start at a negative time: the longest
+   * entry duration among the items' first keyframes, whatever their time — a first keyframe late in
+   * the scene still widens it. `0` when no first keyframe has an entry duration.
    *
    * A single value for the whole scene (not per capsule level) — decided so every level shares one
    * offset rather than accumulating one per nesting depth, which would drift the deeper an item
@@ -38,7 +38,7 @@ export class TransitionTiming {
 
   /**
    * A capsule child's locked outro bound. Never subtracts anything — `transitionOut` starts AT its
-   * keyframe (§2.2), so only the pre-roll shift applies, never the transition's own duration.
+   * keyframe (§6), so only the pre-roll shift applies, never the transition's own duration.
    */
   static lockedOutroMs(lastKf: { timeMs: number } | undefined, preRollMs = 0): number | undefined {
     if (!lastKf) return undefined

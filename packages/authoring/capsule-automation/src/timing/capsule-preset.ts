@@ -1,16 +1,11 @@
 // CapsulePreset — resolves a capsule's sub-type + author distribution setting into the concrete
 // mode/values `CapsuleDistribution.compute()` needs. Pure computation, no side effects.
-// `specs/capsule-distribution-spec.md` §3.3 — owns the ENTIRE CapsuleKind vocabulary and its
-// resolution; neither `CapsuleDistribution` nor the ed2 Builder know about capsule sub-types at
-// all, this is the one place that knowledge lives.
+// `specs/capsule-distribution-spec.md` §3.3 — the one place where a capsule type is turned into a
+// distribution mode; `CapsuleDistribution` itself knows no capsule type.
+import type { AutoCapsuleType } from '../types/public'
 
-/**
- * The 5 ed2 capsule sub-types — the single declaration of this vocabulary across the codebase.
- * `sequence-editor`'s own `CapsuleKind` (`TrackNode.capsuleType`) re-exports this type rather than
- * redeclaring it — a second, separately-declared copy previously drifted out of sync with reality
- * once (same class of bug as the old `GRID_MODE`/`GRID_POLICY` duplication).
- */
-export type CapsuleKind = 'carousel' | 'rangee' | 'liste' | 'grille' | 'card'
+/** Capsule sub-type vocabulary, declared once by `CAPSULE_TYPE` (`AutoCapsuleType`). */
+export type CapsuleKind = AutoCapsuleType
 
 export type DistributionMode = 'sequential' | 'stagger'
 
@@ -47,6 +42,15 @@ export class CapsulePreset {
    * `CapsuleDistribution.compute()` (`mode`, `staggerInMs`, `staggerOutMs`).
    */
   static resolve(input: CapsulePresetInput): CapsulePresetResolution {
+    const resolution = CapsulePreset.find(input)
+    if (resolution !== undefined) return resolution
+    throw new Error(
+      `CapsulePreset.resolve: capsuleType '${input.capsuleType}' has no structural default — an explicit \`distribution\` is required (author choice, not something this class can infer)`,
+    )
+  }
+
+  /** Same resolution as `resolve()`, returning `undefined` when the type has no structural default. */
+  static find(input: CapsulePresetInput): CapsulePresetResolution | undefined {
     if (input.distribution) {
       return {
         mode: input.distribution.mode,
@@ -54,11 +58,7 @@ export class CapsulePreset {
         staggerOutMs: input.distribution.staggerOutMs,
       }
     }
-    if (input.capsuleType === 'carousel') {
-      return { mode: 'sequential' }
-    }
-    throw new Error(
-      `CapsulePreset.resolve: capsuleType '${input.capsuleType}' has no structural default — an explicit \`distribution\` is required (author choice, not something this class can infer)`,
-    )
+    if (input.capsuleType === 'carousel') return { mode: 'sequential' }
+    return undefined
   }
 }

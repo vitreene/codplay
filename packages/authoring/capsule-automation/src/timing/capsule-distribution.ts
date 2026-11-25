@@ -1,10 +1,10 @@
-// CapsuleDistribution — computes virtual keyframe positions for capsule children.
-// Pure computation, no side effects. All times are relative to capsule.intro.timeMs.
+// CapsuleDistribution — computes the slots of a capsule's children (`specs/capsule-distribution-spec.md`
+// §3–§4). Pure computation, no side effects. All times are relative to the capsule window start.
 
 export interface ChildInput {
   trackId: string
-  lockedIntroMs?: number   // real kf present — takes priority
-  lockedOutroMs?: number   // real kf present — takes priority
+  lockedIntroMs?: number   // locked bound — takes priority
+  lockedOutroMs?: number   // locked bound — takes priority
 }
 
 export interface ChildOutput {
@@ -31,7 +31,7 @@ export interface CapsuleDistributionOutput {
 }
 
 export class CapsuleDistribution {
-  /** Computes virtual child bounds from one editor capsule distribution policy. */
+  /** Computes the children's slots from one capsule distribution policy. */
   static compute(input: CapsuleDistributionInput): CapsuleDistributionOutput {
     const { mode, children } = input
     if (children.length === 0) {

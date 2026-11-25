@@ -15,5 +15,20 @@ export { CapsuleDistribution } from "./timing/capsule-distribution";
 export type { ChildInput, ChildOutput, CapsuleDistributionInput, CapsuleDistributionOutput } from "./timing/capsule-distribution";
 export { CapsulePreset } from "./timing/capsule-preset";
 export type { CapsuleKind, CapsuleDistributionSetting, CapsulePresetInput, CapsulePresetResolution } from "./timing/capsule-preset";
+export { CapsuleBounds } from "./timing/capsule-bounds";
+export type {
+	BoundInput,
+	BoundTransitionInput,
+	BoundsCapsuleInput,
+	BoundsNodeInput,
+	BoundsWindow,
+	CapsuleBoundsDiagnostic,
+	CapsuleBoundsInput,
+	CapsuleBoundsOutput,
+	ResolvedBound,
+	ResolvedBoundTransition,
+	ResolvedCapsuleBounds,
+	ResolvedNodeBounds
+} from "./timing/capsule-bounds";
 export { TransitionTiming } from "./timing/transition-timing";
 export type { TransitionTimingKeyframe } from "./timing/transition-timing";
