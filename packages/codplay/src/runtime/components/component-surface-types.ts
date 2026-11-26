@@ -43,6 +43,7 @@ export type SlotReplaceShape = 'circle' | 'star' | 'diamond' | Readonly<{
 /** Presentation profiles that operate on one slot rectangle and its two views. */
 export type SlotReplaceTransition = ReplaceTransition
   | 'mask-reveal'
+  | 'burn'
   | 'curtain'
   | 'wipe'
   | 'slide-over'

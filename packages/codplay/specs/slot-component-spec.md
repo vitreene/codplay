@@ -217,6 +217,7 @@ Les profils et leurs valeurs par défaut sont :
 | `fade` | Les vues sortante et entrante passent simultanément de visible à masquée et inversement. | 300 ms |
 | `fade-in` | La vue sortante reste visible ; l'entrante apparaît progressivement. | 300 ms |
 | `mask-reveal` | Révèle l'entrante avec un masque centré. Formes `circle` (défaut), `star`, `diamond`, ou chemin SVG `{ path, viewBox }`. Avec `split: 'cells'`, le masque se répète sur une grille. | 900 ms |
+| `burn` | Un shader WebGL2 remplace l'image bruitée de la vue sortante par l'entrante avec un front de braises. Si H-i-C ou WebGL2 manque, bascule immédiatement sur le cercle `mask-reveal`. Vue entière, sans `split: 'cells'`. | 900 ms |
 | `curtain` | La sortante glisse vers le haut ; l'entrante remonte depuis le bas. | 1000 ms |
 | `wipe` | L'entrante fixe est révélée du bord droit vers la gauche ; la sortante se décale légèrement vers la gauche. | 900 ms |
 | `slide-over` | L'entrante remonte par-dessus la sortante, qui recule et s'assombrit. | 1100 ms |

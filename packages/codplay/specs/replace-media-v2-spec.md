@@ -20,8 +20,10 @@ Le circuit commun des animations HTML est défini dans la
 ## Rôle
 
 `replace-media` laisse le composant `img` ou `media` propriétaire de sa source
-et de son nœud persistant. En mode entier, la surface présente des vues
-transitoires fixes. Avec `split: 'cells'`, elle garde un clone sortant et le
+et de son nœud persistant. Les transitions entières classiques présentent
+des vues transitoires dont la sortie est fixe et dont la vidéo entrante est
+rééchantillonnée depuis le lecteur persistant à chaque échantillon player.
+H-i-C présente directement les médias natifs dans ses slots. Avec `split: 'cells'`, elle garde un clone sortant et le
 nœud média cible persistant. Une grille de masques SVG anime le clone sortant
 au-dessus de la cible, qui reste sans masque. En intro seule, la grille est
 portée par la cible. Les cellules ne créent ni copies média ni lecteurs.
@@ -29,14 +31,25 @@ portée par la cible. Les cellules ne créent ni copies média ni lecteurs.
 ## Profils et snapshots entiers
 
 Pour `img` et la source vidéo du composant `media`, `replace-media` accepte les
-sept transitions CSS établies par `replace-slot` ainsi que les noms du catalogue
-JSON. Les snapshots sortant et entrant sont présentés comme des vues séparées ;
-un preset JSON échantillonne ses poses `outro` et `intro` avec ACE sur
-`ComponentAnimation`. Une transition CSS de slot conserve ses poses existantes.
+profils `fade`, `fade-in`, `mask-reveal`, `burn`, `curtain`, `wipe`,
+`slide-over` et `stack`, ainsi que les noms du catalogue JSON. Les snapshots
+sortant et entrant sont présentés comme des vues séparées ; un preset JSON
+échantillonne ses poses `outro` et `intro` avec ACE sur `ComponentAnimation`.
+Les transitions de slot conservent leur présentation établie.
+
+`burn` dispose d’un chemin HTML-in-Canvas distinct des snapshots classiques :
+les médias natifs sortant et entrant sont présentés dans deux slots de wrappers
+`drawable`, puis chargés comme textures DOM sur `paint` dans un shader WebGL2. Il n'accepte pas `split: 'cells'`. Si les primitives H-i-C, l'accès
+WebGL2 ou le programme shader ne sont pas disponibles, le remplacement utilise
+immédiatement le `mask-reveal` circulaire. Le composant média continue de
+posséder sa source et son nœud persistant.
 
 Le nœud natif persistant et sa source restent possédés par le composant média.
-Les vues transitoires représentent une frame fixe ; elles ne remplacent pas le
-nœud persistant et ne contrôlent pas sa lecture. Une cellule vidéo ne crée pas
+La vue sortante classique représente une frame fixe. Sa vidéo entrante
+reprend la frame du lecteur persistant à chaque échantillon, sans relancer
+ce lecteur. H-i-C présente directement la vidéo entrante native, dont la lecture
+est immédiatement visible pendant la transition. La présentation ne contrôle
+pas cette lecture. Une cellule vidéo ne crée pas
 de lecteur ni d'horloge média supplémentaire.
 
 ## Grilles de masques SVG
@@ -122,3 +135,10 @@ précédent.
   `star` et auteur, l'absence de canvas par cellule, le resize des grilles image
   et vidéo à `150 ms`, l'interruption A→B→C, le retry asynchrone à position
   player constante et le `currentTime` de la copie vidéo sortante.
+- La démo [`replace-carousel`](../../demos/src/v2/demos/replace-carousel/main.ts)
+  exerce `burn` sur les mises à jour image et vidéo réelles, ainsi que
+  un aller puis un retour séparés par une pause de 1 600 ms après la fin de l'aller.
+
+Les limites de capture avant le premier `paint`, notamment lors de la
+reconstruction d’une interruption par Seek, sont définies dans la
+[présentation replace](./replace-presentation-v2-spec.md#cycle-de-vie-des-vues).

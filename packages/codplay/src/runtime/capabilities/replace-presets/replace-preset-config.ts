@@ -26,7 +26,7 @@ export const REPLACE_TEXT_SPLITS = ['letter', 'word', 'line'] as const
 export const REPLACE_MEDIA_SPLITS = ['cells'] as const
 export const REPLACE_STAGGER_PATTERNS = ['manhattan', 'row-wave', 'column-wave'] as const
 export const REPLACE_SLOT_TRANSITIONS = [
-  'fade', 'fade-in', 'mask-reveal', 'curtain', 'wipe', 'slide-over', 'stack',
+  'fade', 'fade-in', 'mask-reveal', 'burn', 'curtain', 'wipe', 'slide-over', 'stack',
 ] as const
 
 export type ReplaceTextSplit = (typeof REPLACE_TEXT_SPLITS)[number]

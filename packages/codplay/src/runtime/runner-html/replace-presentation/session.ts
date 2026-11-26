@@ -12,7 +12,7 @@ import {
 } from './dom'
 import {
   areMediaFramesReady, createMotionSnapshot, freezeMediaClone, releaseFrozenMediaClone,
-  resizeFrozenMediaFrames, watchMediaFrames,
+  refreshIncomingVideoFrames, resizeFrozenMediaFrames, watchMediaFrames,
 } from './media'
 import {
   buildMediaMaskGrid, createMediaMaskHost, removeMediaMaskGrid, removeMediaMaskHost,
@@ -27,6 +27,7 @@ import {
   sampleSplitMediaMotion, sampleSplitTextMotion,
 } from './motion'
 import { setMaskImage } from './masks'
+import { createHtmlInCanvasBurnSession } from './html-in-canvas-burn/burn-session'
 
 /** Width slack in CSS pixels keeps text snapshots clear of measurement drift. */
 const SNAPSHOT_WIDTH_SAFETY_MARGIN = 8
@@ -37,11 +38,15 @@ export function createHtmlReplacePresentationSurface(
   root: unknown,
 ): ReplaceComponentSurface {
   return {
-    begin: (profile = 'fade', sourceSnapshot) => createReplaceSession(
-      root,
-      normalizeProfile(profile),
-      sourceSnapshot,
-    ),
+    begin: (profile = 'fade', sourceSnapshot) => {
+      const normalized = normalizeProfile(profile)
+      if (normalized.transition === 'burn') {
+        const session = createHtmlInCanvasBurnSession(root, normalized, sourceSnapshot)
+        if (session !== undefined) return session
+        return createReplaceSession(root, createBurnFallbackProfile(normalized), sourceSnapshot)
+      }
+      return createReplaceSession(root, normalized, sourceSnapshot)
+    },
   }
 }
 
@@ -344,6 +349,10 @@ function createReplaceSession(
       )
     }
 
+    if (profile.freezeMedia && incomingSnapshot !== undefined) {
+      refreshIncomingVideoFrames(incomingSnapshot, root)
+    }
+
     if (profile.motion !== undefined && motionTrajectories !== undefined) {
       if (profile.motion.split !== undefined && profile.motion.split !== 'cells') {
         sampleSplitTextMotion(outgoingSnapshot, incomingSnapshot, profile.motion, value, motionTrajectories)
@@ -496,5 +505,16 @@ function createReplaceSession(
     },
     reflow,
     captureCurrent,
+  }
+}
+
+/** Replaces an unavailable H-i-C burn profile with the established circle reveal. */
+function createBurnFallbackProfile(profile: HtmlReplaceProfile): HtmlReplaceProfile {
+  return {
+    transition: 'mask-reveal',
+    duration: profile.duration ?? 900,
+    shape: 'circle',
+    clipToSlot: true,
+    freezeMedia: profile.freezeMedia,
   }
 }

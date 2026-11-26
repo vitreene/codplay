@@ -63,6 +63,7 @@ describe('slotManifest', () => {
       { transition: 'fade', duration: 300 },
       { transition: 'fade-in', duration: 400 },
       { transition: 'mask-reveal', shape: { path: 'M50 0 L100 100 L0 100 Z', viewBox: '0 0 100 100' }, duration: 500 },
+      { transition: 'burn', duration: 550 },
       { transition: 'curtain', duration: 600 },
       {
         transition: 'wipe',

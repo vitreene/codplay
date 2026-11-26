@@ -26,6 +26,7 @@ const DEFAULT_DURATION_BY_TRANSITION: Readonly<Record<SlotReplaceTransition, num
   fade: 300,
   'fade-in': 300,
   'mask-reveal': 900,
+  burn: 900,
   curtain: 1000,
   wipe: 900,
   'slide-over': 1100,

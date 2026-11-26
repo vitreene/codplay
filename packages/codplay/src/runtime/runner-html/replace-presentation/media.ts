@@ -263,39 +263,40 @@ export function drawFittedFrame(
   if (context === null) return false
   context.clearRect(0, 0, width, height)
 
-  const sourceWidth = source.width
-  const sourceHeight = source.height
+  const fitted = getFittedMediaRect(
+    source.width, source.height, width, height,
+    objectFit === 'scale-down' ? 'contain' : objectFit,
+  )
+  context.drawImage(source, fitted.left, fitted.top, fitted.width, fitted.height)
+  return true
+}
+
+/** Resolves the shared centered media fit for 2D frames and initial GPU presentation. */
+export function getFittedMediaRect(
+  sourceWidth: number,
+  sourceHeight: number,
+  width: number,
+  height: number,
+  objectFit: string,
+): Readonly<{ left: number; top: number; width: number; height: number }> {
+  if (objectFit === 'fill') return { left: 0, top: 0, width, height }
   const containScale = Math.min(width / sourceWidth, height / sourceHeight)
   const coverScale = Math.max(width / sourceWidth, height / sourceHeight)
-  const fit = objectFit === 'cover'
-    ? 'cover'
-    : objectFit === 'contain' || objectFit === 'scale-down'
-      ? 'contain'
-      : objectFit
-  if (fit === 'fill' || fit === 'cover' || fit === 'contain' || fit === 'scale-down') {
-    const scale = fit === 'cover'
-      ? coverScale
-      : fit === 'scale-down'
-        ? Math.min(1, containScale)
-        : fit === 'contain'
-          ? containScale
-          : 0
-    if (fit === 'fill') {
-      context.drawImage(source, 0, 0, width, height)
-      return true
-    }
-    const drawnWidth = sourceWidth * scale
-    const drawnHeight = sourceHeight * scale
-    const left = (width - drawnWidth) / 2
-    const top = (height - drawnHeight) / 2
-    context.drawImage(source, left, top, drawnWidth, drawnHeight)
-    return true
+  const scale = objectFit === 'cover'
+    ? coverScale
+    : objectFit === 'scale-down'
+      ? Math.min(1, containScale)
+      : objectFit === 'contain'
+        ? containScale
+        : 1
+  const drawnWidth = sourceWidth * scale
+  const drawnHeight = sourceHeight * scale
+  return {
+    left: (width - drawnWidth) / 2,
+    top: (height - drawnHeight) / 2,
+    width: drawnWidth,
+    height: drawnHeight,
   }
-
-  const left = (width - sourceWidth) / 2
-  const top = (height - sourceHeight) / 2
-  context.drawImage(source, left, top)
-  return true
 }
 
 
@@ -311,6 +312,32 @@ export function resizeFrozenMediaFrames(snapshot: HTMLElement, liveRoot: HTMLEle
     const fallbackRect = liveSource === undefined
       ? undefined
       : copyMediaFrameDimensions(liveSource, frame)
+    drawFittedFrame(frame, frozen.rawFrame, frozen.objectFit, fallbackRect)
+  }
+}
+
+/** Refreshes whole-view incoming video frames from their persistent media nodes. */
+export function refreshIncomingVideoFrames(snapshot: HTMLElement, liveRoot: HTMLElement): void {
+  const liveMedia = collectMediaElements(liveRoot)
+  const frames = snapshot.querySelectorAll<HTMLCanvasElement>('canvas[data-codplay-replace-frame]')
+  for (let index = 0; index < frames.length; index += 1) {
+    const frame = frames[index]
+    const liveSource = liveMedia[index]
+    const frozen = frame === undefined ? undefined : frozenMediaFrames.get(frame)
+    if (frame === undefined || frozen === undefined
+      || liveSource?.tagName.toLowerCase() !== 'video'
+      || getMediaFrameReadiness(liveSource) !== 'ready') continue
+
+    const rawContext = frozen.rawFrame.getContext('2d')
+    if (rawContext === null) continue
+    try {
+      rawContext.clearRect(0, 0, frozen.rawFrame.width, frozen.rawFrame.height)
+      rawContext.drawImage(liveSource, 0, 0, frozen.rawFrame.width, frozen.rawFrame.height)
+    } catch {
+      continue
+    }
+
+    const fallbackRect = copyMediaFrameDimensions(liveSource, frame)
     drawFittedFrame(frame, frozen.rawFrame, frozen.objectFit, fallbackRect)
   }
 }

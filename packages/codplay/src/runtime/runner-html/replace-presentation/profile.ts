@@ -43,7 +43,7 @@ export function normalizeProfile(
       transition: profile.transition,
       duration: profile.duration,
       shape: profile.shape,
-      clipToSlot: false,
+      clipToSlot: profile.transition === 'burn',
       motion: profile,
       freezeMedia: profile.freezeMedia === true,
       ...(profile.split === 'cells' ? { mediaCells: toMediaCellSettings(profile) } : {}),
@@ -54,7 +54,7 @@ export function normalizeProfile(
       transition: profile.transition,
       duration: profile.duration,
       shape: profile.shape,
-      clipToSlot: false,
+      clipToSlot: profile.transition === 'burn',
       freezeMedia: true,
       ...(profile.split === 'cells' ? { mediaCells: toMediaCellSettings(profile) } : {}),
     }

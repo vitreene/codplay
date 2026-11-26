@@ -75,7 +75,7 @@ function createStage(): ScenePerso {
             <div id="replace-outlet-line" class="replace-card__outlet" data-part="replace-carousel-stage:line"></div>
           </article>
           <article id="replace-card-image" class="replace-card">
-            <h2 id="replace-label-image" class="replace-card__label">image · entier</h2>
+            <h2 id="replace-label-image" class="replace-card__label">image · burn H-i-C</h2>
             <div id="replace-outlet-image" class="replace-card__outlet" data-part="replace-carousel-stage:image"></div>
           </article>
           <article id="replace-card-image-cells" class="replace-card">
@@ -83,7 +83,7 @@ function createStage(): ScenePerso {
             <div id="replace-outlet-image-cells" class="replace-card__outlet" data-part="replace-carousel-stage:image-cells"></div>
           </article>
           <article id="replace-card-video" class="replace-card">
-            <h2 id="replace-label-video" class="replace-card__label">video · entier</h2>
+            <h2 id="replace-label-video" class="replace-card__label">video · burn H-i-C</h2>
             <div id="replace-outlet-video" class="replace-card__outlet" data-part="replace-carousel-stage:video"></div>
           </article>
           <article id="replace-card-video-cells" class="replace-card">
@@ -158,7 +158,7 @@ function createImagePerso(mode: 'whole' | 'cells'): ScenePerso {
     : undefined
   const replace = mode === 'cells'
     ? { transition: 'mask-reveal' as const, duration: 900, ...splitOptions }
-    : { transition: resolveReplacePresetChoice('tilt', 'right'), duration: 700 }
+    : { transition: 'burn' as const, duration: 900 }
   const target = mode === 'whole' ? 'image' : 'image-cells'
 
   return {
@@ -192,7 +192,7 @@ function createVideoPerso(mode: 'whole' | 'cells'): ScenePerso {
         },
         ...splitOptions,
       }
-    : { transition: 'slide-over' as const, duration: 700 }
+    : { transition: 'burn' as const, duration: 900 }
   const target = mode === 'whole' ? 'video' : 'video-cells'
 
   return {

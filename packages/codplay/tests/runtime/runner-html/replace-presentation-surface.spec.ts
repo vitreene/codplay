@@ -84,6 +84,23 @@ describe('HTML slot replacement presentation surface', () => {
     expect(root.style.visibility).toBe('')
   })
 
+  it('falls back from burn to the existing mask reveal when HTML-in-Canvas is absent', () => {
+    const { parent, root, session } = createReplaceFixture({ transition: 'burn' })
+    const [outgoing, incoming] = getSnapshots(parent)
+
+    session.sample(0.5)
+
+    expect(outgoing?.textContent).toBe('outgoing view')
+    expect(incoming?.textContent).toBe('incoming view')
+    expect(incoming?.style.getPropertyValue('mask-image')).toContain('data:image/svg+xml')
+    expect(getPresentationLayer(parent)?.style.overflow).toBe('hidden')
+    expect(root.style.visibility).toBe('hidden')
+
+    session.finish()
+    expect(getSnapshots(parent)).toHaveLength(0)
+    expect(root.style.visibility).toBe('')
+  })
+
   it('moves the old and new slot views vertically for curtain', () => {
     const { parent, session } = createReplaceFixture({ transition: 'curtain' })
     const [outgoing, incoming] = getSnapshots(parent)

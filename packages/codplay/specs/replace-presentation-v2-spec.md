@@ -13,7 +13,8 @@ leurs animations et la reconstruction par Seek. Le module replace prépare une
 `ComponentAnimation` puis utilise le même échantillonneur et le même cycle de
 fin que les autres animations de composant. La surface HTML ne possède que les
 instantanés DOM, leur géométrie, les fragments texte, les représentations média,
-les masques SVG et les styles de transition. Elle ne décide pas quelle scène,
+les masques SVG, les styles de transition et le rendu H-i-C du profil `burn`.
+Elle ne décide pas quelle scène,
 ressource ou occurrence entrante doit être sélectionnée.
 
 Lors d'un montage externe, l'application hôte — Sighty pour ses scènes — choisit
@@ -57,14 +58,16 @@ ne maintient pas de circuit parallèle de calcul matriciel.
 
 L'implémentation de présentation est répartie par propriétaire dans
 `runtime/runner-html/replace-presentation/` : sessions, géométrie et DOM,
-texte, frames/cellules média, poses, masques, normalisation de profil et
-identifiants. `replace-presentation-surface.ts` reste la porte d'export de la
-surface HTML.
+texte, frames/cellules média, poses, masques, rendu HTML-in-Canvas,
+normalisation de profil et identifiants. `replace-presentation-surface.ts`
+reste la porte d'export de la surface HTML. Le shader `burn` est dans
+[`html-in-canvas-burn/burn-renderer.ts`](../src/runtime/runner-html/replace-presentation/html-in-canvas-burn/burn-renderer.ts).
 
 ## Cycle de vie des vues
 
-- Les vues sortante et entrante sont des instantanés temporaires ; l'état
-  persistant est toujours mis à jour par le composant et le player.
+- Les transitions classiques utilisent des instantanés temporaires. H-i-C
+  présente les états DOM natifs dans des slots. Le composant et le player
+  restent propriétaires de l’état persistant.
 - Les vues sont retirées à la fin, à l'annulation, lors du remplacement d'une
   session ou au teardown de leur propriétaire.
 - `replace-media.split: 'cells'` garde un clone source et le média cible
@@ -86,6 +89,58 @@ surface HTML.
   composant.
 - Le reflow repositionne ou reconstruit la présentation depuis les mesures
   actuelles tout en gardant la progression échantillonnée.
+- Le profil entier `burn` dispose de sa session H-i-C avant toute création de
+  snapshot classique. Un canvas `content="drawable"` dans la racine shadow du
+  composant porte deux wrappers `drawable` avec un slot sortant nommé et un
+  slot entrant par défaut. Les médias natifs restent des enfants directs de la
+  racine persistante : leurs sélecteurs CSS et leur propriétaire sont conservés.
+  La session réattache temporairement le média sortant détaché par la mise à
+  jour, avec le marqueur transitoire existant qui le protège de la matérialisation.
+  Elle le rattache avant le contrôle de disponibilité de l'entrée : la sortie
+  reste donc dessinable dès le premier `paint`, y compris pendant la reprise
+  asynchrone du circuit média existant. Le renderer ne charge aucune ressource.
+  Aucun état média n'est cloné ou transformé en snapshot 2D sur ce chemin.
+- Avant l'affichage du canvas, le renderer amorce ses deux textures existantes
+  avec la frame native sortante déjà disponible (`img`, `video` ou composition
+  canvas d'une interruption) et dessine la sortie à progression zéro. Ce dessin
+  précède le premier `paint` H-i-C : la bascule DOM → canvas ne révèle donc pas
+  de framebuffer vide. L'amorçage utilise le calcul de fit média partagé dans
+  un viewport WebGL entier ; H-i-C utilise ensuite le viewport complet et une
+  texture DOM allouée à la taille entière supérieure. Ces conversions distinctes
+  ne garantissent pas l'alignement sous-pixel entre les phases. Cet amorçage ne
+  crée ni clone DOM, ni canvas 2D, ni
+  lecteur, ni texture supplémentaire ; les paints suivants remplacent ces
+  textures avec les wrappers DOM vivants. Il ne charge aucune ressource.
+- Le renderer charge les wrappers avec `texElementSubImage2D` sur `paint`, puis
+  applique le shader et synchronise leur géométrie via `updateElementGeometry`.
+  Le média entrant continue donc à fournir ses frames natives. Seule la
+  progression reçue de `ComponentAnimation` fait avancer la transition ;
+  `requestPaint` demande un rendu sans introduire une horloge locale.
+  Le montage et les demandes de rendu dimensionnent le canvas avant que le
+  navigateur peigne ses wrappers. L'upload et le dessin gardent ensuite cette
+  taille. Cette stabilité du backing store ne garantit pas celle du cadrage
+  entre amorçage natif et texture DOM. Le dessin
+  ne redimensionne jamais le canvas après l'upload des textures.
+- La surface vérifie les primitives H-i-C, WebGL2 et le programme shader avant
+  de monter cette présentation. Leur absence sélectionne immédiatement le
+  profil classique `mask-reveal` circulaire. `burn` est entier et exclut
+  `split: 'cells'`. Son canvas reste dans le rectangle de la racine ; un reflow
+  reprend la progression courante aux dimensions actuelles.
+- Lors d'une interruption après le premier `paint`, le renderer redessine ses
+  textures courantes puis lit immédiatement la composition par `readPixels`.
+  Cette image devient la sortie de la transition suivante, sans passer par
+  `cloneSnapshotNode` et sans dépendre du tampon de présentation conservé par
+  le navigateur. Cette garantie ne couvre pas les interruptions reconstruites
+  par Seek avant tout premier `paint` H-i-C : les textures d'amorçage ne portent
+  alors que la sortie, sans la composition intermédiaire des deux états DOM.
+- Fin, annulation, perte de contexte et teardown retirent le canvas, les
+  listeners, les textures et le programme, puis libèrent explicitement le
+  contexte. Aucun renderer ou historique de frames n'est conservé. La racine
+  shadow, indétachable selon le DOM, reste réduite à un slot ordinaire sans
+  ressources graphiques. Les attributs temporaires des médias sont restaurés
+  et seul le contenu courant reste présenté. Le périmètre H-i-C vérifié porte
+  sur les images et vidéos ; les relations foreign imbriquées ne sont pas
+  certifiées par cette présentation.
 - L'interruption texte repart de la composition visible. Le player conserve
   séparément la reconstruction de l'état logique de la timeline.
 - La disponibilité asynchrone d'une frame média peut redemander un échantillon
@@ -115,3 +170,20 @@ Le catalogue JSON et sa sélection auteur sont définis dans
   traverse `SceneBuilder` et `HtmlPlayerRunner` : formules de contenu,
   profils CSS/JSON, masques média, resize à temps constant, interruption
   A→B→C, gel de la copie vidéo et retry de frame à position player constante.
+- La démo [`replace-carousel`](../../demos/src/v2/demos/replace-carousel/main.ts)
+  exerce `burn` sur les chemins image et vidéo de `replace-media` : l'aller à
+  1 500 ms dure 900 ms, puis le retour démarre à 4 000 ms après 1 600 ms de pause.
+- Les contrôles navigateur H-i-C sur deux images opaques vérifient les états
+  initiaux et finaux, leur mélange sans transparence à mi-parcours, le transfert
+  de composition, le resize et le nettoyage sur perte de contexte. Une série de
+  24 fins/annulations vérifie la libération des 24 contextes et le retrait des
+  présentations. La lecture vidéo est observable par les callbacks natifs de
+  frames pendant la transition.
+- [`burn-session.spec.ts`](../tests/runtime/runner-html/html-in-canvas-burn/burn-session.spec.ts)
+  vérifie la conservation du nœud sortant pendant la préparation d'une image
+  ou vidéo entrante, son retrait à l'annulation, la transmission du média natif
+  d'amorçage et les fits `cover`/`contain`/`fill`. Seule la frontière GPU est
+  remplacée dans jsdom ; le contrôle du premier paint et du cadrage relève du
+  parcours navigateur réel `replace-carousel`. L'absence de frame vide entre
+  DOM et canvas se vérifie par enregistrement du compositeur, sans readback GPU
+  dans les frames observées : un readback peut masquer ce défaut de bascule.

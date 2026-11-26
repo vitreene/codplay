@@ -281,6 +281,17 @@ describe('V2 replacement modules', () => {
     })).toBeUndefined()
   })
 
+  it('normalizes the H-i-C burn profile as a whole media replacement', () => {
+    const profile = normalizeReplaceMediaCommand({ transition: 'burn' })
+
+    expect(profile?.profile).toMatchObject({
+      transition: 'burn',
+      duration: 900,
+      freezeMedia: true,
+    })
+    expect(normalizeReplaceMediaCommand({ transition: 'burn', split: 'cells' })).toBeUndefined()
+  })
+
   it('rejects unknown presets and invalid text replacement settings', () => {
     const invalidCommands: unknown[] = [
       'text-flythrough',
@@ -987,7 +998,7 @@ describe('V2 replacement modules', () => {
     expect(snapshots()).toHaveLength(0)
   })
 
-  it.each(['fade', 'fade-in', 'mask-reveal', 'curtain', 'wipe', 'slide-over', 'stack'] as const)(
+  it.each([...REPLACE_SLOT_TRANSITIONS] as const)(
     'applies the %s slot profile to fixed image snapshots',
     (transition) => {
       restoreMediaFrameMocks = mockDecodedImageFrames()
@@ -1047,7 +1058,7 @@ describe('V2 replacement modules', () => {
       } else if (transition === 'fade-in') {
         expect(outgoing?.style.opacity).toBe('1')
         expect(incoming?.style.opacity).toBe('0.5')
-      } else if (transition === 'mask-reveal') {
+      } else if (transition === 'mask-reveal' || transition === 'burn') {
         expect(incoming?.style.getPropertyValue('mask-image')).toContain('data:image/svg+xml')
         expect(incoming?.style.getPropertyValue('mask-size')).not.toBe('0% auto')
       } else if (transition === 'curtain') {
@@ -1068,7 +1079,7 @@ describe('V2 replacement modules', () => {
     },
   )
 
-  it.each([...REPLACE_SLOT_TRANSITIONS, 'tilt-right'] as const)(
+  it.each([...REPLACE_SLOT_TRANSITIONS.filter((transition) => transition !== 'burn'), 'tilt-right'] as const)(
     'uses SVG masks over one source view and the persistent image for %s during Play and Seek',
     (transition) => {
     const authorShape = transition === 'wipe'
@@ -1165,7 +1176,7 @@ describe('V2 replacement modules', () => {
     },
   )
 
-  it.each([...REPLACE_SLOT_TRANSITIONS, 'tilt-right'] as const)(
+  it.each([...REPLACE_SLOT_TRANSITIONS.filter((transition) => transition !== 'burn'), 'tilt-right'] as const)(
     'applies %s SVG masks to one frozen source and the persistent video node',
     (transition) => {
       restoreMediaFrameMocks = mockDecodedVideoFrames()
@@ -1280,7 +1291,7 @@ describe('V2 replacement modules', () => {
   )
 
   it.each([...REPLACE_SLOT_TRANSITIONS, 'tilt-right'] as const)(
-    'applies %s to fixed whole-video snapshots through the player',
+    'applies %s to whole-video snapshots with a live incoming view through the player',
     (transition) => {
       restoreMediaFrameMocks = mockDecodedVideoFrames()
       restoreMediaGeometryMock = mockMediaGeometry()
@@ -1341,7 +1352,7 @@ describe('V2 replacement modules', () => {
       } else if (transition === 'fade-in') {
         expect(outgoing?.style.opacity).toBe('1')
         expect(incoming?.style.opacity).toBe('0.5')
-      } else if (transition === 'mask-reveal') {
+      } else if (transition === 'mask-reveal' || transition === 'burn') {
         expect(incoming?.style.getPropertyValue('mask-image')).toContain('data:image/svg+xml')
         expect(incoming?.style.getPropertyValue('mask-size')).not.toBe('0% auto')
       } else if (transition === 'curtain') {
@@ -1364,6 +1375,67 @@ describe('V2 replacement modules', () => {
       expect(root.querySelectorAll('[data-codplay-replace-view]')).toHaveLength(0)
     },
   )
+
+  it('keeps the incoming whole-video snapshot live during replace samples', () => {
+    const mediaFrames = mockDecodedVideoFrames()
+    restoreMediaFrameMocks = mediaFrames
+    restoreMediaGeometryMock = mockMediaGeometry()
+    const root = document.createElement('main')
+    document.body.append(root)
+    const catalog = createCoreRuntimeCatalog()
+    const build = new SceneBuilder(catalog.validationSnapshot()).build({
+      id: 'replace-video-live-incoming-runtime',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [{
+            id: 'video',
+            type: 'media',
+            initial: { tag: 'video', move: '@root', src: '/video-a.mp4', sync: 'independent' },
+            actions: {
+              swap: {
+                src: '/video-b.mp4',
+                replace: { transition: 'fade', duration: 500 },
+                broadcast: { type: 'START' },
+              },
+            },
+          }],
+          eventimes: [{ name: 'swap', startAt: 100 }],
+        },
+      },
+      eventimes: [{ name: 'sequence:end', startAt: 1000 }],
+    })
+
+    expect(build.ok).toBe(true)
+    if (!build.ok) return
+    runner = new HtmlPlayerRunner({
+      id: 'replace-video-live-incoming-player',
+      compiledScene: build.compiledScene,
+      root,
+      catalog,
+      resources: ['/video-a.mp4', '/video-b.mp4'],
+    })
+    expect(runner.init().ok).toBe(true)
+    runner.player.play()
+    runner.advance(0)
+    runner.advance(150)
+
+    const incomingVideo = root.querySelector<HTMLVideoElement>('video[src="/video-b.mp4"]')
+    const incomingView = root.querySelector<HTMLElement>('[data-codplay-replace-view="incoming"]')
+    if (incomingVideo === null) throw new Error('The incoming video should remain the persistent media node.')
+    expect(incomingVideo?.paused).toBe(false)
+    expect(incomingView?.querySelector('video')).toBeNull()
+    expect(root.querySelectorAll('video')).toHaveLength(1)
+    expect(mediaFrames.getDrawnVideoFrames().some((frame) => frame.src === '/video-b.mp4')).toBe(true)
+
+    incomingVideo.currentTime = 0.75
+    runner.advance(200)
+
+    expect(incomingVideo?.paused).toBe(false)
+    expect(mediaFrames.getDrawnVideoFrames().some((frame) => frame.src === '/video-b.mp4' && frame.currentTime === 0.75))
+      .toBe(true)
+    expect(mediaFrames.getDrawnVideoFrames().filter((frame) => frame.src === '/video-a.mp4')).toHaveLength(1)
+  })
 
   it.each([
     ['img', '/image-a.png', '/image-b.png'],
@@ -2310,8 +2382,8 @@ function mockTextRangeMeasurements(getWrapAt: () => number = () => Number.MAX_SA
   }
 }
 
-/** Supplies decoded video dimensions and a minimal fixed-frame canvas context in jsdom. */
-function mockDecodedVideoFrames(): () => void {
+/** Supplies decoded video dimensions and records video frames copied in jsdom. */
+function mockDecodedVideoFrames() {
   const videoPrototype = HTMLVideoElement.prototype
   const mediaPrototype = HTMLMediaElement.prototype
   const canvasPrototype = HTMLCanvasElement.prototype
@@ -2324,7 +2396,11 @@ function mockDecodedVideoFrames(): () => void {
     ['currentTime', Object.getOwnPropertyDescriptor(videoPrototype, 'currentTime')],
   ])
   const currentTimes = new WeakMap<HTMLVideoElement, number>()
+  const pausedStates = new WeakMap<HTMLMediaElement, boolean>()
+  const drawnVideoFrames: Array<Readonly<{ src: string | null; currentTime: number }>> = []
+  const mediaPlay = Object.getOwnPropertyDescriptor(mediaPrototype, 'play')
   const mediaPause = Object.getOwnPropertyDescriptor(mediaPrototype, 'pause')
+  const mediaPaused = Object.getOwnPropertyDescriptor(mediaPrototype, 'paused')
   const canvasGetContext = Object.getOwnPropertyDescriptor(canvasPrototype, 'getContext')
 
   Object.defineProperties(videoPrototype, {
@@ -2339,22 +2415,50 @@ function mockDecodedVideoFrames(): () => void {
       set: function (this: HTMLVideoElement, value: number): void { currentTimes.set(this, value) },
     },
   })
-  Object.defineProperty(mediaPrototype, 'pause', { configurable: true, value: () => undefined })
+  Object.defineProperty(mediaPrototype, 'play', {
+    configurable: true,
+    value: function (this: HTMLMediaElement): Promise<void> {
+      pausedStates.set(this, false)
+      return Promise.resolve()
+    },
+  })
+  Object.defineProperty(mediaPrototype, 'pause', {
+    configurable: true,
+    value: function (this: HTMLMediaElement): void { pausedStates.set(this, true) },
+  })
+  Object.defineProperty(mediaPrototype, 'paused', {
+    configurable: true,
+    get: function (this: HTMLMediaElement): boolean { return pausedStates.get(this) ?? true },
+  })
   Object.defineProperty(canvasPrototype, 'getContext', {
     configurable: true,
-    value: () => ({ clearRect: () => undefined, drawImage: () => undefined }),
+    value: () => ({
+      clearRect: () => undefined,
+      drawImage: (source: CanvasImageSource) => {
+        if (source instanceof HTMLVideoElement) {
+          drawnVideoFrames.push({ src: source.getAttribute('src'), currentTime: source.currentTime })
+        }
+      },
+    }),
   })
 
-  return () => {
+  const restore = (): void => {
     for (const [name, descriptor] of videoDescriptors) {
       if (descriptor === undefined) delete (videoPrototype as unknown as Record<string, unknown>)[name]
       else Object.defineProperty(videoPrototype, name, descriptor)
     }
+    if (mediaPlay === undefined) delete (mediaPrototype as unknown as Record<string, unknown>).play
+    else Object.defineProperty(mediaPrototype, 'play', mediaPlay)
     if (mediaPause === undefined) delete (mediaPrototype as unknown as Record<string, unknown>).pause
     else Object.defineProperty(mediaPrototype, 'pause', mediaPause)
+    if (mediaPaused === undefined) delete (mediaPrototype as unknown as Record<string, unknown>).paused
+    else Object.defineProperty(mediaPrototype, 'paused', mediaPaused)
     if (canvasGetContext === undefined) delete (canvasPrototype as unknown as Record<string, unknown>).getContext
     else Object.defineProperty(canvasPrototype, 'getContext', canvasGetContext)
   }
+  return Object.assign(restore, {
+    getDrawnVideoFrames: () => [...drawnVideoFrames],
+  })
 }
 
 /** Keeps only the replacement video pending until a test releases its native event. */

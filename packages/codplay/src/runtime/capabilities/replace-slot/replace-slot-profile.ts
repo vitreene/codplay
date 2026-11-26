@@ -25,6 +25,7 @@ export function parseSlotReplaceProfile(value: unknown): SlotReplace | undefined
 
   const split = value.split
   if (split !== undefined && !isSlotReplaceSplit(split)) return undefined
+  if (value.transition === 'burn' && split === 'cells') return undefined
 
   const shape = value.shape
   if (shape !== undefined
