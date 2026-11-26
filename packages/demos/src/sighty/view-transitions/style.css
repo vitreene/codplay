@@ -1,0 +1,247 @@
+::view-transition-group(sighty-vt-page) {
+  overflow: clip;
+  contain: paint;
+  border-radius: inherit;
+  animation-duration: 680ms;
+  animation-timing-function: cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+:root:active-view-transition-type(sighty-enter-a)::view-transition-old(sighty-vt-page) {
+  animation: sighty-vt-out 460ms ease both;
+}
+
+:root:active-view-transition-type(sighty-enter-a)::view-transition-new(sighty-vt-page) {
+  animation: sighty-vt-rise 620ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+:root:active-view-transition-type(sighty-enter-b)::view-transition-old(sighty-vt-page) {
+  animation: sighty-vt-shrink 560ms ease both;
+}
+
+:root:active-view-transition-type(sighty-enter-b)::view-transition-new(sighty-vt-page) {
+  animation: sighty-vt-expand 620ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+:root:active-view-transition-type(sighty-enter-c)::view-transition-old(sighty-vt-page) {
+  animation: sighty-vt-left-out 540ms ease both;
+}
+
+:root:active-view-transition-type(sighty-enter-c)::view-transition-new(sighty-vt-page) {
+  animation: sighty-vt-right-in 620ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+:root:active-view-transition-type(sighty-forward)::view-transition-old(sighty-vt-page) {
+  animation: sighty-vt-left-out 460ms ease both;
+}
+
+:root:active-view-transition-type(sighty-forward)::view-transition-new(sighty-vt-page) {
+  animation: sighty-vt-right-in 620ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+:root:active-view-transition-type(sighty-backward)::view-transition-old(sighty-vt-page) {
+  animation: sighty-vt-right-out 460ms ease both;
+}
+
+:root:active-view-transition-type(sighty-backward)::view-transition-new(sighty-vt-page) {
+  animation: sighty-vt-left-in 620ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+@keyframes sighty-vt-out {
+  to { opacity: 0; }
+}
+
+@keyframes sighty-vt-rise {
+  from { opacity: 0; transform: translateY(7%) scale(.97); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes sighty-vt-shrink {
+  to { opacity: 0; transform: scale(.88); }
+}
+
+@keyframes sighty-vt-expand {
+  from { opacity: 0; transform: scale(1.12); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes sighty-vt-left-out {
+  to { opacity: 0; transform: translateX(-8%); }
+}
+
+@keyframes sighty-vt-right-in {
+  from { opacity: 0; transform: translateX(12%); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes sighty-vt-right-out {
+  to { opacity: 0; transform: translateX(8%); }
+}
+
+@keyframes sighty-vt-left-in {
+  from { opacity: 0; transform: translateX(-12%); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(sighty-vt-page),
+  ::view-transition-old(sighty-vt-page),
+  ::view-transition-new(sighty-vt-page) {
+    animation-duration: 1ms !important;
+  }
+}
+
+.sighty-vt-layout {
+  position: relative;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  color: #f8fafc;
+  background: #101a27;
+}
+
+.sighty-vt-layout__menu {
+  position: relative;
+  z-index: 10;
+  grid-row: 1;
+  min-height: 3rem;
+  padding: .5rem 1rem;
+  background: #1e293b;
+}
+
+.sighty-vt-layout__menu-slot {
+  width: 100%;
+  height: 2.5rem;
+}
+
+.sighty-vt-layout__page {
+  position: relative;
+  z-index: 0;
+  grid-row: 2;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sighty-vt-layout__page-slot {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.sighty-vt-layout__menu .demo4-menu {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: .5rem;
+  padding: 0;
+  background: transparent;
+}
+
+.sighty-vt-layout__menu .demo4-menu__heading {
+  display: none;
+}
+
+.sighty-vt-layout__menu .demo4-menu__buttons {
+  width: 100%;
+  flex-wrap: nowrap;
+  gap: .45rem;
+}
+
+.sighty-vt-intro {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 28rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  text-align: center;
+}
+
+.sighty-vt-intro__eyebrow {
+  color: #5eead4;
+  font-size: .8rem;
+  font-weight: 800;
+  letter-spacing: .2em;
+}
+
+.sighty-vt-intro__title {
+  margin: .3em 0;
+  font-size: clamp(2rem, 6vw, 4.5rem);
+}
+
+.sighty-vt-intro__caption {
+  color: #cbd5e1;
+}
+
+
+.sighty-vt-scene-a {
+  position: relative;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-height: 28rem;
+  place-items: end start;
+  overflow: hidden;
+  background: #152331;
+}
+
+.sighty-vt-scene-a__image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sighty-vt-scene-a::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background: linear-gradient(90deg, #0b1220c9, #0b122055 65%, transparent);
+  content: '';
+}
+
+.sighty-vt-scene-a__copy {
+  position: relative;
+  z-index: 1;
+  max-width: 46rem;
+  padding: clamp(2rem, 7vw, 6rem);
+  text-shadow: 0 2px 18px #0008;
+}
+
+.sighty-vt-scene-a__eyebrow {
+  font-size: .8rem;
+  font-weight: 800;
+  letter-spacing: .18em;
+}
+
+.sighty-vt-scene-a__title {
+  margin: .3em 0;
+  font-size: clamp(2.5rem, 7vw, 6rem);
+  line-height: .98;
+}
+
+.sighty-vt-scene-a__caption {
+  color: #e2e8f0;
+}
+
+.sighty-vt-layout__telco {
+  display: flex;
+  grid-row: 3;
+  min-width: 0;
+  justify-content: center;
+  background: #101a27;
+}
+
+.sighty-vt-layout__telco-slot {
+  width: min(100%, 42rem);
+}
