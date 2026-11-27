@@ -13,7 +13,8 @@ comportements runtime sont définis par leurs spécifications respectives.
 `SceneDoc` possède un `id` et des `stories` nommées. Chaque `StoryDoc` possède
 son `id` et ses `persos`. Un `PersoDoc` possède un `id`, un type de composant,
 un état `initial` facultatif et des `actions` nommées facultatives. Un perso
-peut également déclarer des sources `emit`. Les [types auteur](../src/scene/types.ts)
+peut également déclarer un `name`, des sources `emit` et un champ `list`
+destiné à la capacité list. Les [types auteur](../src/scene/types.ts)
 fixent les autres champs acceptés par cette fondation ; les profils de
 composants et leurs validateurs décident des champs propres à chaque type.
 
@@ -89,6 +90,19 @@ ont leurs spécifications dédiées et leur propre périmètre certifié.
 `tag` projette son contenu par le service `content` ; `text` porte du contenu
 HTML enrichi. Leurs responsabilités sont décrites dans la
 [spécification de matérialisation](./component-materialization-v2-spec.md).
+
+### Type d'un perso externe
+
+Un perso dont le type n'est pas un type core est typé par la forme ouverte
+`CustomPersoDoc` : son `initial` et ses `actions` restent des enregistrements
+non typés, validés à la compilation par les validateurs de sa définition.
+L'interface `PersoTypeRegistry`, exportée par `codplay`, est le point
+d'extension de typage : une intégration y déclare son type avec
+`initial` et `action`, par une augmentation de module sur
+`codplay/scene/types`. Ses persos sont alors typés comme ceux du cœur, et
+`SceneDoc<'son-type'>` les accepte. Cette extension n'agit que sur le typage ;
+l'enregistrement du composant reste celui de la façade. Aucun test permanent ne
+couvre cette augmentation : elle a été vérifiée par un typecheck ponctuel.
 
 ## Normalisation des champs auteur
 

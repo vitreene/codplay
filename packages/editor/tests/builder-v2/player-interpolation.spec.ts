@@ -4,7 +4,7 @@ import { EDITOR_ENGINE_OPTIONS } from '../../src/item-presentation/engine-option
 
 import { afterEach, describe, expect, it } from 'vitest'
 import { CodPlay } from 'codplay'
-import { parseColor } from 'ace'
+import { parseColor, prepareInterval, resolveInterval, type ColorValue } from 'ace'
 import { buildSceneDocV2, EDITOR_V2_STORY_ID } from '../../src/builder-v2'
 import type { EditorScene } from '../../src/app/commands/types'
 
@@ -131,7 +131,13 @@ describe('editor V2 player interpolation', () => {
     expect(getComputedStyle(item!).transform).toBe('translate(20cqw, 15cqw) rotate(7.5deg)')
     expect(getComputedStyle(item!).width).toBe('30cqw')
     expect(getComputedStyle(item!).height).toBe('17cqw')
-    expect(root.querySelector<HTMLElement>('[data-editor-visual-for="item"]')?.style.backgroundColor).toBe(`rgb(${parseColor('#800080').coords.map((value) => Math.round(value * 255)).join(', ')})`)
+    // The halfway color is ACE's single-space (OKLCH) interpolation, read back from the rendered style.
+    const expected = resolveInterval(prepareInterval('#ff0000', '#0000ff'), 0.5) as ColorValue
+    const rendered = parseColor(root.querySelector<HTMLElement>('[data-editor-visual-for="item"]')!.style.backgroundColor)
+    const wrapHue = (hue: number): number => ((hue % 360) + 360) % 360
+    expect(rendered.coords[0]).toBeCloseTo(expected.coords[0]!, 2)
+    expect(rendered.coords[1]).toBeCloseTo(expected.coords[1]!, 2)
+    expect(wrapHue(rendered.coords[2]!)).toBeCloseTo(wrapHue(expected.coords[2]!), 2)
   })
 
   it('interpolates a destination-only radius from one measured CSS default through the same ACE action', async () => {

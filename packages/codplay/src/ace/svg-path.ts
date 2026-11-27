@@ -1,5 +1,6 @@
 import {
   prepareSegmentPath,
+  samePoint,
   type Path,
   type PathSegmentInput,
   type PathTraversal,
@@ -165,11 +166,6 @@ function isCommand(value: string | undefined): value is string {
 /** Checks one SVG arc flag. */
 function isArcFlag(value: number): boolean {
   return value === 0 || value === 1
-}
-
-/** Checks whether two points are identical. */
-function samePoint(left: Point, right: Point): boolean {
-  return left[0] === right[0] && left[1] === right[1]
 }
 
 /** Rounds one scalar to the requested compiled precision. */

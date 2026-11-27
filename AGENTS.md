@@ -19,6 +19,11 @@
 - JavaScript classes are allowed when useful.
 - Every parent element in authored `markup` must have an explicit `id`; never
   leave an authored parent element anonymous.
+  - Never measure an element's geometry with `getBoundingClientRect`: it ignores
+    the transform a parent applies to its child. Compose geometry with the affine
+    capture (`captureHtmlPose`) and local box sizes. Exactly two cases are
+    authorized: measuring the root frame, and the parent-matrix computation
+    function itself.
 
 ## Project vocabulary
 

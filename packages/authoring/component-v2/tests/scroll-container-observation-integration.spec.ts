@@ -330,7 +330,8 @@ it('resynchronizes observations after reset while retaining title live actions a
   await deliverAndSettle(imageObserver, imageFrame, false, 0)
   await deliverAndSettle(headingObserver, heading, true, 0.25)
   expect(runner.player.trackJournal.getAllEvents().map((event) => event.name)).not.toContain('image:enter')
-  expect(heading.style.backgroundColor).toBe('rgb(0, 0, 0)')
+  // The declared initial color is compiled to OKLCH; the reset restores it, not the live action's output.
+  expect(heading.style.backgroundColor).toBe('oklch(0 0 0)')
 
   await deliverAndSettle(resetImageObserver, imageFrame, true, 1)
   await deliverAndSettle(resetHeadingObserver, heading, true, 1)

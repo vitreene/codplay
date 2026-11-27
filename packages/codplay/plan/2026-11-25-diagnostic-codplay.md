@@ -423,3 +423,41 @@ voir le [plan couleur](./color-values-plan.md) pour le reste.
   plan dans une spec.
 - Une quinzaine de plans sont « En cours » sans date de dernière vérification,
   et `evolutions/evolution-backlog.md` est « A relire ».
+
+## Structure des modules du cœur — revue du 2026-11-27
+
+Relevé fait contre les specs existantes, hors move et FLIP.
+
+- **Traité** : faux DOM de test retiré d’`image` et `media` ; commentaire cité
+  Sighty retiré de `layout` ; défaut `div` en double retiré de `slot` ; alias
+  `HTMLComponentInput` / `HTMLComponentServices` supprimés ; mesure des lignes
+  de `layout` ramenée au repère local du paragraphe par la pose affine ;
+  `isNonEmptyString` et `samePoint` dédupliquées ; deux appels d’une ligne de
+  replace inlinés.
+- **Specs complétées** : contrat d’un module (`component-materialization-v2-spec`),
+  typage d’un perso externe et champs `name` / `list` du perso
+  (`scene-authoring-spec`), preuves des six comportements qui reposaient sur
+  des tests de démo supprimés (voir leurs nouveaux tests de fonctionnalité).
+- **Décision ouverte — surface d’import des composants externes** :
+  `package.json` exporte `.` et `./*`, donc tout chemin interne est importable.
+  `authoring/component-v2` importe vingt symboles par des chemins internes, dont
+  quinze sont absents de l’entrée `codplay` : `isComponentRecord`,
+  `reportInvalidComponentValue`, `isMeasurableHtmlElement`, `resolveAncestorChain`,
+  `SolvedScene`, `PLAYER_LIFECYCLE_PLAYING`, `PLAYER_LIFECYCLE_READY`,
+  `Diagnostic`, `RuntimeCaptureSourceSession`, `HtmlSourceAdapter`,
+  `HtmlSourceAdapterContext`, `HtmlSourceAdapterFactory`,
+  `CompiledScrollObservation`, `CompiledScrollObservationEvent` et
+  `AuthorScrollObservationDeclaration`. La plupart servent `scroll-container`,
+  qui s’accroche aux sources de capture et au runner. Les promouvoir à l’entrée
+  publique élargit l’API du cœur : décision utilisateur, avec modification de
+  `component-v2` sur `develop`.
+- **Imports entre modules — pas de règle adoptée** : 146 imports atteignent
+  directement un fichier interne d’un autre module au lieu de son `index`.
+  Imposer l’`index` créerait des cycles : `scene` importe
+  `runtime/components` (9 imports) et `runtime/components` importe `scene`. Une
+  règle suppose de casser ce cycle d’abord.
+- **Reste ouvert, hors décision** : trois liens de `plan/` pointent vers des
+  notes ou un plan absents (`action-sequence-tween-plan`,
+  `2026-09-18-third-party-components-v2-plan`) ; cinq doublons à corps
+  différents (tests « élément HTML », `freezeValue` / `freezeRecord`, tailles
+  locales) ; douze fonctions d’`ace` sans commentaire.

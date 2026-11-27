@@ -111,8 +111,10 @@ ne certifie pas l'arrêt d'une `TweenAction` contenue dans une séquence.
 - [`runtime-player.spec.ts`](../tests/runtime/player/runtime-player.spec.ts)
   vérifie la même résolution logique en Seek et Play et le franchissement d'une
   frontière interne de séquence.
-- [`chrono-demo.spec.ts`](../tests/facade/chrono-demo.spec.ts) exerce l'arrêt
-  d'une `TweenAction` via la façade et l'émission DOM de la fixture chrono.
+- [`tween-stop-live.spec.ts`](../tests/facade/tween-stop-live.spec.ts) exerce
+  l'arrêt d'une `TweenAction` en cours par un événement live `tween:stop` émis
+  par la façade : le player reste en lecture, sa timeline continue et l'action
+  ne pilote plus le perso.
 
 ## Limite de certification
 

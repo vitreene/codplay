@@ -424,7 +424,7 @@ function cumulativeLengths(segments: readonly PathSegment[], totalLength: number
 }
 
 /** Checks whether two points are identical. */
-function samePoint(left: Point, right: Point): boolean {
+export function samePoint(left: Point, right: Point): boolean {
   return left[0] === right[0] && left[1] === right[1]
 }
 

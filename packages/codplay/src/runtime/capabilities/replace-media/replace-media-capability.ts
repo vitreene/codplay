@@ -40,12 +40,6 @@ export type ReplaceMediaCommand = Readonly<{
   duration: number
 }>
 
-type ReplaceOccurrence = Readonly<{
-  key: string
-  action: ComponentActionOccurrence
-  command: ReplaceMediaCommand
-}>
-
 type ActiveReplaceSession = ReplaceTimelineSession & {
   sessionId: number
   frameState?: 'ready' | 'error'
@@ -82,7 +76,7 @@ export function createReplaceMediaModuleService(
   /** Starts or preserves the outgoing snapshot before an image/video source update. */
   function beforeComponentUpdate(update: RuntimeComponentUpdateContext): void {
     if (!supportsReplaceMedia(update, getMediaTag(update.componentId))) return
-    const occurrence = resolveLatestReplaceOccurrence(update.activeActions)
+    const occurrence = findLatestReplaceCandidate(update.activeActions, readMediaCommand)
     if (!sessions.needsSession(update, occurrence?.key) || occurrence === undefined) return
 
     const interruptedSnapshot = sessions.captureInterrupted(update)
@@ -95,7 +89,7 @@ export function createReplaceMediaModuleService(
   /** Registers a media transition whose incoming frame is captured on the first player sample. */
   function afterComponentUpdate(update: RuntimeComponentUpdateContext): void {
     if (!supportsReplaceMedia(update, getMediaTag(update.componentId))) return
-    const occurrence = resolveLatestReplaceOccurrence(update.activeActions)
+    const occurrence = findLatestReplaceCandidate(update.activeActions, readMediaCommand)
     const active = sessions.activeFor(update, occurrence?.key)
     if (active === undefined || occurrence === undefined) return
 
@@ -222,13 +216,6 @@ function ignoreInertMediaGridSettings(
 /** Reads the media profile of one source-changing action, or undefined. */
 function readMediaCommand(action: ComponentActionOccurrence): ReplaceMediaCommand | undefined {
   return hasReplaceTarget(action.action) ? normalizeReplaceMediaCommand(action.action.replace) : undefined
-}
-
-/** Selects the latest source-changing action that carries one valid media profile. */
-function resolveLatestReplaceOccurrence(
-  actions: readonly ComponentActionOccurrence[],
-): ReplaceOccurrence | undefined {
-  return findLatestReplaceCandidate(actions, readMediaCommand)
 }
 
 /** Lists the image/video replace occurrences of one perso with an upper bound of their end. */

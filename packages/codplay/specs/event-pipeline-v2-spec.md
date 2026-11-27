@@ -238,7 +238,6 @@ son adresse à l’injection ; elle ne l’encode pas dans `data`.
 - [`runtime-player.spec.ts`](../tests/runtime/player/runtime-player.spec.ts)
   couvre le rejeu par Seek sans nouvelle exécution des transforms et des straps,
   ainsi que les frontières de reset sans déplacement de l’horloge.
-- [`story-isolation.spec.ts`](../tests/runtime/player/story-isolation.spec.ts),
-  [`position-demo.spec.ts`](../tests/facade/position-demo.spec.ts) et
-  [`sighty-demo4.spec.ts`](../tests/facade/sighty-demo4.spec.ts) couvrent les
+- [`story-isolation.spec.ts`](../tests/runtime/player/story-isolation.spec.ts) et
+  [`position-demo.spec.ts`](../tests/facade/position-demo.spec.ts) couvrent les
   règles de portée et d’observation employées par leurs parcours respectifs.

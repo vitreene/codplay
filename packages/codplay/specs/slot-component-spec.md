@@ -301,5 +301,5 @@ opaque.
   vérifie le rebinding des identités de conteneur capturées.
 - Les tests consommateurs
   [`replace-presentation.spec.ts`](../../sighty/tests/replace-presentation.spec.ts)
-  et [`sighty-demo4.spec.ts`](../tests/facade/sighty-demo4.spec.ts) exercent la
+  et [`foreign-mount.spec.ts`](../tests/facade/foreign-mount.spec.ts) exercent la
   sélection de profil et le montage/démontage indépendant des scènes enfants.

@@ -16,16 +16,16 @@ initiale est sérialisée sur `path[d]`, et le texte est projeté dans la part
 
 La valeur `diameter` détermine `width` et `height` en pixels. La suite composant
 vérifie une valeur numérique initiale, puis une nouvelle valeur de chaîne
-numérique ; la démo vérifie également une entrée native `input` diffusée comme
-`polygon:diameter`, dont le payload conserve `data.value` sous forme de chaîne.
+numérique. Le payload natif `value` d'un `input` relève de la
+[spécification `Perso.emit`](./perso-emit-v2-spec.md).
 
 ## Morph temporel
 
 Une occurrence d'action `morph` fournit la forme cible et sa progression est
 calculée à partir du temps logique. Le test du composant vérifie une forme
-intermédiaire à 500 ms et la forme finale à 1000 ms. La fixture de démo utilise
-le runner HTML réel : elle vérifie le changement de path pendant Play et les
-formes finales de deux morphs déclenchés par le circuit DOM emit.
+intermédiaire à 500 ms et la forme finale à 1000 ms. Un test du runner HTML
+réel vérifie le changement de path pendant Play et la forme finale d'un morph
+déclenché par une eventime.
 
 Le Seek vers le milieu ou la fin d'un morph est exclu du périmètre certifié
 de ces preuves.
@@ -35,7 +35,7 @@ de ces preuves.
 - [`image-input-polygon.spec.ts`](../tests/runtime/components/image-input-polygon.spec.ts)
   vérifie le namespace SVG, les parts, le diamètre et la progression
   déterministe d'un morph sur le composant.
-- [`polygon-demo.spec.ts`](../tests/runtime/components/polygon-demo.spec.ts)
+- [`polygon-morph-play.spec.ts`](../tests/runtime/runner-html/polygon-morph-play.spec.ts)
   construit la scène avec le builder et l'exécute par le runner HTML ; il vérifie
-  `polygon:sides`, `polygon:diameter`, le payload natif `value`, la mise à jour
-  des contrôles et les deux morphs pendant Play.
+  le path initial, une forme intermédiaire, la forme finale et le texte du morph
+  pendant Play.

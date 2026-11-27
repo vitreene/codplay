@@ -109,6 +109,7 @@ persistants et préparent chacun leurs sources statiques avant un changement.
   couvre la persistance des nodes par source, le détachement, le seek, la
   destruction, le type audio, la transmission du rate et deux composants qui
   partagent une URL vidéo et gardent chacun une node `preload='auto'`.
-- [`preload-media-demo.spec.ts`](../tests/runtime/components/preload-media-demo.spec.ts)
-  couvre la lecture de la scène média par le runtime V2 et l'absence d'écriture
-  native redondante pendant sa présentation.
+- [`media-auto-sync-playback.spec.ts`](../tests/runtime/runner-html/media-auto-sync-playback.spec.ts)
+  couvre une vidéo `sync: 'auto'` lancée par un broadcast d'auteur : un seul
+  `play()` natif, aucun `pause()` ni écriture de `currentTime` pendant sa
+  présentation, et un nœud qui garde son parent.

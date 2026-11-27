@@ -1,5 +1,6 @@
 export { isPlainRecord } from './is-plain-record'
 export { isFiniteNumber } from './numbers'
+export { isNonEmptyString } from './strings'
 export { compareNumberPaths } from './ordering'
 export { cloneRecord, cloneValue } from './values'
 export { canAppendChild, canRemoveChild, hasParentNode, listMaterializedRoots } from './nodes'

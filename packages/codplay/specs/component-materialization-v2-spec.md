@@ -63,6 +63,38 @@ champs suivent le [contrat du pont cible](./third-party-target-bridge-spec.md).
 `mountableParts` et `mountablePartResolver` sélectionnent les parts utilisables
 par le placement ; ils ne changent pas leur découverte dans le template.
 
+### Définition d'un module
+
+Un module est une capacité propre à un player, déclarée par une
+`RuntimeModuleServiceDefinition` : un `id` et une fonction `create(context)`.
+Un composant le demande par cet `id` dans `modules`. Le catalogue crée une
+instance par player ; les capacités du cœur la fabriquent par une fonction
+`create<Nom>ModuleServiceDefinition()` rangée dans
+`runtime/capabilities/<id>/`.
+
+`create` reçoit un `RuntimeModuleServiceContext` : `playerId`, `compiledScene`,
+et, selon l'assemblage, `componentSurfaces` (opérations typées des composants
+montés), `emitEvent` et `getEvents`. `emitEvent` journalise un événement privé
+du module, avec un nom, des données et un `applyAtMs` facultatif, puis
+rafraîchit la présentation. `getEvents` ne relit que les événements de ce
+module pour reconstruire une scène.
+
+L'instance retournée est un objet dont tous les crochets sont facultatifs. Ils
+se répartissent selon qui les appelle :
+
+| Appelant | Crochets |
+| --- | --- |
+| Runtime des composants | `beforeComponentUpdate`, `afterComponentUpdate`, `onComponentUpdateError`, `prepareExternalPresentation` |
+| Modules du player | `initializeScene`, `onScenePresented`, `onPlaybackStateChange`, `onRateChange`, `resolveTimelineMs`, `onMoveDelta` |
+| Seek | `beforeSeek`, `prepareSeek` (retourne un handle `commit` / `abort`) |
+| Reconstruction du placement | `getMountTargets`, `resolveStructuralOrder`, `resetStructuralOrder` |
+| Teardown | `destroy` |
+
+`resolveTimelineMs` permet à un module qui possède l'horloge native de
+substituer son temps à celui du player. Une instance n'est partagée entre aucun
+player, et une définition manquante ou dupliquée est rejetée par le catalogue,
+comme décrit ci-dessous.
+
 ### Application de l'état
 
 `update()` reçoit un `ComponentUpdateInput` contenant l'état résolu et
@@ -204,6 +236,9 @@ ensemble.
 - [`module-catalog.spec.ts`](../tests/runtime/engine/module-catalog.spec.ts)
   vérifie l'indépendance des instances de modules par player et les définitions
   absentes ou dupliquées.
+- [`module-service-types.ts`](../src/runtime/engine/module-service-types.ts) fixe
+  les types du contrat de module ; les appelants de chaque crochet se trouvent
+  dans `runtime-component-runtime.ts` et `runtime/player/modules/`.
 - [`markup-capability.spec.ts`](../tests/runtime/capabilities/markup-capability.spec.ts)
   vérifie les identifiants opaques, l'isolation player-local, le retrait des
   cibles et leur conversion vers le registre de montage.

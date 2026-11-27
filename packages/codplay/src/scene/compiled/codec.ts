@@ -1,6 +1,6 @@
 import type { DiagnosticOutput, DiagnosticReport } from '../../diagnostics'
 import { DiagnosticCollector } from '../../diagnostics'
-import { isPlainRecord } from '../../shared'
+import { isNonEmptyString, isPlainRecord } from '../../shared'
 import { SCENE_BUILD_CONFIG } from '../config/scene-build'
 import type {
   CompiledListenRule,
@@ -193,11 +193,6 @@ function isCompiledRel(value: unknown): value is CompiledRel {
   return Object.entries(value).every(([key, entry]) => (
     key === 'host' || key === 'target' || isCompiledValue(entry)
   ))
-}
-
-/** Checks one non-empty relation identifier at the serialized boundary. */
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0
 }
 
 /** Checks one compiled emit declaration and its nested capture references. */

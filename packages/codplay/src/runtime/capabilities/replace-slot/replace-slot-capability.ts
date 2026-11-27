@@ -49,12 +49,6 @@ type ReplaceSlotCommand = SlotReplaceProfile & Readonly<{
   duration: number
 }>
 
-type ReplaceOccurrence = Readonly<{
-  key: string
-  action: ComponentActionOccurrence
-  command: ReplaceSlotCommand
-}>
-
 type ActiveExternalSession = {
   session: ReplacePresentationSession
   cancel: () => void
@@ -91,7 +85,7 @@ export function createReplaceSlotModuleService(
     const contentChanged = slotContentSignatures.has(update.componentId)
       && slotContentSignatures.get(update.componentId) !== contentSignature
     slotContentSignatures.set(update.componentId, contentSignature)
-    const occurrence = resolveLatestReplaceOccurrence(update.activeActions)
+    const occurrence = findLatestReplaceCandidate(update.activeActions, readSlotCommand)
     const isNewOccurrence = occurrence !== undefined
       && sessions.get(update.componentId)?.key !== occurrence.key
       && !sessions.isHandled(update.componentId, occurrence.key)
@@ -112,7 +106,7 @@ export function createReplaceSlotModuleService(
   /** Registers one slot update on the player timeline. */
   function afterComponentUpdate(update: RuntimeComponentUpdateContext): void {
     if (update.componentType !== 'slot') return
-    const occurrence = resolveLatestReplaceOccurrence(update.activeActions)
+    const occurrence = findLatestReplaceCandidate(update.activeActions, readSlotCommand)
     const active = sessions.activeFor(update, occurrence?.key)
     if (active === undefined || occurrence === undefined) return
 
@@ -280,13 +274,6 @@ function createReplaceSlotCommand(
 /** Reads the slot profile of one action that changes the opaque slot content, or undefined. */
 function readSlotCommand(action: ComponentActionOccurrence): ReplaceSlotCommand | undefined {
   return action.action.content === undefined ? undefined : normalizeReplaceSlotCommand(action.action.replace)
-}
-
-/** Selects the latest slot replace occurrence that changes opaque slot content. */
-function resolveLatestReplaceOccurrence(
-  actions: readonly ComponentActionOccurrence[],
-): ReplaceOccurrence | undefined {
-  return findLatestReplaceCandidate(actions, readSlotCommand)
 }
 
 /** Lists the slot replace occurrences of one perso with an upper bound of their end. */
