@@ -324,20 +324,20 @@ Choose the source implementation relevant to the new producer:
 | Existing source | Files and role |
 | --- | --- |
 | Pointer at the HTML-host boundary | [`html-pointer-capture-source-adapter.ts`](../../../../packages/codplay/src/runtime/capture/sources/html-pointer-capture-source-adapter.ts): associate native input with a perso, convert samples, route native track/end events and isolate pointer sessions |
-| Continuous source owned by a component | [`scroll-container-component.ts`](../../../../packages/authoring/component-v2/src/scroll-container/scroll-container-component.ts): attach after materialization, open by compiled identity, send samples and close/cancel at lifecycle boundaries |
-| Source-specific measurement and coalescing | [`scroll-progress-provider.ts`](../../../../packages/authoring/component-v2/src/scroll-container/scroll-progress-provider.ts) and [`abstract-live-source-provider.ts`](../../../../packages/authoring/component-v2/src/scroll-container/abstract-live-source-provider.ts): separate measurement publication and provider lifecycle from capture/journal ownership |
+| Scroll progress at the HTML-host boundary | [`scroll-progress-source.ts`](../../../../packages/codplay/src/runtime/runner-html/scroll-container/scroll-progress-source.ts): attach to the materialized scrollport, coalesce measurements to one presentation, open by compiled identity, send samples and close/cancel at lifecycle boundaries |
 
-For a component-owned source, extend the component integration and consume its
-provided capture port. Define the new sample record's fields, units and meaning
+A browser source lives in the HTML runner, beside the pointer and scroll
+sources, and receives the shared capture port there. Define the new sample record's fields, units and meaning
 in the owning source contract before implementation. Reuse the shared opening,
 tracking and end paths; emitting one event per measurement remains forbidden.
 
 The optional HTML factory interface in
 [`source-adapter.ts`](../../../../packages/codplay/src/runtime/runner-html/source-adapter.ts)
 provides bounded host commands and lifecycle notifications; it does **not**
-expose the capture session port. In particular,
-[`scroll-container-source-adapter.ts`](../../../../packages/authoring/component-v2/src/scroll-container/scroll-container-source-adapter.ts)
-owns descendant observations, not the continuous scroll capture. Do not infer
+expose the capture session port. The scroll observation source
+([`scroll-observation-source.ts`](../../../../packages/codplay/src/runtime/runner-html/scroll-container/scroll-observation-source.ts))
+uses the same bounded context: it emits ordinary events and live actions and
+opens no capture session. Do not infer
 `registerSource`, capture methods on the factory context or unrestricted player
 access from that interface. Changing a core integration boundary requires the
 repository's explicit authorization and implementation gates.
@@ -353,8 +353,8 @@ Read these tests to identify the acceptance boundaries:
 - [`capture-source-circuit.spec.ts`](../../../../packages/codplay/tests/runtime/capture/capture-source-circuit.spec.ts): compiled rule selection, opening queue, session routing and cancellation.
 - [`runtime-capture-session.spec.ts`](../../../../packages/codplay/tests/runtime/capture/runtime-capture-session.spec.ts): callback values, sample accumulation, capture state and conclusion outputs.
 - [`html-pointer-capture-source-adapter.spec.ts`](../../../../packages/codplay/tests/runtime/capture/html-pointer-capture-source-adapter.spec.ts): source conversion, pointer identity, end routing and listener teardown.
-- [`scroll-container-component-source.spec.ts`](../../../../packages/authoring/component-v2/tests/scroll-container-component-source.spec.ts): component-owned source and its injected port.
-- [`scroll-container-player-integration.spec.ts`](../../../../packages/authoring/component-v2/tests/scroll-container-player-integration.spec.ts): actual component -> runner -> capture -> player/journal path, Seek and teardown.
+- [`scroll-container-sources.spec.ts`](../../../../packages/codplay/tests/runtime/runner-html/scroll-container-sources.spec.ts): scroll progress source, its capture port and lifecycle boundaries.
+- [`scroll-container-player-integration.spec.ts`](../../../../packages/codplay/tests/runtime/runner-html/scroll-container-player-integration.spec.ts): actual scrollport -> runner source -> capture -> player/journal path, Seek and teardown.
 
 Validate opening, samples, live projection, both end-output modes, visibility,
 Seek cancellation and teardown through the source actually used. Unit tests of

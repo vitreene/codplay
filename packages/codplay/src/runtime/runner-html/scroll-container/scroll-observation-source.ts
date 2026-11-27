@@ -2,20 +2,12 @@ import type {
   CompiledScene,
   CompiledScrollObservation,
   CompiledScrollObservationEvent,
-} from 'codplay/scene/compiled'
-import type { Diagnostic } from 'codplay/diagnostics'
-import {
-  PLAYER_LIFECYCLE_PLAYING,
-  PLAYER_LIFECYCLE_READY,
-  resolveAncestorChain,
-} from 'codplay/runtime/player'
-import type { SolvedScene } from 'codplay/runtime/player'
-import type {
-  HtmlSourceAdapter,
-  HtmlSourceAdapterContext,
-  HtmlSourceAdapterFactory,
-} from 'codplay/runtime/runner-html'
-import { IntersectionObservationProvider } from './intersection-observation-provider'
+} from '../../../scene/compiled'
+import type { Diagnostic } from '../../../diagnostics'
+import { PLAYER_LIFECYCLE_PLAYING, PLAYER_LIFECYCLE_READY } from '../../config/player-lifecycle'
+import { resolveAncestorChain, type SolvedScene } from '../../player'
+import type { HtmlSourceAdapter, HtmlSourceAdapterContext } from '../source-adapter'
+import { ScrollObservationPhases } from './scroll-observation-phases'
 import type {
   ScrollObservationEmission,
   ScrollObservationRule,
@@ -43,17 +35,16 @@ type ObserverGroup = {
   rulesByTarget: Map<Element, Map<string, ScrollObservationRule>>
 }
 
-/** Creates the optional adapter for descendant intersection observations. */
-export const createScrollContainerSourceAdapter: HtmlSourceAdapterFactory = (context) => (
-  new ScrollContainerObservationAdapter(context)
-)
-
-/** Owns logical descendant observations and their native IntersectionObservers. */
-class ScrollContainerObservationAdapter implements HtmlSourceAdapter {
+/**
+ * HTML source of `emit.observe`: watches each observed perso inside its ancestor scroll-container
+ * and turns phase changes into ordinary events and ratios into live actions. It reuses the
+ * player's emit and live-action circuits; it opens no capture session.
+ */
+export class HtmlScrollObservationSource implements HtmlSourceAdapter {
   private readonly context: HtmlSourceAdapterContext
   private readonly compiledScene: CompiledScene
   private readonly observationRules: readonly ScrollObservationRule[]
-  private readonly observationProvider: IntersectionObservationProvider
+  private readonly observationPhases: ScrollObservationPhases
   private observationBindings: ObservationBinding[] = []
   private readonly observerGroups = new Map<Element, Map<string, ObserverGroup>>()
   private readonly reportedDiagnostics = new Set<string>()
@@ -71,7 +62,7 @@ class ScrollContainerObservationAdapter implements HtmlSourceAdapter {
     this.context = context
     this.compiledScene = context.compiledScene
     this.observationRules = collectObservationRules(this.compiledScene)
-    this.observationProvider = new IntersectionObservationProvider(this.observationRules)
+    this.observationPhases = new ScrollObservationPhases(this.observationRules)
   }
 
   /** Attaches descendant observers after the runner has materialized the scene. */
@@ -118,7 +109,7 @@ class ScrollContainerObservationAdapter implements HtmlSourceAdapter {
     this.observationGeneration += 1
     this.pendingInitialEmissions = []
     this.disconnectObservationBindings()
-    this.observationProvider.detach()
+    this.observationPhases.detach()
     this.attached = false
     this.seeking = false
     this.pendingDispatch = Promise.resolve()
@@ -137,7 +128,7 @@ class ScrollContainerObservationAdapter implements HtmlSourceAdapter {
     this.observationGeneration += 1
     this.pendingInitialEmissions = []
     this.disconnectObservationBindings()
-    this.observationProvider.destroy()
+    this.observationPhases.detach()
     this.pendingDispatch = Promise.resolve()
   }
 
@@ -145,7 +136,7 @@ class ScrollContainerObservationAdapter implements HtmlSourceAdapter {
   private resolveObservationBindings(scene: SolvedScene): void {
     this.observationBindings = []
     for (const rule of this.observationRules) {
-      const targetKey = runtimePersoKey(rule.storyId, rule.persoId)
+      const targetKey = `${rule.storyId}:${rule.persoId}`
       const targetPerso = scene.persos[targetKey]
       if (targetPerso?.placement.mounted !== true) continue
       const ancestors = [...resolveAncestorChain(scene, targetKey)].reverse()
@@ -192,7 +183,7 @@ class ScrollContainerObservationAdapter implements HtmlSourceAdapter {
   private attachObservationSource(): void {
     if (this.attached || this.destroyed) return
     this.attached = true
-    this.observationProvider.attach()
+    this.observationPhases.attach()
     for (const binding of this.observationBindings) {
       const group = this.getOrCreateObserverGroup(binding)
       if (group === undefined) continue
@@ -281,7 +272,7 @@ class ScrollContainerObservationAdapter implements HtmlSourceAdapter {
         updates.push({ ruleId: rule.id, phase, ratio: entry.intersectionRatio })
       }
     }
-    const { emissions, liveActions } = this.observationProvider.update(updates)
+    const { emissions, liveActions } = this.observationPhases.update(updates)
     for (const action of liveActions) {
       try {
         this.context.commands.setLiveActions(
@@ -388,11 +379,6 @@ function collectObservationRules(scene: CompiledScene): readonly ScrollObservati
     }
   }
   return result
-}
-
-/** Derives the canonical runtime key already used by materialization and the runner. */
-function runtimePersoKey(storyId: string, persoId: string): string {
-  return `${storyId}:${persoId}`
 }
 
 /** Checks that one solved ancestor is a scroll-container in the target's story. */

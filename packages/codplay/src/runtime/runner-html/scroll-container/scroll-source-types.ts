@@ -1,4 +1,4 @@
-import type { CompiledScrollObservation, CompiledScrollObservationEvent } from 'codplay/scene/compiled'
+import type { CompiledScrollObservation, CompiledScrollObservationEvent } from '../../../scene/compiled'
 
 /** Numeric geometry consumed by the DOM-free progress calculation. */
 export type ScrollProgressMetrics = Readonly<{
@@ -15,17 +15,13 @@ export type ScrollObservationRule = Readonly<{
   declaration: CompiledScrollObservation
 }>
 
-/** Normalized phase supplied by the HTML adapter for one observer callback. */
+/** Normalized phase of one observed target. */
 export type ScrollObservationPhase = 'inside' | 'outside'
 
-/** DOM-free phase update accepted from one native observer batch. */
-export type ScrollObservationPhaseUpdate = Readonly<{
+/** Phase and native visibility ratio read for one rule in one observer batch. */
+export type ScrollObservationUpdate = Readonly<{
   ruleId: string
   phase: ScrollObservationPhase
-}>
-
-/** Native visibility value paired with a phase update for one observed target. */
-export type ScrollObservationUpdate = ScrollObservationPhaseUpdate & Readonly<{
   ratio: number
 }>
 

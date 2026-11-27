@@ -6,7 +6,7 @@ export {
   sanitizeTagInitial,
   validateTagInitial,
 } from './runtime/components'
-export type { TagInitial } from './runtime/components'
+export type { ScrollContainerInitial, ScrollProgressAxis, TagInitial } from './runtime/components'
 export type { BaseComponentData } from './runtime/components'
 export {
   REPLACE_PRESET_CHOICES,

@@ -8,6 +8,7 @@ import type { MediaAction, MediaInitial } from '../runtime/components/media'
 import type { PolygonAction, PolygonInitial } from '../runtime/components/polygon'
 import type { TagAction, TagInitial } from '../runtime/components/tag'
 import type { SlotAction, SlotInitial } from '../runtime/components/slot'
+import type { ScrollContainerAction, ScrollContainerInitial } from '../runtime/components/scroll-container'
 import type { TextAction, TextInitial } from '../runtime/components/text'
 import type { MoveOrderMode } from '../runtime/config/move'
 import type { Rel } from './rel'
@@ -37,6 +38,7 @@ export interface PersoTypeRegistry {
   media: { initial: MediaInitial; action: MediaAction }
   polygon: { initial: PolygonInitial; action: PolygonAction }
   slot: { initial: SlotInitial; action: SlotAction }
+  'scroll-container': { initial: ScrollContainerInitial; action: ScrollContainerAction }
 }
 
 /** Built-in component type names understood by the V2 core catalog. */

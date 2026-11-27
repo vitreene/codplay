@@ -211,8 +211,8 @@ progression. Le titre, l’état du menu et les boutons de navigation sont
 actualisés par des événements adressés aux persos de leurs scènes ; le
 composant scroll porte aussi la politique déclarative d’émission initiale.
 
-`ElcePlayerComposition` instancie le runtime Sighty avec les définitions
-optionnelles `scroll-container`, compile le catalogue de scènes fourni par le
+`ElcePlayerComposition` instancie le runtime Sighty, dont CodPlay fournit le
+type core `scroll-container`, compile le catalogue de scènes fourni par le
 builder et démarre la scène de layout. Aucun gestionnaire de géométrie Elcé ne
 réintervient après le montage : le runtime CodPlay place le perso dans le slot
 et le composant `layout` recalcule la position de ce slot. Le circuit de navigation Sighty reste
@@ -220,14 +220,14 @@ inchangé.
 
 Les contrats de sortie sont isolés dans
 [`flux-scene-builder-types.ts`](../src/resources/pages/flux/flux-scene-builder-types.ts) et
-[`scenario-builder-types.ts`](../src/builders/scenario/scenario-builder-types.ts) ; les
+[`learning-scenario-types.ts`](../src/mods/learning/reading/learning-scenario-types.ts) ; les
 builders ne déclarent que leur comportement d’exécution.
 
 ## Preuves
 
 - [`flux-scene-builder.test.ts`](../src/mods/learning/integration/flux-scene-builder.test.ts)
-  vérifie les stories, le scrollport, les commentaires d’insertion et la compilation avec les
-  définitions réelles `scroll-container` de CodPlay, ainsi que le montage
+  vérifie les stories, le scrollport, les commentaires d’insertion et la compilation avec le
+  type core `scroll-container` de CodPlay, ainsi que le montage
   d’une Carte directe vers son perso vidéo. Il vérifie aussi la
   projection des BDC Carte identifiés par leur Carousel parent, leurs champs,
   leurs médias selon le layout et les plages automatiques finies.
@@ -267,7 +267,7 @@ Elcé.
   la part du slot d’ancre. Le cadre reste en `16 / 9` avec une réserve de
   `56.25%` ; la source testée mesure `442 × 300 px` pour `5,89 s`. Le cadrage
   diffère actuellement entre l’éditeur (`contain`) et le player (`cover`).
-- [`scenario-builder.test.ts`](../src/builders/scenario/scenario-builder.test.ts)
+- [`learning-scenario-builder.test.ts`](../src/mods/learning/reading/learning-scenario-builder.test.ts)
   vérifie les scènes persistantes, le graphe Sighty, les routes, l’ordre racine
   mélangé des entrées page/chapitre, le menu correspondant, et l’exclusion des
   pages du catalogue.

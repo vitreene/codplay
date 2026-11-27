@@ -79,13 +79,12 @@ L'[exemple des composants](../../demos/src/v2/demos/components/components-scene.
 montre les deux niveaux de déclaration.
 
 Les types core enregistrés sont `tag`, `text`, `img`, `input`, `layout`,
-`list`, `media`, `polygon` et `slot`. Une capacité optionnelle peut enregistrer
+`list`, `media`, `polygon`, `slot` et `scroll-container`. Une capacité optionnelle peut enregistrer
 son propre type par la façade avant le premier build. Les profils de
 [img](./image-component-v2-spec.md), [input](./input-component-v2-spec.md),
 [layout](./layout-component-spec.md), [polygon](./polygon-component-v2-spec.md),
 [slot](./slot-component-spec.md) et [scroll-container](./scroll-container-spec.md)
 ont leurs spécifications dédiées et leur propre périmètre certifié.
-`scroll-container` n'est pas enregistré dans le catalogue core.
 
 `tag` projette son contenu par le service `content` ; `text` porte du contenu
 HTML enrichi. Leurs responsabilités sont décrites dans la

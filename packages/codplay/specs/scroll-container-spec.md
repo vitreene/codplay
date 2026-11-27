@@ -4,69 +4,54 @@
 
 ## Périmètre vérifié
 
-Cette spécification définit la capacité optionnelle `scroll-container` de
-CodPlay V2 : une source de progress géométrique, les observations
-`IntersectionObserver` déclarées par des persos descendants et la capture
-facultative d’une activité de scroll. Le scroll ne commande pas le temps
-logique CodPlay.
+Cette spécification définit le type core `scroll-container` de CodPlay V2 :
+le composant qui rend le scrollport, et les deux sources HTML du runner qui s'y
+rattachent — la progression géométrique, avec la capture facultative d’une
+activité de scroll, et les observations `IntersectionObserver` déclarées par
+des persos descendants. Le scroll ne commande pas le temps logique CodPlay.
 
-## Enregistrement optionnel
+## Répartition des responsabilités
 
-La capacité est fournie hors du catalogue runtime core. Son intégration expose
-une définition de composant `scroll-container` et une définition de module
-player-scoped. Les deux sont enregistrées via
-`CodPlayEngineOptions.components` et `CodPlayEngineOptions.modules`.
+`scroll-container` est enregistré dans le catalogue core ; aucune intégration
+n’a de composant, de module ou d’adaptateur à fournir. Ses identifiants restent
+`scroll-container`.
 
-Une scène qui utilise la capacité déclare ses requirements compilés. Si le
-composant ou le module n’est pas enregistré, l’engine refuse l’initialisation
-selon le contrôle de requirements existant. En leur absence, le catalogue core
-ne crée aucun composant scroll, provider ou observer. Aucun registre générique
-de providers n’est ajouté.
+- Le composant [`ScrollContainerComponent`](../src/runtime/components/scroll-container/scroll-container-component.ts)
+  dérive de `BaseHTMLComponent` et applique les services `className`, `style`
+  et `attr` à sa racine. Sa racine matérialisée est le scrollport. Il ne lit pas
+  le défilement et n’ouvre aucune capture.
+- La progression est une source HTML du runner,
+  [`HtmlScrollProgressSource`](../src/runtime/runner-html/scroll-container/scroll-progress-source.ts),
+  au même titre que la source pointeur. Elle alimente le circuit de capture
+  commun.
+- L’observation est une source HTML du runner,
+  [`HtmlScrollObservationSource`](../src/runtime/runner-html/scroll-container/scroll-observation-source.ts).
+  Elle réutilise les circuits `emit` et actions live du player et n’ouvre pas
+  de session de capture.
 
-Le composant est matérialisé par le circuit HTML existant. Sa racine HTML
-matérialisée est le scrollport. Après la matérialisation, le runtime assigne
-cette racine à `BaseHTMLComponent.node`, puis appelle
-`ScrollContainerComponent.initialize()` avant son premier update. Le composant
-résout son propre node à cette étape ; la progression et la capture attachent
-leurs listeners à cette racine. Aucune `ScrollContainerSurface` n’est ajoutée
-à `RuntimeComponentSurfaceMap` et le node n’est ni une API de façade ni une
-valeur compilée.
-
-La définition de module runtime et son contexte restent neutres par rapport à
-la matérialisation. La factory de l’adaptateur de source HTML est fournie
-séparément à la frontière `runner-html` par l’hôte HTML ; elle n’est pas un
-hook de `RuntimeModuleServiceDefinition` et ne traverse ni le catalogue, ni
-`RuntimeModuleServiceContext`, ni `CompiledScene`. Les types DOM et l’accès aux
-surfaces/nœuds de présentation restent confinés à cette intégration HTML.
-La façade la transmet par
-`CodPlayOptions.htmlHost.sourceAdapterFactories`, séparément de
-`CodPlayEngineOptions`, puis `createInstanceHost` la fournit aux
-`HtmlPlayerRunnerOptions`. Le hook expose un contexte borné : lecture de la
-scène compilée et de la scène résolue, accès à l’état/temps du player, résolution
-d’un élément par perso, `emit`, actions live et diagnostics. Il ne transmet ni
-instance brute de runner/player, ni commandes bas niveau de capture, ni
-catalogue, ni registre mutable de nodes. Il ne résout pas le node scrollport et
-ne pilote pas sa progression ou sa capture ; il attache les observations des
-descendants à leurs racines logiques. `runner-html` possède l’ordonnancement
-des callbacks de cycle de vie et du teardown. Le type
-`HtmlSourceAdapterFactory` est exporté par le sous-chemin
-`codplay/runtime/runner-html`, et seul le point de composition de la façade
-HTML consomme ce type.
-
-Le hook est générique aux factories de sources HTML optionnelles. Un module peut
-fournir une telle factory lorsqu’il a besoin d’une source navigateur ; cela ne
-rend pas `RuntimeModuleServiceDefinition` dépendant d’un runner et ne constitue
-pas un hook générique de module.
+`HtmlPlayerRunner` crée ces deux sources avant celles fournies par
+`CodPlayOptions.htmlHost.sourceAdapterFactories`, et leur transmet le même
+contexte borné ainsi que les mêmes frontières de cycle de vie : attache après
+`init()`, reset après celui des composants, seek, `sequence:end` et
+destruction. La source de progression reçoit en plus le port de capture
+player-scoped. Les types DOM restent confinés au runner HTML ; la définition du
+composant ne déclare aucun module.
 
 ## Composant auteur
 
-Le `PersoDoc<'scroll-container'>` reprend le profil du composant `tag` et
-ajoute les réglages de progression :
+Le `PersoDoc<'scroll-container'>` décrit sa racine (`tag`, `className`,
+`style`, `attr`), sans contenu, et ajoute les réglages de progression. Le nom de
+tag suit la validation du composant `tag` ; `div` est le défaut :
 
 ```ts
-import type { TagInitial } from 'codplay/runtime/components'
+import type { ScrollContainerInitial } from 'codplay'
 
-type ScrollContainerInitial = Omit<TagInitial, 'content'> & Readonly<{
+// Forme de ScrollContainerInitial :
+type ScrollContainerShape = Readonly<{
+  tag?: string
+  className?: ClassNameValue
+  style?: StyleValue
+  attr?: AttrValue
   values?: Readonly<{
     progress?: Readonly<{
       axis?: 'block' | 'inline'
@@ -108,14 +93,15 @@ unique de l’event de début éventuel ; elle se ferme à `scrollend` par
 `endCapture`. Un seek, un détachement, `sequence:end`, une destruction ou une
 erreur annule la session sans event de fermeture.
 
-`ScrollContainerComponent.initialize()` attache `scroll`, `scrollend`, resize
-élément et resize viewport à la racine déjà matérialisée. Il calcule la
-progression à l’initialisation puis coalesce les samples à une présentation.
-Au premier sample utile, il ouvre la source `(storyId, persoId, 'scroll')` via
-le port de capture player-scoped fourni au composant. Il lui transmet les
-samples et la frontière `scrollend`, sans choisir la règle ou l’event compilé.
-Le composant retire ses listeners à `sequence:end` et à la destruction ; un
-reset du player les rattache.
+À l’attache, la source de progression retient chaque perso `scroll-container`
+qui déclare une capture `scroll`, et attache `scroll`, `scrollend`, resize
+élément et resize viewport à sa racine matérialisée. Elle calcule la
+progression à l’attache puis coalesce les samples à une présentation. Au
+premier sample utile, elle ouvre la source `(storyId, persoId, 'scroll')` via
+le port de capture player-scoped. Elle lui transmet les samples et la frontière
+`scrollend`, sans choisir la règle ou l’event compilé. Elle retire ses
+listeners à `sequence:end` et à la destruction ; un reset du player les
+rattache.
 
 Le port est servi par le circuit commun
 [`RuntimeCaptureSourceCircuit`](../src/runtime/capture/capture-source-circuit.ts).
@@ -130,7 +116,7 @@ pointeurs.
 L’événement d’ouverture réutilise la portée `visibility` du contrat capture
 commun. Sans portée ou avec `story`, il vise la story du scroll-container ;
 `scene` et `public` utilisent la cible globale. Le résolveur partagé porte ce
-routage ; l’adaptateur scroll ne crée pas de chemin de dispatch spécifique.
+routage ; la source scroll ne crée pas de chemin de dispatch spécifique.
 
 Pour cette source, `trackCommand` peut retourner une collection ordonnée
 d’actions live :
@@ -230,13 +216,13 @@ batch sont traitées dans l’ordre des déclarations compilées.
 Au premier callback, la phase est synchronisée. Une action `liveAction` reçoit
 quand même le ratio de cette première mesure ; une déclaration `initial`
 compatible peut en plus produire l’event de phase correspondant. Si cette
-première mesure correspond à `initial` pendant l’état `ready`, l’adaptateur
+première mesure correspond à `initial` pendant l’état `ready`, la source
 diffère cette seule émission jusqu’au passage à `playing`, par le callback de
-cycle de vie existant et le port player existant. Il l’annule si la phase de la
+cycle de vie existant et le port player existant. Elle l’annule si la phase de la
 cible change avant la lecture. Les transitions ordinaires observées en `ready`
 ne sont pas rejouées.
 
-Après la première matérialisation, l’adaptateur résout une fois le parentage
+Après la première matérialisation, la source résout une fois le parentage
 logique courant. Sans `root`, il prend le premier scroll-container en remontant
 depuis le parent du perso ; avec `root`, il cherche cet ancêtre précis. La
 liaison reste attachée à ce scrollport pendant la durée de vie du player. Un
@@ -263,19 +249,19 @@ ordinaires.
 
 ## Cycle de vie et frontières
 
-- Après matérialisation, `ScrollContainerComponent.initialize()` attache la
-  progression et la capture à son node. Après `player.init()`, l’adaptateur
-  d’observation résout les racines persistantes des cibles via le résolveur HTML
-  en lecture et la scène logique résolue ; il n’attache aucun listener de
-  progression ou de capture au scrollport.
+- Après `player.init()`, la source de progression attache ses listeners aux
+  scrollports qui déclarent une capture `scroll`, et la source d’observation
+  résout les racines persistantes des cibles via le résolveur HTML en lecture
+  et la scène logique résolue ; elle n’attache aucun listener de progression
+  ou de capture au scrollport.
 - La progression continue pendant une pause temporelle et n’avance pas le
   temps CodPlay. Les phases d’intersection restent synchronisées pendant une
   pause, mais aucun event n’est émis hors de `playing` ou pendant un seek. Une
   action `liveAction` suit les ratios reçus pendant la pause. La reprise ne
   rejoue pas les transitions observées pendant la pause ; les émissions
   initiales en attente ne concernent que l’état `ready`.
-- Pendant un seek, le composant suspend sa source et annule sa session ; après
-  la reconstruction il reprend la progression. Les callbacks IO ne produisent
+- Pendant un seek, la source de progression suspend son échantillonnage et
+  annule sa session ; après la reconstruction elle reprend la progression. Les callbacks IO ne produisent
   aucun event ; les événements
   déjà présents dans le journal ne sont pas réémis par l’observation. Le seek
   annule la session scroll ouverte et les émissions initiales différées avant
@@ -287,25 +273,26 @@ ordinaires.
   reconstruire le journal.
 - À `sequence:end`, le hook observe l’event dans le callback public existant,
   après sa présentation et avant la finalisation terminale du player. Le
-  composant annule sa session et détache ses listeners ; l’adaptateur annule
-  ses observers. À la destruction, le composant retire ses ressources DOM et
-  l’adaptateur déconnecte ses observers et invalide sa file d’émissions.
+  source de progression annule sa session et détache ses listeners ; la source
+  d’observation annule ses observers. À la destruction, la source de
+  progression retire ses listeners et la source d’observation déconnecte ses
+  observers et invalide sa file d’émissions.
 - Au reset explicite du player, `ScrollContainerComponent.onReset()` ramène à
   zéro la position du scrollport sur l’axe de progression configuré (`scrollTop`
-  pour `block`, `scrollLeft` pour `inline`), puis rattache et échantillonne la
-  source. La coordonnée de l’autre axe reste inchangée. Ce comportement suit le
+  pour `block`, `scrollLeft` pour `inline`) ; la source de progression
+  rattache ensuite ses listeners et échantillonne. La coordonnée de l’autre axe reste inchangée. Ce comportement suit le
   hook de reset existant ; il ne change pas les règles d’observation `once`.
-- L’adaptateur ne possède ni runner, ni player, ni journal parallèle et
-  n’expose aucune cible DOM à l’auteur ou à la démo.
+- Les sources ne possèdent ni runner, ni player, ni journal parallèle et
+  n’exposent aucune cible DOM à l’auteur ou à la démo.
 
 ## Validation de la déclaration et diagnostics
 
-La compilation vérifie les exigences du composant et du module, le nom du tag,
+La compilation vérifie le nom du tag,
 la forme de `emit.observe`, l’existence d’une action TweenAction déclarée par
 `liveAction` sur le perso observé, l’existence du scroll-container désigné par
 `root` dans la même story, le seuil, les options de visibilité, les events
 déclarés et les combinaisons invalides. Après la première matérialisation,
-l’adaptateur valide l’ascendance réelle sur le graphe logique courant et signale
+la source d’observation valide l’ascendance réelle sur le graphe logique courant et signale
 un root absent ou non ancêtre. Aucun provider ni classe runtime n’est instancié
 pendant la compilation.
 
@@ -316,27 +303,32 @@ sont refusées.
 
 ## Fichiers de preuve et portée
 
-- Le contrôle des déclarations auteur dans CodPlay est
-  [`scroll-observation-validation.ts`](../src/scene/compiled/scroll-observation-validation.ts).
-  La validation et l’adaptation du composant sont dans
-  [`scroll-container-validation.ts`](../../authoring/component-v2/src/scroll-container/scroll-container-validation.ts),
-  [`scroll-container-component.ts`](../../authoring/component-v2/src/scroll-container/scroll-container-component.ts)
-  et [`scroll-container-source-adapter.ts`](../../authoring/component-v2/src/scroll-container/scroll-container-source-adapter.ts).
+- Le contrôle des déclarations auteur est
+  [`scroll-observation-validation.ts`](../src/scene/compiled/scroll-observation-validation.ts) ;
+  celui du profil est
+  [`scroll-container-validation.ts`](../src/runtime/components/scroll-container/scroll-container-validation.ts).
+- Le composant est
+  [`scroll-container-component.ts`](../src/runtime/components/scroll-container/scroll-container-component.ts) ;
+  les sources sont dans
+  [`runtime/runner-html/scroll-container/`](../src/runtime/runner-html/scroll-container/).
 - Le circuit commun source → règle compilée → session player est dans
   [`capture-source-circuit.ts`](../src/runtime/capture/capture-source-circuit.ts).
-- [`scroll-container-component-source.spec.ts`](../../authoring/component-v2/tests/scroll-container-component-source.spec.ts)
-  vérifie que l’initialisation attache au node matérialisé, coalesce les
-  samples, termine à `scrollend` et gère seek, sequence-end, reset et teardown.
-- [`scroll-container-player-integration.spec.ts`](../../authoring/component-v2/tests/scroll-container-player-integration.spec.ts)
+- [`scroll-container-sources.spec.ts`](../tests/runtime/runner-html/scroll-container-sources.spec.ts)
+  vérifie le calcul de la progression, l’attache au scrollport, la coalescence
+  des samples, la fin à `scrollend`, le seek, la fin de séquence, le reset et
+  le teardown de la source ; le reset du composant sur l’axe configuré ; et
+  l’ordre des transitions d’observation.
+- [`scroll-container-player-integration.spec.ts`](../tests/runtime/runner-html/scroll-container-player-integration.spec.ts)
   exerce la matérialisation DOM, le vrai `HtmlPlayerRunner`, le contrôleur de
   capture, le journal, seek et destruction.
-- [`scroll-container-providers.spec.ts`](../../authoring/component-v2/tests/scroll-container-providers.spec.ts)
-  vérifie le cycle de vie des providers, le calcul et la coalescence du
-  progress, ainsi que l’ordre des transitions d’observation.
+- [`scroll-container-observation-integration.spec.ts`](../tests/runtime/runner-html/scroll-container-observation-integration.spec.ts)
+  exerce les émissions initiales différées, leur annulation par seek, reset,
+  fin de séquence et destruction, et la resynchronisation après reset avec les
+  actions live.
 - [`capture-source-circuit.spec.ts`](../tests/runtime/capture/capture-source-circuit.spec.ts)
   vérifie la sélection par identité/source et le routage de l’événement
   d’ouverture selon les portées implicite, `story`, `scene` et `public`.
 - La scène réelle de validation est
   [`main.ts`](../../demos/src/v2/demos/scroll-container/main.ts). Elle
-  utilise les mêmes composants, le même circuit capture et le
-  même adaptateur d'observation que les intégrations applicatives.
+  utilise le même composant, le même circuit capture et les mêmes sources que
+  les intégrations applicatives.

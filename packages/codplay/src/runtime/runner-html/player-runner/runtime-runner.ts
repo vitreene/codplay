@@ -39,6 +39,7 @@ import {
   type HtmlMaterializerRuntimeContext,
 } from '../component-materializer'
 import { HtmlPersoEmitSourceAdapter } from '../perso-emit-source-adapter'
+import { HtmlScrollObservationSource, HtmlScrollProgressSource } from '../scroll-container'
 import { HtmlMotionContainerResolver } from '../motion-container'
 import { MotionMaterializer } from '../../motion'
 import type {
@@ -250,9 +251,12 @@ export class HtmlPlayerRunner {
       eventTarget,
       onDiagnostic: options.onEmitDiagnostic,
     })
-    this.sourceAdapters = (options.sourceAdapterFactories ?? []).map((factory) => (
-      factory(this.createSourceAdapterContext(options))
-    ))
+    const sourceContext = this.createSourceAdapterContext(options)
+    this.sourceAdapters = [
+      new HtmlScrollProgressSource(sourceContext, this.captureSourceCircuit),
+      new HtmlScrollObservationSource(sourceContext),
+      ...(options.sourceAdapterFactories ?? []).map((factory) => factory(sourceContext)),
+    ]
   }
 
   /** Initializes the visible player without preparing unseen motion groups. */

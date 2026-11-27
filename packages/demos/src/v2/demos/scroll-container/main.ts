@@ -1,12 +1,6 @@
-import type { CodPlayEngineOptions } from 'codplay'
 import type { SceneDoc } from 'codplay/scene/types'
 import { prepareTween, resolveTween } from 'ace'
 import chapterImageUrl from '../components/component-demo-image.svg?url'
-import {
-  SCROLL_CONTAINER_COMPONENT_DEFINITION,
-  SCROLL_CONTAINER_MODULE_DEFINITION,
-  createScrollContainerSourceAdapter,
-} from '@codplay/component-v2'
 
 const SCENE_ID = 'scroll-container-scene-v2'
 const STORY_ID = 'scroll-container-story'
@@ -21,6 +15,7 @@ const IMAGE_HIDDEN_OFFSET = '-112%'
 const CHAPTER_TITLE_LIGHTNESS = 42
 const CHAPTER_TITLE_CHROMA = 0.12
 const CHAPTER_TITLE_HUE_ROTATION = 90
+const CHAPTER_TITLE_COLOR_VARIABLE = '--chapter-title-color'
 
 type ScrollPerso = SceneDoc<string>['stories'][string]['persos'][number]
 
@@ -32,15 +27,6 @@ const CHAPTER_PASSAGES = [
   'La dernière partie demande un pas plus attentif. Le terrain devient irrégulier, mais le sommet n’est plus très loin. On suit les courbes du sentier plutôt que de couper à travers la pente. Quand la crête s’ouvre enfin, la vallée réapparaît sous un autre angle : le même paysage, vu depuis un point que l’on ne pouvait pas atteindre en restant immobile.',
   'La descente reprend le même chemin en sens inverse. Certains repères que l’on n’avait pas remarqués à l’aller deviennent évidents. En revenant, on voit aussi la pente autrement : ce qui paraissait lointain s’approche, puis disparaît derrière nous. Le parcours reste le même, mais le point de vue change à chaque pas.',
 ]
-
-/** Registers the optional source, module, and browser adapter for this scene. */
-export const engineCapabilities: Pick<CodPlayEngineOptions, 'components' | 'modules'> = {
-  components: { register: [SCROLL_CONTAINER_COMPONENT_DEFINITION] },
-  modules: { register: [SCROLL_CONTAINER_MODULE_DEFINITION] },
-}
-
-/** Returns the scroll source factory consumed by the shared HTML host. */
-export const sourceAdapterFactories = [createScrollContainerSourceAdapter]
 
 /** Creates the shared scroll demo scene with a long passage and an observed image. */
 export function createScene(): SceneDoc<string> {
@@ -171,7 +157,11 @@ function createProgressIndicator(): readonly ScrollPerso[] {
   ]
 }
 
-/** Creates one chapter parent, its sticky step title, and its unchanged passages. */
+/**
+ * Creates one chapter parent, its sticky step title, and its unchanged passages. The chapter
+ * itself is observed: its visible ratio rotates the title hue over the whole chapter height,
+ * through the `--chapter-title-color` variable read by the title.
+ */
 function createChapterSection(input: {
   id: string
   title: string
@@ -189,15 +179,26 @@ function createChapterSection(input: {
         tag: 'section',
         attr: { id: input.id },
         className: 'scroll-container__chapter',
+        style: { [CHAPTER_TITLE_COLOR_VARIABLE]: createChapterTitleColor(input.startHue) },
         move: { target: SCROLL_ID },
+      },
+      emit: {
+        observe: {
+          liveAction: `${input.id}:visibility`,
+          zone: { threshold: createVisibilityThresholds(input.thresholdCount) },
+        },
+      },
+      actions: {
+        [`${input.id}:visibility`]: {
+          duration: 1,
+          fn: createChapterTitleAction(createChapterTitleTween(input.startHue)),
+        },
       },
     },
     createObservedChapterTitle({
       id: `${input.id}-title`,
       parentId: input.id,
       content: input.title,
-      thresholdCount: input.thresholdCount,
-      startHue: input.startHue,
       once: input.once,
     }),
     ...createChapterPassages(input.firstPassageIndex, input.id, input.betweenPassages),
@@ -301,30 +302,26 @@ function createChapterTitleTween(startHue: number): ReturnType<typeof prepareTwe
   })
 }
 
-/** Resolves one title's prepared color from its visible ratio. */
+/** Resolves the chapter's title color from the chapter's visible ratio. */
 function createChapterTitleAction(tween: ReturnType<typeof prepareTween>) {
   return (input: { data: Readonly<Record<string, unknown>> }): Record<string, unknown> => ({
-    style: { backgroundColor: resolveTween(tween, input.data.ratio as number) },
+    style: { [CHAPTER_TITLE_COLOR_VARIABLE]: resolveTween(tween, input.data.ratio as number) },
   })
 }
 
-/** Creates evenly spaced visibility notifications for one observed title. */
+/** Creates evenly spaced visibility notifications for one observed chapter. */
 function createVisibilityThresholds(count: number): readonly number[] {
   return Array.from({ length: count + 1 }, (_, index) => index / count)
 }
 
-/** Creates a sticky chapter heading whose visibility rotates its OKLCH hue. */
+/** Creates a sticky chapter heading that announces its entry and exit; its color comes from its chapter. */
 function createObservedChapterTitle(input: {
   id: string
   parentId: string
   content: string
-  thresholdCount: number
-  startHue: number
   once?: boolean
 }): ScrollPerso {
-  const { id, parentId, content, thresholdCount, startHue, once = false } = input
-  const liveAction = `${id}:visibility`
-  const backgroundTween = createChapterTitleTween(startHue)
+  const { id, parentId, content, once = false } = input
   return {
     id,
     type: 'tag',
@@ -333,19 +330,13 @@ function createObservedChapterTitle(input: {
       attr: { id },
       content,
       className: 'scroll-container__chapter-title',
-      style: { backgroundColor: createChapterTitleColor(startHue) },
       move: { target: parentId },
     },
     emit: {
       observe: {
-        liveAction,
-        zone: { threshold: createVisibilityThresholds(thresholdCount) },
         enter: [{ name: `chapter:${id}:enter`, ...(once ? { once: true as const } : {}) }],
         leave: [{ name: `chapter:${id}:leave` }],
       },
-    },
-    actions: {
-      [liveAction]: { duration: 1, fn: createChapterTitleAction(backgroundTween) },
     },
   }
 }

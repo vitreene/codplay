@@ -3,7 +3,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Sighty } from '@codplay/sighty'
 import type { SightyScenarioMutation } from '@codplay/sighty'
-import { createScrollContainerSourceAdapter } from '@codplay/component-v2/scroll-container'
 import type { ElceSceneKey, ElceSlotName } from '../mods/learning/reading/learning-scenario-types'
 import { INITIAL_PROJECT_TEST_STATE } from '../mods/learning/reading/learning-test-state-types'
 import { BDC_TYPE, DEFAULT_PRESET_ID } from '../mods/learning/learning-definition'
@@ -211,19 +210,14 @@ describe('SCORM package state restoration', () => {
     const events: string[] = []
     let runtimeContext: Readonly<Record<string, unknown>> | undefined
     const contextUpdates: Readonly<Record<string, unknown>>[] = []
-    let sourceAdapterFactories: readonly unknown[] | undefined
     const mutations: SightyScenarioMutation<ElceSceneKey, ElceSlotName>[] = []
     let layoutTimelineMs = 12_345
     let destroyed = 0
     const loadSightyPackage = vi.fn(async (options: Readonly<{
       root: HTMLElement
-      codplay: Readonly<{
-        htmlHost: Readonly<{ sourceAdapterFactories: readonly unknown[] }>
-      }>
       runtime: Readonly<{ context: Readonly<Record<string, unknown>> }>
     }>) => {
       runtimeContext = options.runtime.context
-      sourceAdapterFactories = options.codplay.htmlHost?.sourceAdapterFactories
       return {
         runtime: {
           initialize: async () => {
@@ -284,7 +278,6 @@ describe('SCORM package state restoration', () => {
       'chapter-a': 'ITEM-a',
       'evaluation-a': 'ITEM-evaluation',
     })
-    expect(sourceAdapterFactories).toEqual([createScrollContainerSourceAdapter])
     expect(events).toEqual([
       'initialize',
       'updateContext',
@@ -496,7 +489,6 @@ describe('SCORM package state restoration', () => {
           instanceIds: Object.fromEntries(sceneKeys.map((sceneKey) => [sceneKey, `test-${sceneKey}`])) as Record<ElceSceneKey, string>,
           codplay: {
             engine: ELCE_ENGINE_CAPABILITIES,
-            htmlHost: options.codplay.htmlHost,
           },
         },
       })

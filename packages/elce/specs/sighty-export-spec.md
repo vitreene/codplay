@@ -51,11 +51,9 @@ Les styles communs du lecteur restent sur la scène layout et les styles
 produits par un builder restent sur la scène de page qui les utilise.
 
 `elce-engine.js` ne contient que les capacités Elcé nécessaires au catalogue
-CodPlay, ici les définitions du composant et du module `scroll-container`.
-L’adaptateur HTML optionnel reste raccordé par le player Elcé. Le bundle
-n’embarque pas la table de couleurs ACE : le validateur `component-v2` conserve
-son garde `isPlainRecord` local, et la configuration engine importe les seules
-définitions requises plutôt que la barre qui réexporte aussi cet adaptateur.
+CodPlay, ici celles de Rive. `scroll-container`, sa progression et ses
+observations font partie du cœur embarqué par `codplay.js` : ni définition ni
+adaptateur HTML ne sont fournis par Elcé.
 
 La diffusion Elcé utilise le format compact Sighty V2. `scenario.mjs` contient
 le graphe et les données nécessaires à l’exécution ainsi que les seuls
@@ -109,7 +107,7 @@ seconde. Les messages et les routes restent fournis par chaque mod.
   couleurs ACE, ainsi que le refus d’octets manquants pour un média utilisé.
   L’export complet s’exécute avec un répertoire de travail temporaire situé
   hors du dépôt.
-- [`scene-functions.test.ts`](../src/builders/scene-functions/scene-functions.test.ts)
+- [`scene-functions.test.ts`](../src/mods/learning/integration/scene-functions.test.ts)
   vérifie les straps Question, formulaire, Carousel et agrandissement avec des
   paramètres de scène fournis par l’état et les événements.
 - [`learning-sighty-export-client.test.ts`](../src/mods/learning/persistence/learning-sighty-export-client.test.ts)
@@ -122,12 +120,12 @@ seconde. Les messages et les routes restent fournis par chaque mod.
   libération de l’Object URL.
 - [`sighty-export-api-controller.test.ts`](../src/server/export/sighty-export-api-controller.test.ts)
   vérifie la réponse ZIP et l’absence d’écriture de persistance.
-- [`project-application.test.tsx`](../src/app/remix/project-application.test.tsx)
+- [`learning-project-application.test.tsx`](../src/mods/learning/authoring/learning-project-application.test.tsx)
   vérifie le bouton à droite de la barre de titre, son action, son état occupé
   et l’annonce du téléchargement. Pendant que la génération Sighty reste en
   attente, le test crée une page par l’interface : l’accès reste actif et le
   snapshot d’export demeure celui pris au démarrage ;
-  [`editor-workspace.test.tsx`](../src/app/remix/workspace/editor-workspace.test.tsx)
+  [`learning-workspace.test.tsx`](../src/mods/learning/authoring/learning-workspace.test.tsx)
   vérifie qu’il n’est plus rendu dans la barre de commandes responsive.
 - Safari, le 20 octobre 2026, sur `http://localhost:5175`, exporte le Projet 1
   depuis l’interface avec ses deux médias référencés : les deux lectures

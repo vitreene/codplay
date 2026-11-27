@@ -1,6 +1,6 @@
 import { Sighty } from '@codplay/sighty'
 import { createInitialCourseSignet, getCoursePage } from './course-data'
-import { engineCapabilities, sceneRootStyleSheet, sourceAdapterFactories } from './engine-config'
+import { engineCapabilities, sceneRootStyleSheet } from './engine-config'
 import { COURSE_EVENTS } from './messages'
 import { createCourseScenario, type CourseSceneKey, type CourseSlotName } from './scenario'
 
@@ -44,7 +44,6 @@ export class CourseComposition {
               options.onLog(diagnostic.message, diagnostic.severity === 'warning' ? 'warn' : 'error')
             },
           },
-          htmlHost: { sourceAdapterFactories },
           pauseOnDocumentHidden: false,
         },
       },

@@ -221,13 +221,14 @@ journal.
 
 Les sources utilisent le port borné `RuntimeCaptureSourcePort`. L’adaptateur
 pointeur garde l’association des événements natifs aux persos et la conversion
-des samples ; il utilise le même circuit. Un composant peut aussi recevoir ce
-port player-scoped et ouvrir sa source à partir de son identité compilée. Pour
-le scroll, `ScrollContainerComponent.initialize()` attache les listeners à la
-racine matérialisée et demande au circuit la règle `scroll` de ce perso. La
-factory HTML `scroll-container` reste propriétaire des observations de
-descendants ; elle ne résout ni le scrollport ni ses captures. Le contexte de
-factory n’expose aucune opération de capture bas niveau. Les contrats propres
+des samples ; il utilise le même circuit. Un composant reçoit aussi ce port
+player-scoped et peut ouvrir sa source à partir de son identité compilée. La
+source HTML de progression du
+runner fait de même pour le scroll : elle attache ses listeners au scrollport
+matérialisé et ouvre la règle `scroll` de ce perso par son identité compilée.
+La source d’observation des descendants n’utilise pas ce port et n’ouvre pas de
+session. Le contexte des sources HTML fournies par l’hôte n’expose aucune
+opération de capture bas niveau. Les contrats propres
 au scroll sont dans la
 [spécification scroll-container](./scroll-container-spec.md).
 
@@ -245,6 +246,6 @@ les [déclarations auteur](../src/scene/capture/authoring-types.ts), le
 [adaptateur pointeur](../tests/runtime/capture/html-pointer-capture-source-adapter.spec.ts)
 et [codec](../tests/scene/compiled/codec.spec.ts) couvrent les frontières
 source-agnostiques et leurs portées. Le test d’intégration scroll avec le vrai
-[`HtmlPlayerRunner`](../../authoring/component-v2/tests/scroll-container-player-integration.spec.ts)
+[`HtmlPlayerRunner`](../tests/runtime/runner-html/scroll-container-player-integration.spec.ts)
 vérifie le passage du node matérialisé au circuit, au contrôleur et au journal,
 y compris seek et teardown.

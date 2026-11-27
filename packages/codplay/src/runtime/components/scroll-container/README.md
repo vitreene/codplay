@@ -14,39 +14,11 @@ Il fournit deux fonctions indépendantes :
 Ces fonctions lisent la géométrie réelle du navigateur. Elles ne font pas
 avancer le temps CodPlay.
 
-## Enregistrer la capacité
+## Disponibilité
 
-La capacité est optionnelle. Une application qui l’utilise enregistre le
-composant, son module et l’adaptateur HTML :
-
-~~~ts
-import { CodPlay } from 'codplay'
-import {
-  SCROLL_CONTAINER_COMPONENT_DEFINITION,
-  SCROLL_CONTAINER_MODULE_DEFINITION,
-  createScrollContainerSourceAdapter,
-} from '@codplay/component-v2'
-
-const codplay = new CodPlay({
-  engine: {
-    components: { register: [SCROLL_CONTAINER_COMPONENT_DEFINITION] },
-    modules: { register: [SCROLL_CONTAINER_MODULE_DEFINITION] },
-  },
-  htmlHost: {
-    sourceAdapterFactories: [createScrollContainerSourceAdapter],
-  },
-})
-~~~
-
-Ces trois éléments ont des rôles distincts :
-
-- la définition du composant permet de matérialiser `type: 'scroll-container'` ;
-- la définition du module déclare la capacité requise par la scène ;
-- l’adaptateur HTML relie les observations logiques aux éléments du navigateur.
-
-Dans une application qui enregistre déjà d’autres capacités, ajoutez ces
-éléments aux listes existantes. Sans cet enregistrement, l’engine ne crée pas
-le composant et ne branche pas les observations.
+`scroll-container` est un type du cœur de CodPlay. Il n'y a rien à enregistrer :
+le composant, la progression du défilement et l'observation des persos enfants
+sont disponibles dans toute instance HTML.
 
 ## Déclarer le scrollport
 
@@ -365,8 +337,6 @@ journal ni par listen ou les straps.
 
 ## Erreurs fréquentes
 
-- Enregistrer le composant sans enregistrer son module, ou sans fournir
-  `createScrollContainerSourceAdapter` au host HTML.
 - Déclarer `observe` sur le scrollport lui-même au lieu de le porter par un perso
   enfant placé dans ce scrollport.
 - Oublier `move.target`, ou choisir un `root` qui n’est pas un ancêtre logique.
@@ -377,18 +347,9 @@ journal ni par listen ou les straps.
   `emit.scroll` est nécessaire pour ouvrir une activité et fermer la session sur
   `scrollend`.
 
-## Exports publics
+## Types publics
 
-Le point d’entrée `@codplay/component-v2` exporte :
-
-- SCROLL_CONTAINER_COMPONENT_DEFINITION ;
-- SCROLL_CONTAINER_MODULE_DEFINITION et
-  SCROLL_CONTAINER_MODULE_SERVICE_ID ;
-- ScrollContainerComponent ;
-- ScrollContainerInitial, ScrollObservationDeclaration et ScrollProgressAxis ;
-- createScrollContainerSourceAdapter ;
-- validateScrollContainerInitial.
-
-Les détails de validation, de compilation et de cycle de vie certifié sont
-conservés dans la spécification CodPlay :
+Le point d’entrée `codplay` exporte `ScrollContainerInitial` et
+`ScrollProgressAxis`. Les détails de validation, de compilation et de cycle de
+vie certifié sont dans la spécification CodPlay :
 packages/codplay/specs/scroll-container-spec.md.

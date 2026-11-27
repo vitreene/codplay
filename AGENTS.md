@@ -11,6 +11,11 @@
 - In Editor, authored lengths, palette controls, and persisted data use cqw.
   Keep physical pixel measurements confined to transient DOM projection;
   never convert or save authoring values in pixels.
+- Never measure an element's geometry with `getBoundingClientRect`: it ignores
+  the transform a parent applies to its child. Compose geometry with the affine
+  capture (`captureHtmlPose`) and local box sizes. Exactly two cases are
+  authorized: measuring the root frame, and the parent-matrix computation
+  function itself.
 - Apply KISS and DRY: prefer the simplest implementation that satisfies the established contract, reuse existing logic, and avoid speculative abstractions, wrappers, and duplicated circuits.
 - Use English for function names and variable names.
 - Use kebab-case for file names.
@@ -178,7 +183,7 @@
   authorize CodPlay core changes or bypass accepted-plan gates.
 - A handoff report is a snapshot for transfer, not an accumulating journal or
   a substitute for study notes, an execution plan, or a delivered specification.
-- Before resuming CodPlay V2 work, read [`packages/codplay/plan/notes/2026-08-26-decouverte-etat-codplay-v2.md`](packages/codplay/plan/notes/2026-08-26-decouverte-etat-codplay-v2.md) after identifying the applicable detailed plan.
+- Before resuming CodPlay V2 work, identify the applicable detailed plan in the [CodPlay V2 index](packages/codplay/plan/codplay-v2-plan.md), then read its owning specification.
 
 ## Module status
 

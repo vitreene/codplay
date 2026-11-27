@@ -74,7 +74,7 @@ precedence are outside the verified contract.
 | Image, form control, media, polygon | `img`, `input`, `media`, `polygon`, with the corresponding profile |
 | A host for another representation or instance | `slot`, with its immutable root-level `name` |
 | An ordered list | `list`, with its [capability contract](../../../../packages/codplay/specs/list-capability-v2-spec.md) |
-| A scroll source/container | Optional `scroll-container` integration; register it before build |
+| A scroll source/container | Core `scroll-container` type; nothing to register |
 | Camera, Rive state machine, Avatar feature | Registered native component and immutable `initial.rel`; see [native rendering](native-rendering.md) |
 
 Core types are `tag`, `text`, `img`, `input`, `layout`, `list`, `media`,

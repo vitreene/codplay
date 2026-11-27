@@ -1,5 +1,4 @@
 import { ELCE_EVENTS, ELCE_SCENARIO, ELCE_SCENARIO_HANDLERS } from '../mods/learning/reading/learning-reading-events'
-import { createScrollContainerSourceAdapter } from '@codplay/component-v2/scroll-container'
 import type { SightyRuntimeApi, SightyScenarioMutation, SightyViewAction } from '@codplay/sighty'
 import type { CodPlayTelco } from 'codplay'
 import { learningTestStateService } from '../mods/learning/reading/learning-test-state-service'
@@ -47,11 +46,6 @@ type ElceScormPackageRuntime = Pick<
 export interface ElceScormPackageLoader {
   (options: Readonly<{
     root: HTMLElement
-    codplay: Readonly<{
-      htmlHost: Readonly<{
-        sourceAdapterFactories: readonly (typeof createScrollContainerSourceAdapter)[]
-      }>
-    }>
     runtime: Readonly<{ context: Readonly<Record<string, unknown>> }>
   }>): Promise<Readonly<{
     runtime: ElceScormPackageRuntime
@@ -151,9 +145,6 @@ export async function startElceScormPackageRuntime(
     }
     course = await options.loadSightyPackage({
       root: options.root,
-      codplay: {
-        htmlHost: { sourceAdapterFactories: [createScrollContainerSourceAdapter] },
-      },
       runtime: {
         context: runtimeContext,
       },

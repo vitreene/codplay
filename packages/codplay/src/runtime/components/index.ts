@@ -29,6 +29,7 @@ export {
   validatePolygonInitial,
 } from './polygon'
 export { TagComponent, sanitizeTagInitial, validateTagAction, validateTagInitial } from './tag'
+export { ScrollContainerComponent, resolveScrollProgressAxis, validateScrollContainerInitial } from './scroll-container'
 export {
   ForeignContentComponent,
   SlotComponent,
@@ -94,6 +95,12 @@ export type {
   SlotState,
 } from './slot'
 export type { TagAction, TagInitial, TagState } from './tag'
+export type {
+  ScrollContainerAction,
+  ScrollContainerInitial,
+  ScrollContainerState,
+  ScrollProgressAxis,
+} from './scroll-container'
 export { TextComponent, sanitizeTextInitial, validateTextAction, validateTextInitial } from './text'
 export type { TextAction, TextInitial, TextReplace, TextState } from './text'
 export {

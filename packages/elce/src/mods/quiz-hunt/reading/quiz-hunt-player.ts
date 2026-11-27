@@ -1,4 +1,3 @@
-import { createScrollContainerSourceAdapter } from '@codplay/component-v2/scroll-container'
 import type { SightyScenarioDefinition } from '@codplay/sighty'
 import type { QuizHuntDocument } from '../document/quiz-hunt-document-types'
 import { ELCE_ENGINE_CAPABILITIES } from '../../../player/elce-player-engine'
@@ -91,7 +90,6 @@ export class QuizHuntPlayer {
             this.options.onLog?.(diagnostic.message, diagnostic.severity === 'warning' ? 'warn' : 'error')
           },
         },
-        htmlHost: { sourceAdapterFactories: [createScrollContainerSourceAdapter] },
         pauseOnDocumentHidden: false,
       },
     })

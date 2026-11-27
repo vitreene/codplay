@@ -1,5 +1,4 @@
 import type { SightyScenarioDefinition } from '@codplay/sighty'
-import { createScrollContainerSourceAdapter } from '@codplay/component-v2/scroll-container'
 import { RIVE_PRELOAD_STRATEGIES } from '@codplay/component-v2'
 import { ELCE_EVENTS, ELCE_SCENARIO } from './learning-reading-events'
 import { learningScenarioBuilder } from './learning-scenario-builder'
@@ -92,7 +91,6 @@ export class LearningPlayer {
             },
           },
           preload: { strategies: RIVE_PRELOAD_STRATEGIES },
-          htmlHost: { sourceAdapterFactories: [createScrollContainerSourceAdapter] },
           ...(options.frameScheduler === undefined ? {} : { frameScheduler: options.frameScheduler }),
           pauseOnDocumentHidden: false,
         },

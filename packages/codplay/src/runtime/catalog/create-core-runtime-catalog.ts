@@ -37,6 +37,7 @@ import {
   RuntimeCapabilityCatalog,
   type RuntimeComponentDefinition,
 } from './runtime-capability-catalog'
+import { ScrollContainerComponent, validateScrollContainerInitial } from '../components/scroll-container'
 import { createMarkupModuleServiceDefinition } from '../capabilities/markup'
 import { createListModuleServiceDefinition } from '../capabilities/list'
 import { createMediaSyncModuleServiceDefinition } from '../capabilities/media-sync'
@@ -74,6 +75,7 @@ export function createCoreRuntimeCatalog(): RuntimeCapabilityCatalog {
   catalog.registerComponent(coreListDefinition, 'core')
   catalog.registerComponent(corePolygonDefinition, 'core')
   catalog.registerComponent(coreSlotDefinition, 'core')
+  catalog.registerComponent(coreScrollContainerDefinition, 'core')
   return catalog
 }
 
@@ -166,6 +168,15 @@ const corePolygonDefinition: RuntimeComponentDefinition = {
   validateAction: validatePolygonAction,
   sanitizeInitial: sanitizePolygonInitial,
   sanitizeAction: sanitizePolygonAction,
+}
+
+/** Creates the core scrollport declaration; its progress and observations are HTML sources of the runner. */
+const coreScrollContainerDefinition: RuntimeComponentDefinition = {
+  type: 'scroll-container',
+  component: ScrollContainerComponent,
+  modules: [],
+  validateInitial: validateScrollContainerInitial,
+  sanitizeInitial: sanitizeTagInitial,
 }
 
 /** Creates the core opaque foreign-content host declaration. */

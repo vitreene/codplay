@@ -73,6 +73,7 @@
   align-items: center;
   border: 1px solid #374456;
   border-radius: 0.8rem;
+  background-color: var(--chapter-title-color);
   color: #eff6ff;
   font-size: 1.35rem;
 }

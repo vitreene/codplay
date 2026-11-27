@@ -99,19 +99,6 @@ export {
   createAvatarBreathTrigger,
   createAvatarHeadDrift,
 } from './avatar'
-export {
-  SCROLL_CONTAINER_COMPONENT_DEFINITION,
-  SCROLL_CONTAINER_MODULE_DEFINITION,
-  SCROLL_CONTAINER_MODULE_SERVICE_ID,
-  ScrollContainerComponent,
-  createScrollContainerSourceAdapter,
-  validateScrollContainerInitial,
-} from './scroll-container'
-export type {
-  ScrollContainerInitial,
-  ScrollObservationDeclaration,
-  ScrollProgressAxis,
-} from './scroll-container'
 export type {
   AvatarGestureFrame,
   AvatarGestureAction,

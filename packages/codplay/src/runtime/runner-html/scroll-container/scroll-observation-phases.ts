@@ -1,39 +1,45 @@
-import { AbstractLiveSourceProvider } from './abstract-live-source-provider'
 import type {
-  ScrollObservationEmission,
-  ScrollObservationPhase,
-  ScrollObservationPhaseUpdate,
-  ScrollObservationUpdate,
   ScrollObservationBatch,
+  ScrollObservationPhase,
   ScrollObservationRule,
+  ScrollObservationUpdate,
 } from './scroll-source-types'
 
-/** Selects declared enter/leave events from DOM-free phase changes. */
-export class IntersectionObservationProvider extends AbstractLiveSourceProvider {
+/** Selects declared enter/leave events and ratio actions from DOM-free phase updates. */
+export class ScrollObservationPhases {
   private readonly rules: readonly ScrollObservationRule[]
-  private readonly rulesById: ReadonlyMap<string, ScrollObservationRule>
+  private readonly ruleIds: ReadonlySet<string>
   private readonly phases = new Map<string, ScrollObservationPhase>()
+  private attached = false
 
-  /** Creates a deterministic provider whose rules stay in compiled order. */
+  /** Keeps the rules in compiled declaration order; ids must be unique. */
   constructor(rules: readonly ScrollObservationRule[]) {
-    super()
-    const rulesById = new Map<string, ScrollObservationRule>()
+    const ruleIds = new Set<string>()
     for (const rule of rules) {
-      if (rulesById.has(rule.id)) {
-        throw new Error(`Duplicate scroll observation rule id: ${rule.id}`)
-      }
-      rulesById.set(rule.id, rule)
+      if (ruleIds.has(rule.id)) throw new Error(`Duplicate scroll observation rule id: ${rule.id}`)
+      ruleIds.add(rule.id)
     }
     this.rules = [...rules]
-    this.rulesById = rulesById
+    this.ruleIds = ruleIds
+  }
+
+  /** Starts accepting observer batches. */
+  attach(): void {
+    this.attached = true
+  }
+
+  /** Stops accepting batches and forgets the phases, so the next callback synchronizes again. */
+  detach(): void {
+    this.attached = false
+    this.phases.clear()
   }
 
   /** Applies one callback batch and selects ratio actions plus phase events. */
   update(updates: readonly ScrollObservationUpdate[]): ScrollObservationBatch {
-    if (!this.isAttached()) return { emissions: [], liveActions: [] }
+    if (!this.attached) return { emissions: [], liveActions: [] }
     const latestByRule = new Map<string, ScrollObservationUpdate>()
     for (const update of updates) {
-      if (this.rulesById.has(update.ruleId)) latestByRule.set(update.ruleId, update)
+      if (this.ruleIds.has(update.ruleId)) latestByRule.set(update.ruleId, update)
     }
 
     const emissions: ScrollObservationBatch['emissions'][number][] = []
@@ -60,9 +66,7 @@ export class IntersectionObservationProvider extends AbstractLiveSourceProvider 
             : undefined
         if (initialPhase === undefined || initialPhase !== update.phase) continue
       } else if (previousPhase === update.phase) continue
-      const events = update.phase === 'inside'
-        ? rule.declaration.enter
-        : rule.declaration.leave
+      const events = update.phase === 'inside' ? rule.declaration.enter : rule.declaration.leave
       for (const event of events ?? []) {
         emissions.push({
           ruleId: rule.id,
@@ -75,15 +79,5 @@ export class IntersectionObservationProvider extends AbstractLiveSourceProvider 
       }
     }
     return { emissions, liveActions }
-  }
-
-  /** Keeps the phase-only provider surface for callers that do not use ratios. */
-  updatePhases(updates: readonly ScrollObservationPhaseUpdate[]): readonly ScrollObservationEmission[] {
-    return this.update(updates.map((update) => ({ ...update, ratio: 0 }))).emissions
-  }
-
-  /** Resets phases whenever the source is detached from its current roots. */
-  protected override onDetach(): void {
-    this.phases.clear()
   }
 }

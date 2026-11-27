@@ -6,8 +6,8 @@
 >
 > 2026-11-27 : scroll-container n'est pas un bon candidat pour concevoir le
 > composant externe (imbrication forte dans le cœur, pas assez de recul).
-> L'API externe sera conçue sur des exemples plus simples. Revue du composant
-> scroll : [plan dédié](./2026-11-27-scroll-container-review-plan.md).
+> L'API externe sera conçue sur des exemples plus simples. scroll-container
+> est devenu un type du cœur : voir sa [spécification](../specs/scroll-container-spec.md).
 
 ## Intention de départ (utilisateur, 2026-11-27)
 

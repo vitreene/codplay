@@ -1,21 +1,14 @@
 // @vitest-environment jsdom
-import { SceneBuilder } from 'codplay/scene/compiled'
-import type { AuthorCaptureEndInput, AuthorCaptureTrackInput } from 'codplay/scene/capture'
-import type { SceneDoc } from 'codplay/scene/types'
-import { createCoreRuntimeCatalog } from 'codplay/runtime/catalog'
-import { HtmlPlayerRunner } from 'codplay/runtime/runner-html'
+import { SceneBuilder } from '../../../src/scene/compiled'
+import type { AuthorCaptureEndInput, AuthorCaptureTrackInput } from '../../../src/scene/capture'
+import type { SceneDoc } from '../../../src/scene/types'
+import { createCoreRuntimeCatalog } from '../../../src/runtime/catalog'
+import { HtmlPlayerRunner } from '../../../src/runtime/runner-html'
 import { expect, it, vi } from 'vitest'
-import {
-  SCROLL_CONTAINER_COMPONENT_DEFINITION,
-  SCROLL_CONTAINER_MODULE_DEFINITION,
-  createScrollContainerSourceAdapter,
-} from '../src/scroll-container'
 
-/** Builds a real runner scene with a component-owned scroll capture source. */
+/** Builds a real runner scene whose scroll-container declares a scroll capture. */
 function createRunner(root: HTMLElement): HtmlPlayerRunner {
   const catalog = createCoreRuntimeCatalog()
-  catalog.registerComponent(SCROLL_CONTAINER_COMPONENT_DEFINITION)
-  catalog.registerModule(SCROLL_CONTAINER_MODULE_DEFINITION)
   const scene = {
     id: 'scroll-container-player-integration',
     stories: {
@@ -60,7 +53,6 @@ function createRunner(root: HTMLElement): HtmlPlayerRunner {
     functions: build.functions,
     root,
     catalog,
-    sourceAdapterFactories: [createScrollContainerSourceAdapter],
   })
 }
 

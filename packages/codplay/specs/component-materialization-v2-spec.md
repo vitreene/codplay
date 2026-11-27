@@ -19,17 +19,18 @@ confirme qu’un composant générique peut être mis à jour sans représentati
 markup et que le composant HTML conserve `node === null` avant matérialisation.
 
 Le runtime appelle `BaseComponent.initialize()` après la matérialisation de la
-racine HTML et avant le premier update logique. Les composants qui possèdent une
-source continue peuvent y attacher leurs listeners à cette racine. Le runtime
-leur fournit alors, si nécessaire, le port player-scoped optionnel
-`captureSources` ; le contrat du port partagé est décrit dans la
-[spécification capture](./capture-v2-spec.md).
+racine HTML et avant le premier update logique. Un composant peut y préparer
+l’état qu’il possède sur cette racine, comme les réservations de lignes de
+`layout`. Les composants qui possèdent une source continue peuvent y attacher
+leurs listeners. Le runtime fournit à chaque composant le port player-scoped
+optionnel `captureSources`, celui du runner ; le contrat du port partagé est
+décrit dans la [spécification capture](./capture-v2-spec.md).
 
 Le runtime transmet aussi aux composants les frontières `beforeSeek()`,
-`afterSeek()`, `onSequenceEnd()` et `onReset()` pour suspendre, reprendre ou
-retirer leurs sources selon le cycle du player. `destroy()` libère leurs
-ressources au teardown. Le test d’intégration du scroll vérifie ces frontières
-avec un vrai `HtmlPlayerRunner` et une racine DOM matérialisée.
+`afterSeek()`, `onSequenceEnd()` et `onReset()` selon le cycle du player.
+`destroy()` libère leurs ressources au teardown. Le test des réservations de
+`layout` vérifie le recalcul après un seek du vrai `HtmlPlayerRunner`, et le
+test du composant `scroll-container` vérifie son reset sur l’axe configuré.
 
 Le test du runtime composant confirme que les instances sont conservées pendant
 les synchronisations de snapshots et détruites au teardown final. Un échantillon
@@ -225,9 +226,13 @@ ensemble.
 - [`runtime-component-runtime.spec.ts`](../tests/runtime/components/runtime-component-runtime.spec.ts)
   vérifie la persistance des instances, le teardown et l'échantillonnage de
   présentation sans nouvel update logique.
-- [`scroll-container-player-integration.spec.ts`](../../authoring/component-v2/tests/scroll-container-player-integration.spec.ts)
-  vérifie l’initialisation d’une source sur la racine matérialisée et ses
-  frontières seek, fin de séquence, reset et teardown dans le runner réel.
+- [`layout-flow-reservation.spec.ts`](../tests/runtime/components/layout-flow-reservation.spec.ts)
+  vérifie l’initialisation sur la racine matérialisée et le recalcul après le
+  seek du runner réel ;
+  [`scroll-container-sources.spec.ts`](../tests/runtime/runner-html/scroll-container-sources.spec.ts)
+  vérifie le reset du composant `scroll-container`.
+- [`component-capture-port.spec.ts`](../tests/runtime/components/component-capture-port.spec.ts)
+  vérifie qu’un composant enregistré reçoit le port de capture du runner réel.
 - [`runtime-capability-catalog.spec.ts`](../tests/runtime/catalog/runtime-capability-catalog.spec.ts)
   vérifie les services déclarés, leur compatibilité avec le materializer et le
   snapshot partagé par le build et le runtime.

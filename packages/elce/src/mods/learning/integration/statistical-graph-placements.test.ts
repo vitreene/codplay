@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { CodPlay } from 'codplay'
-import {
-  SCROLL_CONTAINER_COMPONENT_DEFINITION,
-  SCROLL_CONTAINER_MODULE_DEFINITION,
-} from '@codplay/component-v2'
 import { BDC_TYPE, DEFAULT_PRESET_ID, PAGE_TYPE } from '../learning-definition'
 import { PAGE_LOCATION } from '../organization/learning-page-placement'
 import { STATISTICAL_GRAPH_RENDERING } from '../../../resources/bdcs/statistical-graph/statistical-graph-config'
@@ -224,8 +220,6 @@ function compileScene(scene: Parameters<CodPlay['build']>[0]['scene']) {
     pauseOnDocumentHidden: false,
     engine: {
       idle: false,
-      components: { register: [SCROLL_CONTAINER_COMPONENT_DEFINITION] },
-      modules: { register: [SCROLL_CONTAINER_MODULE_DEFINITION] },
     },
   })
   try {
