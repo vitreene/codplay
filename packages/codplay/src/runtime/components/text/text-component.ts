@@ -1,5 +1,5 @@
 import { BaseHTMLComponent } from '../base-html-component'
-import type { ComponentUpdateInput, HTMLComponentInput } from '../component-types'
+import type { ComponentUpdateInput, ComponentInput } from '../component-types'
 import type { TextInitial, TextState } from './text-types'
 
 /** Rich HTML text component retained from the V1 text-content behavior. */
@@ -8,7 +8,7 @@ export class TextComponent extends BaseHTMLComponent<TextInitial> {
   static readonly declaredServices = ['className', 'style', 'attr'] as const
 
   /** Creates one rich text component using the shared presentation services. */
-  constructor(input: HTMLComponentInput<TextInitial>) {
+  constructor(input: ComponentInput<TextInitial>) {
     super(input)
     this.services.declare(TextComponent.declaredServices)
   }

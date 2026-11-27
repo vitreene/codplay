@@ -4,7 +4,6 @@ import type {
   ComponentInput,
   ComponentServices,
   ComponentUpdateInput,
-  HTMLComponentInput,
 } from '../../../src/runtime/components'
 
 /** Creates the minimal component-scoped service facade used by boundary tests. */
@@ -27,7 +26,7 @@ class GenericComponent extends BaseComponent<Record<string, unknown>> {
 
 class HtmlProbeComponent extends BaseHTMLComponent<Record<string, unknown>> {
   /** Creates one HTML probe with the specialized service boundary. */
-  constructor(input: HTMLComponentInput) {
+  constructor(input: ComponentInput) {
     super(input)
   }
 
@@ -55,7 +54,7 @@ describe('component base boundaries', () => {
   })
 
   it('keeps markup concerns on the HTML specialization', () => {
-    const input: HTMLComponentInput = {
+    const input: ComponentInput = {
       services: testServices(),
       perso: { id: 'html', storyId: 'main', initial: {} },
     }

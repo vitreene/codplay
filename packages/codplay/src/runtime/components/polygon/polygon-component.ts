@@ -5,7 +5,7 @@ import type {
   ComponentActionOccurrence,
   ComponentAnimation,
   ComponentUpdateInput,
-  HTMLComponentInput,
+  ComponentInput,
 } from '../component-types'
 import {
   resolveMorphPathString,
@@ -48,7 +48,7 @@ export class PolygonComponent extends BaseHTMLComponent<PolygonInitial> {
   private activeMorph: ActiveMorph | null = null
 
   /** Creates one polygon component with root/part service bindings. */
-  constructor(input: HTMLComponentInput<PolygonInitial>) {
+  constructor(input: ComponentInput<PolygonInitial>) {
     super(input)
     this.services.declare(PolygonComponent.declaredServices)
   }

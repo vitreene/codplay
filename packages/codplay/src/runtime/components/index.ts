@@ -119,8 +119,6 @@ export type {
   ComponentAnimation,
   ComponentAnimationFrame,
   ComponentAnimationPresentationPhase,
-  HTMLComponentInput,
-  HTMLComponentServices,
   ComponentUpdateInput,
   MaterializedPart,
   MaterializedPartKind,

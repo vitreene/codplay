@@ -1,5 +1,5 @@
 import { BaseHTMLComponent } from '../base-html-component'
-import type { ComponentUpdateInput, HTMLComponentInput } from '../component-types'
+import type { ComponentUpdateInput, ComponentInput } from '../component-types'
 import type { TagInitial, TagState } from './tag-types'
 
 /** V2 template-string component for a plain HTML tag. */
@@ -8,7 +8,7 @@ export class TagComponent extends BaseHTMLComponent<TagInitial> {
   static readonly declaredServices = ['className', 'style', 'attr', 'content'] as const
 
   /** Creates one tag component and declares only its own services. */
-  constructor(input: HTMLComponentInput<TagInitial>) {
+  constructor(input: ComponentInput<TagInitial>) {
     super(input)
     this.services.declare(TagComponent.declaredServices)
   }

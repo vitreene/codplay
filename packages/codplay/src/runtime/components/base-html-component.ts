@@ -1,5 +1,5 @@
 import type {
-  HTMLComponentInput,
+  ComponentInput,
   MaterializedPart,
 } from './component-types'
 import { BaseComponent } from './base-component'
@@ -11,7 +11,7 @@ export abstract class BaseHTMLComponent<Initial extends Record<string, unknown>>
   private parts: readonly MaterializedPart[] = []
 
   /** Creates one markup component through the substrate-neutral component boundary. */
-  constructor(input: HTMLComponentInput<Initial>) {
+  constructor(input: ComponentInput<Initial>) {
     super(input)
   }
 

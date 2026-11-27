@@ -1,3 +1,5 @@
+import { captureHtmlPose, worldDeltaToLocalDelta } from '../../motion/html-pose'
+import type { HtmlPose } from '../../motion/html-types'
 import type { LayoutFlowReservation } from './layout-flow-reservation-types'
 
 type FlowPart = {
@@ -95,9 +97,11 @@ export class LayoutFlowReservationController {
   /** Moves one existing slot after its visual line and sizes its reservation. */
   private placeAfterLine(part: FlowPart): void {
     if (part.paragraph === null) return
-    const lineTop = part.node.getClientRects()[0]?.top
+    // Line positions are read in the paragraph's own frame, so a transformed ancestor does not skew them.
+    const pose = captureHtmlPose(part.paragraph)
+    const lineTop = readLocalTop(part.node.getClientRects()[0], pose)
     if (lineTop === undefined) return
-    const boundary = this.findNextLine(part, lineTop)
+    const boundary = this.findNextLine(part, lineTop, pose)
     if (boundary === null) {
       part.paragraph.append(part.node)
     } else {
@@ -112,7 +116,7 @@ export class LayoutFlowReservationController {
   }
 
   /** Finds the first text character rendered below the slot's natural line. */
-  private findNextLine(part: FlowPart, lineTop: number): { node: Text; offset: number } | null {
+  private findNextLine(part: FlowPart, lineTop: number, pose: HtmlPose): { node: Text; offset: number } | null {
     if (part.paragraph === null) return null
     const iterator = part.paragraph.ownerDocument.createTreeWalker(part.paragraph, NodeFilter.SHOW_TEXT)
     const range = part.paragraph.ownerDocument.createRange()
@@ -123,7 +127,7 @@ export class LayoutFlowReservationController {
         for (let offset = 0; offset < text.length; offset += 1) {
           range.setStart(text, offset)
           range.setEnd(text, offset + 1)
-          const top = range.getClientRects()[0]?.top
+          const top = readLocalTop(range.getClientRects()[0], pose)
           if (top !== undefined && top > lineTop + 1) return { node: text, offset }
         }
       }
@@ -131,6 +135,12 @@ export class LayoutFlowReservationController {
     }
     return null
   }
+}
+
+/** Projects the top-left corner of one client rect onto the paragraph's local vertical axis. */
+function readLocalTop(rect: DOMRect | undefined, pose: HtmlPose): number | undefined {
+  if (rect === undefined) return undefined
+  return worldDeltaToLocalDelta(pose.matrix, rect.left - pose.origin.x, rect.top - pose.origin.y).y
 }
 
 /** Orders reservations by their immutable source positions in the authored markup. */

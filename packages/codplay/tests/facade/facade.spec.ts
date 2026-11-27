@@ -15,7 +15,7 @@ import * as publicApi from '../../src'
 import { BaseHTMLComponent } from '../../src/runtime/components'
 import type {
   ComponentUpdateInput,
-  HTMLComponentInput,
+  ComponentInput,
 } from '../../src/runtime/components'
 import type {
   RuntimeComponentDefinition,
@@ -204,7 +204,7 @@ function createCodPlay(options: CodPlayOptions = {}): CodPlay {
 class RegistryComponent extends BaseHTMLComponent<Record<string, unknown>> {
   static readonly declaredServices = ['registry-service'] as const
 
-  constructor(input: HTMLComponentInput<Record<string, unknown>>) {
+  constructor(input: ComponentInput<Record<string, unknown>>) {
     super(input)
     this.services.declare(RegistryComponent.declaredServices)
   }

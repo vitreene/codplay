@@ -234,6 +234,7 @@ function parseAlpha(value: string): number {
   return Math.min(1, Math.max(0, isPercent ? Number(raw) / 100 : Number(raw)))
 }
 
+/** Brings 8-bit RGB channels into [0, 1]. */
 function scaleRgb(rgb: Channels): Channels {
   return [rgb[0] / 255, rgb[1] / 255, rgb[2] / 255]
 }
@@ -244,6 +245,7 @@ function createOklchValue(coords: Channels, alpha: number): ColorValue {
   return { kind: 'color', space: 'oklch', coords: achromatic ? [coords[0], 0, 0] : coords, alpha }
 }
 
+/** Checks one color record of the given space with three finite coordinates and a finite alpha. */
 function isColorShape(value: unknown, space: 'oklch' | 'srgb'): boolean {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
   const candidate = value as Record<string, unknown>

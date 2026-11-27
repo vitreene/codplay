@@ -121,28 +121,34 @@ export function oklabToOklch(lab: Vector): Vector {
   return [lab[0], chroma, hue < 0 ? hue + 360 : hue]
 }
 
+/** Adapts CIE XYZ from the D50 to the D65 white point, then converts it to OKLCH. */
 function xyzD50ToOklch(xyz: Vector): Vector {
   return xyzD65ToOklch(multiply(XYZ_D50_TO_D65, xyz))
 }
 
+/** Converts CIE XYZ (D65) to OKLCH through the OKLab LMS cone response. */
 function xyzD65ToOklch(xyz: Vector): Vector {
   return oklabToOklch(multiply(LMS_TO_OKLAB, mapVector(multiply(XYZ_TO_LMS, xyz), Math.cbrt)))
 }
 
+/** Removes the sRGB (and Display P3) transfer function from one channel. */
 function srgbToLinear(channel: number): number {
   const magnitude = Math.abs(channel)
   return magnitude <= 0.04045 ? channel / 12.92 : Math.sign(channel) * ((magnitude + 0.055) / 1.055) ** 2.4
 }
 
+/** Removes the Adobe RGB (1998) transfer function from one channel. */
 function a98ToLinear(channel: number): number {
   return Math.sign(channel) * Math.abs(channel) ** (563 / 256)
 }
 
+/** Removes the ProPhoto RGB transfer function from one channel. */
 function prophotoToLinear(channel: number): number {
   const magnitude = Math.abs(channel)
   return magnitude <= 16 / 512 ? channel / 16 : Math.sign(channel) * magnitude ** 1.8
 }
 
+/** Removes the Rec. 2020 transfer function from one channel. */
 function rec2020ToLinear(channel: number): number {
   const alpha = 1.09929682680944
   const beta = 0.018053968510807
@@ -150,11 +156,13 @@ function rec2020ToLinear(channel: number): number {
   return magnitude < beta * 4.5 ? channel / 4.5 : Math.sign(channel) * ((magnitude + alpha - 1) / alpha) ** (1 / 0.45)
 }
 
+/** Multiplies one 3×3 matrix by one vector. */
 function multiply(matrix: Matrix, vector: Vector): Vector {
   return mapVector([0, 1, 2], (row) =>
     matrix[row][0] * vector[0] + matrix[row][1] * vector[1] + matrix[row][2] * vector[2])
 }
 
+/** Applies one function to each component of a vector. */
 function mapVector(vector: Vector, map: (value: number) => number): Vector {
   return [map(vector[0]), map(vector[1]), map(vector[2])]
 }

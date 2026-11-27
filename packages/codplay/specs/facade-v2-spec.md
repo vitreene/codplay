@@ -69,7 +69,7 @@ Le
 [registre d'instances](../src/facade/engine-facade/instance-registry.ts) et la
 [spécification preload](./preload-v2-spec.md) décrivent ces chemins.
 Le [test de façade](../tests/facade/facade.spec.ts) et le
-[test de transfert média](../tests/facade/media-preload-handoff.spec.ts) les
+[test de transfert média](../tests/facade/preload-media-node-handoff.spec.ts) les
 exercent.
 
 ### Chargement d'un paquet de scène

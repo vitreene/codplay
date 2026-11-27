@@ -38,6 +38,31 @@ afterEach(() => {
 })
 
 describe('layout flow reservation', () => {
+  it('finds the next line in the paragraph frame under a rotated ancestor', async () => {
+    vi.stubGlobal('ResizeObserver', TestResizeObserver)
+    const root = document.createElement('article')
+    root.style.transform = 'matrix(0, 1, -1, 0, 0, 0)' // rotate(90deg), as browsers compute it
+    root.innerHTML = '<p id="text">Before <span id="slot"></span> after line</p>'
+    const slot = root.querySelector<HTMLElement>('#slot')!
+    // Rotated 90°, local lines stack along the screen's negative x axis: every client top stays equal.
+    vi.spyOn(slot, 'getClientRects').mockReturnValue([{ left: 0, top: 10 }] as unknown as DOMRectList)
+    Object.defineProperty(Range.prototype, 'getClientRects', {
+      configurable: true,
+      value: function (this: Range) {
+        const nextLine = this.startContainer.textContent?.includes('after') === true && this.startOffset >= 7
+        return [{ left: nextLine ? -20 : 0, top: 10 }] as unknown as DOMRectList
+      },
+    })
+
+    new LayoutFlowReservationController(root, [{ partId: 'slot', blockSize: '75%' }], () => slot)
+    document.body.append(root)
+    TestResizeObserver.current!.notify(500)
+    await Promise.resolve()
+
+    expect(slot.previousSibling?.textContent).toBe(' after ')
+    expect(slot.nextSibling?.textContent).toBe('line')
+  })
+
   it('waits for CodPlay attachment, then reuses the same part after its visual line on resize', async () => {
     vi.stubGlobal('ResizeObserver', TestResizeObserver)
     const root = document.createElement('article')
@@ -48,12 +73,12 @@ describe('layout flow reservation', () => {
     const originalBefore = slot.previousSibling?.textContent
     let nextLineOffset = 7
 
-    vi.spyOn(slot, 'getClientRects').mockReturnValue([{ top: 10 }] as unknown as DOMRectList)
+    vi.spyOn(slot, 'getClientRects').mockReturnValue([{ left: 0, top: 10 }] as unknown as DOMRectList)
     Object.defineProperty(Range.prototype, 'getClientRects', {
       configurable: true,
       value: function (this: Range) {
         const top = this.startContainer.textContent?.includes('after') && this.startOffset >= nextLineOffset ? 30 : 10
-        return [{ top }] as unknown as DOMRectList
+        return [{ left: 0, top }] as unknown as DOMRectList
       },
     })
 
@@ -90,15 +115,15 @@ describe('layout flow reservation', () => {
     const first = root.querySelector<HTMLElement>('#slot-a')!
     const second = root.querySelector<HTMLElement>('#slot-b')!
 
-    vi.spyOn(first, 'getClientRects').mockReturnValue([{ top: 10 }] as unknown as DOMRectList)
-    vi.spyOn(second, 'getClientRects').mockReturnValue([{ top: 10 }] as unknown as DOMRectList)
+    vi.spyOn(first, 'getClientRects').mockReturnValue([{ left: 0, top: 10 }] as unknown as DOMRectList)
+    vi.spyOn(second, 'getClientRects').mockReturnValue([{ left: 0, top: 10 }] as unknown as DOMRectList)
     Object.defineProperty(Range.prototype, 'getClientRects', {
       configurable: true,
       value: function (this: Range) {
         const text = this.startContainer.textContent ?? ''
         const nextLine = (text.includes('alpha') && this.startOffset >= 2)
           || (text.includes('omega') && this.startOffset >= 3)
-        return [{ top: nextLine ? 30 : 10 }] as unknown as DOMRectList
+        return [{ left: 0, top: nextLine ? 30 : 10 }] as unknown as DOMRectList
       },
     })
 
@@ -154,7 +179,7 @@ describe('layout flow reservation', () => {
     if (!built.ok) return
 
     vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(function (this: HTMLElement) {
-      return this.matches('#slot-a, #slot-b') ? [{ top: 10 }] as unknown as DOMRectList : [] as unknown as DOMRectList
+      return this.matches('#slot-a, #slot-b') ? [{ left: 0, top: 10 }] as unknown as DOMRectList : [] as unknown as DOMRectList
     })
     Object.defineProperty(Range.prototype, 'getClientRects', {
       configurable: true,
@@ -162,7 +187,7 @@ describe('layout flow reservation', () => {
         const text = this.startContainer.textContent ?? ''
         const nextLine = (text.includes('alpha') && this.startOffset >= 2)
           || (text.includes('omega') && this.startOffset >= 3)
-        return [{ top: nextLine ? 30 : 10 }] as unknown as DOMRectList
+        return [{ left: 0, top: nextLine ? 30 : 10 }] as unknown as DOMRectList
       },
     })
 

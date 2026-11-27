@@ -1,5 +1,5 @@
 import { BaseHTMLComponent } from '../base-html-component'
-import type { HTMLComponentInput, ComponentUpdateInput } from '../component-types'
+import type { ComponentInput, ComponentUpdateInput } from '../component-types'
 import type { ListInitial, ListState } from './list-types'
 
 /** V2 list component: the capability owns order, while the component owns its root. */
@@ -8,7 +8,7 @@ export class ListComponent extends BaseHTMLComponent<ListInitial> {
   static readonly declaredServices = ['className', 'style', 'attr'] as const
 
   /** Creates one list host and declares only its own services. */
-  constructor(input: HTMLComponentInput<ListInitial>) {
+  constructor(input: ComponentInput<ListInitial>) {
     super(input)
     this.services.declare(ListComponent.declaredServices)
   }

@@ -64,7 +64,7 @@ chargement d'une ressource CSS par URL.
 - [`preload-css-slot.spec.ts`](../tests/runtime/preload/preload-css-slot.spec.ts)
   couvre la portée, le remplacement, le nettoyage des slots et le refus d'un
   identifiant vide.
-- [`media-preload-handoff.spec.ts`](../tests/facade/media-preload-handoff.spec.ts)
+- [`preload-media-node-handoff.spec.ts`](../tests/facade/preload-media-node-handoff.spec.ts)
   couvre le transfert de la node retenue vers un composant média par la façade.
 - [`player-runner.spec.ts`](../tests/runtime/runner-html/player-runner.spec.ts)
   couvre deux composants partageant une URL : une seule adopte la node du

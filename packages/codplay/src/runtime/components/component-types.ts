@@ -52,10 +52,6 @@ export type ComponentInput<Initial extends Record<string, unknown> = Record<stri
   resourceMedia?: ReadonlyMap<string, RuntimePreloadMediaHandle>
 }>
 
-/** Input extension used by the current HTML/SVG component family. */
-export type HTMLComponentInput<Initial extends Record<string, unknown> = Record<string, unknown>> =
-  ComponentInput<Initial>
-
 /** One kind of author part discovered while materializing a component template. */
 export type MaterializedPartKind = 'outlet' | 'anchor'
 
@@ -110,5 +106,3 @@ export type ComponentActionOccurrence = Readonly<{
   declarationPath?: readonly number[]
 }>
 
-/** Compatibility name for the current HTML/SVG component family. */
-export type HTMLComponentServices = ComponentServices

@@ -5,14 +5,14 @@ import { CompiledSceneValidationEngine, validatePersoWithCapabilities } from '..
 import { createCoreRuntimeCatalog } from '../../../src/runtime/catalog'
 import type { RuntimeCapabilityCatalog, RuntimeComponentDefinition } from '../../../src/runtime/catalog'
 import { BaseHTMLComponent } from '../../../src/runtime/components'
-import type { ComponentUpdateInput, HTMLComponentInput } from '../../../src/runtime/components'
+import type { ComponentUpdateInput, ComponentInput } from '../../../src/runtime/components'
 
 /** Creates a fixture component whose service declaration belongs to the component class. */
 function componentClass(services: readonly string[]) {
   return class ValidationComponent extends BaseHTMLComponent<Record<string, unknown>> {
     static readonly declaredServices = services
 
-    constructor(input: HTMLComponentInput<Record<string, unknown>>) {
+    constructor(input: ComponentInput<Record<string, unknown>>) {
       super(input)
       this.services.declare(services)
     }

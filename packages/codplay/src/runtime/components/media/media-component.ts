@@ -6,7 +6,7 @@ import {
   type RuntimePreloadResourceMetadata,
 } from '../../preload'
 import { BaseHTMLComponent } from '../base-html-component'
-import type { HTMLComponentInput, ComponentUpdateInput } from '../component-types'
+import type { ComponentInput, ComponentUpdateInput } from '../component-types'
 import type { MediaTransition } from '../component-surface-types'
 import type { MediaInitial, MediaPartState, MediaState, MediaTag } from './media-types'
 
@@ -33,7 +33,7 @@ export class MediaComponent extends BaseHTMLComponent<MediaInitial> {
   private playbackRate = 1
 
   /** Creates one media component with its declared core services. */
-  constructor(input: HTMLComponentInput<MediaInitial>) {
+  constructor(input: ComponentInput<MediaInitial>) {
     super(input)
     this.services.declare(MediaComponent.declaredServices)
     this.resourceMetadata = input.resourceMetadata ?? new Map()
@@ -242,41 +242,9 @@ export class MediaComponent extends BaseHTMLComponent<MediaInitial> {
 }
 
 /** Creates one internal native media node for the component's private media part. */
-function createMediaNode(tag: MediaTag): unknown {
-  if (typeof globalThis.document !== 'undefined') {
-    const node = globalThis.document.createElement(tag)
-    if (tag === 'video') (node as HTMLVideoElement).preload = 'auto'
-    return node
-  }
-  const node: {
-    tagName: string
-    parentNode: unknown
-    src: string
-    preload?: string
-    currentTime: number
-    duration: number
-    paused: boolean
-    volume: number
-    muted: boolean
-    playbackRate: number
-    play: () => void
-    pause: () => void
-  } = {
-    tagName: tag.toUpperCase(),
-    parentNode: null,
-    src: '',
-    currentTime: 0,
-    duration: Number.NaN,
-    paused: true,
-    volume: 1,
-    muted: false,
-    playbackRate: 1,
-    play: () => undefined,
-    pause: () => undefined,
-  }
+function createMediaNode(tag: MediaTag): HTMLMediaElement {
+  const node = document.createElement(tag)
   if (tag === 'video') node.preload = 'auto'
-  node.play = () => { node.paused = false }
-  node.pause = () => { node.paused = true }
   return node
 }
 

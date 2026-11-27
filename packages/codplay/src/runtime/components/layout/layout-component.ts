@@ -1,5 +1,5 @@
 import { BaseHTMLComponent } from '../base-html-component'
-import type { HTMLComponentInput, ComponentUpdateInput } from '../component-types'
+import type { ComponentInput, ComponentUpdateInput } from '../component-types'
 import type { LayoutInitial, LayoutState } from './layout-types'
 import { LayoutFlowReservationController } from './layout-flow-reservation'
 
@@ -10,7 +10,7 @@ export class LayoutComponent extends BaseHTMLComponent<LayoutInitial> {
   private flowReservation: LayoutFlowReservationController | null = null
 
   /** Creates one layout component and declares only its own services. */
-  constructor(input: HTMLComponentInput<LayoutInitial>) {
+  constructor(input: ComponentInput<LayoutInitial>) {
     super(input)
     this.services.declare(LayoutComponent.declaredServices)
   }
@@ -38,7 +38,7 @@ export class LayoutComponent extends BaseHTMLComponent<LayoutInitial> {
     this.services.apply(this.node, input.state)
   }
 
-  /** Recalculates the same layout when Sighty replays a retained scene. */
+  /** Recalculates the same layout after a seek replays a retained scene. */
   afterSeek(): void {
     this.flowReservation?.refresh()
   }

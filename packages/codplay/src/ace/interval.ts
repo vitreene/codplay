@@ -81,6 +81,7 @@ export type Interval =
 
 const NUMBER_PATTERN = /[-+]?(?:\d+\.?\d*|\.?\d+)(?:[eE][-+]?\d+)?/g
 
+/** Accepts a normalized OKLCH color or the deprecated sRGB intermediate. */
 const isColor = (value: InterpolationValue): value is ColorValue | LegacySrgbColorValue =>
   isColorValue(value) || isLegacySrgbColorValue(value)
 

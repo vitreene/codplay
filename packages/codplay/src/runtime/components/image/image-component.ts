@@ -1,5 +1,5 @@
-import { canAppendChild, hasParentNode } from '../../../shared'
-import type { HTMLComponentInput, ComponentUpdateInput } from '../component-types'
+import { canAppendChild } from '../../../shared'
+import type { ComponentInput, ComponentUpdateInput } from '../component-types'
 import { BaseHTMLComponent } from '../base-html-component'
 import type { ImageInitial, ImageState } from './image-types'
 
@@ -11,12 +11,12 @@ export class ImageComponent extends BaseHTMLComponent<ImageInitial> {
   static readonly declaredServices = ['className', 'style', 'attr'] as const
 
   /** Persistent native image nodes indexed by their immutable source. */
-  private readonly imageBySource = new Map<string, unknown>()
+  private readonly imageBySource = new Map<string, HTMLImageElement>()
   /** Source currently attached to the wrapper. */
   private activeSource: string | null = null
 
   /** Creates one image component with services bound by the core catalog. */
-  constructor(input: HTMLComponentInput<ImageInitial>) {
+  constructor(input: ComponentInput<ImageInitial>) {
     super(input)
     this.services.declare(ImageComponent.declaredServices)
   }
@@ -42,20 +42,20 @@ export class ImageComponent extends BaseHTMLComponent<ImageInitial> {
   }
 
   /** Creates or returns the one native image node associated with a source. */
-  private ensureImage(source: string): unknown {
+  private ensureImage(source: string): HTMLImageElement {
     const existing = this.imageBySource.get(source)
     if (existing !== undefined) return existing
 
-    const image = createImageNode()
-    setImageSource(image, source)
+    const image = document.createElement('img')
+    image.src = source
     this.applyImageState(image, this.perso.initial)
     this.imageBySource.set(source, image)
     return image
   }
 
   /** Applies non-source state to one persistent image node. */
-  private applyImageState(node: unknown, state: ImageInitial | ImageState): void {
-    if (state.alt !== undefined) setImageAlt(node, state.alt)
+  private applyImageState(node: HTMLImageElement, state: ImageInitial | ImageState): void {
+    if (state.alt !== undefined) node.alt = state.alt
     if (state.img !== undefined) {
       this.services.apply(node, {
         className: state.img.className,
@@ -72,47 +72,8 @@ export class ImageComponent extends BaseHTMLComponent<ImageInitial> {
     const image = this.ensureImage(source)
     const previous = this.activeSource === null ? undefined : this.imageBySource.get(this.activeSource)
 
-    if (hasParentNode(previous) && previous !== image && previous.parentNode === wrapper) {
-      removeChild(previous)
-    }
-    if (canAppendChild(wrapper) && hasParentNode(image) && image.parentNode !== wrapper) {
-      wrapper.appendChild(image)
-    }
+    if (previous !== undefined && previous !== image && previous.parentNode === wrapper) previous.remove()
+    if (canAppendChild(wrapper) && image.parentNode !== wrapper) wrapper.appendChild(image)
     this.activeSource = source
-  }
-}
-
-/** Creates one native image node in a browser or a minimal test/runtime fallback. */
-function createImageNode(): unknown {
-  if (typeof globalThis.document !== 'undefined') return globalThis.document.createElement('img')
-  return { tagName: 'IMG', parentNode: null, style: {}, attributes: {} }
-}
-
-/** Assigns a source exactly once to a freshly created image node. */
-function setImageSource(node: unknown, source: string): void {
-  if (typeof node !== 'object' || node === null) return
-  const candidate = node as { src?: string; setAttribute?: (name: string, value: string) => void }
-  if ('src' in candidate) candidate.src = source
-  else candidate.setAttribute?.('src', source)
-}
-
-/** Applies alternative text without changing the source resource. */
-function setImageAlt(node: unknown, alt: string): void {
-  if (typeof node !== 'object' || node === null) return
-  const candidate = node as { alt?: string; setAttribute?: (name: string, value: string) => void }
-  if ('alt' in candidate) candidate.alt = alt
-  else candidate.setAttribute?.('alt', alt)
-}
-
-/** Removes one image from its current parent without touching its source. */
-function removeChild(node: Readonly<{ parentNode: unknown | null }> & { remove?: () => void }): void {
-  if (typeof node.remove === 'function') {
-    node.remove()
-    return
-  }
-  const parent = node.parentNode
-  if (typeof parent === 'object' && parent !== null && 'removeChild' in parent) {
-    const remove = (parent as { removeChild?: (child: unknown) => void }).removeChild
-    remove?.(node)
   }
 }

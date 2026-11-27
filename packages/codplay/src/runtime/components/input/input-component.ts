@@ -1,6 +1,6 @@
 import { isPlainRecord } from '../../../shared'
 import { BaseHTMLComponent } from '../base-html-component'
-import type { ComponentUpdateInput, HTMLComponentInput } from '../component-types'
+import type { ComponentUpdateInput, ComponentInput } from '../component-types'
 import {
   resolveCorrectionState,
   resolveInputControlStateClasses,
@@ -29,7 +29,7 @@ export class InputComponent extends BaseHTMLComponent<InputInitial> {
   static readonly declaredServices = ['className', 'style', 'attr', 'content'] as const
 
   /** Creates one input component and declares only its own services. */
-  constructor(input: HTMLComponentInput<InputInitial>) {
+  constructor(input: ComponentInput<InputInitial>) {
     super(input)
     this.services.declare(InputComponent.declaredServices)
   }

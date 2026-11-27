@@ -1,5 +1,5 @@
 import { BaseHTMLComponent } from '../base-html-component'
-import type { ComponentUpdateInput, HTMLComponentInput } from '../component-types'
+import type { ComponentUpdateInput, ComponentInput } from '../component-types'
 import type { SlotInitial, SlotState } from './slot-types'
 
 /** Core HTML host that exposes an opaque foreign representation through one tag root. */
@@ -8,14 +8,14 @@ export class ForeignContentComponent extends BaseHTMLComponent<SlotInitial> {
   static readonly declaredServices = ['className', 'style', 'attr'] as const
 
   /** Creates one opaque foreign-content host. */
-  constructor(input: HTMLComponentInput<SlotInitial>) {
+  constructor(input: ComponentInput<SlotInitial>) {
     super(input)
     this.services.declare(ForeignContentComponent.declaredServices)
   }
 
-  /** Returns the authored host tag, with the structural div default normalized by the builder. */
+  /** Returns the authored host tag; the builder normalizes its structural `div` default. */
   render(): string {
-    const tag = this.perso.initial.tag ?? 'div'
+    const tag = this.perso.initial.tag as string
     return `<${tag}></${tag}>`
   }
 
