@@ -81,3 +81,8 @@ Aucune couleur par défaut n'est ajoutée globalement par ACE ou le service
   et [`interval.spec.ts`](../tests/ace/interval.spec.ts).
 - Matérialisation HTML :
   [`component-materializer.spec.ts`](../tests/runtime/runner-html/component-materializer.spec.ts).
+- Player HTML réel : [`player-runner.spec.ts`](../tests/runtime/runner-html/player-runner.spec.ts)
+  vérifie une couleur continue en Seek. Une validation dans le navigateur, avec
+  le vrai player, confirme qu'un tween `#ff0000 → hsl(240 100% 50%)` et un fondu
+  `oklch(0.7 0.2 140) → transparent` donnent la même valeur en Play et en Seek,
+  égale au calcul ACE, et que le fondu ne fait varier que l'alpha.

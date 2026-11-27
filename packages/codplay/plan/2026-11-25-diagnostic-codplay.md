@@ -408,7 +408,7 @@ impossible entre deux espaces, alpha non prémultiplié (assombrissement vers
 `transparent`), teinte interpolée depuis une couleur achromatique, formes CSS
 Color 4 rejetées (`hsl()`, `lab()`, `color()`…), chroma replace désactivé hors
 sRGB. **Traité** : un seul espace actif, OKLCH, normalisé par le compilateur ;
-voir le [plan couleur](./color-values-plan.md) pour le reste.
+voir la [spécification couleur](../specs/color-values-v2-spec.md).
 
 ## Documentation
 
