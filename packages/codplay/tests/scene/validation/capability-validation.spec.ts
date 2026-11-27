@@ -104,7 +104,7 @@ describe('RuntimeCapabilityCatalog validation snapshot', () => {
     validatePersoWithCapabilities(runtimeCatalog.validationSnapshot(), {
       id: 'title',
       type: 'tag',
-      initial: { style: { color: 'hsl(0, 100%, 50%)', transform: 'rotate(20deg)' } },
+      initial: { style: { color: 'color-mix(in srgb, red, blue)', transform: 'rotate(20deg)' } },
       actions: {},
     }, diagnostics)
 

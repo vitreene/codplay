@@ -7,7 +7,7 @@ import type { RuntimePlayerPresentation } from './presentation'
 import type { RuntimePlayerState } from './player-state'
 
 /** Dependencies for player-owned presentation commands. */
-export type RuntimePlayerPresentationControllerContext = Readonly<{
+type RuntimePlayerPresentationControllerContext = Readonly<{
   state: RuntimePlayerState
   componentRuntime: RuntimeComponentRuntime | undefined
   materializer: RuntimeMaterializer | undefined

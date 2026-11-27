@@ -391,7 +391,7 @@ describe('materialize -> resolve -> solve', () => {
       className: 'is-active',
       style: {
         opacity: 0.5,
-        backgroundColor: { kind: 'color', space: 'srgb', coords: [0.5, 0.5, 0.5], alpha: 1 },
+        backgroundColor: { kind: 'color', space: 'oklch', coords: [expect.closeTo(0.5, 9), 0, 0], alpha: 1 },
       },
     })
     expect(scene.scene.stories.main.persos[0]?.initial).toEqual({

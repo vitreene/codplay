@@ -1,3 +1,4 @@
+import { listMaterializedRoots } from '../../../shared'
 import type { Diagnostic } from '../../../diagnostics'
 import type { CompiledScene } from '../../../scene/compiled'
 import type { RuntimeMaterializer } from '../../materializer'
@@ -484,7 +485,7 @@ export class HtmlPlayerRunner {
       return []
     }
     return scene.graph.rootPersoKeys.flatMap((persoKey) => (
-      materializedRootNodes(this.nodes.persoNodes.get(persoKey))
+      listMaterializedRoots(this.nodes.persoNodes.get(persoKey))
     ))
   }
 
@@ -557,7 +558,7 @@ export class HtmlPlayerRunner {
       getSolvedScene: () => this.player.getSolvedScene(),
       getLifecycleState: () => this.player.getLifecycleState(),
       getCurrentTimeMs: () => this.player.getCurrentTimeMs(),
-      resolvePersoElement: (persoKey) => resolveMaterializedElement(this.nodes.persoNodes.get(persoKey)),
+      resolvePersoElement: (persoKey) => listMaterializedRoots(this.nodes.persoNodes.get(persoKey)).find(isMeasurableHtmlElement),
       commands: {
         emit: (input) => this.player.emit(input),
         setLiveActions: (sourceId, actions) => this.player.setLiveActions(sourceId, actions),
@@ -738,19 +739,6 @@ function createMotionInitializationDiagnostics(error: unknown): {
     message,
   }
   return { all: [issue], warnings: [], errors: [issue] }
-}
-
-/** Expands one materialized component root or ordered fragment of roots. */
-function materializedRootNodes(root: unknown): readonly unknown[] {
-  if (root === undefined || root === null) {
-    return []
-  }
-  return Array.isArray(root) ? root : [root]
-}
-
-/** Resolves the first measurable HTML root without exposing the materialization registry. */
-function resolveMaterializedElement(root: unknown): Element | undefined {
-  return materializedRootNodes(root).find(isMeasurableHtmlElement)
 }
 
 /** Derives instance-local root targets from the compiled scene manifest. */

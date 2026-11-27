@@ -8,12 +8,12 @@ import type { RuntimePlayerSceneState } from './scene-state'
 import { collectMoveOccurrences } from './motion-occurrences'
 
 /** Adds player-local controls to one materializer presentation. */
-export type RuntimePlayerMaterializationContext = RuntimeMaterializerSceneContext & Readonly<{
+type RuntimePlayerMaterializationContext = RuntimeMaterializerSceneContext & Readonly<{
   forceMotionOccurrences?: boolean
 }>
 
 /** Dependencies used to present solved scenes without owning player state. */
-export type RuntimePlayerPresentationContext = Readonly<{
+type RuntimePlayerPresentationContext = Readonly<{
   componentRuntime: RuntimeComponentRuntime | undefined
   materializer: RuntimeMaterializer | undefined
   moduleServiceInstances: ReadonlyMap<string, RuntimeModuleServiceInstance>

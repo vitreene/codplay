@@ -29,7 +29,7 @@ import {
 import type { RuntimePlayerState } from './player-state'
 
 /** Dependencies used by the player snapshot and projection boundary. */
-export type RuntimePlayerSnapshotControllerContext = Readonly<{
+type RuntimePlayerSnapshotControllerContext = Readonly<{
   state: RuntimePlayerState
   sceneState: RuntimePlayerSceneState
   presentation: RuntimePlayerPresentation

@@ -15,14 +15,14 @@ export const HTML_IN_CANVAS_EFFECTS = ['burn', 'ripple', 'pixelate', 'swirl', 's
 export type HtmlInCanvasEffectName = (typeof HTML_IN_CANVAS_EFFECTS)[number]
 
 /** One draw call of an effect: its entry points and how many vertices/instances it emits. */
-export type HtmlInCanvasDraw = Readonly<{
+type HtmlInCanvasDraw = Readonly<{
   vertex: string
   fragment: string
   vertexCount: number
 }>
 
 /** One effect: its WGSL source (prelude excluded) and its ordered draw calls. */
-export type HtmlInCanvasEffect = Readonly<{
+type HtmlInCanvasEffect = Readonly<{
   code: string
   draws: readonly HtmlInCanvasDraw[]
 }>

@@ -57,7 +57,7 @@ describe('HTML component materializer services', () => {
 
     expect(node.className).toBe('active')
     expect(node.style.opacity).toBe('0.5')
-    expect(node.style.color).toBe('rgba(255, 0, 0, 1)')
+    expect(node.style.color).toBe('oklch(0.627955 0.257683 29.23388 / 1)')
     expect(node.attributes).toEqual(new Map([['role', 'button']]))
     expect(node.textContent).toBe('Hello')
   })

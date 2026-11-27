@@ -1,9 +1,9 @@
 import {
-  isScalarTransformProperty,
+  isColorValue,
   parseEase,
   prepareTransformTween,
   prepareTween,
-  resolveTransformProperty as canonicalTransformProperty,
+  resolveScalarTransformProperty,
   resolveTween,
   type ColorValue,
   type TransformProperty,
@@ -150,7 +150,7 @@ function resolveTweenAction(
   if (fn === undefined) {
     throw new Error(`TweenAction function is not available: ${action.fn.ref}`)
   }
-  const rawProgress = clamp(elapsedMs / action.duration, 0, 1)
+  const rawProgress = Math.min(1, Math.max(0, elapsedMs / action.duration))
   const ease = parseEase(typeof action.ease === 'string' ? action.ease : 'linear')
   const progress = ease(rawProgress)
   let output: unknown
@@ -168,11 +168,6 @@ function resolveTweenAction(
   return output as CompiledRecord
 }
 
-/** Clamps one continuous progress value to the closed interval [0, 1]. */
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.min(maximum, Math.max(minimum, value))
-}
-
 /** Resolves one explicit tween or preserves one direct style value. */
 function resolveStyleValue(
   property: string,
@@ -181,7 +176,7 @@ function resolveStyleValue(
   elapsedMs: number,
 ): CompiledValue {
   if (isLengthTween(value, current)) return resolveLengthStyleValue(property, current, value, elapsedMs)
-  const transformProperty = resolveTransformProperty(property)
+  const transformProperty = resolveScalarTransformProperty(property)
   if (transformProperty !== undefined) return resolveTransformStyleValue(transformProperty, current, value, elapsedMs)
   if (!isPlainRecord(value) || !('to' in value)) return value
   const to = value.to
@@ -263,26 +258,9 @@ function resolveTransformStyleValue(
   }), elapsedMs) as CompiledValue
 }
 
-/** Maps the supported style aliases to their canonical ACE transform channels. */
-function resolveTransformProperty(property: string): TransformProperty | undefined {
-  const canonical = canonicalTransformProperty(property)
-  return canonical !== undefined && isScalarTransformProperty(canonical) ? canonical : undefined
-}
-
 /** Checks scalar and normalized color values accepted by ACE. */
 function isTweenValue(value: unknown): value is string | number | ColorValue {
   return isScalar(value) || isColorValue(value)
-}
-
-/** Checks one normalized color value. */
-function isColorValue(value: unknown): value is ColorValue {
-  if (!isPlainRecord(value)) return false
-  const candidate = value as Record<string, unknown>
-  return candidate.kind === 'color'
-    && (candidate.space === 'srgb' || candidate.space === 'oklch')
-    && Array.isArray(candidate.coords)
-    && candidate.coords.every((coordinate: unknown) => typeof coordinate === 'number')
-    && typeof candidate.alpha === 'number'
 }
 
 /** Applies an authored class patch without mutating the previous state. */

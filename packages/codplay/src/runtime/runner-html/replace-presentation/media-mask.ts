@@ -20,7 +20,7 @@ export type MediaMaskCell = Readonly<{
   index: number
 }>
 
-export type MediaMaskGrid = {
+type MediaMaskGrid = {
   readonly viewKey: HTMLElement
   readonly target: HTMLElement
   readonly host: SVGSVGElement

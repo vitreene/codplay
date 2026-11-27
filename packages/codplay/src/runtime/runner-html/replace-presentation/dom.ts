@@ -173,7 +173,7 @@ export function getLocalBoxSize(element: Element): Readonly<{ width: number; hei
 
 
 /** Returns one untransformed border-box dimension without offset-size rounding. */
-export function getUntransformedBorderBoxSize(
+function getUntransformedBorderBoxSize(
   element: HTMLElement,
   dimension: 'width' | 'height',
 ): number {
@@ -195,7 +195,7 @@ export function getUntransformedBorderBoxSize(
 
 
 /** Reads a CSS pixel length while treating non-numeric values as zero. */
-export function parsePixelSize(value: string): number {
+function parsePixelSize(value: string): number {
   const size = Number.parseFloat(value)
   return Number.isFinite(size) ? size : 0
 }

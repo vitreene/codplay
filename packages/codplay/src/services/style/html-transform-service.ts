@@ -1,7 +1,6 @@
 import {
   getTransformOrder,
-  isScalarTransformProperty,
-  resolveTransformProperty as canonicalTransformProperty,
+  resolveScalarTransformProperty,
   type TransformProperty,
 } from 'ace'
 import {
@@ -12,7 +11,7 @@ import {
 } from '../html-materializer-service-types'
 
 /** Component-scoped transform declarations kept by the HTML style adapter. */
-export type HtmlTransformStyleState = {
+type HtmlTransformStyleState = {
   readonly channels: Map<TransformProperty, string>
   rawTransform: string | undefined
 }
@@ -41,7 +40,7 @@ export function applyHtmlTransformStyleProperty(
     state.rawTransform = rawTransformValue(value)
     return true
   }
-  const transformProperty = resolveTransformProperty(property)
+  const transformProperty = resolveScalarTransformProperty(property)
   if (transformProperty === undefined) return false
   state.channels.set(transformProperty, transformCssValue(transformProperty, value, context))
   return true
@@ -61,7 +60,7 @@ export function removeHtmlTransformStyleProperty(
     state.rawTransform = undefined
     return true
   }
-  const transformProperty = resolveTransformProperty(property)
+  const transformProperty = resolveScalarTransformProperty(property)
   if (transformProperty === undefined) return false
   state.channels.delete(transformProperty)
   return true
@@ -125,12 +124,6 @@ function composeTransformChannels(channels: ReadonlyMap<TransformProperty, strin
       return channel === undefined ? [] : [`${property}(${channel})`]
     })
     .join(' ')
-}
-
-/** Maps one author property to a scalar transform channel materialized by HTML. */
-function resolveTransformProperty(property: string): TransformProperty | undefined {
-  const canonical = canonicalTransformProperty(property)
-  return canonical !== undefined && isScalarTransformProperty(canonical) ? canonical : undefined
 }
 
 /** Converts one authored scalar transform value to its CSS channel representation. */

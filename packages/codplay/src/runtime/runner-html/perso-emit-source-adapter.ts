@@ -1,4 +1,5 @@
 import type { Diagnostic } from '../../diagnostics'
+import { hasParentNode, listMaterializedRoots } from '../../shared'
 import type {
   CompiledEmitEvent,
   CompiledEmitRule,
@@ -152,7 +153,7 @@ export class HtmlPersoEmitSourceAdapter {
     nativeEvent: Event,
     applyAtMs: number,
   ): Promise<void> {
-    const visibility = resolveVisibility(match.rule)
+    const visibility = match.rule.event.visibility ?? 'story'
     const result = await this.player.emit({
       name: match.rule.event.name,
       applyAtMs,
@@ -199,7 +200,7 @@ export class HtmlPersoEmitSourceAdapter {
   /** Resolves a V1-compatible action ref against the materializer-published parts. */
   private resolveActionTargets(entry: IndexedEmitRule): readonly unknown[] {
     const root = this.nodes.persoNodes.get(entry.persoKey)
-    if (entry.rule.ref === undefined || entry.rule.ref === 'root') return materializedNodes(root)
+    if (entry.rule.ref === undefined || entry.rule.ref === 'root') return listMaterializedRoots(root)
 
     const part = this.nodes.persoParts.get(entry.persoKey)?.find((candidate) => candidate.partId === entry.rule.ref)
     if (part !== undefined) return [part.nodeRef]
@@ -253,11 +254,6 @@ function normalizeRules(
   return [value as CompiledEmitRule]
 }
 
-/** Resolves V2 named visibility for one ordinary emit rule. */
-function resolveVisibility(rule: IndexedEmitRule['rule']): 'story' | 'scene' | 'public' {
-  return rule.event.visibility ?? 'story'
-}
-
 /** Builds the raw authored event payload and the native input value, when present. */
 function createEmitData(entry: IndexedEmitRule, nativeEvent: Event): CompiledRecord {
   const event = entry.rule.event
@@ -305,19 +301,9 @@ function isEventWithinNode(event: Event, node: unknown): boolean {
   while (current !== null && current !== undefined && !visited.has(current)) {
     if (current === node) return true
     visited.add(current)
-    if (!isParentNode(current)) break
+    if (!hasParentNode(current)) break
     current = current.parentNode
   }
   return false
 }
 
-/** Expands one materialized root or fragment roots for event matching. */
-function materializedNodes(root: unknown): readonly unknown[] {
-  if (root === undefined || root === null) return []
-  return Array.isArray(root) ? root : [root]
-}
-
-/** Narrows one event target to the parent relationship used by DOM traversal. */
-function isParentNode(value: unknown): value is Readonly<{ parentNode: unknown | null }> {
-  return typeof value === 'object' && value !== null && 'parentNode' in value
-}

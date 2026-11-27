@@ -267,7 +267,7 @@ arrière puis avant restitue les mêmes poids de bouche et de tête. Les scènes
 test sont propres aux tests et leurs données auteur sont sérialisées avant
 construction.
 
-Le [relevé navigateur du 4 novembre 2026](../../elce/notes/assets/talking-head/rive-player-acceptance.json)
+Le [relevé navigateur](../../elce/notes/assets/talking-head/rive-player-acceptance.json)
 borne la preuve native à ce fichier, cette version et Safari : preload réel,
 commandes bouche/tête, événements au même instant, broadcasts, retour temporel,
 resize CSS, destruction et remontage. Les phases natives libres ne servent pas
@@ -275,6 +275,5 @@ de critère d’égalité d’image. La persistance applicative Elcé, le nouvea
 scénario de démo et les autres familles Rive restent hors de cette preuve.
 Le POC Elcé exerce aussi le chemin réel Sighty/CodPlay : un Seek telco à 1 s
 puis à 7,5 s change le rendu du canvas Rive ; après Pause à 7,5 s, le rendu et
-le temps restent stables pendant 1,2 s. Ces observations sont suivies dans le
-[plan tête parlante](../../elce/plan/2026-11-04-talking-head-plan.md). Le Play
-naturel et la fin restent à vérifier avec une page visible.
+le temps restent stables pendant 1,2 s. Le travail restant est suivi dans le
+[plan tête parlante](../../elce/plan/2026-11-04-talking-head-plan.md).

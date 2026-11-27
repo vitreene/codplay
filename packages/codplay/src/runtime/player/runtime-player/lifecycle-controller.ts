@@ -44,7 +44,7 @@ import type { RuntimePlayerState } from './player-state'
 import type { PlayerInitResult, PlayerSeekResult } from './player-types'
 
 /** Dependencies for lifecycle, transport and engine registration commands. */
-export type RuntimePlayerLifecycleControllerContext = Readonly<{
+type RuntimePlayerLifecycleControllerContext = Readonly<{
   id: string
   state: RuntimePlayerState
   engine: RuntimeEngine

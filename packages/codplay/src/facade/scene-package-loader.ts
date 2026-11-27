@@ -1,3 +1,4 @@
+import { isPlainRecord } from '../shared'
 import {
   CompiledSceneCodec,
   type CompiledFunctionCollection,
@@ -80,13 +81,13 @@ type ScenePackageStyleSheet = Readonly<{
   fontFaces: readonly ScenePackageFontFace[]
 }>
 
-export type LoadedScenePackage = Readonly<{
+type LoadedScenePackage = Readonly<{
   instance: CodPlayInstance
   cssSlot?: string
 }>
 
 /** One validated and resource-ready package scene without a created occurrence. */
-export type PreparedScenePackage = Readonly<{
+type PreparedScenePackage = Readonly<{
   compiledScene: CompiledScene
   functions: CompiledFunctionCollection
   strapCollections: StrapCollections
@@ -916,9 +917,3 @@ function writePath(root: unknown, path: readonly (string | number)[], replacemen
   parent[finalSegment] = replacement
 }
 
-/** Checks the plain JSON records used by the package and compiled-scene boundaries. */
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
-  const prototype = Object.getPrototypeOf(value)
-  return prototype === Object.prototype || prototype === null
-}

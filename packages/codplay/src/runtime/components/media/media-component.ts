@@ -1,4 +1,4 @@
-import { isPlainRecord } from '../../../shared'
+import { canAppendChild, canRemoveChild, hasParentNode, isPlainRecord } from '../../../shared'
 import {
   clearRuntimePreloadPresentation,
   type RuntimePreloadMediaHandle,
@@ -67,11 +67,11 @@ export class MediaComponent extends BaseHTMLComponent<MediaInitial> {
   /** Creates or reuses one source node and attaches it as the sole media child. */
   private setActiveSource(src: string): void {
     const root = this.node
-    if (!isParentNode(root)) return
+    if (!canAppendChild(root) || !canRemoveChild(root)) return
     const active = this.ensureNodeForSource(src)
-    if (!isNode(active)) return
+    if (!hasParentNode(active)) return
     const previous = this.activeSrc === null ? undefined : this.mediaBySrc.get(this.activeSrc)
-    if (isNode(previous) && previous !== active && previous.parentNode === root) root.removeChild(previous)
+    if (hasParentNode(previous) && previous !== active && previous.parentNode === root) root.removeChild(previous)
     if (active.parentNode !== root) root.appendChild(active)
     if (this.activeSrc !== src) this.playbackWindow = { startMs: 0, endMs: null }
     this.activeSrc = src
@@ -332,24 +332,6 @@ function setMediaProperty(node: unknown, property: string, value: unknown): void
     return
   }
   if (property in node) (node as Record<string, unknown>)[property] = value
-}
-
-/** Checks the DOM-like parent surface needed by source selection. */
-function isParentNode(value: unknown): value is {
-  appendChild: (child: unknown) => unknown
-  removeChild: (child: unknown) => unknown
-} {
-  return typeof value === 'object'
-    && value !== null
-    && 'appendChild' in value
-    && typeof value.appendChild === 'function'
-    && 'removeChild' in value
-    && typeof value.removeChild === 'function'
-}
-
-/** Checks the DOM-like node surface needed by source selection. */
-function isNode(value: unknown): value is { parentNode: unknown } {
-  return typeof value === 'object' && value !== null && 'parentNode' in value
 }
 
 /** Checks the native media surface used by the player-scoped sync capability. */

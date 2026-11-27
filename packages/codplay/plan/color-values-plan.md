@@ -1,22 +1,26 @@
-# Acceptation des entrées couleur directes dans ACE
+# Couleurs : un seul espace actif, OKLCH
 
-> Statut : **En cours** — la normalisation et l'interpolation couleur de base
-> sont décrites dans la [spécification](../specs/color-values-v2-spec.md). Le
-> passage direct par `prepareTween` et la validation runtime restent ouverts.
-> Décision confirmée le 2026-09-25.
+> Statut : **En cours** — le parseur, la normalisation du compilateur,
+> l'interpolation et le rendu HTML sont décrits dans la
+> [spécification](../specs/color-values-v2-spec.md). Restent la validation en
+> navigateur et l'alignement de l'editor.
+
+## Décisions
+
+- Le compilateur ramène toute couleur auteur CSS Color 4 en OKLCH ; le runtime
+  ne connaît que cet espace (2026-11-27).
+- ACE accepte encore les chaînes couleur au runtime, par précaution. Ce chemin
+  est en voie de dépréciation : les scènes compilées portent déjà des
+  `ColorValue` OKLCH. La forme intermédiaire sRGB est dépréciée de la même
+  façon.
 
 ## Périmètre restant
 
-Le code d'ACE fait passer les chaînes CSS prises en charge par la préparation
-existante. La spécification couvre le comportement vérifié de
-`prepareInterval`, du service `style` et du rendu HTML. Ce plan porte sur les
-gates suivants :
-
-- [ ] Vérifier un tween ACE préparé directement avec deux chaînes
-      hexadécimales, sans appel explicite à `parseColor` par l'appelant.
-- [ ] Utiliser la scène scroll existante comme fixture pour vérifier le passage
-      de bornes hexadécimales brutes dans ACE et le vrai player HTML, aux points
-      Play et Seek. Cette preuve porte sur la valeur couleur ; elle ne rouvre
-      pas l'acceptation de la feature scroll.
-- [ ] Mettre à jour la spécification avec tout comportement nouvellement
-  certifié, puis retirer ce plan lorsque les gates sont passées.
+- [ ] Valider en navigateur, aux points Play et Seek du vrai player HTML, une
+      scène dont les bornes de tween mélangent hexadécimal, `hsl()` et
+      `oklch()`, et un fondu vers `transparent`.
+- [ ] Editor : le test `player-interpolation` attend un mi-parcours rouge →
+      bleu calculé en sRGB (`#800080`). Il doit attendre le mi-parcours OKLCH,
+      et le correctif `alignColorSpaces` du builder editor devient inutile.
+      À faire sur la branche editor.
+- [ ] Retirer ce plan quand ces gates sont passées.

@@ -1,6 +1,13 @@
 export { get, set, type PersoState } from './state'
 export type { UnitValue } from './values'
-export { parseColor } from './adapters/color-adapter'
+export {
+  formatColor,
+  isColorValue,
+  isLegacySrgbColorValue,
+  parseColor,
+  toOklchColor,
+  type LegacySrgbColorValue,
+} from './adapters/color-adapter'
 export {
   getTransformOrder,
   isScalarTransformProperty,
@@ -8,6 +15,7 @@ export {
   normalizeTransformProperties,
   prepareTransformTween,
   resolveTransformProperty,
+  resolveScalarTransformProperty,
   resolveTransformFrom,
   type TransformAuthorProperty,
   type TransformNormalizationIssue,

@@ -23,7 +23,7 @@ export type HtmlReplaceProfile = Readonly<{
 }>
 
 /** Author-supplied cell sizing retained until the media box is measured. */
-export type MediaCellRequest = ReplaceCellGridSettings
+type MediaCellRequest = ReplaceCellGridSettings
 
 /** One grid configuration shared by the SVG masks and ticker sampling. */
 export type ResolvedMediaCellSettings = Readonly<{
@@ -73,7 +73,7 @@ export function normalizeProfile(
 
 
 /** Converts the media profile's cell fields to the shared grid settings. */
-export function toMediaCellSettings(
+function toMediaCellSettings(
   profile: SlotReplaceProfile | ReplaceMotionProfile | ReplaceMediaPresentationProfile,
 ): MediaCellRequest | undefined {
   if (profile.split !== 'cells') return undefined

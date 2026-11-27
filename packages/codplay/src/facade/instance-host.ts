@@ -10,7 +10,7 @@ import type {
 import type { CodPlayInstanceOptions } from './facade-types'
 
 /** Dependencies used to assemble one public HTML/DOM instance host. */
-export type InstanceHostOptions = Readonly<{
+type InstanceHostOptions = Readonly<{
   catalog: import('../runtime/catalog').RuntimeCapabilityCatalog
   engine: RuntimeEngine
   resourceMetadata: ReadonlyMap<string, RuntimePreloadMetadata[string]>
@@ -42,8 +42,8 @@ export function createInstanceHost(options: InstanceHostOptions): InstanceHost {
     numericLengthScale: resolveRootNumericLengthScale(root),
     partMarkerPrefix: options.instance.partMarkerPrefix,
     catalog: options.catalog,
-    resourceMetadata: toResourceMetadata(options.resourceMetadata),
-    resourceMedia: toResourceMedia(options.resourceMedia),
+    resourceMetadata: Object.fromEntries(options.resourceMetadata.entries()),
+    resourceMedia: Object.fromEntries(options.resourceMedia.entries()),
     engine: options.engine,
     idle: options.instance.idle,
     functions: options.instance.functions,
@@ -108,16 +108,3 @@ function observeRootResize(root: HTMLElement, onResize: () => void): () => void 
   return () => globalThis.removeEventListener('resize', onResize)
 }
 
-/** Converts the internal metadata map to the runner's indexed metadata shape. */
-function toResourceMetadata(
-  metadata: ReadonlyMap<string, RuntimePreloadMetadata[string]>,
-): RuntimePreloadMetadata {
-  return Object.fromEntries(metadata.entries())
-}
-
-/** Converts the internal media handoff map to the runner's indexed shape. */
-function toResourceMedia(
-  media: ReadonlyMap<string, RuntimePreloadMediaResources[string]>,
-): RuntimePreloadMediaResources {
-  return Object.fromEntries(media.entries())
-}

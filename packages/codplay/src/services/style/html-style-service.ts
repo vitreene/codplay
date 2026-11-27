@@ -1,3 +1,4 @@
+import { formatColor, isColorValue, isLegacySrgbColorValue, toOklchColor } from 'ace'
 import {
   applyHtmlTransformStyleProperty,
   commitHtmlTransformStyle,
@@ -64,16 +65,7 @@ export function createHtmlStyleService(context: HtmlMaterializerRuntimeContext):
 function cssValue(value: unknown, context: HtmlMaterializerRuntimeContext): string {
   const logicalLength = projectHtmlLogicalLength(value, context)
   if (logicalLength !== undefined) return logicalLength
-  if (!isServiceRecord(value)) return String(value)
-  if (value.kind !== 'color' || !Array.isArray(value.coords) || typeof value.alpha !== 'number') return String(value)
-  const coordinates = value.coords
-  if (!coordinates.every((coordinate) => typeof coordinate === 'number')) return String(value)
-  if (value.space === 'srgb' && coordinates.length >= 3) {
-    const alpha = value.alpha === 1 ? '1' : value.alpha.toFixed(3)
-    return `rgba(${Math.round(coordinates[0] * 255)}, ${Math.round(coordinates[1] * 255)}, ${Math.round(coordinates[2] * 255)}, ${alpha})`
-  }
-  if (value.space === 'oklch' && coordinates.length >= 3) {
-    return `oklch(${coordinates[0]} ${coordinates[1]} ${coordinates[2]} / ${value.alpha})`
-  }
+  if (isColorValue(value)) return formatColor(value)
+  if (isLegacySrgbColorValue(value)) return formatColor(toOklchColor(value))
   return String(value)
 }

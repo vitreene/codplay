@@ -1,4 +1,4 @@
-import { isFiniteNumber } from '../shared'
+import { isFiniteNumber, isPlainRecord } from '../shared'
 
 /** A two-dimensional point used by ACE's geometry primitives. */
 export type Point = readonly [number, number]
@@ -32,14 +32,14 @@ export type PathSegmentInput =
     }>
 
 /** One prepared line segment with its normalized endpoint and length. */
-export type PathLineSegment = Readonly<{
+type PathLineSegment = Readonly<{
   kind: 'line'
   to: Point
   length: number
 }>
 
 /** One prepared elliptical arc segment in center/angle form. */
-export type PathArcSegment = Readonly<{
+type PathArcSegment = Readonly<{
   kind: 'arc'
   to: Point
   center: Point
@@ -204,7 +204,7 @@ export function resolvePathFrame(path: Path, from: Point, to: Point, progress: n
 
 /** Validates one prepared path received from a compiled scene. */
 export function isPreparedPath(value: unknown): value is Path {
-  if (!isRecord(value) || (value.kind !== 'quadratic' && value.kind !== 'segments')) return false
+  if (!isPlainRecord(value) || (value.kind !== 'quadratic' && value.kind !== 'segments')) return false
   if (value.traversal !== 'parameter' && value.traversal !== 'arc-length') return false
   if (value.lengths !== null && (!Array.isArray(value.lengths) || !value.lengths.every(isFiniteNumber))) return false
   if (value.kind === 'quadratic') return isPoint(value.control)
@@ -440,7 +440,7 @@ function lerpPoint(from: Point, to: Point, progress: number): Point {
 
 /** Checks one prepared segment shape at the compiled-scene boundary. */
 function isPreparedSegment(value: unknown): value is PathSegment {
-  if (!isRecord(value) || !isPoint(value.to) || !isFiniteNumber(value.length)) return false
+  if (!isPlainRecord(value) || !isPoint(value.to) || !isFiniteNumber(value.length)) return false
   if (value.kind === 'line') return true
   return value.kind === 'arc'
     && isPoint(value.center)
@@ -455,7 +455,3 @@ function isPoint(value: unknown): value is Point {
   return Array.isArray(value) && value.length === 2 && value.every(isFiniteNumber)
 }
 
-/** Checks one JSON-like record without importing the scene layer. */
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}

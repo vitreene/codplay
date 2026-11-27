@@ -86,7 +86,8 @@ export function createReplaceSlotModuleService(
   /** Starts or preserves a timeline presentation before one slot state update. */
   function beforeComponentUpdate(update: RuntimeComponentUpdateContext): void {
     if (update.componentType !== 'slot') return
-    const contentSignature = createSlotContentSignature(update.state.content)
+    // Stable signature of the JSON-compatible foreign slot reference.
+    const contentSignature = JSON.stringify({ content: update.state.content }) ?? ''
     const contentChanged = slotContentSignatures.has(update.componentId)
       && slotContentSignatures.get(update.componentId) !== contentSignature
     slotContentSignatures.set(update.componentId, contentSignature)
@@ -243,11 +244,6 @@ export function normalizeReplaceSlotCommand(rawReplace: unknown): ReplaceSlotCom
   if (typeof profile === 'string') return createReplaceSlotCommand(profile)
   const { transition, ...settings } = profile
   return createReplaceSlotCommand(transition, settings)
-}
-
-/** Builds a stable signature for the JSON-compatible foreign slot reference. */
-function createSlotContentSignature(content: unknown): string {
-  return JSON.stringify({ content }) ?? ''
 }
 
 /** Applies the profile defaults and retains its shared SVG grid settings. */

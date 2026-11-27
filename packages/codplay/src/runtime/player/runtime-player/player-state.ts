@@ -2,7 +2,6 @@ import {
   PLAYER_LIFECYCLE_IDLE,
   type PlayerLifecycleState,
 } from '../../config/player-lifecycle'
-import type { RuntimePlayerEmitInput } from '../capture'
 import type {
   RuntimeSnapshotContribution,
   SolvedScene,
@@ -22,5 +21,3 @@ export class RuntimePlayerState {
   sequenceEndPending = false
 }
 
-/** Keeps the event input type close to the controller that consumes it. */
-export type RuntimePlayerEventInput = RuntimePlayerEmitInput

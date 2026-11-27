@@ -8,7 +8,7 @@ import type {
 const MEDIA_POSITION_TOLERANCE_MS = 150
 
 /** Applies one broadcast occurrence to the corresponding logical media state. */
-export function applyBroadcastOccurrence(
+function applyBroadcastOccurrence(
   state: MediaRuntimeState | undefined,
   occurrence: BroadcastOccurrence,
   mediaById: Map<string, MediaRuntimeState>,
@@ -210,7 +210,7 @@ export function resolveTimelineFromMaster(
 }
 
 /** Applies a complete reset for initialization, seek replay, or non-monotonic changes. */
-export function resetPlaybackStates(
+function resetPlaybackStates(
   mediaById: ReadonlyMap<string, MediaRuntimeState>,
   getMediaComponent: MediaComponentSurfaceResolver,
 ): void {

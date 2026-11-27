@@ -13,7 +13,7 @@ export type LiveActionTarget = Readonly<{
 }>
 
 /** One live action and all of its compiled targets. */
-export type ActiveLiveAction = Readonly<{
+type ActiveLiveAction = Readonly<{
   action: RuntimeLiveAction
   targets: readonly LiveActionTarget[]
 }>

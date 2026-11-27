@@ -1,3 +1,4 @@
+import { canAppendChild, listMaterializedRoots } from '../../shared'
 import {
   MARKUP_MODULE_SERVICE_ID,
   type MarkupModuleServiceInstance,
@@ -170,7 +171,7 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
           ...destination,
           roots: [],
         }
-        for (const root of materializedRootNodes(this.nodes.persoNodes.get(childKey))) {
+        for (const root of listMaterializedRoots(this.nodes.persoNodes.get(childKey))) {
           if (!isHtmlTransientNode(root)) entry.roots.push(root)
         }
         desiredRootsByDestination.set(key, entry)
@@ -240,7 +241,7 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
     referenceRoot?: unknown,
   ): void {
     const host = this.nodes.persoNodes.get(componentId)
-    if (!isAppendable(host)) {
+    if (!isObjectNode(host) || !canAppendChild(host)) {
       throw new Error(`Foreign content host is not materialized as an appendable node: ${componentId}`)
     }
 
@@ -322,7 +323,7 @@ function isMarkupModuleService(value: RuntimeModuleServiceInstance): value is Ma
 
 /** Detaches one materialized root from its current DOM parent. */
 function detachMaterializedRoot(root: HtmlMaterializedRoot): void {
-  for (const node of materializedRootNodes(root)) {
+  for (const node of listMaterializedRoots(root)) {
     if (!isDetachableNode(node) || node.parentNode === null) continue
     node.parentNode.removeChild(node)
   }
@@ -371,7 +372,7 @@ function reconcileStructuredRoots(
 
 /** Detaches every real root of one persistent component materialization. */
 function detachStructuredRoot(root: unknown): void {
-  for (const node of materializedRootNodes(root)) detachStructuredNode(node)
+  for (const node of listMaterializedRoots(root)) detachStructuredNode(node)
 }
 
 /** Places one real node without introducing a wrapper for a fragment. */
@@ -383,7 +384,7 @@ function reconcileStructuredNode(
 ): void {
   if (parent === undefined || child === undefined || parent === child) return
   if (isIgnoredNode(child)) return
-  if (isAppendable(parent)) {
+  if (isObjectNode(parent) && canAppendChild(parent)) {
     const managedChildren = Array.from(parent.children ?? []).filter((node) => !isIgnoredNode(node))
     const desiredIndex = desiredRoots.indexOf(child)
     const currentIndex = managedChildren.indexOf(child)
@@ -432,21 +433,6 @@ function detachStructuredNode(node: unknown): void {
     parent.children = parent.children.filter((child) => child !== node)
   }
   node.parentNode = null
-}
-
-/** Returns the persistent real roots represented by one component materialization. */
-function materializedRootNodes(root: unknown): readonly unknown[] {
-  if (root === undefined || root === null) return []
-  return Array.isArray(root) ? root : [root]
-}
-
-/** Checks the minimal append contract supported by a real DOM parent. */
-function isAppendable(value: unknown): value is {
-  parentNode?: unknown | null
-  children?: unknown[]
-  appendChild: (child: unknown) => void
-} {
-  return isObjectNode(value) && typeof value.appendChild === 'function'
 }
 
 /** Checks the optional insertion contract used to preserve an existing sibling. */

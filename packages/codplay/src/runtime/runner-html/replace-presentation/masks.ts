@@ -1,8 +1,6 @@
 import { getLocalBoxSize } from './dom'
 import type { SlotReplaceShape } from '../../components'
 
-
-
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
 const MASK_PATHS = {
   circle: 'M50 0 A50 50 0 1 1 50 100 A50 50 0 1 1 50 0 Z',
@@ -10,11 +8,10 @@ const MASK_PATHS = {
   rect: 'M0 0 H100 V100 H0 Z',
 } as const
 
-export type MaskShapeDefinition = Readonly<{
+type MaskShapeDefinition = Readonly<{
   path: string
   viewBox: string
 }>
-
 
 /** Applies the generated alpha mask used by the expanding reveal. */
 export function setMaskImage(snapshot: HTMLElement, shape: SlotReplaceShape): void {
@@ -30,9 +27,8 @@ export function setMaskImage(snapshot: HTMLElement, shape: SlotReplaceShape): vo
   snapshot.style.setProperty('-webkit-mask-size', '0% auto')
 }
 
-
 /** Serializes one preset or author path into an SVG alpha mask data URL. */
-export function createMaskDataUrl(shape: SlotReplaceShape): string {
+function createMaskDataUrl(shape: SlotReplaceShape): string {
   const svg = document.createElementNS(SVG_NAMESPACE, 'svg')
   svg.setAttribute('xmlns', SVG_NAMESPACE)
   svg.setAttribute('viewBox', '0 0 100 100')
@@ -62,18 +58,8 @@ export function getMaskShapeDefinition(shape: SlotReplaceShape | 'rect'): MaskSh
   return { path: shape.path, viewBox: shape.viewBox }
 }
 
-
-/** Adds one filled path to the generated SVG mask. */
-export function appendMaskPath(svg: SVGSVGElement, data: string): void {
-  const path = document.createElementNS(SVG_NAMESPACE, 'path')
-  path.setAttribute('d', data)
-  path.setAttribute('fill', 'white')
-  svg.append(path)
-}
-
-
 /** Builds a centered five-point star path on a normalized square. */
-export function createStarPath(): string {
+function createStarPath(): string {
   const points = Array.from({ length: 10 }, (_, index) => {
     const angle = (-90 + index * 36) * Math.PI / 180
     const radius = index % 2 === 0 ? 49 : 22
@@ -83,7 +69,6 @@ export function createStarPath(): string {
   })
   return `${points.join(' ')} Z`
 }
-
 
 /** Chooses an oversized mask extent that covers tall and wide slot rectangles. */
 export function getMaskExtent(root: Element): number {

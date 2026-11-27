@@ -32,12 +32,6 @@ import type {
   LayoutSnapshot,
 } from '../../motion'
 
-/** One instance-local root target mapped to the runner's supplied root element. */
-export type HtmlRootTarget = Readonly<{
-  id: string
-  storyId: string
-}>
-
 /** Selects the resolved occurrences whose groups need a geometry capture. */
 export type MotionBoundaryRebuildOptions = Readonly<{
   occurrences?: readonly RuntimeMoveOccurrence[]

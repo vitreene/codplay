@@ -1,7 +1,7 @@
 import type { DiagnosticCollector, DiagnosticRefs } from '../../diagnostics'
 
 /** Describes the validation capability that is missing from one declaration. */
-export type MissingValidatorInput = Readonly<{
+type MissingValidatorInput = Readonly<{
   kind: 'component' | 'service'
   name: string
   refs: DiagnosticRefs

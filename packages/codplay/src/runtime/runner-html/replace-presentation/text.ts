@@ -8,7 +8,7 @@ import { nextReplacePresentationId } from './ids'
 
 export type TextUnit = { text: string; spans: HTMLElement[]; static?: boolean }
 
-export type TextUnitLayer = {
+type TextUnitLayer = {
   contentRoot: HTMLElement
   layer: HTMLElement
   units: TextUnit[]
@@ -111,9 +111,9 @@ export function buildTextUnitLayer(snapshot: HTMLElement, split: 'letter' | 'wor
 }
 
 
-export type TextNodeEntry = Readonly<{ node: Text; value: string; start: number; end: number }>
+type TextNodeEntry = Readonly<{ node: Text; value: string; start: number; end: number }>
 
-export type GraphemeSegment = Readonly<{ text: string; start: number; end: number }>
+type GraphemeSegment = Readonly<{ text: string; start: number; end: number }>
 
 export type MeasuredTextFragment = Readonly<{
   text: string
@@ -135,7 +135,7 @@ export type MeasuredTextFragment = Readonly<{
 
 
 /** Collects visible text nodes and their offsets in one flattened reading string. */
-export function collectTextNodeEntries(root: HTMLElement): TextNodeEntry[] {
+function collectTextNodeEntries(root: HTMLElement): TextNodeEntry[] {
   const entries: TextNodeEntry[] = []
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
   let cursor = 0
@@ -155,7 +155,7 @@ export function collectTextNodeEntries(root: HTMLElement): TextNodeEntry[] {
 
 
 /** Excludes source text stored in non-rendering HTML elements. */
-export function isNonVisualTextElement(element: HTMLElement): boolean {
+function isNonVisualTextElement(element: HTMLElement): boolean {
   return element.closest('script, style, template') !== null
 }
 
@@ -176,7 +176,7 @@ export function segmentTextGraphemes(value: string): GraphemeSegment[] {
 
 
 /** Keeps combining marks, emoji modifiers, joiner sequences, and flag pairs whole. */
-export function segmentTextGraphemesFallback(value: string): GraphemeSegment[] {
+function segmentTextGraphemesFallback(value: string): GraphemeSegment[] {
   const parts: GraphemeSegment[] = []
   let offset = 0
   let regionalIndicators = 0
@@ -219,7 +219,7 @@ export function splitTextWords(value: string): GraphemeSegment[] {
 
 
 /** Measures each grapheme's rendered fragments before the source text is hidden. */
-export function measureTextGraphemes(
+function measureTextGraphemes(
   entries: readonly TextNodeEntry[],
   graphemes: readonly GraphemeSegment[],
   root: HTMLElement,
@@ -311,7 +311,7 @@ export function createTextUnits(
 
 
 /** Applies measured typography and coordinates to one temporary text fragment. */
-export function applyMeasuredTextStyle(
+function applyMeasuredTextStyle(
   span: HTMLElement,
   fragment: MeasuredTextFragment,
   remSizePx: number,
@@ -341,7 +341,7 @@ export function applyMeasuredTextStyle(
 
 
 /** Aligns each generated fragment's rendered glyph box with its measured source range. */
-export function alignTextFragmentsToSource(
+function alignTextFragmentsToSource(
   root: HTMLElement,
   rootRect: Readonly<{ left: number; top: number; width: number; height: number }>,
   fragments: readonly Readonly<{ span: HTMLElement; fragment: MeasuredTextFragment }>[],
@@ -372,7 +372,7 @@ export function alignTextFragmentsToSource(
 
 
 /** Composes the affine CSS transform matrices from a text root through its ancestors. */
-export function getCssLinearTransform(element: HTMLElement): Matrix2D {
+function getCssLinearTransform(element: HTMLElement): Matrix2D {
   let result = createIdentityMatrix()
   let current: HTMLElement | null = element
   while (current !== null) {
@@ -385,7 +385,7 @@ export function getCssLinearTransform(element: HTMLElement): Matrix2D {
 
 
 /** Parses the linear part of a computed CSS 2D or planar 3D transform matrix. */
-export function parseCssLinearTransform(value: string): Matrix2D | undefined {
+function parseCssLinearTransform(value: string): Matrix2D | undefined {
   if (value === 'none') return undefined
   const values = value.slice(value.indexOf('(') + 1, value.lastIndexOf(')'))
     .split(',')
@@ -410,7 +410,7 @@ export function parseCssLinearTransform(value: string): Matrix2D | undefined {
 
 
 /** Converts a viewport correction into the text root's local CSS coordinate plane. */
-export function toLocalTextOffset(
+function toLocalTextOffset(
   x: number,
   y: number,
   transform: Matrix2D,

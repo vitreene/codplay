@@ -29,7 +29,7 @@ import {
 import { resolveCaptureEventTarget } from '../../capture/capture-event-target'
 
 /** Dependencies required to coordinate live capture without owning playback. */
-export type RuntimePlayerCaptureControllerContext = Readonly<{
+type RuntimePlayerCaptureControllerContext = Readonly<{
   functions: CompiledFunctionCollection
   getStateStore: () => RuntimeStateStore
   liveActions: RuntimePlayerLiveActionController

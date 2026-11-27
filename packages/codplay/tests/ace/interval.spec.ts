@@ -2,13 +2,6 @@ import { describe, expect, it } from 'vitest'
 
 import { prepareInterval, resolveInterval, type ColorValue } from '../../src/ace/interval'
 
-const srgb = (coords: readonly number[], alpha = 1): ColorValue => ({
-  kind: 'color',
-  space: 'srgb',
-  coords,
-  alpha,
-})
-
 const oklch = (coords: readonly number[], alpha = 1): ColorValue => ({
   kind: 'color',
   space: 'oklch',
@@ -49,23 +42,15 @@ describe('prepareInterval', () => {
     expect(() => prepareInterval(0, '50px')).toThrow(/meme unite/)
   })
 
-  it('normalise les couleurs CSS prises en charge pendant la preparation', () => {
-    expect(resolveInterval(prepareInterval('#f00', '#00f'), 0.5)).toEqual({
-      kind: 'color',
-      space: 'srgb',
-      coords: [0.5, 0, 0.5],
-      alpha: 1,
-    })
+  it('normalise les couleurs CSS prises en charge dans l espace OKLCH unique', () => {
+    expect(prepareInterval('#f00', '#00f')).toMatchObject({ kind: 'color', space: 'oklch' })
     expect(prepareInterval('oklch(60% .2 30)', 'oklch(70% .2 60)')).toMatchObject({
       kind: 'color',
       space: 'oklch',
     })
-    expect(resolveInterval(prepareInterval('red', 'blue'), 0.5)).toEqual({
-      kind: 'color',
-      space: 'srgb',
-      coords: [0.5, 0, 0.5],
-      alpha: 1,
-    })
+    expect(resolveInterval(prepareInterval('red', 'blue'), 0.5)).toEqual(
+      resolveInterval(prepareInterval('#f00', 'rgb(0 0 255)'), 0.5),
+    )
   })
 })
 
@@ -90,11 +75,11 @@ describe('resolveInterval', () => {
     expect(resolveInterval(prepareInterval(0, 10), 1.2)).toBe(12)
   })
 
-  it('interpole une couleur sRGB preparee', () => {
-    expect(resolveInterval(prepareInterval(srgb([1, 0, 0]), srgb([0, 0, 1], 0.5)), 0.5)).toEqual({
+  it('interpole lightness et chroma en alpha premultiplie', () => {
+    expect(resolveInterval(prepareInterval(oklch([0.6, 0.2, 30]), oklch([0.8, 0.1, 30], 0.5)), 0.5)).toEqual({
       kind: 'color',
-      space: 'srgb',
-      coords: [0.5, 0, 0.5],
+      space: 'oklch',
+      coords: [(0.6 + 0.4) / 1.5, (0.2 + 0.05) / 1.5, 30],
       alpha: 0.75,
     })
   })
@@ -115,13 +100,13 @@ describe('resolveInterval', () => {
   })
 
   it('interpole recursivement les tableaux et retourne une nouvelle valeur', () => {
-    const from = [0, srgb([1, 0, 0])] as const
-    const to = [20, srgb([0, 0, 1])] as const
+    const from = [0, oklch([0.6, 0.2, 30])] as const
+    const to = [20, oklch([0.8, 0.1, 30])] as const
     const interval = prepareInterval(from, to)
     const first = resolveInterval(interval, 0.5)
     const second = resolveInterval(interval, 0.5)
 
-    expect(first).toEqual([10, srgb([0.5, 0, 0.5])])
+    expect(first).toEqual([10, oklch([0.7, 0.15000000000000002, 30])])
     expect(second).toEqual(first)
     expect(second).not.toBe(first)
   })

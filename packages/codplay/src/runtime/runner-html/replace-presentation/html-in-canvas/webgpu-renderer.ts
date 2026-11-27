@@ -38,7 +38,7 @@ export type HtmlInCanvasInitialMedia = Readonly<{
 }>
 
 /** What the renderer shows until its first frame: a native frame, or a covering DOM copy. */
-export type HtmlInCanvasMountOptions = Readonly<{
+type HtmlInCanvasMountOptions = Readonly<{
   initialMedia?: HtmlInCanvasInitialMedia
   /** Slot name of an extra outgoing copy shown above the canvas until the first DOM frame. */
   coverSlot?: string
@@ -54,7 +54,7 @@ type GpuResources = Readonly<{
 }>
 
 /** WebGPU resources that draw two slotted DOM states with one HTML-in-Canvas effect. */
-export type HtmlInCanvasRenderer = Readonly<{
+type HtmlInCanvasRenderer = Readonly<{
   /** Mounts the states in `parent`; the outgoing state stays visible until the first frame. */
   mount: (parent: ShadowRoot, outgoingSlot: string, options?: HtmlInCanvasMountOptions) => void
   sample: (progress: number) => void

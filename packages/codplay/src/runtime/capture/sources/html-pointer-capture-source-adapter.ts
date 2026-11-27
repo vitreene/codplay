@@ -1,6 +1,6 @@
 import type { RuntimeCaptureSourcePort, RuntimeCaptureSourceSession } from '../capture-source-circuit'
 import type { RuntimeCaptureSample, RuntimeCaptureState } from '../capture-types'
-import { isFiniteNumber } from '../../../shared'
+import { hasParentNode, isFiniteNumber, listMaterializedRoots } from '../../../shared'
 
 const GLOBAL_EVENT_LISTENER_OPTIONS = { capture: true } as const
 
@@ -198,25 +198,14 @@ function resolvePersoKey(
   while (current !== null && current !== undefined && !visited.has(current)) {
     visited.add(current)
     for (const [persoKey, root] of nodes.persoNodes) {
-      for (const node of materializedRootNodes(root)) {
+      for (const node of listMaterializedRoots(root)) {
         if (node === current) return persoKey
       }
     }
-    if (!isParentNode(current)) break
+    if (!hasParentNode(current)) break
     current = current.parentNode
   }
   return undefined
-}
-
-/** Expands one persistent HTML root or fragment roots for event hit resolution. */
-function materializedRootNodes(root: unknown): readonly unknown[] {
-  if (root === undefined || root === null) return []
-  return Array.isArray(root) ? root : [root]
-}
-
-/** Narrows one event target to the parent relationship needed by the adapter. */
-function isParentNode(value: unknown): value is Readonly<{ parentNode: unknown | null }> {
-  return typeof value === 'object' && value !== null && 'parentNode' in value
 }
 
 /** Extracts the documented pointer sample without calculating or changing values. */

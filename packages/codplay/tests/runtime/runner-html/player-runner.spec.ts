@@ -1076,12 +1076,12 @@ describe('HtmlPlayerRunner', () => {
     expect(runner.seek(600).ok).toBe(true)
     expect(item.style.transform).toBe('translate(50px, 20px)')
     expect(item.style.opacity).toBe('0.5')
-    expect(item.style.backgroundColor).toBe('rgba(128, 128, 128, 1)')
+    expect(item.style.backgroundColor).toBe('oklch(0.5 0 0 / 1)')
     expect(item.parentNode).toBe(root)
 
     expect(runner.seek(1100).ok).toBe(true)
     expect(item.style.transform).toBe('translate(100px, 40px)')
-    expect(item.style.backgroundColor).toBe('rgba(255, 255, 255, 1)')
+    expect(item.style.backgroundColor).toBe('oklch(1 0 0 / 1)')
     expect(item.parentNode).toBe(root)
 
     expect(runner.seek(0).ok).toBe(true)
@@ -1090,7 +1090,7 @@ describe('HtmlPlayerRunner', () => {
     runner.advance(600)
     expect(item.style.transform).toBe('translate(50px, 20px)')
     expect(item.style.opacity).toBe('0.5')
-    expect(item.style.backgroundColor).toBe('rgba(128, 128, 128, 1)')
+    expect(item.style.backgroundColor).toBe('oklch(0.5 0 0 / 1)')
 
     runner.resize(2)
     expect(item.style.transform).toBe('translate(100px, 40px)')

@@ -60,7 +60,7 @@ import type { RuntimePlayerState } from './player-state'
 const RUNTIME_MODULE_EVENT_NAME = '__codplay_module_event__'
 
 /** Dependencies used by the player event and frame boundary. */
-export type RuntimePlayerEventControllerContext = Readonly<{
+type RuntimePlayerEventControllerContext = Readonly<{
   state: RuntimePlayerState
   compiledScene: CompiledScene
   strapCollections: StrapCollections | undefined

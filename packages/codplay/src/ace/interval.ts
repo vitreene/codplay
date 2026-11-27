@@ -1,19 +1,20 @@
 import { applyRelative, compose, decompose, lerp } from './values'
-import { isColorCandidate, parseColor } from './adapters/color-adapter'
+import {
+  ACHROMATIC_CHROMA,
+  isColorCandidate,
+  isColorValue,
+  isLegacySrgbColorValue,
+  parseColor,
+  toOklchColor,
+  type ColorSpace,
+  type ColorValue,
+  type LegacySrgbColorValue,
+} from './adapters/color-adapter'
 
-/** Espaces de couleur resolus sans conversion par ACE. */
-export type ColorSpace = 'srgb' | 'oklch'
+export type { ColorSpace, ColorValue }
 
 /** Direction retenue pour le passage entre deux teintes polaires. */
 export type HuePath = 'shorter' | 'longer' | 'increasing' | 'decreasing'
-
-/** Une couleur normalisee avant son interpolation par ACE. */
-export type ColorValue = Readonly<{
-  kind: 'color'
-  space: ColorSpace
-  coords: readonly number[]
-  alpha: number
-}>
 
 /** Un objet de valeur preparee, potentiellement imbrique. */
 export interface InterpolationObject {
@@ -28,6 +29,7 @@ export type InterpolationValue =
   | null
   | undefined
   | ColorValue
+  | LegacySrgbColorValue
   | readonly InterpolationValue[]
   | InterpolationObject
 
@@ -45,7 +47,7 @@ type ColorInterval = Readonly<{
   to: readonly number[]
   fromAlpha: number
   toAlpha: number
-  hue: HuePath | null
+  hue: HuePath
 }>
 
 type StringInterval = Readonly<{
@@ -79,23 +81,20 @@ export type Interval =
 
 const NUMBER_PATTERN = /[-+]?(?:\d+\.?\d*|\.?\d+)(?:[eE][-+]?\d+)?/g
 
-const isColor = (value: InterpolationValue): value is ColorValue => {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
-  const candidate = value as Partial<ColorValue>
-  return (
-    candidate.kind === 'color' &&
-    (candidate.space === 'srgb' || candidate.space === 'oklch') &&
-    Array.isArray(candidate.coords) &&
-    typeof candidate.alpha === 'number'
-  )
-}
+const isColor = (value: InterpolationValue): value is ColorValue | LegacySrgbColorValue =>
+  isColorValue(value) || isLegacySrgbColorValue(value)
 
 const isRecord = (value: InterpolationValue): value is InterpolationObject =>
   typeof value === 'object' && value !== null && !Array.isArray(value) && !isColor(value)
 
-/** Normalizes a supported CSS color string before interval preparation. */
-const normalizeColorString = (value: InterpolationValue): InterpolationValue =>
-  typeof value === 'string' && isColorCandidate(value) ? parseColor(value) : value
+/**
+ * Normalizes a CSS color string or a legacy sRGB value into OKLCH before interval preparation.
+ * @deprecated path for strings: compiled scenes already carry OKLCH `ColorValue`s.
+ */
+const normalizeColorInput = (value: InterpolationValue): InterpolationValue => {
+  if (typeof value === 'string') return isColorCandidate(value) ? parseColor(value) : value
+  return isLegacySrgbColorValue(value) ? toOklchColor(value) : value
+}
 
 /**
  * Prepare un nombre, avec ou sans unite, en appliquant les operateurs relatifs d'anime.
@@ -153,23 +152,21 @@ const prepareString = (from: string, to: string): StringInterval => {
 }
 
 /**
- * Prepare deux couleurs deja placees dans le meme espace interne.
+ * Prepare deux couleurs OKLCH. Une borne achromatique emprunte la teinte de l'autre borne.
  */
 const prepareColor = (from: ColorValue, to: ColorValue): ColorInterval => {
-  if (from.space !== to.space) {
-    throw new Error('ace: from et to doivent employer le meme espace de couleur')
-  }
-  if (from.coords.length !== to.coords.length) {
-    throw new Error('ace: from et to doivent avoir le meme nombre de coordonnees couleur')
-  }
+  const fromCoords = [...from.coords]
+  const toCoords = [...to.coords]
+  if (fromCoords[1] < ACHROMATIC_CHROMA) fromCoords[2] = toCoords[2]
+  else if (toCoords[1] < ACHROMATIC_CHROMA) toCoords[2] = fromCoords[2]
   return {
     kind: 'color',
-    space: from.space,
-    from: [...from.coords],
-    to: [...to.coords],
+    space: 'oklch',
+    from: fromCoords,
+    to: toCoords,
     fromAlpha: from.alpha,
     toAlpha: to.alpha,
-    hue: from.space === 'oklch' ? 'shorter' : null,
+    hue: 'shorter',
   }
 }
 
@@ -177,14 +174,14 @@ const prepareColor = (from: ColorValue, to: ColorValue): ColorInterval => {
  * Normalise les couleurs CSS puis prepare une valeur pour l'interpolation recursive.
  */
 const prepareValue = (from: InterpolationValue, to: InterpolationValue): Interval => {
-  const normalizedFrom = normalizeColorString(from)
-  const normalizedTo = normalizeColorString(to)
+  const normalizedFrom = normalizeColorInput(from)
+  const normalizedTo = normalizeColorInput(to)
 
   if (isColor(normalizedFrom) || isColor(normalizedTo)) {
     if (!isColor(normalizedFrom) || !isColor(normalizedTo)) {
       throw new Error('ace: from et to doivent etre deux couleurs ou deux valeurs de meme nature')
     }
-    return prepareColor(normalizedFrom, normalizedTo)
+    return prepareColor(toOklchColor(normalizedFrom), toOklchColor(normalizedTo))
   }
 
   if (Array.isArray(normalizedFrom) || Array.isArray(normalizedTo)) {
@@ -247,6 +244,22 @@ const resolveHue = (from: number, to: number, progress: number, path: HuePath): 
 }
 
 /**
+ * Interpole lightness et chroma en alpha premultiplie (CSS Color 4) ; la teinte ne l'est jamais.
+ */
+const resolveColor = (interval: ColorInterval, progress: number): ColorValue => {
+  const alpha = lerp(interval.fromAlpha, interval.toAlpha, progress)
+  const premultiplied = (index: number): number => alpha === 0
+    ? lerp(interval.from[index], interval.to[index], progress)
+    : lerp(interval.from[index] * interval.fromAlpha, interval.to[index] * interval.toAlpha, progress) / alpha
+  return {
+    kind: 'color',
+    space: interval.space,
+    coords: [premultiplied(0), premultiplied(1), resolveHue(interval.from[2], interval.to[2], progress, interval.hue)],
+    alpha,
+  }
+}
+
+/**
  * Resout un intervalle prepare pour une progression deja calculee.
  */
 const resolveValue = (interval: Interval, progress: number): InterpolationValue => {
@@ -258,19 +271,7 @@ const resolveValue = (interval: Interval, progress: number): InterpolationValue 
       interval.unit,
     )
   }
-  if (interval.kind === 'color') {
-    const coords = interval.from.map((from, index) =>
-      interval.space === 'oklch' && index === 2 && interval.hue
-        ? resolveHue(from, interval.to[index], progress, interval.hue)
-        : lerp(from, interval.to[index], progress),
-    )
-    return {
-      kind: 'color',
-      space: interval.space,
-      coords,
-      alpha: lerp(interval.fromAlpha, interval.toAlpha, progress),
-    }
-  }
+  if (interval.kind === 'color') return resolveColor(interval, progress)
   if (interval.kind === 'string') {
     return interval.parts.map((part) =>
       typeof part === 'string' ? part : resolveValue(part, progress),

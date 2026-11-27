@@ -9,7 +9,7 @@ import type {
 import { isActionSequence, isTweenAction, planActionSequenceSteps } from './action-sequence'
 import { resolveActionDefinition } from './action-resolution'
 import { flattenCompiledEventimes, type FlattenedCompiledEventime } from './compiled-eventimes'
-import type { RuntimeStoryResetBoundary, RuntimeTrackEvent, RuntimeTrackJournal } from './track-journal'
+import { isAfterStoryResetBoundary, type RuntimeTrackEvent, type RuntimeTrackJournal } from './track-journal'
 import { buildTrackRegistry, resolveStoryTrackId } from './tracks'
 import type { MaterializedAction, MaterializedMoveOccurrence, MaterializedPerso, MaterializedScene } from './types'
 
@@ -124,7 +124,7 @@ function materializeSceneAtBoundary(
         options.includePersistOnly !== false,
       ),
     ]
-      .filter((event) => reset === undefined || isAfterStoryReset(event, reset))
+      .filter((event) => reset === undefined || isAfterStoryResetBoundary(event.startAt, event.eventSeq, reset))
     for (const perso of story.persos) {
       const key = `${storyId}:${perso.id}`
       const actions = materializePersoActions(events, perso.actions, timeMs, includeBoundary)
@@ -353,7 +353,7 @@ function getLiveEventsForStory(
         && track !== undefined
         && journal.isTrackActive(event.trackId)
     })
-    .filter((event) => reset === undefined || isAfterStoryResetEvent(event, reset))
+    .filter((event) => reset === undefined || isAfterStoryResetBoundary(event.applyAtMs, event.eventSeq, reset))
     .map((event) => toFlattenedLiveEvent(event, event.trackId, journal.registry.tracks[event.trackId]?.order ?? 0))
 }
 
@@ -368,25 +368,6 @@ function toFlattenedLiveEvent(event: RuntimeTrackEvent, trackId: string, trackOr
     eventSeq: event.eventSeq,
     declarationPath: [Number.MAX_SAFE_INTEGER, event.eventSeq],
   }
-}
-
-/** Tests whether a compiled or live event occurs after one story reset. */
-function isAfterStoryReset(
-  event: FlattenedEventime,
-  reset: RuntimeStoryResetBoundary,
-): boolean {
-  if (event.startAt > reset.applyAtMs) return true
-  if (event.startAt < reset.applyAtMs) return false
-  return event.eventSeq !== undefined && event.eventSeq > reset.eventSeq
-}
-
-/** Tests whether one live event occurs after one story reset. */
-function isAfterStoryResetEvent(
-  event: RuntimeTrackEvent,
-  reset: RuntimeStoryResetBoundary,
-): boolean {
-  return event.applyAtMs > reset.applyAtMs
-    || (event.applyAtMs === reset.applyAtMs && event.eventSeq > reset.eventSeq)
 }
 
 /** Reads the mutable track activity layer without mutating compiled metadata. */

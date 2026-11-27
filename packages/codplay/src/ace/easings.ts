@@ -65,7 +65,7 @@ export const elastic = (
 // ---------------------------------------------------------------------------
 
 /** Les quatre régimes d'application d'une courbe de base. */
-export const easeTypes = {
+const easeTypes = {
   in: (easeIn: EasingFunction): EasingFunction => (t) => easeIn(t),
   out: (easeIn: EasingFunction): EasingFunction => (t) => 1 - easeIn(1 - t),
   inOut:
@@ -184,6 +184,18 @@ export const irregular = (
   return linear(...values)
 }
 
+/** Pseudo-random generator in [0, 1[ seeded by one text (FNV-1a hash, mulberry32 sequence). */
+const createSeededRandom = (text: string): (() => number) => {
+  let seed = 0x811c9dc5
+  for (let index = 0; index < text.length; index++) seed = Math.imul(seed ^ text.charCodeAt(index), 0x01000193)
+  return () => {
+    seed = (seed + 0x6d2b79f5) | 0
+    let value = Math.imul(seed ^ (seed >>> 15), 1 | seed)
+    value = (value + Math.imul(value ^ (value >>> 7), 61 | value)) ^ value
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Catalogue nommé
 // ---------------------------------------------------------------------------
@@ -221,12 +233,11 @@ const parametricBases: Record<string, (...args: Array<number | string>) => Easin
  * Marqué à la construction plutôt que déduit du nom — l'original teste `nom.includes('Back')`,
  * ce qui casserait dès qu'une courbe future contiendrait ce mot.
  */
-export const parametricNames = new Set<string>()
+const parametricNames = new Set<string>()
 
 export const eases: Record<string, EasingFunction | ((...args: Array<number | string>) => EasingFunction)> =
   (() => {
     const list: Record<string, EasingFunction | ((...args: Array<number | string>) => EasingFunction)> = {
-      linear: none,
       none,
     }
     for (const type of Object.keys(easeTypes) as Array<keyof typeof easeTypes>) {
@@ -240,6 +251,26 @@ export const eases: Record<string, EasingFunction | ((...args: Array<number | st
         list[fullName] = (...args: Array<number | string>) => applyType(base(...args))
         parametricNames.add(fullName)
       }
+    }
+    // Les fonctions paramétrées d'anime.js, résolues en chaîne : une scène compilée ne
+    // porte que des chaînes (`steps(4)`, `cubicBezier(.42, 0, .58, 1)`, `linear(0, .5 30%, 1)`).
+    const parametricFunctions: Record<string, (...args: Array<number | string>) => EasingFunction> = {
+      linear: (...args) => linear(...args),
+      steps: (count = 10, fromStart = 'end') => {
+        const position = String(fromStart).trim()
+        return steps(Number(count), position === 'true' || position === 'start')
+      },
+      cubicBezier: (x1 = 0.5, y1 = 0, x2 = 0.5, y2 = 1) => cubicBezier(Number(x1), Number(y1), Number(x2), Number(y2)),
+      // Une même déclaration donne toujours la même courbe : le hasard est graine par son texte.
+      irregular: (length = 10, randomness = 1) => irregular(
+        Number(length),
+        Number(randomness),
+        createSeededRandom(`irregular(${String(length).trim()},${String(randomness).trim()})`),
+      ),
+    }
+    for (const [name, factory] of Object.entries(parametricFunctions)) {
+      list[name] = factory
+      parametricNames.add(name)
     }
     return list
   })()

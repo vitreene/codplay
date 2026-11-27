@@ -780,7 +780,7 @@ describe('V2 replacement modules', () => {
     expect(runner.seek(600).ok).toBe(true)
     expect(root.querySelectorAll('[data-codplay-replace-view]')).toHaveLength(0)
     expect((runner.getPersoNode('main:copy') as HTMLElement).textContent).toBe('ACA')
-    expect((runner.getPersoNode('main:copy') as HTMLElement).style.color).toBe('rgb(12, 34, 56)')
+    expect((runner.getPersoNode('main:copy') as HTMLElement).style.color).toMatch(/^oklch\(0\.246717 0\.050582 250\.603/)
   })
 
   const contentForms = [

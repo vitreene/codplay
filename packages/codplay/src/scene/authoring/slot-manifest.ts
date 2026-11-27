@@ -60,7 +60,7 @@ export function slotManifest(
     if (options.storyId !== undefined && options.storyId !== storyKey && options.storyId !== storyId) continue
     story.persos.forEach((perso, index) => {
       if (perso.type !== 'slot') return
-      const replace = readSlotReplace(perso.initial)
+      const replace = parseSlotReplaceProfile(perso.initial?.replace)
       entries.push({
         slot: perso.name ?? '',
         storyId,
@@ -129,11 +129,6 @@ function isCompiledScene(scene: SlotManifestScene): scene is CompiledScene {
 /** Formats names consistently in author-facing diagnostics. */
 function formatNames(names: readonly string[]): string {
   return names.length === 0 ? '(none)' : names.map((name) => `"${name}"`).join(', ')
-}
-
-/** Reads the validated slot replacement declaration without interpreting foreign content. */
-function readSlotReplace(initial: Readonly<Record<string, unknown>> | undefined): SlotReplace | undefined {
-  return parseSlotReplaceProfile(initial?.replace)
 }
 
 /** Common story shape needed by manifest discovery on author and compiled data. */

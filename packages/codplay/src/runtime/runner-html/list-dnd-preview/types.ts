@@ -1,4 +1,3 @@
-import type { RuntimeCaptureSample, RuntimeCaptureState } from '../../capture'
 import type { HtmlTransientRect } from '../transient-flip'
 
 /** Resolves one mounted HTML perso root owned by the runner. */
@@ -62,8 +61,3 @@ export type ActivePreview = {
   height?: number
 }
 
-/** Identifies the geometry inputs consumed by one target resolution. */
-export type DndPointerSample = Readonly<{
-  sample: RuntimeCaptureSample
-  captureState: RuntimeCaptureState
-}>

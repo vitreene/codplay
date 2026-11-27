@@ -41,9 +41,18 @@ actions concurrentes.
 ## Courbes et séquences temporelles
 
 `parseEase` résout les courbes nommées, y compris les formes paramétrées.
-Un nom inconnu provoque une erreur. Le catalogue comprend les courbes de
-Bézier, `steps` et `linear` ; ce contrat ne garantit pas de parité avec une
-bibliothèque externe.
+Un nom inconnu provoque une erreur. Le catalogue reprend l'ensemble des
+définitions d'anime.js v4 :
+- `none`, et les puissances `in`, `out`, `inOut`, `outIn` (exposant en
+  paramètre), déclinées avec `Quad`, `Cubic`, `Quart`, `Quint`, `Sine`, `Circ`,
+  `Expo`, `Bounce`, `Back(dépassement)` et `Elastic(amplitude, période)` ;
+- les fonctions qu'anime.js importe à part, résolues ici en chaîne puisqu'une
+  scène compilée ne porte que des chaînes : `linear(…points)` (points répartis,
+  ou abscisse en pourcentage), `steps(nombre, start|end)`,
+  `cubicBezier(x1, y1, x2, y2)` et `irregular(longueur, hasard)`. Le hasard
+  d'`irregular` est graine par le texte de la déclaration : une même
+  déclaration donne toujours la même courbe, en Play comme en Seek.
+`spring` reste une construction à part (ci-dessous), comme dans anime.js.
 
 `spring` construit un easing déterministe à partir de paramètres physiques ou
 perceptuels et expose sa durée de stabilisation. Ses évaluations sont pures et

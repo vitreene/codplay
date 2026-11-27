@@ -27,7 +27,7 @@ type RuntimePlayerSeekTransaction = {
 }
 
 /** Dependencies used by one player-local seek transaction. */
-export type RuntimePlayerSeekControllerContext = Readonly<{
+type RuntimePlayerSeekControllerContext = Readonly<{
   getLifecycleState: () => PlayerLifecycleState
   requireSequenceActive: (operation: string) => void
   getCurrentTimeMs: () => number

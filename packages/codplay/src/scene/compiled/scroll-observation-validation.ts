@@ -28,7 +28,7 @@ export function validateAuthoredScrollDeclarations(
           }, diagnostics)
           continue
         }
-        for (const [ruleIndex, rule] of normalizeRules(value).entries()) {
+        for (const [ruleIndex, rule] of (Array.isArray(value) ? value : [value]).entries()) {
           if (!isPlainRecord(rule)) continue
           if (Object.keys(rule).some((key) => ['root', 'zone', 'enter', 'leave'].includes(key))) {
             diagnostics.error(
@@ -218,7 +218,3 @@ function validateEvents(
   })
 }
 
-/** Normalizes one author emit entry while preserving its source order. */
-function normalizeRules(value: unknown): readonly unknown[] {
-  return Array.isArray(value) ? value : [value]
-}

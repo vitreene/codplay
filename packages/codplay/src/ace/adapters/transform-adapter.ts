@@ -109,6 +109,12 @@ export function isScalarTransformProperty(property: TransformProperty): boolean 
   return property !== 'rotate3d' && property !== 'matrix' && property !== 'matrix3d'
 }
 
+/** Returns the canonical transform channel of one author property when it is scalar. */
+export function resolveScalarTransformProperty(property: string): TransformProperty | undefined {
+  const canonical = resolveTransformProperty(property)
+  return canonical !== undefined && isScalarTransformProperty(canonical) ? canonical : undefined
+}
+
 /** Normalizes supported transform aliases and returns operations in canonical order. */
 export function normalizeTransformProperties(
   authored: Readonly<Record<string, unknown>>,

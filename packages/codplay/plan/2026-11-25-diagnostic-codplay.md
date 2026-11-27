@@ -87,8 +87,8 @@ modules, noms de fonctions, marqueurs) et une lecture ciblée.
 
 ## Duplications et code mort
 
-- **`src/ace/vendor/` (18 fichiers, 2 768 lignes, copie d’anime.js) n’est
-  importé par aucun fichier du dépôt.** Seuls ses `TODO` et `console.warn`
+- **Retiré (2026-11-27)** : **`src/ace/vendor/` (18 fichiers, 2 768 lignes,
+  copie d’anime.js) n’était importé par aucun fichier du dépôt.** Seuls ses `TODO` et `console.warn`
   apparaissent dans les recherches. Candidat à la suppression.
 - Mécanique de session replace écrite trois fois : voir la
   [revue du module `replace`](#module-replace--revue-détaillée).
@@ -101,7 +101,14 @@ modules, noms de fonctions, marqueurs) et une lecture ciblée.
   aux stories), `isAfterStoryReset` ×2 (deux formes d’événement),
   `parseCssMatrix` ×2 (voir C3), `isParentNode` ×4, `isPlainRecord` et
   `isRecord` répétés alors que `shared/is-plain-record.ts` existe.
-- Exports morts (aucune référence, même locale) : `RuntimePlayerEventInput`
+- **Traité (2026-11-27), hors `move` et FLIP** : 4 exports morts retirés, `export`
+  retiré des déclarations utilisées dans leur seul fichier, doublons
+  `resolveTransformProperty`, `isAfterStoryReset`, `isParentNode` (×6 sous
+  plusieurs noms), `isPlainRecord`/`isRecord` et `listMaterializedRoots` (×4)
+  remplacés par `ace` et `shared`, fonctions d’une ligne triviales inlinées.
+  Le catalogue ACE reprend désormais l’intégralité des définitions d’anime.js
+  (`linear(…)`, `steps`, `cubicBezier`, `irregular` graine par sa déclaration),
+  comme la spec ACE l’annonçait. Constat d’origine — exports morts (aucune référence, même locale) : `RuntimePlayerEventInput`
   (`player-state.ts`), `DndPointerSample` (`list-dnd-preview/types.ts`),
   `HtmlRootTarget` (`runner-types.ts`), `appendMaskPath` (`masks.ts`). 72 autres
   exports ne servent que dans leur propre fichier (mot-clé `export` inutile).
@@ -394,9 +401,21 @@ Ces corrections sont planifiées dans le [plan `replace`](./replace-media-live-v
 (tranche A pour 1 à 4, tranche B pour RP4 et 5) ; elles touchent
 `packages/codplay` et attendent l’autorisation explicite de l’utilisateur.
 
+## Couleurs
+
+Revue faite après coup (2026-11-27). Elle a relevé cinq défauts : tween
+impossible entre deux espaces, alpha non prémultiplié (assombrissement vers
+`transparent`), teinte interpolée depuis une couleur achromatique, formes CSS
+Color 4 rejetées (`hsl()`, `lab()`, `color()`…), chroma replace désactivé hors
+sRGB. **Traité** : un seul espace actif, OKLCH, normalisé par le compilateur ;
+voir le [plan couleur](./color-values-plan.md) pour le reste.
+
 ## Documentation
 
-- La note de découverte exigée par `AGENTS.md`
+- **Traité en partie (2026-11-27)** : relevé daté et travail restant retirés de
+  `third-party-rive-spec.md`. Le lien mort d’`AGENTS.md` est à corriger sur
+  `develop`, puis à propager (décision utilisateur). Constat d’origine — la note
+  de découverte exigée par `AGENTS.md`
   (`plan/notes/2026-08-26-decouverte-etat-codplay-v2.md`) n’existe pas : lien
   mort dans les règles de travail.
 - `list-dnd-v2-spec.md` et `third-party-rive-spec.md` portent un statut ;

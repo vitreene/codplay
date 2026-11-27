@@ -1,3 +1,4 @@
+import { isPlainRecord } from '../../shared'
 import type {
   CompiledCaptureDeclaration,
   CompiledCaptureEvent,
@@ -484,7 +485,7 @@ class RuntimeCaptureSourceSessionImpl implements RuntimeCaptureSourceSession {
 function normalizeRules(value: CompiledEmitRule | readonly CompiledEmitRule[] | unknown): readonly CompiledEmitRule[] {
   if (value === undefined) return []
   if (Array.isArray(value)) return value as readonly CompiledEmitRule[]
-  if (!isRecord(value) || !('event' in value)) return []
+  if (!isPlainRecord(value) || !('event' in value)) return []
   return [value as unknown as CompiledEmitRule]
 }
 
@@ -493,7 +494,3 @@ function sourceRuleKey(storyId: string, persoId: string, source: string): string
   return JSON.stringify([storyId, persoId, source])
 }
 
-/** Checks a compiled value before narrowing it to a record. */
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}

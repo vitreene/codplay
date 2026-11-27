@@ -1,5 +1,5 @@
 /** One CSS named color represented by its 8-bit sRGB channels. */
-export type NamedColorRgb = readonly [number, number, number]
+type NamedColorRgb = readonly [number, number, number]
 
 /** Explicit CSS named-color transcription table used without browser resolution. */
 export const NAMED_COLORS: Readonly<Record<string, NamedColorRgb>> = {

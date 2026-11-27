@@ -14,7 +14,7 @@ export type MediaComponentSurfaceResolver = (
 ) => MediaComponentSurface | undefined
 
 /** Logical playback states tracked independently from the native media node. */
-export type MediaLogicalState = 'idle' | 'playing' | 'paused' | 'stopped'
+type MediaLogicalState = 'idle' | 'playing' | 'paused' | 'stopped'
 
 /** Mutable state for one media item during the lifetime of a player. */
 export type MediaRuntimeState = {

@@ -4,16 +4,16 @@ import type { MaterializedPart } from '../components/component-types'
 export type HtmlMaterializedRoot = Node | readonly Node[]
 
 /** Prefix used before the `part` token in comment-based author markers. */
-export const DEFAULT_PART_MARKER_PREFIX = 'data-' as const
+const DEFAULT_PART_MARKER_PREFIX = 'data-' as const
 
 /** Options that configure the author marker syntax read from HTML comments. */
-export type HtmlTemplateMaterializationOptions = Readonly<{
+type HtmlTemplateMaterializationOptions = Readonly<{
   /** Prefix before `part`; `data-` recognizes `<!-- data-part="..." -->`. */
   partMarkerPrefix?: string
 }>
 
 /** Result of materializing HTML markup returned by a component. */
-export type HtmlTemplateMaterialization = Readonly<{
+type HtmlTemplateMaterialization = Readonly<{
   rootNode: HtmlMaterializedRoot
   parts: readonly MaterializedPart[]
 }>

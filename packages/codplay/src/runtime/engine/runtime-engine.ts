@@ -300,7 +300,7 @@ export class RuntimeEngine {
     const diagnostics = Object.fromEntries(
       participants.map(({ target, participant }) => [
         target.instanceId,
-        participant.getSeekDiagnostics?.() ?? emptyDiagnosticReport(),
+        participant.getSeekDiagnostics?.() ?? { all: [], warnings: [], errors: [] },
       ]),
     )
     const prepared: Array<{ participant: InstanceSeekParticipant }> = []
@@ -401,11 +401,6 @@ export class RuntimeEngine {
   private assertUsable(): void {
     if (this.destroyed) throw new Error('Runtime engine has been destroyed.')
   }
-}
-
-/** Provides a stable empty report for participants without diagnostic output. */
-function emptyDiagnosticReport(): DiagnosticReport {
-  return { all: [], warnings: [], errors: [] }
 }
 
 /** Aborts every staged participant while preserving the original seek error. */

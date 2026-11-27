@@ -527,7 +527,7 @@ export class RuntimeTrackJournal {
           || this.isStoryEventEligibleAt(storyId, event, timeMs, includeBoundary))
         && (event.applyAtMs < timeMs || (includeBoundary && event.applyAtMs === timeMs))
         && (scope !== STRAP_SCOPE_STORY || event.storyId === storyId))
-      .filter((event) => reset === undefined || isAfterStoryReset(event, reset))
+      .filter((event) => reset === undefined || isAfterStoryResetBoundary(event.applyAtMs, event.eventSeq, reset))
       .sort((left, right) => left.applyAtMs - right.applyAtMs || left.eventSeq - right.eventSeq)
   }
 
@@ -706,10 +706,18 @@ function isStoryResetEvent(
   return rules.some((rule) => rule.reset === true && rule.on === event.name)
 }
 
-/** Tests whether one event belongs strictly after a reset boundary. */
-function isAfterStoryReset(event: RuntimeTrackEvent, reset: RuntimeStoryResetBoundary): boolean {
-  return event.applyAtMs > reset.applyAtMs
-    || (event.applyAtMs === reset.applyAtMs && event.eventSeq > reset.eventSeq)
+/**
+ * Tests whether one occurrence belongs strictly after a story reset: later in
+ * time, or at the same time and later in journal order. A compiled occurrence
+ * has no journal order and never follows a reset at its own time.
+ */
+export function isAfterStoryResetBoundary(
+  timeMs: number,
+  eventSeq: number | undefined,
+  reset: RuntimeStoryResetBoundary,
+): boolean {
+  if (timeMs !== reset.applyAtMs) return timeMs > reset.applyAtMs
+  return eventSeq !== undefined && eventSeq > reset.eventSeq
 }
 
 /** Flattens relative runtime eventimes against one absolute anchor. */

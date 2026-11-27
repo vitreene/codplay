@@ -1,5 +1,5 @@
 import { REPLACE_GRID_STAGGER_SHARE, REPLACE_TEXT_STAGGER_SHARE } from '../../config/replace'
-import { parseColor, prepareInterval, prepareTween, resolveInterval, resolveTween, type ColorValue, type Tween } from 'ace'
+import { formatColor, isColorValue, parseColor, prepareInterval, prepareTween, resolveInterval, resolveTween, type ColorValue, type Tween } from 'ace'
 import type { ReplaceMotionProfile } from '../../components'
 import {
   computeReplaceStaggerDelays,
@@ -13,7 +13,7 @@ import type { HtmlReplaceProfile, ResolvedMediaCellSettings } from './profile'
 
 
 
-export type PreparedMotionTrajectories = Readonly<{
+type PreparedMotionTrajectories = Readonly<{
   intro: Tween
   outro: Tween
 }>
@@ -103,7 +103,7 @@ export function sampleSplitMediaMotion(
 
 
 /** Applies a per-cell trajectory using the common duration and each cell's stagger delay. */
-export function sampleMediaMotionCells(
+function sampleMediaMotionCells(
   cells: readonly MediaMaskCell[],
   trajectory: Tween,
   elapsed: number,
@@ -348,7 +348,7 @@ export function sampleSplitTextMotion(
 
 
 /** Applies one eased trajectory to every fragment belonging to each visible text unit. */
-export function sampleTextUnits(
+function sampleTextUnits(
   units: readonly TextUnit[],
   trajectory: Tween,
   elapsed: number,
@@ -384,25 +384,29 @@ export function sampleTextUnits(
 
 
 /** Produces a repeatable pseudo-random value for one slot-roll unit and channel. */
-export function deterministicWobble(index: number, salt: number): number {
+function deterministicWobble(index: number, salt: number): number {
   const value = Math.sin((index + 1) * 12.9898 + salt * 78.233) * 43758.5453
   return (value - Math.floor(value)) * 2 - 1
 }
 
 
 /** Interpolates the slot-roll hue back to each fragment's authored computed color. */
-export function applyChromaColor(span: HTMLElement, index: number, count: number, progress: number): void {
+function applyChromaColor(span: HTMLElement, index: number, count: number, progress: number): void {
   const interval = getChromaColorInterval(span, index, count)
   if (interval === undefined) return
-  const resolved = resolveInterval(interval, clampProgress(progress))
-  if (!isColorValue(resolved) || resolved.space !== 'srgb') return
-  const channels = resolved.coords.map((value) => Math.round(value * 255))
-  span.style.color = `rgb(${channels.join(', ')})`
+  const bounded = clampProgress(progress)
+  // The end restores the authored computed color itself, free of conversion rounding.
+  if (bounded === 1) {
+    span.style.color = span.dataset.replaceTargetColor ?? ''
+    return
+  }
+  const resolved = resolveInterval(interval, bounded)
+  if (isColorValue(resolved)) span.style.color = formatColor(resolved)
 }
 
 
 /** Prepares one ACE color interval for a glyph's deterministic chroma path. */
-export function getChromaColorInterval(
+function getChromaColorInterval(
   span: HTMLElement,
   index: number,
   count: number,
@@ -417,46 +421,10 @@ export function getChromaColorInterval(
   } catch {
     return undefined
   }
-  if (target.space !== 'srgb') return undefined
   const hue = count <= 1 ? 0 : (index / (count - 1)) * 300
-  const sourceChannels = hslToRgb(hue, 0.9, 0.6)
-  const source: ColorValue = {
-    kind: 'color',
-    space: 'srgb',
-    coords: sourceChannels.map((value) => value / 255),
-    alpha: 1,
-  }
-  const interval = prepareInterval(source, { ...target, alpha: 1 })
+  const interval = prepareInterval(parseColor(`hsl(${hue} 90% 60%)`), { ...target, alpha: 1 })
   chromaColorIntervals.set(span, interval)
   return interval
-}
-
-
-/** Narrows one ACE interpolation result to its prepared color value. */
-export function isColorValue(value: unknown): value is ColorValue {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
-  const candidate = value as Partial<ColorValue>
-  return candidate.kind === 'color'
-    && (candidate.space === 'srgb' || candidate.space === 'oklch')
-    && Array.isArray(candidate.coords)
-    && typeof candidate.alpha === 'number'
-}
-
-
-/** Converts one HSL hue and saturation into an RGB slot-roll accent. */
-export function hslToRgb(hueDegrees: number, saturation: number, lightness: number): readonly [number, number, number] {
-  const hue = ((hueDegrees % 360) + 360) % 360 / 360
-  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation
-  const section = hue * 6
-  const secondary = chroma * (1 - Math.abs(section % 2 - 1))
-  const [red, green, blue] = section < 1 ? [chroma, secondary, 0]
-    : section < 2 ? [secondary, chroma, 0]
-      : section < 3 ? [0, chroma, secondary]
-        : section < 4 ? [0, secondary, chroma]
-          : section < 5 ? [secondary, 0, chroma]
-            : [chroma, 0, secondary]
-  const offset = lightness - chroma / 2
-  return [(red + offset) * 255, (green + offset) * 255, (blue + offset) * 255]
 }
 
 
@@ -514,14 +482,14 @@ export function applyMotionPose(
 
 
 /** Returns the neutral transform value used when a trajectory omits its source bound. */
-export function defaultMotionOrigin(property: string): number {
+function defaultMotionOrigin(property: string): number {
   if (property === 'opacity' || property === 'scale' || property === 'scaleX' || property === 'scaleY') return 1
   return 0
 }
 
 
 /** Moves a view along one axis while clipping the part outside the slot rectangle. */
-export function setVerticalTravel(snapshot: MotionStyleElement, distancePercent: number): void {
+function setVerticalTravel(snapshot: MotionStyleElement, distancePercent: number): void {
   const distance = clampProgress(Math.abs(distancePercent) / 100) * 100
   snapshot.style.translate = `0 ${distancePercent}%`
   snapshot.style.clipPath = distancePercent < 0

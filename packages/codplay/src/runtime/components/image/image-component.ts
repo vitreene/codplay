@@ -1,3 +1,4 @@
+import { canAppendChild, hasParentNode } from '../../../shared'
 import type { HTMLComponentInput, ComponentUpdateInput } from '../component-types'
 import { BaseHTMLComponent } from '../base-html-component'
 import type { ImageInitial, ImageState } from './image-types'
@@ -71,10 +72,10 @@ export class ImageComponent extends BaseHTMLComponent<ImageInitial> {
     const image = this.ensureImage(source)
     const previous = this.activeSource === null ? undefined : this.imageBySource.get(this.activeSource)
 
-    if (isChildNode(previous) && previous !== image && previous.parentNode === wrapper) {
+    if (hasParentNode(previous) && previous !== image && previous.parentNode === wrapper) {
       removeChild(previous)
     }
-    if (isParentNode(wrapper) && isChildNode(image) && image.parentNode !== wrapper) {
+    if (canAppendChild(wrapper) && hasParentNode(image) && image.parentNode !== wrapper) {
       wrapper.appendChild(image)
     }
     this.activeSource = source
@@ -103,19 +104,8 @@ function setImageAlt(node: unknown, alt: string): void {
   else candidate.setAttribute?.('alt', alt)
 }
 
-/** Checks the append contract used by the persistent wrapper. */
-function isParentNode(value: unknown): value is { appendChild: (child: unknown) => void } {
-  return typeof value === 'object' && value !== null && 'appendChild' in value
-    && typeof (value as { appendChild?: unknown }).appendChild === 'function'
-}
-
-/** Checks the parent pointer required to detach one persistent node. */
-function isChildNode(value: unknown): value is { parentNode: unknown; remove?: () => void } {
-  return typeof value === 'object' && value !== null && 'parentNode' in value
-}
-
 /** Removes one image from its current parent without touching its source. */
-function removeChild(node: { parentNode: unknown; remove?: () => void }): void {
+function removeChild(node: Readonly<{ parentNode: unknown | null }> & { remove?: () => void }): void {
   if (typeof node.remove === 'function') {
     node.remove()
     return

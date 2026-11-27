@@ -17,7 +17,7 @@
  */
 
 /** Ce qu'une valeur d'auteur peut être, une fois reconnue. */
-export type ValueKind =
+type ValueKind =
   /** Un nombre nu : `42`, `'42'`. */
   | 'number'
   /** Un nombre et son unité : `'12cqw'`, `'-8.62%'`, `'1.5rem'`. */
@@ -43,7 +43,7 @@ export type UnitValue = {
  * et les fragments de texte qui les séparent, dans l'ordre, de sorte que la chaîne se
  * reconstruise en les entrelaçant.
  */
-export type DecomposedValue = UnitValue & {
+type DecomposedValue = UnitValue & {
   kind: ValueKind
   /** L'opérateur relatif si la valeur en portait un (`'+=8'`) ; `null` sinon. */
   operator: RelativeOperator | null

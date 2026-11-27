@@ -1,4 +1,3 @@
-import type { DiagnosticReport } from '../diagnostics'
 import {
   createRuntimeTelco,
   type RuntimeTelcoCommandResult,
@@ -326,7 +325,7 @@ function createTelcoFacade(options: InstanceFacadeOptions): Readonly<{
     setRate: (rate: number) => options.runner.setRate(rate),
     seek: (timeMs: number): Readonly<{ ok: boolean }> => {
       const result = options.runner.seek(timeMs)
-      publishSeekDiagnostics(options.diagnostics, options.instanceId, result.diagnostics)
+      options.diagnostics.publishReport(result.diagnostics, { instanceId: options.instanceId })
       return { ok: result.ok }
     },
   }
@@ -419,15 +418,6 @@ async function runTelcoCommand(
   const result = await command
   if (result.ok) return
   publishFacadeError(diagnostics, result.error.code, result.error.message, { instanceId })
-}
-
-/** Publishes seek diagnostics with the instance reference at the facade boundary. */
-function publishSeekDiagnostics(
-  diagnostics: DiagnosticChannel,
-  instanceId: string,
-  report: DiagnosticReport,
-): void {
-  diagnostics.publishReport(report, { instanceId })
 }
 
 /** Adapts the internal telco state while keeping the instance identity explicit. */

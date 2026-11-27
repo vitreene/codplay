@@ -5,7 +5,7 @@ import { nextReplacePresentationId } from './ids'
 
 
 
-export type FrozenMediaFrame = Readonly<{
+type FrozenMediaFrame = Readonly<{
   rawFrame: HTMLCanvasElement
   objectFit: string
 }>
@@ -34,7 +34,7 @@ export function createMotionSnapshot(
 
 
 /** Copies each image/video frame into a static canvas owned by one replace snapshot. */
-export function freezeMediaFrames(liveRoot: HTMLElement, snapshotRoot: HTMLElement): boolean {
+function freezeMediaFrames(liveRoot: HTMLElement, snapshotRoot: HTMLElement): boolean {
   const liveMedia = collectMediaElements(liveRoot)
   const copiedMedia = collectMediaElements(snapshotRoot)
   if (liveMedia.length !== copiedMedia.length) return false
@@ -110,7 +110,7 @@ export function releaseFrozenMediaClone(snapshotRoot: HTMLElement): void {
 
 
 /** Collects only native image/video elements from one component root. */
-export function collectMediaElements(root: HTMLElement): Array<HTMLImageElement | HTMLVideoElement> {
+function collectMediaElements(root: HTMLElement): Array<HTMLImageElement | HTMLVideoElement> {
   const elements: Array<HTMLImageElement | HTMLVideoElement> = []
   if (isMediaElement(root)) elements.push(root)
   elements.push(...Array.from(root.querySelectorAll<HTMLImageElement | HTMLVideoElement>('img, video')))
@@ -119,7 +119,7 @@ export function collectMediaElements(root: HTMLElement): Array<HTMLImageElement 
 
 
 /** Narrows one HTML element to a native media frame source. */
-export function isMediaElement(value: HTMLElement): value is HTMLImageElement | HTMLVideoElement {
+function isMediaElement(value: HTMLElement): value is HTMLImageElement | HTMLVideoElement {
   return value.tagName.toLowerCase() === 'img' || value.tagName.toLowerCase() === 'video'
 }
 
@@ -197,7 +197,7 @@ export function getMediaFrameReadiness(source: HTMLImageElement | HTMLVideoEleme
 
 
 /** Copies a currently available decoded image or video frame to an offscreen canvas. */
-export function createRawMediaFrame(source: HTMLImageElement | HTMLVideoElement): HTMLCanvasElement | undefined {
+function createRawMediaFrame(source: HTMLImageElement | HTMLVideoElement): HTMLCanvasElement | undefined {
   if (getMediaFrameReadiness(source) !== 'ready') return undefined
   const isVideo = source.tagName.toLowerCase() === 'video'
   const width = isVideo ? (source as HTMLVideoElement).videoWidth : (source as HTMLImageElement).naturalWidth
@@ -219,7 +219,7 @@ export function createRawMediaFrame(source: HTMLImageElement | HTMLVideoElement)
 
 
 /** Retains layout styles needed for a canvas to occupy the source media rectangle. */
-export function copyMediaFrameStyle(source: HTMLElement, frame: HTMLCanvasElement): void {
+function copyMediaFrameStyle(source: HTMLElement, frame: HTMLCanvasElement): void {
   const computed = getComputedStyle(source)
   frame.className = source.className
   frame.style.cssText = source.style.cssText
@@ -236,7 +236,7 @@ export function copyMediaFrameStyle(source: HTMLElement, frame: HTMLCanvasElemen
 
 
 /** Updates fallback pixel dimensions from the current live media box. */
-export function copyMediaFrameDimensions(
+function copyMediaFrameDimensions(
   source: HTMLElement,
   frame: HTMLCanvasElement,
 ): Readonly<{ width: number; height: number }> {
@@ -248,7 +248,7 @@ export function copyMediaFrameDimensions(
 
 
 /** Draws a fixed raw frame into its measured media rectangle with the authored fit rule. */
-export function drawFittedFrame(
+function drawFittedFrame(
   target: HTMLCanvasElement,
   source: HTMLCanvasElement,
   objectFit: string,
@@ -346,7 +346,7 @@ export function refreshIncomingVideoFrames(snapshot: HTMLElement, liveRoot: HTML
 }
 
 /** Reads the device scale used to keep whole-view media snapshots crisp. */
-export function getDevicePixelRatio(): number {
+function getDevicePixelRatio(): number {
   return typeof globalThis.devicePixelRatio === 'number' && globalThis.devicePixelRatio > 0
     ? globalThis.devicePixelRatio
     : 1

@@ -30,7 +30,7 @@ export type RuntimePlayerSceneStateContext = Readonly<{
 }>
 
 /** Result of deciding whether the current frame needs a logical reconstruction. */
-export type RuntimePlayerFrameScene = Readonly<{
+type RuntimePlayerFrameScene = Readonly<{
   scene: SolvedScene
   reconstructed: boolean
 }>

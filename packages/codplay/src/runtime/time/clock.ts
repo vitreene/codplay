@@ -7,11 +7,6 @@ export type Clock = {
   reset: (baseMs?: number) => void
 }
 
-/** Computes elapsed milliseconds from one clock origin. */
-function getElapsedMs(nowProvider: NowProvider, originMs: number): number {
-  return nowProvider() - originMs
-}
-
 /** Implements a relative clock with an injectable time source. */
 export class TimeClock implements Clock {
   private readonly nowProvider: NowProvider
@@ -26,7 +21,7 @@ export class TimeClock implements Clock {
 
   /** Returns the current relative timeline time. */
   nowMs(): number {
-    return this.baseMs + getElapsedMs(this.nowProvider, this.originMs)
+    return this.baseMs + this.nowProvider() - this.originMs
   }
 
   /** Resets the origin and optionally changes the relative base. */
