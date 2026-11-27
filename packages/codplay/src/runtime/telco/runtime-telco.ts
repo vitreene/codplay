@@ -73,7 +73,13 @@ export function createRuntimeTelco(options: RuntimeTelcoOptions): RuntimeTelco {
     runtimeRevision += 1
     const state = getState()
     observedTargetState = { status: state.status, sequenceEnded: state.sequenceEnded }
-    for (const listener of changeListeners) listener(state)
+    for (const listener of [...changeListeners]) {
+      try {
+        listener(state)
+      } catch {
+        // Like progress observers, a state observer must not lock the transport.
+      }
+    }
   }
 
   /** Publishes progress and relays target lifecycle changes from the existing update. */

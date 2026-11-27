@@ -979,3 +979,29 @@ function createNaturalLayout(width: number, height: number): LayoutSnapshot {
 function localPose(x: number): { origin: readonly [number, number]; layoutOrigin: readonly [number, number]; matrix: HtmlMatrix; width: number; height: number } {
   return { origin: [x, 0], layoutOrigin: [x, 0], matrix: IDENTITY, width: 20, height: 20 }
 }
+
+describe('HtmlMotionPresentationHost seek lock stylesheet', () => {
+  /** Lists the seek lock stylesheets installed in the document head. */
+  const seekStyles = (): HTMLStyleElement[] => Array.from(document.head.querySelectorAll('style'))
+    .filter((style) => style.textContent?.includes('[data-codplay-motion-seek]'))
+
+  it('shares one stylesheet per document and removes it with the last host', () => {
+    const first = new HtmlMotionPresentationHost(document.createElement('main'), () => undefined)
+    const second = new HtmlMotionPresentationHost(document.createElement('main'), () => undefined)
+    expect(seekStyles()).toHaveLength(1)
+    first.destroy()
+    expect(seekStyles()).toHaveLength(1)
+    second.destroy()
+    expect(seekStyles()).toHaveLength(0)
+  })
+
+  it('reinstalls the stylesheet when the page removed it', () => {
+    const first = new HtmlMotionPresentationHost(document.createElement('main'), () => undefined)
+    seekStyles().forEach((style) => style.remove())
+    const second = new HtmlMotionPresentationHost(document.createElement('main'), () => undefined)
+    expect(seekStyles()).toHaveLength(1)
+    first.destroy()
+    second.destroy()
+    expect(seekStyles()).toHaveLength(0)
+  })
+})

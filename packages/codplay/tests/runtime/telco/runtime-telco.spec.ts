@@ -220,6 +220,20 @@ describe('Runtime telco', () => {
     telco.destroy()
   })
 
+  it('keeps accepting commands when a state observer throws', async () => {
+    const target = new FakeTransportTarget()
+    target.status = PLAYER_LIFECYCLE_PAUSED
+    const telco = createRuntimeTelco({ target })
+    telco.onChange(() => {
+      throw new Error('observer failure')
+    })
+
+    expect(await telco.play()).toEqual({ ok: true })
+    expect(telco.commandInFlight).toBe(false)
+    expect(await telco.pause()).toEqual({ ok: true })
+    telco.destroy()
+  })
+
   it('relays a target sequence end through the state channel', () => {
     const target = new FakeTransportTarget()
     const telco = createRuntimeTelco({ target })

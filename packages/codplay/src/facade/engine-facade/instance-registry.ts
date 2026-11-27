@@ -14,7 +14,6 @@ import type {
 import { DiagnosticChannel, publishFacadeError, withDiagnosticRefs } from '../diagnostic-channel'
 import { InstanceFacadeImpl } from '../instance-facade'
 import { createInstanceHost, type InstanceHost } from '../instance-host'
-import { toPublicEvent } from '../public-event'
 import { toTraceEvent } from '../trace-event'
 import type { EngineResourceRegistry } from './resource-registry'
 import type { InstanceMountRegistry } from './mount-registry'
@@ -91,7 +90,7 @@ export class InstanceRegistry {
         resourceMedia: this.options.resources.mediaSnapshot(),
         sourceAdapterFactories: this.options.sourceAdapterFactories,
         instance: instanceOptions,
-        onPublicEvent: (event) => this.forwardPublicEvent(instanceOptions.instanceId, eventListeners, event),
+        onPublicEvent: (event) => this.forwardPublicEvent(instanceOptions.instanceId, event),
         onTrace: (event) => this.forwardTraceEvent(
           instanceOptions.instanceId,
           traceListeners,
@@ -183,19 +182,9 @@ export class InstanceRegistry {
     }
   }
 
-  /** Forwards one runtime public event to local listeners or the live instance. */
-  private forwardPublicEvent(
-    instanceId: string,
-    eventListeners: Set<CodPlayEventListener>,
-    event: RuntimeTraceEvent,
-  ): void {
-    const instance = this.instances.get(instanceId)
-    if (instance !== undefined) {
-      instance.handlePublicEvent(event)
-      return
-    }
-    const publicEvent = toPublicEvent(instanceId, event)
-    for (const listener of eventListeners) listener(publicEvent)
+  /** Forwards one runtime public event to its live instance. */
+  private forwardPublicEvent(instanceId: string, event: RuntimeTraceEvent): void {
+    this.instances.get(instanceId)?.handlePublicEvent(event)
   }
 
   /** Forwards one runtime trace event while isolating observer failures. */

@@ -14,6 +14,7 @@ export class HtmlMotionPresentationHost {
   private readonly root: Element
   private readonly localPresenter: LocalMotionPresenter
   private readonly overlayPresenter: OverlayMotionPresenter
+  private readonly transientStyles: ReturnType<typeof createHtmlMotionStyleLayer>
 
   /** Creates one item-indexed overlay resource host. */
   constructor(
@@ -23,6 +24,7 @@ export class HtmlMotionPresentationHost {
   ) {
     this.root = root
     const transientStyles = createHtmlMotionStyleLayer(root)
+    this.transientStyles = transientStyles
     this.localPresenter = new LocalMotionPresenter(transientStyles)
     this.overlayPresenter = new OverlayMotionPresenter(
       root,
@@ -102,5 +104,6 @@ export class HtmlMotionPresentationHost {
   destroy(): void {
     this.completeSeek()
     this.clearTransientPresentation()
+    this.transientStyles.release()
   }
 }

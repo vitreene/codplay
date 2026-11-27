@@ -33,7 +33,8 @@ const SEEK_STYLE_TEXT = `
 }
 `
 
-const installedSeekStyles = new WeakSet<Document>()
+/** Seek lock stylesheet of each document, shared by its live motion hosts. */
+const seekStyles = new WeakMap<Document, { style: HTMLElement; hosts: number }>()
 
 /** Host-owned transient contribution layer for local poses and overlay visibility. */
 export type HtmlMotionStyleLayer = Readonly<{
@@ -48,16 +49,18 @@ export type HtmlMotionStyleLayer = Readonly<{
   captureTemplate: (node: HTMLElement) => HTMLElement
   /** Synchronizes an existing template without creating DOM nodes when its structure is stable. */
   syncTemplate: (source: HTMLElement, target: HTMLElement) => boolean
+  /** Releases this host's share of the document seek lock; the last host removes it. */
+  release: () => void
 }>
 
 /** Creates a transient presentation layer without taking ownership of authored CSS declarations. */
 export function createHtmlMotionStyleLayer(root: Element): HtmlMotionStyleLayer {
-  installSeekStyles(root)
-  return createInlineLayer()
+  const releaseSeekStyles = installSeekStyles(root)
+  return { ...createInlineLayer(), release: releaseSeekStyles }
 }
 
 /** Creates the inline layer used by browser hosts and lightweight DOM doubles alike. */
-function createInlineLayer(): HtmlMotionStyleLayer {
+function createInlineLayer(): Omit<HtmlMotionStyleLayer, 'release'> {
   const localContributions = new WeakMap<HTMLElement, InlineContributionMap>()
   const preservedContributions = new WeakMap<HTMLElement, InlineContributionMap>()
   const hiddenContributions = new WeakMap<HTMLElement, InlineContributionMap>()
@@ -193,21 +196,36 @@ function restoreTemplateContributions(
   }
 }
 
-/** Installs the root-scoped seek lock once per document. */
-function installSeekStyles(root: Element): void {
+/**
+ * Installs the root-scoped seek lock for one motion host and returns its
+ * release. The stylesheet is shared per document, reinstalled if the host page
+ * removed it, and removed with the document's last motion host.
+ */
+function installSeekStyles(root: Element): () => void {
   const document = (root as Element & { ownerDocument?: Document }).ownerDocument
-  if (document === undefined || installedSeekStyles.has(document)) return
-
+  if (document === undefined) return () => undefined
   const documentWithFactory = document as Document & {
     createElement?: (tagName: string) => HTMLElement
   }
-  if (typeof documentWithFactory.createElement !== 'function') return
-  const style = documentWithFactory.createElement('style')
-  style.textContent = SEEK_STYLE_TEXT
+  if (typeof documentWithFactory.createElement !== 'function') return () => undefined
   const parent = document.head ?? document.documentElement ?? root
-  if (typeof parent.appendChild !== 'function') return
-  parent.appendChild(style)
-  installedSeekStyles.add(document)
+  if (typeof parent.appendChild !== 'function') return () => undefined
+
+  const entry = seekStyles.get(document) ?? { style: documentWithFactory.createElement('style'), hosts: 0 }
+  if (entry.hosts === 0) entry.style.textContent = SEEK_STYLE_TEXT
+  if (entry.style.parentNode === null || entry.style.parentNode === undefined) parent.appendChild(entry.style)
+  entry.hosts += 1
+  seekStyles.set(document, entry)
+
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    entry.hosts -= 1
+    if (entry.hosts > 0) return
+    entry.style.parentNode?.removeChild(entry.style)
+    seekStyles.delete(document)
+  }
 }
 
 /** Applies one inline transient property while tracking concurrent author writes. */

@@ -28,7 +28,9 @@ modules, noms de fonctions, marqueurs) et une lecture ciblée.
 
 ## Défauts
 
-- **C1 — Un observateur interne qui lève une exception verrouille la telco**
+- **C1 — Corrigé (2026-11-27).** Les écouteurs `onChange` sont isolés comme ceux
+  de progression ; test `runtime-telco.spec.ts`. Constat d’origine :
+  **un observateur interne qui lève une exception verrouille la telco**
   (confirmé en isolation, latent). `runCommand` passe `commandInFlight` à
   `true` puis appelle `notifyChange()` **avant** son `try`. Si un écouteur
   `onChange` lève, la commande rejette et `commandInFlight` reste `true` : toutes
@@ -36,7 +38,13 @@ modules, noms de fonctions, marqueurs) et une lecture ciblée.
   protège chaque observateur par `try/catch`, donc aucun appelant actuel n’est
   touché ; seule une future souscription interne directe le serait. Les
   écouteurs de progression, eux, sont déjà isolés dans la telco.
-- **C2 — Des tests du cœur dépendent des démos.** Dix fichiers de `tests/`
+- **C2 — Traité (2026-11-27), sauf `move`.** Les tests qui ne vérifiaient qu’une
+  démo sont supprimés (une démo est elle-même le test de sa fonctionnalité) ;
+  `open-duration-discovery.spec.ts` et `preload-media-node-handoff.spec.ts`
+  vérifient leur fonctionnalité sur une scène propre. Restent, pour le chantier
+  `move` : `position-demo`, `flip-stress-motion`, `story-five-motion`,
+  `story-six-motion`. La suite n’a plus d’échec. Constat d’origine : **des tests
+  du cœur dépendent des démos.** Dix fichiers de `tests/`
   importent `../../../demos/src/…` (dont `sighty-layout.spec.ts`,
   `sighty-demo4.spec.ts`, `components-demo.spec.ts`, `polygon-demo.spec.ts`,
   `chrono-demo.spec.ts`). La règle du projet l’interdit : un test possède ses
@@ -52,17 +60,26 @@ modules, noms de fonctions, marqueurs) et une lecture ciblée.
   transition annulée (nœud masqué ou retiré, `transitioncancel`) laisse
   `transition: transform …` dans le style inline de l’auteur jusqu’au FLIP
   suivant du même nœud.
-- **C4 — Feuille de seek installée une fois par document, jamais retirée.**
+- **C4 — Corrigé (2026-11-27).** Feuille partagée par document, comptée par
+  hôte, réinstallée si la page l’a retirée, supprimée avec le dernier hôte ;
+  tests `motion-presentation-host.spec.ts`. Constat d’origine : **feuille de seek
+  installée une fois par document, jamais retirée.**
   `motion-style-layer.ts` mémorise le document dans un `WeakSet` global et
   ajoute un `<style>` dans `head` hors de tout `@scope`. `CodPlay.destroy()` ne
   le retire pas ; si l’hôte retire ce style, le `WeakSet` empêche de le
   réinstaller.
-- **C5 — Promesses non observées** (à qualifier au cas par cas). `void
+- **C5 — Sans défaut après examen (2026-11-27)** pour la capture et le chargeur :
+  `openSession`/`endNow` interceptent leurs erreurs, et le chargeur transmet
+  le rejet (`.then(resolve, reject)`). Le cas FLIP relève du chantier FLIP.
+  Constat d’origine : **promesses non observées** (à qualifier au cas par cas). `void
   this.end(...)` (`capture-source-circuit.ts`), `void captureHtmlPose(node)`
   (`transient-flip.ts`) et `void decoded.then(...)` (loader de paquet) ne
   traitent pas un rejet. `event-controller.ts` traite le sien pour la fin de
   séquence et l’inactivité.
-- **C6 — Événements publics émis pendant l’initialisation.**
+- **C6 — Clos (2026-11-27).** Aucun circuit n’émet d’événement public pendant la
+  création d’une instance, et ni Sighty ni Elcé n’en dépendent : la branche qui
+  distribuait ces événements avant l’enregistrement de l’instance est retirée.
+  Constat d’origine : **événements publics émis pendant l’initialisation.**
   `forwardPublicEvent` distribue aux écouteurs locaux tant que l’instance n’est
   pas enregistrée, mais cet ensemble est forcément vide à ce moment (l’instance
   n’est pas encore rendue à l’appelant) : un événement public émis par
@@ -272,8 +289,8 @@ Trois probes jetables (supprimés) ont confirmé RP1 à RP3.
 
 ### Défauts et coûts
 
-- **RP1 — Le builder accepte des réglages de grille que le runtime refuse en
-  bloc** (confirmé). Pour une image ou une vidéo, `{ transition: 'curtain',
+- **RP1 — Corrigé** (plan `replace`, A3). **Le builder accepte des réglages de
+  grille que le runtime refuse en bloc** (confirmé). Pour une image ou une vidéo, `{ transition: 'curtain',
   stagger: 100 }`, `{ transition: 'fade', direction: 'left' }` ou
   `{ transition: 'wipe', cellX: 4 }` passent `SceneBuilder` sans diagnostic.
   À l’exécution, `normalizeReplaceMediaCommand` passe ces transitions CSS du
@@ -285,8 +302,8 @@ Trois probes jetables (supprimés) ont confirmé RP1 à RP3.
   mise à jour, avec deux jeux de règles écrits séparément (voir RP5).
   _Décision à prendre_ : refuser ces formes au build, comme le slot, ou les
   ignorer au runtime comme les splits texte historiques du slot.
-- **RP2 — La clé d’occurrence texte et média dépend de la position dans la
-  liste des actions** (confirmé sur la clé, effet visuel à vérifier).
+- **RP2 — Corrigé** (A1). **La clé d’occurrence texte et média dépend de la
+  position dans la liste des actions** (confirmé sur la clé, effet visuel à vérifier).
   `replace-text` et `replace-media` identifient une occurrence par
   `${eventId ?? name}:${startAt}:${index}`, où `index` est sa place dans
   `activeActions`. Cette liste peut perdre une action plus ancienne en cours de
@@ -300,7 +317,8 @@ Trois probes jetables (supprimés) ont confirmé RP1 à RP3.
   même instant y partagent la même clé. `MaterializedAction` porte déjà
   `eventSeq` et `declarationPath`, que `ComponentActionOccurrence` ne transmet
   pas ; `move` s’en sert pour la même identification (`actionOccurrenceKey`).
-- **RP3 — Un Seek crée une session DOM pour chaque remplacement passé**
+- **RP3 — Corrigé** (A2). **Un Seek crée une session DOM pour chaque
+  remplacement passé**
   (mesuré). Un `tag` avec 10 remplacements à 1 s d’intervalle : un Seek à
   10 500 ms ouvre 10 sessions, un Seek à 5 100 ms en ouvre 5, alors qu’une
   seule est visible à l’arrivée. `replayForSeek` présente chaque frontière
@@ -311,7 +329,7 @@ Trois probes jetables (supprimés) ont confirmé RP1 à RP3.
   intermédiaire de la cible. Le coût croît avec le nombre de remplacements
   passés. _Décision à prendre_ : comment le player signale le rejeu
   intermédiaire (phase distincte ou absence de hook replace).
-- **RP4 — `fade` désigne deux effets** (à qualifier). Le nom existe comme
+- **RP4 — Corrigé** (B1 : preset JSON sur un média). **`fade` désigne deux effets** (à qualifier). Le nom existe comme
   transition CSS du slot et comme preset JSON (300 ms tous les deux). Sur
   `tag`/`text`, `fade` prend le preset JSON ; sur `img`/`media`,
   `normalizeReplaceMediaCommand` teste d’abord les transitions du slot et prend
@@ -319,7 +337,7 @@ Trois probes jetables (supprimés) ont confirmé RP1 à RP3.
   helper auteur `resolveReplacePresetChoice('fade', 'default')` rend `'fade'`
   pour les deux. La spec média dit accepter « les sept transitions CSS ainsi
   que les noms du catalogue » sans trancher ce cas.
-- **RP5 — Normalisation complète à chaque mise à jour.** Chaque
+- **RP5 — Corrigé** (B2). **Normalisation complète à chaque mise à jour.** Chaque
   `beforeComponentUpdate` et `afterComponentUpdate` appelle
   `resolveLatestReplaceOccurrence`, qui renormalise toutes les actions de
   l’historique du perso. Pour le texte, chacune relance aussi
