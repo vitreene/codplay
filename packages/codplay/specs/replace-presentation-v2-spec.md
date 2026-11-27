@@ -13,7 +13,8 @@ leurs animations et la reconstruction par Seek. Le module replace prépare une
 `ComponentAnimation` puis utilise le même échantillonneur et le même cycle de
 fin que les autres animations de composant. La surface HTML ne possède que les
 instantanés DOM, leur géométrie, les fragments texte, les représentations média,
-les masques SVG, les styles de transition et le rendu H-i-C du profil `burn`.
+les masques SVG, les styles de transition et le rendu HTML-in-Canvas (H-i-C)
+des effets WebGPU.
 Elle ne décide pas quelle scène,
 ressource ou occurrence entrante doit être sélectionnée.
 
@@ -49,7 +50,11 @@ Les valeurs de pose et leurs easings sont préparés et résolus avec ACE via
 `prepareTween`/`resolveTween`. Les couleurs de rouleau utilisent les
 adaptateurs ACE de couleurs. La conversion des valeurs échantillonnées en
 styles, unités `rem`, géométrie DOM et masque SVG appartient à la surface HTML.
-La propagation texte/média réutilise `computeReplaceStaggerDelays`.
+La propagation texte/média réutilise `computeReplaceStaggerDelays`. Sans
+`stagger`, son enveloppe vaut 40 % de la durée pour le texte découpé
+(`REPLACE_TEXT_STAGGER_SHARE`) et 50 % pour les rouleaux de glyphes et les
+grilles de masques (`REPLACE_GRID_STAGGER_SHARE`) ; une grille sans dimension
+vaut 4 × 3 (`config/replace.ts`).
 
 Pour le recalage des fragments texte, l'adaptateur lit les matrices CSS calculées
 dans le DOM, puis compose les transforms et reporte les offsets avec les
@@ -60,8 +65,10 @@ L'implémentation de présentation est répartie par propriétaire dans
 `runtime/runner-html/replace-presentation/` : sessions, géométrie et DOM,
 texte, frames/cellules média, poses, masques, rendu HTML-in-Canvas,
 normalisation de profil et identifiants. `replace-presentation-surface.ts`
-reste la porte d'export de la surface HTML. Le shader `burn` est dans
-[`html-in-canvas-burn/burn-renderer.ts`](../src/runtime/runner-html/replace-presentation/html-in-canvas-burn/burn-renderer.ts).
+reste la porte d'export de la surface HTML. Les effets H-i-C sont dans
+[`html-in-canvas/`](../src/runtime/runner-html/replace-presentation/html-in-canvas/) :
+shaders WGSL (`effects.ts`), renderer WebGPU (`webgpu-renderer.ts`), session
+(`session.ts`) et géométrie (`texture-mapping.ts`).
 
 ## Cycle de vie des vues
 
@@ -89,64 +96,88 @@ reste la porte d'export de la surface HTML. Le shader `burn` est dans
   composant.
 - Le reflow repositionne ou reconstruit la présentation depuis les mesures
   actuelles tout en gardant la progression échantillonnée.
-- Le profil entier `burn` dispose de sa session H-i-C avant toute création de
-  snapshot classique. Un canvas `content="drawable"` dans la racine shadow du
-  composant porte deux wrappers `drawable` avec un slot sortant nommé et un
-  slot entrant par défaut. Les médias natifs restent des enfants directs de la
-  racine persistante : leurs sélecteurs CSS et leur propriétaire sont conservés.
-  La session réattache temporairement le média sortant détaché par la mise à
-  jour, avec le marqueur transitoire existant qui le protège de la matérialisation.
-  Elle le rattache avant le contrôle de disponibilité de l'entrée : la sortie
-  reste donc dessinable dès le premier `paint`, y compris pendant la reprise
-  asynchrone du circuit média existant. Le renderer ne charge aucune ressource.
-  Aucun état média n'est cloné ou transformé en snapshot 2D sur ce chemin.
-- Avant l'affichage du canvas, le renderer amorce ses deux textures existantes
-  avec la frame native sortante déjà disponible (`img`, `video` ou composition
-  canvas d'une interruption) et dessine la sortie à progression zéro. Ce dessin
-  précède le premier `paint` H-i-C : la bascule DOM → canvas ne révèle donc pas
-  de framebuffer vide. L'amorçage utilise le calcul de fit média partagé dans
-  un viewport WebGL entier ; H-i-C utilise ensuite le viewport complet et une
-  texture DOM allouée à la taille entière supérieure. Ces conversions distinctes
-  ne garantissent pas l'alignement sous-pixel entre les phases. Cet amorçage ne
-  crée ni clone DOM, ni canvas 2D, ni
-  lecteur, ni texture supplémentaire ; les paints suivants remplacent ces
-  textures avec les wrappers DOM vivants. Il ne charge aucune ressource.
-- Le renderer charge les wrappers avec `texElementSubImage2D` sur `paint`, puis
-  applique le shader et synchronise leur géométrie via `updateElementGeometry`.
-  Le média entrant continue donc à fournir ses frames natives. Seule la
-  progression reçue de `ComponentAnimation` fait avancer la transition ;
-  `requestPaint` demande un rendu sans introduire une horloge locale.
-  Le montage et les demandes de rendu dimensionnent le canvas avant que le
-  navigateur peigne ses wrappers. L'upload et le dessin gardent ensuite cette
-  taille. Cette stabilité du backing store ne garantit pas celle du cadrage
-  entre amorçage natif et texture DOM. Le dessin
-  ne redimensionne jamais le canvas après l'upload des textures.
-- La surface vérifie les primitives H-i-C, WebGL2 et le programme shader avant
-  de monter cette présentation. Leur absence sélectionne immédiatement le
-  profil classique `mask-reveal` circulaire. `burn` est entier et exclut
-  `split: 'cells'`. Son canvas reste dans le rectangle de la racine ; un reflow
-  reprend la progression courante aux dimensions actuelles.
-- Lors d'une interruption après le premier `paint`, le renderer redessine ses
-  textures courantes puis lit immédiatement la composition par `readPixels`.
-  Cette image devient la sortie de la transition suivante, sans passer par
-  `cloneSnapshotNode` et sans dépendre du tampon de présentation conservé par
-  le navigateur. Cette garantie ne couvre pas les interruptions reconstruites
-  par Seek avant tout premier `paint` H-i-C : les textures d'amorçage ne portent
-  alors que la sortie, sans la composition intermédiaire des deux états DOM.
-- Fin, annulation, perte de contexte et teardown retirent le canvas, les
-  listeners, les textures et le programme, puis libèrent explicitement le
-  contexte. Aucun renderer ou historique de frames n'est conservé. La racine
-  shadow, indétachable selon le DOM, reste réduite à un slot ordinaire sans
-  ressources graphiques. Les attributs temporaires des médias sont restaurés
-  et seul le contenu courant reste présenté. Le périmètre H-i-C vérifié porte
-  sur les images et vidéos ; les relations foreign imbriquées ne sont pas
-  certifiées par cette présentation.
+- Les effets H-i-C (`burn`, `ripple`, `pixelate`, `swirl`, `shatter`, `fold`) sont des transitions de la vue entière, pour `img`, `media` et
+  `slot` ; ils excluent `split: 'cells'`. Leur session est choisie avant toute
+  création de snapshot classique. Sans les primitives H-i-C
+  (`content="drawable"`, `layoutsubtree`, `requestPaint`,
+  `getElementImageDefaultSize`, `drawElementImageToTexture` ou son ancien nom
+  `copyElementImageToTexture`) ou sans WebGPU, la surface présente
+  immédiatement le `mask-reveal` circulaire, à durée égale.
+- Un canvas `content="drawable"` dans la racine shadow du composant porte deux
+  wrappers `drawable` : un slot sortant nommé et le slot entrant par défaut. Les
+  deux états restent du DOM vivant pendant la transition. Pour un média, l'état
+  sortant est son nœud natif, réattaché avec le marqueur transitoire. Pour un
+  slot, comme pour ses autres transitions, c'est une copie temporaire de son
+  contenu, qui appartient à un autre propriétaire. Aucun état présenté n'est
+  masqué par `visibility`, sans quoi il ne produirait pas d'image.
+- Un seul device WebGPU sert toutes les transitions de la page
+  (`webgpu-device.ts`) ; sa perte est signalée aux transitions actives, qui se
+  terminent, et un nouveau device est demandé ensuite. Chaque transition libère
+  à sa fin sa configuration de canvas, ses textures et son buffer. Tant que le
+  device n'est pas prêt, seul l'état sortant est affiché. Quand il l'est,
+  le canvas prend l'affichage sans frame vide : la frame native sortante d'un
+  média (`img`, `video`, ou composition d'une interruption) est copiée dans les
+  textures avec son cadrage `object-fit` et dessinée aussitôt ; pour un slot,
+  une seconde copie du contenu sortant couvre le canvas jusqu'à son premier
+  dessin DOM.
+- À chaque `paint`, le renderer copie dans leurs textures les seuls wrappers
+  que le navigateur a repeints (`changedElements`, `drawElementImageToTexture`),
+  puis dessine l'effet : la copie sortante, statique, d'un slot n'est copiée
+  qu'une fois. Le tableau de paramètres du shader est réutilisé d'une frame à
+  l'autre. Seule la
+  progression reçue de `ComponentAnimation` le fait avancer ; `requestPaint`
+  demande un rendu sans horloge locale. La vue est mesurée par composition
+  affine (`captureHtmlPose` : offsets, styles calculés et matrices parentes),
+  jamais par un rectangle DOM, au montage et au reflow seulement. Le support du
+  canvas est aligné sur les pixels physiques et la vue CSS fractionnaire est
+  conservée à l'intérieur ; l'échantillonnage se limite à la zone utile de
+  chaque texture.
+- Un effet fournit un module WGSL au contrat commun (`getFromColor`,
+  `getToColor`, `progress`, `ratio`) : un shader plein cadre (`burn`,
+  `ripple`, `pixelate`, `swirl`), ou un maillage de l'état sortant au-dessus de
+  l'état entrant (`shatter`, `fold`).
+- Fin, annulation, perte du device et teardown retirent le canvas, les
+  listeners, les textures et le buffer, et déconfigurent le contexte ; le
+  device partagé reste disponible pour la transition suivante.
+  Aucun renderer ni historique de frames n'est conservé. La racine shadow,
+  indétachable selon le DOM, reste réduite à un slot ordinaire.
 - L'interruption texte repart de la composition visible. Le player conserve
-  séparément la reconstruction de l'état logique de la timeline.
+  séparément la reconstruction de l'état logique de la timeline. Avant de
+  capturer cette composition, les modules texte et média échantillonnent la
+  session interrompue à l'instant de la mise à jour : Play, qui met à jour le
+  composant avant d'échantillonner ses animations, capture donc la même
+  composition que Seek.
 - La disponibilité asynchrone d'une frame média peut redemander un échantillon
   à la même position player afin de construire la vue entrante. Elle ne modifie
   pas le temps logique ni la progression de l'animation ; le ticker reste leur
   seule horloge.
+
+## Identité des occurrences et Seek
+
+Les trois modules partagent un même suivi de session
+(`capabilities/replace-session/`) : une session au plus par composant, les
+occurrences déjà traitées, la sélection de Seek et le flux d'échantillonnage
+player. Seule la dernière occurrence valide d'un composant est normalisée à
+chaque mise à jour.
+
+Les trois modules identifient une occurrence par son événement (`eventId`,
+sinon son nom), son instant et sa position dans l'arbre d'eventimes
+(`declarationPath`, étape de séquence comprise), sans tenir compte de sa place
+dans la liste des actions du perso. Cette liste perd des actions plus anciennes
+en cours de route (`tween:stop`, étape de séquence remplacée) sans relancer la
+transition en cours.
+
+Avant le rejeu d'un Seek, `prepareSeek(scèneCible)` fixe, par composant, les
+occurrences visibles à la cible : la dernière si elle est encore en cours,
+puis chaque précédente encore en cours au début de la suivante retenue
+(chaîne d'interruption). La fin de chaque occurrence est majorée de son
+enveloppe de propagation maximale (`stagger`, sinon
+`REPLACE_STAGGER_SHARE_UPPER_BOUND` de la durée), car la durée d'un découpage
+texte se mesure dans le DOM. Pendant le rejeu des frontières antérieures à la
+cible, une occurrence hors de cette chaîne est marquée traitée sans session :
+ni DOM, ni contexte GPU. Le `commit` du Seek active cette sélection, son `abort`
+l'écarte, et la présentation de la scène cible l'efface. La présentation à la
+cible elle-même suit la règle ordinaire.
 
 Les comportements spécifiques de contenu, de segmentation et de capture média
 restent définis dans [remplacement texte](./replace-text-v2-spec.md),
@@ -155,6 +186,14 @@ Le catalogue JSON et sa sélection auteur sont définis dans
 [replace-presets](./replace-presets-v2-spec.md).
 
 ## Preuves
+
+- [`replace-session.spec.ts`](../tests/runtime/capabilities/replace-session.spec.ts)
+  vérifie une seule session quand un tween arrêté quitte la liste des actions,
+  la même composition en Play et en Seek direct, l'absence de session pour les
+  remplacements terminés avant la cible, et la chaîne A→B→C reconstruite comme
+  en Play. Un contrôle navigateur H-i-C, avec le renderer WebGL2 de `burn`
+  alors en place, a confirmé l'absence d'erreur de contextes après des Seeks
+  au-delà de plusieurs `burn`.
 
 - [`foreign-mount.spec.ts`](../tests/facade/foreign-mount.spec.ts) pilote le
   `TimeTicker` avec des frames contrôlées : progression d'opération pendant
@@ -170,20 +209,19 @@ Le catalogue JSON et sa sélection auteur sont définis dans
   traverse `SceneBuilder` et `HtmlPlayerRunner` : formules de contenu,
   profils CSS/JSON, masques média, resize à temps constant, interruption
   A→B→C, gel de la copie vidéo et retry de frame à position player constante.
-- La démo [`replace-carousel`](../../demos/src/v2/demos/replace-carousel/main.ts)
-  exerce `burn` sur les chemins image et vidéo de `replace-media` : l'aller à
-  1 500 ms dure 900 ms, puis le retour démarre à 4 000 ms après 1 600 ms de pause.
-- Les contrôles navigateur H-i-C sur deux images opaques vérifient les états
-  initiaux et finaux, leur mélange sans transparence à mi-parcours, le transfert
-  de composition, le resize et le nettoyage sur perte de contexte. Une série de
-  24 fins/annulations vérifie la libération des 24 contextes et le retrait des
-  présentations. La lecture vidéo est observable par les callbacks natifs de
-  frames pendant la transition.
-- [`burn-session.spec.ts`](../tests/runtime/runner-html/html-in-canvas-burn/burn-session.spec.ts)
-  vérifie la conservation du nœud sortant pendant la préparation d'une image
-  ou vidéo entrante, son retrait à l'annulation, la transmission du média natif
-  d'amorçage et les fits `cover`/`contain`/`fill`. Seule la frontière GPU est
-  remplacée dans jsdom ; le contrôle du premier paint et du cadrage relève du
-  parcours navigateur réel `replace-carousel`. L'absence de frame vide entre
-  DOM et canvas se vérifie par enregistrement du compositeur, sans readback GPU
-  dans les frames observées : un readback peut masquer ce défaut de bascule.
+- [`html-in-canvas/session.spec.ts`](../tests/runtime/runner-html/html-in-canvas/session.spec.ts)
+  vérifie, frontière GPU remplacée dans jsdom, le renderer de chaque effet, le
+  nœud natif sortant d'un média et sa frame d'amorçage cadrée, les copies d'un
+  slot sans modification de son contenu, l'absence de `visibility` sur les
+  états, la durée et la restauration sur échec GPU ;
+  [`texture-mapping.spec.ts`](../tests/runtime/runner-html/html-in-canvas/texture-mapping.spec.ts)
+  vérifie l'alignement du support et les cadrages.
+- Les six modules WGSL et leurs pipelines sont validés par un WebGPU réel. La
+  démo [`hic-transitions`](../../demos/src/v2/demos/hic-transitions/main.ts)
+  (une image par effet, joués l'un après l'autre, et une vidéo) est contrôlée
+  dans un navigateur H-i-C : rendu des effets sur les médias, sans frame noire
+  avant la transition, en Play et en Seek.
+- Limites : le chemin slot (démo [`hic-slot`](../../demos/src/sighty/hic-slot/scenario.ts)),
+  la capture d'une interruption H-i-C, la perte du device et le resize pendant
+  un effet ne sont pas encore contrôlés dans un navigateur.
+

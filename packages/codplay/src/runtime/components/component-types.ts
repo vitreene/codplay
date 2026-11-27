@@ -104,6 +104,10 @@ export type ComponentActionOccurrence = Readonly<{
   elapsedMs: number
   action: Record<string, unknown>
   eventId?: string
+  /** Journal order of a live event, carried from the materialized action. */
+  eventSeq?: number
+  /** Position of the action in its authored eventime tree, sequence step included. */
+  declarationPath?: readonly number[]
 }>
 
 /** Compatibility name for the current HTML/SVG component family. */

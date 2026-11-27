@@ -163,12 +163,8 @@ describe('HTML slot replacement presentation surface', () => {
     parent.append(root)
     document.body.append(parent)
 
-    const parentRect = createRect(25.1875, 218.414, 213.414, 226.516)
-    const rootRect = createRect(25.1875, 322.625, 112.3984, 18.0859)
-    parent.getBoundingClientRect = () => parentRect
-    root.getBoundingClientRect = () => rootRect
-    Object.defineProperty(parent, 'offsetWidth', { configurable: true, value: 213 })
-    Object.defineProperty(parent, 'offsetHeight', { configurable: true, value: 227 })
+    const rootRect = createRect(0, 104.211, 112.3984, 18.0859)
+    mockLayoutBox(root, parent, () => rootRect)
 
     const profile: ReplaceMotionProfile = {
       transition: 'swipe-left',
@@ -196,12 +192,8 @@ describe('HTML slot replacement presentation surface', () => {
     parent.append(root)
     document.body.append(parent)
 
-    const parentRect = createRect(25.1875, 218.414, 213.414, 226.516)
-    let rootRect = createRect(25.1875, 322.625, 112.3984, 18.0859)
-    parent.getBoundingClientRect = () => parentRect
-    root.getBoundingClientRect = () => rootRect
-    Object.defineProperty(parent, 'offsetWidth', { configurable: true, value: 213 })
-    Object.defineProperty(parent, 'offsetHeight', { configurable: true, value: 227 })
+    let rootRect = createRect(0, 104.211, 112.3984, 18.0859)
+    mockLayoutBox(root, parent, () => rootRect)
 
     const profile: ReplaceMotionProfile = {
       transition: 'swipe-left',
@@ -212,7 +204,7 @@ describe('HTML slot replacement presentation surface', () => {
     }
     const session = createHtmlReplacePresentationSurface(root).begin(profile)
     root.textContent = 'Le silence du soir'
-    rootRect = createRect(65.1875, 322.625, 95.5625, 18.0859)
+    rootRect = createRect(40, 104.211, 95.5625, 18.0859)
     session?.start()
     session?.sample(0.5)
 
@@ -240,18 +232,8 @@ describe('HTML slot replacement presentation surface', () => {
       parent.append(root)
       document.body.append(parent)
 
-      let parentRect = createRect(25.1875, 218.414, 213.414, 226.516)
-      let rootRect = createRect(25.1875, 322.625, 112.3984, 18.0859)
-      Object.defineProperty(parent, 'getBoundingClientRect', {
-        configurable: true,
-        value: () => parentRect,
-      })
-      Object.defineProperty(root, 'getBoundingClientRect', {
-        configurable: true,
-        value: () => rootRect,
-      })
-      Object.defineProperty(parent, 'offsetWidth', { configurable: true, value: 213 })
-      Object.defineProperty(parent, 'offsetHeight', { configurable: true, value: 227 })
+      let rootRect = createRect(0, 104.211, 112.3984, 18.0859)
+      mockLayoutBox(root, parent, () => rootRect)
 
       const session = createHtmlReplacePresentationSurface(root).begin({
         transition: 'swipe-left',
@@ -264,7 +246,7 @@ describe('HTML slot replacement presentation surface', () => {
       if (session === undefined) throw new Error('A split text root should provide a replace session.')
 
       root.textContent = 'Le silence du soir'
-      rootRect = createRect(65.1875, 322.625, 95.5625, 18.0859)
+      rootRect = createRect(40, 104.211, 95.5625, 18.0859)
       session.start()
       session.sample(0.5)
 
@@ -274,8 +256,7 @@ describe('HTML slot replacement presentation surface', () => {
       expect(outgoing?.textContent).toContain('La lumière du matin')
       expect(incoming?.textContent).toContain('Le silence du soir')
 
-      parentRect = createRect(125, 500, 213.414, 226.516)
-      rootRect = createRect(175, 580, 95.5625, 18.0859)
+      rootRect = createRect(50, 80, 95.5625, 18.0859)
       session.reflow?.()
 
       expect(outgoing?.style.left).toBe('50px')
@@ -780,6 +761,16 @@ function mockMediaGeometry(width: number, height: number): Readonly<{
       return new DOMRect(0, 0, boxWidth, boxHeight)
     },
   })
+  const offsetDescriptors = (['offsetWidth', 'offsetHeight'] as const)
+    .map((name) => [name, Object.getOwnPropertyDescriptor(elementPrototype, name)] as const)
+  Object.defineProperty(elementPrototype, 'offsetWidth', {
+    configurable: true,
+    get: function (this: HTMLElement): number { return this.isConnected ? boxWidth : 0 },
+  })
+  Object.defineProperty(elementPrototype, 'offsetHeight', {
+    configurable: true,
+    get: function (this: HTMLElement): number { return this.isConnected ? boxHeight : 0 },
+  })
 
   return {
     restore: () => {
@@ -791,6 +782,10 @@ function mockMediaGeometry(width: number, height: number): Readonly<{
         delete (elementPrototype as unknown as Record<string, unknown>).getBoundingClientRect
       } else {
         Object.defineProperty(elementPrototype, 'getBoundingClientRect', getBoundingClientRectDescriptor)
+      }
+      for (const [name, descriptor] of offsetDescriptors) {
+        if (descriptor === undefined) delete (elementPrototype as unknown as Record<string, unknown>)[name]
+        else Object.defineProperty(elementPrototype, name, descriptor)
       }
     },
     setSize: (nextWidth, nextHeight) => {
@@ -896,6 +891,21 @@ function getTextRangeRect(element: HTMLElement): DOMRect | undefined {
 }
 
 /** Creates a DOMRect-shaped fixture with fractional CSS pixel dimensions. */
+/**
+ * Gives one element a layout box inside its offset parent, as a browser
+ * layout would: jsdom computes none, and replace geometry reads layout
+ * offsets and sizes, never DOM rectangles.
+ */
+function mockLayoutBox(element: HTMLElement, offsetParent: HTMLElement, box: () => DOMRect): void {
+  Object.defineProperties(element, {
+    offsetParent: { configurable: true, get: () => offsetParent },
+    offsetLeft: { configurable: true, get: () => box().left },
+    offsetTop: { configurable: true, get: () => box().top },
+    offsetWidth: { configurable: true, get: () => box().width },
+    offsetHeight: { configurable: true, get: () => box().height },
+  })
+}
+
 function createRect(x: number, y: number, width: number, height: number): DOMRect {
   return {
     x,

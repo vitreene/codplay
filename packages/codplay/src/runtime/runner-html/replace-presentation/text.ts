@@ -1,5 +1,6 @@
 import { createIdentityMatrix, invertMatrix, multiplyMatrix, transformPoint, type Matrix2D } from 'ace'
 import { markHtmlTransientNode } from '../transient-node'
+import { captureHtmlPose, createHtmlPoseCaptureContext } from '../../motion/html-pose'
 import { getMotionContentRoot, removeSnapshot } from './dom'
 import { nextReplacePresentationId } from './ids'
 
@@ -51,7 +52,9 @@ export function buildTextUnitLayer(snapshot: HTMLElement, split: 'letter' | 'wor
   const originalVisibility = contentRoot.style.visibility
   const originalPosition = contentRoot.style.position
   if (getComputedStyle(contentRoot).position === 'static') contentRoot.style.position = 'relative'
-  const rootRect = contentRoot.getBoundingClientRect()
+  // Range boxes are screen-space: the text root is the capture root, anchored
+  // once in the same space, so their offsets stay consistent under any transform.
+  const rootRect = captureHtmlPose(contentRoot, createHtmlPoseCaptureContext(contentRoot)).rect
   const entries = collectTextNodeEntries(contentRoot)
   const fullText = entries.map((entry) => entry.value).join('')
   const graphemes = segmentTextGraphemes(fullText)
@@ -220,7 +223,7 @@ export function measureTextGraphemes(
   entries: readonly TextNodeEntry[],
   graphemes: readonly GraphemeSegment[],
   root: HTMLElement,
-  rootRect: DOMRect,
+  rootRect: Readonly<{ left: number; top: number; width: number; height: number }>,
 ): Array<MeasuredTextFragment & Readonly<{ graphemeIndex: number }>> {
   const measured: Array<MeasuredTextFragment & Readonly<{ graphemeIndex: number }>> = []
   let wordIndex = 0
@@ -340,7 +343,7 @@ export function applyMeasuredTextStyle(
 /** Aligns each generated fragment's rendered glyph box with its measured source range. */
 export function alignTextFragmentsToSource(
   root: HTMLElement,
-  rootRect: DOMRect,
+  rootRect: Readonly<{ left: number; top: number; width: number; height: number }>,
   fragments: readonly Readonly<{ span: HTMLElement; fragment: MeasuredTextFragment }>[],
   remSizePx: number,
 ): void {

@@ -1,11 +1,14 @@
 import type { ValidationFunction } from '../../../services'
 import type { PersoValidationFunction } from '../../../scene/validation'
 import {
+  isReplaceHtmlInCanvasTransition,
+  REPLACE_SLOT_TRANSITIONS,
   isReplaceMaskShape,
   isReplaceSlotTransition,
   isReplaceStaggerPattern,
 } from '../../capabilities/replace-presets'
 import {
+  ignoreFadeMaskOptions,
   isFiniteNonNegativeNumber,
   isFinitePositiveNumber,
   isPositiveInteger,
@@ -102,7 +105,8 @@ function isForeignContentValue(value: unknown): value is ForeignContentValue {
 }
 
 /** Validates one slot replacement profile and its optional SVG cell grid. */
-function validateReplace(value: unknown, context: Parameters<ValidationFunction>[1]): void {
+function validateReplace(authored: unknown, context: Parameters<ValidationFunction>[1]): void {
+  const value = ignoreFadeMaskOptions(authored)
   if (value === undefined) return
   if (isReplaceSlotTransition(value)) return
   if (!isComponentRecord(value)) {
@@ -118,7 +122,7 @@ function validateReplace(value: unknown, context: Parameters<ValidationFunction>
     reportInvalidComponentValue(
       context,
       'AUTHOR_SLOT_REPLACE_TRANSITION_INVALID',
-      'slot.replace.transition must be fade, fade-in, mask-reveal, curtain, wipe, slide-over, or stack.',
+      `slot.replace.transition must be one of ${REPLACE_SLOT_TRANSITIONS.join(', ')}.`,
       'replace.transition',
     )
   }
@@ -137,6 +141,14 @@ function validateReplace(value: unknown, context: Parameters<ValidationFunction>
       context,
       'AUTHOR_SLOT_REPLACE_SPLIT_INVALID',
       'slot.replace.split must be cells; legacy text split values remain inert.',
+      'replace.split',
+    )
+  }
+  if (isReplaceHtmlInCanvasTransition(value.transition) && split === 'cells') {
+    reportInvalidComponentValue(
+      context,
+      'AUTHOR_SLOT_REPLACE_SPLIT_INVALID',
+      `slot.replace ${String(value.transition)} is a whole-view transition and does not accept split: cells.`,
       'replace.split',
     )
   }

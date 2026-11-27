@@ -7,7 +7,7 @@ import {
 } from './profile'
 import {
   cloneSnapshotNode, createPresentationComposite, createPresentationLayer, getMotionContentRoot,
-  getOffsetFromParent, isHtmlElement, positionPresentationLayer, positionSnapshot, removeSnapshot,
+  getLocalBoxSize, getOffsetFromParent, isHtmlElement, positionPresentationLayer, positionSnapshot, removeSnapshot,
   restoreParentPosition, sanitizeSnapshot, type SnapshotGeometry,
 } from './dom'
 import {
@@ -27,7 +27,8 @@ import {
   sampleSplitMediaMotion, sampleSplitTextMotion,
 } from './motion'
 import { setMaskImage } from './masks'
-import { createHtmlInCanvasBurnSession } from './html-in-canvas-burn/burn-session'
+import { HTML_IN_CANVAS_DEFAULT_DURATION_MS, createHtmlInCanvasSession } from './html-in-canvas/session'
+import { isHtmlInCanvasEffectName } from './html-in-canvas/effects'
 
 /** Width slack in CSS pixels keeps text snapshots clear of measurement drift. */
 const SNAPSHOT_WIDTH_SAFETY_MARGIN = 8
@@ -40,10 +41,10 @@ export function createHtmlReplacePresentationSurface(
   return {
     begin: (profile = 'fade', sourceSnapshot) => {
       const normalized = normalizeProfile(profile)
-      if (normalized.transition === 'burn') {
-        const session = createHtmlInCanvasBurnSession(root, normalized, sourceSnapshot)
+      if (isHtmlInCanvasEffectName(normalized.transition)) {
+        const session = createHtmlInCanvasSession(root, normalized, sourceSnapshot)
         if (session !== undefined) return session
-        return createReplaceSession(root, createBurnFallbackProfile(normalized), sourceSnapshot)
+        return createReplaceSession(root, createHtmlInCanvasFallbackProfile(normalized), sourceSnapshot)
       }
       return createReplaceSession(root, normalized, sourceSnapshot)
     },
@@ -131,7 +132,7 @@ function createReplaceSession(
   /** Measures one responsive grid request against the current media box. */
   const resolveCurrentMediaCells = (): ResolvedMediaCellSettings | undefined => {
     if (profile.mediaCells === undefined) return undefined
-    const rect = root.getBoundingClientRect()
+    const rect = getLocalBoxSize(root)
     resolvedMediaCells = resolveMediaCellSettings(
       profile.mediaCells,
       rect.width,
@@ -508,11 +509,11 @@ function createReplaceSession(
   }
 }
 
-/** Replaces an unavailable H-i-C burn profile with the established circle reveal. */
-function createBurnFallbackProfile(profile: HtmlReplaceProfile): HtmlReplaceProfile {
+/** Replaces an unavailable HTML-in-Canvas effect with the established circle reveal. */
+function createHtmlInCanvasFallbackProfile(profile: HtmlReplaceProfile): HtmlReplaceProfile {
   return {
     transition: 'mask-reveal',
-    duration: profile.duration ?? 900,
+    duration: profile.duration ?? HTML_IN_CANVAS_DEFAULT_DURATION_MS,
     shape: 'circle',
     clipToSlot: true,
     freezeMedia: profile.freezeMedia,

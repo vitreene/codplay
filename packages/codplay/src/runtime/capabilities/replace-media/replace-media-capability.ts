@@ -1,11 +1,8 @@
 import type {
   ComponentActionOccurrence,
   ComponentAnimation,
-  ReplaceComponentSurface,
   ReplaceMediaPresentationProfile,
   ReplaceMotionProfile,
-  ReplacePresentationSession,
-  ReplaceTransition,
   SlotReplaceProfile,
 } from '../../components'
 import type {
@@ -17,27 +14,24 @@ import type { RuntimeModuleServiceDefinition } from '../../catalog'
 import { MOVE_OPERATION_UNMOUNT } from '../../config/move'
 import type { MoveStateDelta } from '../../move'
 import {
-  computeReplaceStaggerTiming,
   normalizeReplacePresetCommand,
+  isReplacePresetName,
   isReplaceSlotTransition,
 } from '../replace-presets'
-import {
-  isFiniteNonNegativeNumber,
-  isPlainRecord,
-} from '../replace-presets/replace-value-validation'
+import { ignoreFadeMaskOptions, isPlainRecord } from '../replace-presets/replace-value-validation'
 import { normalizeReplaceSlotCommand } from '../replace-slot'
+import {
+  createPlayerReplaceAnimation,
+  collectReplaceSeekOccurrences,
+  findLatestReplaceCandidate,
+  createReplaceSurfaceResolver,
+  ReplaceTimelineSessions,
+  type ReplaceSeekOccurrence,
+  type ReplaceTimelineSession,
+} from '../replace-session'
 
 /** Player-scoped runtime identifier for image and video replacement presentations. */
 export const REPLACE_MEDIA_MODULE_SERVICE_ID = 'replace-media' as const
-
-/** Default duration retained from the V1 `fade` transition definition. */
-export const DEFAULT_REPLACE_DURATION_MS = 300
-
-/** Compatibility command shape retained for callers of the original image helper. */
-export type ReplaceSimpleCommand = Readonly<{
-  transition: ReplaceTransition
-  duration: number
-}>
 
 type ReplaceMediaProfile = SlotReplaceProfile | ReplaceMediaPresentationProfile | ReplaceMotionProfile
 
@@ -52,17 +46,17 @@ type ReplaceOccurrence = Readonly<{
   command: ReplaceMediaCommand
 }>
 
-type ActiveReplaceSession = {
-  key: string
+type ActiveReplaceSession = ReplaceTimelineSession & {
   sessionId: number
-  session: ReplacePresentationSession
-  animation?: ComponentAnimation
   frameState?: 'ready' | 'error'
   waitingCancel?: () => void
   started?: boolean
 }
 
 const MEDIA_FRAME_EVENT_NAME = 'incoming-frame-state'
+
+/** Grid settings without effect when a media replace declares no `split: 'cells'`. */
+const INERT_GRID_FIELDS = ['stagger', 'direction', 'staggerPattern', 'cellX', 'cellY', 'cellSize'] as const
 
 /** Creates the player-scoped image/video replacement module declaration. */
 export function createReplaceMediaModuleServiceDefinition(): RuntimeModuleServiceDefinition {
@@ -76,63 +70,34 @@ export function createReplaceMediaModuleServiceDefinition(): RuntimeModuleServic
 export function createReplaceMediaModuleService(
   context: RuntimeModuleServiceContext,
 ): RuntimeModuleServiceInstance {
-  const getReplaceSurface = context.componentSurfaces === undefined
-    ? (_componentId: string): ReplaceComponentSurface | undefined => undefined
-    : (componentId: string) => context.componentSurfaces?.getReplaceSurface?.(componentId)
-  const getMediaTag = context.componentSurfaces === undefined
-    ? (_componentId: string): 'audio' | 'video' | undefined => undefined
-    : (componentId: string) => context.componentSurfaces?.getSurface(componentId, 'media')?.getMediaTag?.()
-  const sessions = new Map<string, ActiveReplaceSession>()
-  const handledOccurrences = new Map<string, string>()
-  let nextSessionId = 1
-
-  /** Cancels one presentation session and removes its runtime bookkeeping. */
-  function cancelSession(componentId: string): void {
-    const active = sessions.get(componentId)
-    if (active === undefined) return
+  const getReplaceSurface = createReplaceSurfaceResolver(context)
+  const getMediaTag = (componentId: string): 'audio' | 'video' | undefined => (
+    context.componentSurfaces?.getSurface(componentId, 'media')?.getMediaTag?.()
+  )
+  const sessions = new ReplaceTimelineSessions<ActiveReplaceSession>(collectMediaSeekOccurrences, (active) => {
     active.waitingCancel?.()
     active.waitingCancel = undefined
-    active.session.cancel()
-    sessions.delete(componentId)
-  }
+  })
 
   /** Starts or preserves the outgoing snapshot before an image/video source update. */
   function beforeComponentUpdate(update: RuntimeComponentUpdateContext): void {
     if (!supportsReplaceMedia(update, getMediaTag(update.componentId))) return
     const occurrence = resolveLatestReplaceOccurrence(update.activeActions)
-    if (update.phase === 'geometry-capture') {
-      cancelSession(update.componentId)
-      if (occurrence !== undefined) handledOccurrences.set(update.componentId, occurrence.key)
-      else handledOccurrences.delete(update.componentId)
-      return
-    }
+    if (!sessions.needsSession(update, occurrence?.key) || occurrence === undefined) return
 
-    const active = sessions.get(update.componentId)
-    if (active !== undefined && occurrence !== undefined && active.key === occurrence.key) {
-      active.session.reflow?.()
-      return
-    }
-    if (occurrence === undefined) {
-      cancelSession(update.componentId)
-      handledOccurrences.delete(update.componentId)
-      return
-    }
-    if (handledOccurrences.get(update.componentId) === occurrence.key) return
-
-    const interruptedSnapshot = active?.session.captureCurrent?.()
-    cancelSession(update.componentId)
+    const interruptedSnapshot = sessions.captureInterrupted(update)
+    sessions.cancel(update.componentId)
     const session = getReplaceSurface(update.componentId)?.begin(occurrence.command.profile, interruptedSnapshot)
     if (session === undefined) return
-    handledOccurrences.set(update.componentId, occurrence.key)
-    sessions.set(update.componentId, { key: occurrence.key, session, sessionId: nextSessionId++ })
+    sessions.open(update.componentId, { key: occurrence.key, session, sessionId: sessions.nextId() })
   }
 
   /** Registers a media transition whose incoming frame is captured on the first player sample. */
   function afterComponentUpdate(update: RuntimeComponentUpdateContext): void {
     if (!supportsReplaceMedia(update, getMediaTag(update.componentId))) return
     const occurrence = resolveLatestReplaceOccurrence(update.activeActions)
-    const active = sessions.get(update.componentId)
-    if (update.phase === 'geometry-capture' || occurrence === undefined || active?.key !== occurrence.key) return
+    const active = sessions.activeFor(update, occurrence?.key)
+    if (active === undefined || occurrence === undefined) return
 
     if (active.animation === undefined) {
       active.animation = createReplaceAnimation({
@@ -159,13 +124,13 @@ export function createReplaceMediaModuleService(
 
   /** Removes a prepared snapshot when the component update throws. */
   function onComponentUpdateError(update: RuntimeComponentUpdateContext): void {
-    cancelSession(update.componentId)
+    sessions.cancel(update.componentId)
   }
 
   /** Replays matching frame events after normal presentation and Seek reconstruction. */
   function onScenePresented(scene: Parameters<NonNullable<RuntimeModuleServiceInstance['onScenePresented']>>[0]): void {
     const events = context.getEvents?.(MEDIA_FRAME_EVENT_NAME) ?? []
-    for (const [componentId, active] of sessions) {
+    for (const [componentId, active] of sessions.entriesByComponent()) {
       const event = events.find((candidate) => candidate.applyAtMs <= scene.timeMs
         && candidate.data?.componentId === componentId
         && candidate.data?.occurrenceKey === active.key
@@ -173,26 +138,13 @@ export function createReplaceMediaModuleService(
       const frameState = event?.data?.state
       if (frameState === 'ready' || frameState === 'error') active.frameState = frameState
     }
+    sessions.endSeek()
   }
 
   /** Cancels pending frame listeners before a media component is detached. */
   function onMoveDelta(delta: MoveStateDelta): void {
     if (delta.operation !== MOVE_OPERATION_UNMOUNT) return
-    cancelSession(delta.persoKey)
-    handledOccurrences.delete(delta.persoKey)
-  }
-
-  /** Cancels presentation sessions before a player reconstructs a seek target. */
-  function beforeSeek(): void {
-    for (const componentId of [...sessions.keys()]) cancelSession(componentId)
-    handledOccurrences.clear()
-  }
-
-  /** Releases all snapshots and resets the player-scoped replacement state. */
-  function destroy(): void {
-    beforeSeek()
-    sessions.clear()
-    handledOccurrences.clear()
+    sessions.forget(delta.persoKey)
   }
 
   return {
@@ -201,19 +153,22 @@ export function createReplaceMediaModuleService(
     onComponentUpdateError,
     onScenePresented,
     onMoveDelta,
-    beforeSeek,
-    destroy,
+    beforeSeek: () => sessions.cancelAll(),
+    prepareSeek: (scene) => sessions.prepareSeek(scene),
+    destroy: () => sessions.destroy(),
   }
 }
 
 /** Normalizes media profiles, using the slot normalizer for its established CSS transitions. */
-export function normalizeReplaceMediaCommand(rawReplace: unknown): ReplaceMediaCommand | undefined {
+export function normalizeReplaceMediaCommand(authoredReplace: unknown): ReplaceMediaCommand | undefined {
+  const rawReplace = ignoreFadeMaskOptions(authoredReplace)
   const options = typeof rawReplace === 'string' ? {} : isPlainRecord(rawReplace) ? rawReplace : undefined
   const transition = typeof rawReplace === 'string' ? rawReplace : options?.transition
   if (typeof transition !== 'string') return undefined
 
-  if (isReplaceSlotTransition(transition)) {
-    const slotProfile = normalizeReplaceSlotCommand(rawReplace)
+  // A name shared by the JSON catalogue and the slot profiles (`fade`) takes the JSON preset.
+  if (isReplaceSlotTransition(transition) && !isReplacePresetName(transition)) {
+    const slotProfile = normalizeReplaceSlotCommand(ignoreInertMediaGridSettings(options, rawReplace))
     if (slotProfile === undefined) return undefined
     const split = slotProfile.split
     if (split !== undefined && split !== 'cells') return undefined
@@ -231,7 +186,7 @@ export function normalizeReplaceMediaCommand(rawReplace: unknown): ReplaceMediaC
       ...(slotProfile.cellX === undefined ? {} : { cellX: slotProfile.cellX }),
       ...(slotProfile.cellY === undefined ? {} : { cellY: slotProfile.cellY }),
     }
-    return { profile, duration: getGridDuration(profile) }
+    return { profile, duration: profile.duration ?? 0 }
   }
 
   const preset = normalizeReplacePresetCommand(rawReplace, 'replace', ['cells'])
@@ -248,43 +203,45 @@ export function normalizeReplaceMediaCommand(rawReplace: unknown): ReplaceMediaC
     ...(preset.cellX === undefined ? {} : { cellX: preset.cellX }),
     ...(preset.cellY === undefined ? {} : { cellY: preset.cellY }),
   }
-  return { profile, duration: getGridDuration(profile) }
+  return { profile, duration: profile.duration ?? 0 }
 }
 
-/** Normalizes the original image-only shorthand for compatibility with existing callers. */
-export function normalizeReplaceSimpleCommand(rawReplace: unknown): ReplaceSimpleCommand | undefined {
-  if (rawReplace === 'fade' || rawReplace === 'fade-in') {
-    return { transition: rawReplace, duration: DEFAULT_REPLACE_DURATION_MS }
-  }
-  if (!isPlainRecord(rawReplace) || !isReplaceTransition(rawReplace.transition)) return undefined
-  const duration = rawReplace.duration
-  if (duration === undefined) return { transition: rawReplace.transition, duration: DEFAULT_REPLACE_DURATION_MS }
-  if (!isFiniteNonNegativeNumber(duration)) return undefined
-  return { transition: rawReplace.transition, duration }
+/**
+ * Grid settings only apply to a mask grid: without `split: 'cells'`, a slot
+ * transition on media accepts and ignores them, and stays a whole-view transition.
+ */
+function ignoreInertMediaGridSettings(
+  options: Readonly<Record<string, unknown>> | undefined,
+  rawReplace: unknown,
+): unknown {
+  if (options === undefined || options.split !== undefined) return rawReplace
+  return Object.fromEntries(Object.entries(options)
+    .filter(([key]) => !(INERT_GRID_FIELDS as readonly string[]).includes(key)))
+}
+
+/** Reads the media profile of one source-changing action, or undefined. */
+function readMediaCommand(action: ComponentActionOccurrence): ReplaceMediaCommand | undefined {
+  return hasReplaceTarget(action.action) ? normalizeReplaceMediaCommand(action.action.replace) : undefined
 }
 
 /** Selects the latest source-changing action that carries one valid media profile. */
 function resolveLatestReplaceOccurrence(
   actions: readonly ComponentActionOccurrence[],
 ): ReplaceOccurrence | undefined {
-  let latest: ReplaceOccurrence | undefined
-  for (let index = 0; index < actions.length; index += 1) {
-    const action = actions[index]
-    if (action === undefined || !hasReplaceTarget(action.action)) continue
-    const command = normalizeReplaceMediaCommand(action.action.replace)
-    if (command === undefined) continue
-    latest = {
-      key: createOccurrenceKey(action, index),
-      action,
-      command,
-    }
-  }
-  return latest
+  return findLatestReplaceCandidate(actions, readMediaCommand)
 }
 
-/** Creates one stable occurrence key for transition replacement and replay guards. */
-function createOccurrenceKey(action: ComponentActionOccurrence, index: number): string {
-  return `${action.eventId ?? action.name}:${action.startAt}:${index}`
+/** Lists the image/video replace occurrences of one perso with an upper bound of their end. */
+function collectMediaSeekOccurrences(
+  persoType: string,
+  actions: readonly ComponentActionOccurrence[],
+): readonly ReplaceSeekOccurrence[] {
+  if (persoType !== 'img' && persoType !== 'media') return []
+  return collectReplaceSeekOccurrences(actions, readMediaCommand, ({ profile }) => ({
+    durationMs: profile.duration ?? 0,
+    propagates: 'split' in profile && profile.split === 'cells',
+    staggerMs: profile.stagger,
+  }))
 }
 
 /** Registers one player-clocked snapshot transition without starting native media clones. */
@@ -293,12 +250,10 @@ function createReplaceAnimation(options: Readonly<{
   startAt: number
   duration: number
   active: ActiveReplaceSession
-  sessions: Map<string, ActiveReplaceSession>
+  sessions: ReplaceTimelineSessions<ActiveReplaceSession>
   emitFrameState: (session: ActiveReplaceSession, state: 'ready' | 'error') => void
 }>): ComponentAnimation {
-  const endAt = options.startAt + options.duration
   const active = options.active
-  const animationId = `replace-media:${options.componentId}:${active.key}:${active.sessionId}`
 
   /** Starts when the current source frame is ready, or subscribes for a module event. */
   const startAtSample = (): void => {
@@ -337,58 +292,25 @@ function createReplaceAnimation(options: Readonly<{
     active.waitingCancel = cancelWait
   }
 
-  return {
-    id: animationId,
+  return createPlayerReplaceAnimation({
+    id: `replace-media:${options.componentId}:${active.key}:${active.sessionId}`,
     startAt: options.startAt,
-    endAt,
-    sample: (timeMs) => {
-      if (timeMs < options.startAt) return undefined
-      if (timeMs >= endAt) {
-        return {
-          value: 'complete',
-          apply: () => {
-            active.waitingCancel?.()
-            active.waitingCancel = undefined
-            if (active.started === true) active.session.sample(1)
-            active.session.finish()
-            const current = options.sessions.get(options.componentId)
-            if (current?.session === active.session) options.sessions.delete(options.componentId)
-          },
-        }
-      }
-      const progress = endAt === options.startAt
-        ? 1
-        : (timeMs - options.startAt) / (endAt - options.startAt)
-      const normalized = Math.min(1, Math.max(0, progress))
-      return {
-        value: {
-          progress: normalized,
-          frameState: active.frameState ?? 'pending',
-        },
-        apply: () => {
-          startAtSample()
-          if (active.started === true) active.session.sample(normalized)
-        },
-      }
+    duration: options.duration,
+    // The frame readiness belongs to the sample key: a ready frame is captured
+    // again even when Seek left the player at the same progress.
+    value: (progress) => ({ progress, frameState: active.frameState ?? 'pending' }),
+    sample: (progress) => {
+      startAtSample()
+      if (active.started === true) active.session.sample(progress)
     },
-  }
-}
-
-/** Resolves the effective duration for a fixed media-cell grid. */
-function getGridDuration(profile: ReplaceMediaProfile): number {
-  const duration = profile.duration ?? 0
-  if (!('split' in profile) || profile.split !== 'cells') return duration
-  const columns = profile.cellX ?? 4
-  const rows = profile.cellY ?? 3
-  const timing = computeReplaceStaggerTiming({
-    cols: columns,
-    rows,
-    durationMs: duration,
-    totalStaggerMs: profile.stagger ?? Math.round(duration * 0.5),
-    staggerPattern: profile.staggerPattern,
-    direction: profile.direction,
+    complete: () => {
+      active.waitingCancel?.()
+      active.waitingCancel = undefined
+      if (active.started === true) active.session.sample(1)
+      active.session.finish()
+      options.sessions.release(options.componentId, active.session)
+    },
   })
-  return timing.totalDurationMs
 }
 
 /** Reports whether this component update belongs to a supported image or video owner. */
@@ -409,11 +331,6 @@ function supportsReplaceMedia(
 /** Checks whether the active source-changing action contains an explicit source value. */
 function hasReplaceTarget(action: Readonly<Record<string, unknown>>): boolean {
   return Object.prototype.hasOwnProperty.call(action, 'src') && action.src !== undefined
-}
-
-/** Checks whether one command names the two legacy image transitions. */
-function isReplaceTransition(value: unknown): value is ReplaceTransition {
-  return value === 'fade' || value === 'fade-in'
 }
 
 /** Checks whether a source suffix identifies audio under the media component defaults. */

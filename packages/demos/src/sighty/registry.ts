@@ -5,6 +5,7 @@ import { demo4 } from './demo4/main'
 import { demo5 } from './demo5/main'
 import { quizHunt } from './quiz-hunt/main'
 import { replaceSlotDemo } from './replace-slot/main'
+import { hicSlotDemo } from './hic-slot/main'
 import { viewTransitionsDemo } from './view-transitions/main'
 import type { SightyDemoDefinition } from './layout/types'
 
@@ -17,6 +18,7 @@ export const SIGHTY_DEMO_REGISTRY: readonly SightyDemoDefinition[] = [
   demo5,
   quizHunt,
   replaceSlotDemo,
+  hicSlotDemo,
   viewTransitionsDemo,
 ]
 

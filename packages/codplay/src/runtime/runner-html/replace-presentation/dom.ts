@@ -1,3 +1,4 @@
+import { captureHtmlPose, createHtmlPoseCaptureContext, worldDeltaToLocalDelta } from '../../motion/html-pose'
 import { markHtmlTransientNode } from '../transient-node'
 import { nextReplacePresentationId } from './ids'
 
@@ -131,28 +132,43 @@ export function positionSnapshot(
 }
 
 
-/** Measures the slot relative to its parent, accounting for scrolling and scale. */
+/**
+ * Measures the slot in its parent's local coordinates, accounting for
+ * scrolling and for any transform of the parent or of the slot. Both are read
+ * by affine composition, never by a DOM rectangle.
+ */
 export function getOffsetFromParent(
   root: HTMLElement,
   parent: HTMLElement,
   widthSafetyMargin = 0,
 ): Readonly<{ left: number; top: number; width: number; height: number }> {
-  const rootRect = root.getBoundingClientRect()
-  const parentRect = parent.getBoundingClientRect()
-  const parentLayoutWidth = getUntransformedBorderBoxSize(parent, 'width')
-  const parentLayoutHeight = getUntransformedBorderBoxSize(parent, 'height')
-  const scaleX = parentLayoutWidth === 0 ? 1 : parentRect.width / parentLayoutWidth
-  const scaleY = parentLayoutHeight === 0 ? 1 : parentRect.height / parentLayoutHeight
-  const measuredWidth = rootRect.width || root.offsetWidth
-  const width = measuredWidth === 0
-    ? 0
-    : measuredWidth / (scaleX || 1) + widthSafetyMargin
+  const context = createHtmlPoseCaptureContext()
+  const rootPose = captureHtmlPose(root, context)
+  const parentPose = captureHtmlPose(parent, context)
+  const offset = worldDeltaToLocalDelta(
+    parentPose.matrix,
+    rootPose.origin.x - parentPose.origin.x,
+    rootPose.origin.y - parentPose.origin.y,
+  )
+  const size = getLocalBoxSize(root)
   return {
-    left: (rootRect.left - parentRect.left) / (scaleX || 1) + parent.scrollLeft - parent.clientLeft,
-    top: (rootRect.top - parentRect.top) / (scaleY || 1) + parent.scrollTop - parent.clientTop,
-    width,
-    height: (rootRect.height || root.offsetHeight) / (scaleY || 1),
+    left: offset.x + parent.scrollLeft - parent.clientLeft,
+    top: offset.y + parent.scrollTop - parent.clientTop,
+    width: size.width === 0 ? 0 : size.width + widthSafetyMargin,
+    height: size.height,
   }
+}
+
+/** Returns the untransformed border-box size of one element, unaffected by any transformed parent. */
+export function getLocalBoxSize(element: Element): Readonly<{ width: number; height: number }> {
+  if (isHtmlElement(element)) {
+    return {
+      width: getUntransformedBorderBoxSize(element, 'width'),
+      height: getUntransformedBorderBoxSize(element, 'height'),
+    }
+  }
+  const styles = getComputedStyle(element)
+  return { width: parsePixelSize(styles.width), height: parsePixelSize(styles.height) }
 }
 
 

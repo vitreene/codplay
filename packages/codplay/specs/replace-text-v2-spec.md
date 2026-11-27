@@ -47,8 +47,13 @@ entrante après la mise à jour. Chaque échantillon conserve la géométrie cap
 pour sa propre vue ; la largeur du nouveau nœud vivant ne redimensionne pas la
 copie sortante.
 
-La conversion depuis les rectangles du navigateur utilise la dimension CSS
-fractionnaire résolue du parent lorsqu'elle est disponible. La largeur de
+La position de chaque vue dans son parent est mesurée par composition affine
+(`captureHtmlPose` : offsets de layout, styles calculés et matrices parentes),
+jamais par un rectangle DOM, qui ignore la transformation propre d'un parent.
+Les tailles sont les dimensions CSS non transformées, fractionnaires comprises.
+Les boîtes `Range` du texte, en coordonnées d'écran, sont rapportées à la
+racine du texte prise comme racine de capture, ancrée une fois dans ce même
+repère. La largeur de
 chaque vue reçoit une marge de sécurité de 8 px CSS pour absorber les écarts
 de mesure et éviter qu'un instantané ne replie le texte seul. La hauteur
 et la position restent celles de la vue capturée.

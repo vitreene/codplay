@@ -44,6 +44,11 @@ export type SlotReplaceShape = 'circle' | 'star' | 'diamond' | Readonly<{
 export type SlotReplaceTransition = ReplaceTransition
   | 'mask-reveal'
   | 'burn'
+  | 'ripple'
+  | 'pixelate'
+  | 'swirl'
+  | 'shatter'
+  | 'fold'
   | 'curtain'
   | 'wipe'
   | 'slide-over'

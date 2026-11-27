@@ -1,3 +1,5 @@
+import { isHtmlInCanvasEffectName } from './html-in-canvas/effects'
+import { REPLACE_DEFAULT_GRID_COLUMNS, REPLACE_DEFAULT_GRID_ROWS } from '../../config/replace'
 import type {
   ReplaceCellGridSettings,
   ReplaceMediaPresentationProfile,
@@ -43,7 +45,7 @@ export function normalizeProfile(
       transition: profile.transition,
       duration: profile.duration,
       shape: profile.shape,
-      clipToSlot: profile.transition === 'burn',
+      clipToSlot: isHtmlInCanvasEffectName(profile.transition),
       motion: profile,
       freezeMedia: profile.freezeMedia === true,
       ...(profile.split === 'cells' ? { mediaCells: toMediaCellSettings(profile) } : {}),
@@ -54,7 +56,7 @@ export function normalizeProfile(
       transition: profile.transition,
       duration: profile.duration,
       shape: profile.shape,
-      clipToSlot: profile.transition === 'burn',
+      clipToSlot: isHtmlInCanvasEffectName(profile.transition),
       freezeMedia: true,
       ...(profile.split === 'cells' ? { mediaCells: toMediaCellSettings(profile) } : {}),
     }
@@ -102,8 +104,8 @@ export function resolveMediaCellSettings(
       columns = Math.max(1, Math.ceil(mediaWidth / cellSizePx))
       rows = Math.max(1, Math.ceil(mediaHeight / cellSizePx))
     } else {
-      columns = 4
-      rows = 3
+      columns = REPLACE_DEFAULT_GRID_COLUMNS
+      rows = REPLACE_DEFAULT_GRID_ROWS
     }
   } else if (request.cellX !== undefined && request.cellY !== undefined) {
     columns = request.cellX
@@ -115,8 +117,8 @@ export function resolveMediaCellSettings(
     rows = request.cellY
     columns = Math.max(1, Math.ceil(mediaWidth / (mediaHeight / rows)))
   } else {
-    columns = 4
-    rows = 3
+    columns = REPLACE_DEFAULT_GRID_COLUMNS
+    rows = REPLACE_DEFAULT_GRID_ROWS
   }
 
   return {

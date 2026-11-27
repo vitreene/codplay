@@ -3,7 +3,6 @@ import { parseSlotReplaceProfile } from './replace-slot-profile'
 import type {
   ComponentActionOccurrence,
   ComponentAnimation,
-  ReplaceComponentSurface,
   ReplacePresentationSession,
   SlotReplaceProfile,
   SlotReplaceShape,
@@ -17,6 +16,14 @@ import type {
   RuntimeModuleServiceInstance,
 } from '../../engine'
 import type { RuntimeModuleServiceDefinition } from '../../catalog'
+import {
+  createPlayerReplaceAnimation,
+  collectReplaceSeekOccurrences,
+  findLatestReplaceCandidate,
+  createReplaceSurfaceResolver,
+  ReplaceTimelineSessions,
+  type ReplaceSeekOccurrence,
+} from '../replace-session'
 
 /** Player-scoped runtime identifier for the slot-only replacement module. */
 export const REPLACE_SLOT_MODULE_SERVICE_ID = 'replace-slot' as const
@@ -27,6 +34,11 @@ const DEFAULT_DURATION_BY_TRANSITION: Readonly<Record<SlotReplaceTransition, num
   'fade-in': 300,
   'mask-reveal': 900,
   burn: 900,
+  ripple: 900,
+  pixelate: 900,
+  swirl: 900,
+  shatter: 900,
+  fold: 900,
   curtain: 1000,
   wipe: 900,
   'slide-over': 1100,
@@ -42,12 +54,6 @@ type ReplaceOccurrence = Readonly<{
   action: ComponentActionOccurrence
   command: ReplaceSlotCommand
 }>
-
-type ActiveReplaceSession = {
-  key: string
-  session: ReplacePresentationSession
-  animation?: ComponentAnimation
-}
 
 type ActiveExternalSession = {
   session: ReplacePresentationSession
@@ -67,22 +73,10 @@ export function createReplaceSlotModuleServiceDefinition(): RuntimeModuleService
 export function createReplaceSlotModuleService(
   context: RuntimeModuleServiceContext,
 ): RuntimeModuleServiceInstance {
-  const getReplaceSurface = context.componentSurfaces === undefined
-    ? (_componentId: string): ReplaceComponentSurface | undefined => undefined
-    : (componentId: string) => context.componentSurfaces?.getReplaceSurface?.(componentId)
-  const sessions = new Map<string, ActiveReplaceSession>()
+  const getReplaceSurface = createReplaceSurfaceResolver(context)
+  const sessions = new ReplaceTimelineSessions(collectSlotSeekOccurrences)
   const externalSessions = new Map<string, ActiveExternalSession>()
-  const handledOccurrences = new Map<string, string>()
   const slotContentSignatures = new Map<string, string>()
-  let nextSessionId = 1
-
-  /** Cancels one timeline session and removes its runtime bookkeeping. */
-  function cancelSession(componentId: string): void {
-    const active = sessions.get(componentId)
-    if (active === undefined) return
-    active.session.cancel()
-    sessions.delete(componentId)
-  }
 
   /** Cancels one externally clocked presentation if it is still active. */
   function cancelExternalSession(componentId: string): void {
@@ -97,59 +91,42 @@ export function createReplaceSlotModuleService(
       && slotContentSignatures.get(update.componentId) !== contentSignature
     slotContentSignatures.set(update.componentId, contentSignature)
     const occurrence = resolveLatestReplaceOccurrence(update.activeActions)
-    const active = sessions.get(update.componentId)
     const isNewOccurrence = occurrence !== undefined
-      && active?.key !== occurrence.key
-      && handledOccurrences.get(update.componentId) !== occurrence.key
+      && sessions.get(update.componentId)?.key !== occurrence.key
+      && !sessions.isHandled(update.componentId, occurrence.key)
     if (update.phase === 'normal' && (contentChanged || isNewOccurrence)) {
       cancelExternalSession(update.componentId)
     }
     if (!contentChanged && !isNewOccurrence) {
       externalSessions.get(update.componentId)?.session.reflow?.()
     }
-    if (update.phase === 'geometry-capture') {
-      cancelSession(update.componentId)
-      if (occurrence !== undefined) handledOccurrences.set(update.componentId, occurrence.key)
-      else handledOccurrences.delete(update.componentId)
-      return
-    }
+    if (!sessions.needsSession(update, occurrence?.key) || occurrence === undefined) return
 
-    if (occurrence === undefined) {
-      cancelSession(update.componentId)
-      handledOccurrences.delete(update.componentId)
-      return
-    }
-    if (active?.key === occurrence.key) {
-      active.session.reflow?.()
-      return
-    }
-    if (handledOccurrences.get(update.componentId) === occurrence.key) return
-
-    cancelSession(update.componentId)
+    sessions.cancel(update.componentId)
     const session = getReplaceSurface(update.componentId)?.begin(occurrence.command)
     if (session === undefined) return
-    handledOccurrences.set(update.componentId, occurrence.key)
-    sessions.set(update.componentId, { key: occurrence.key, session })
+    sessions.open(update.componentId, { key: occurrence.key, session })
   }
 
   /** Registers one slot update on the player timeline. */
   function afterComponentUpdate(update: RuntimeComponentUpdateContext): void {
     if (update.componentType !== 'slot') return
     const occurrence = resolveLatestReplaceOccurrence(update.activeActions)
-    const active = sessions.get(update.componentId)
-    if (update.phase === 'geometry-capture' || occurrence === undefined || active?.key !== occurrence.key) return
+    const active = sessions.activeFor(update, occurrence?.key)
+    if (active === undefined || occurrence === undefined) return
 
     if (active.animation === undefined) {
-      active.session.start()
-      active.animation = createReplaceAnimation({
-        componentId: update.componentId,
-        key: occurrence.key,
+      const { session } = active
+      session.start()
+      active.animation = createPlayerReplaceAnimation({
+        id: `replace-slot:${update.componentId}:${occurrence.key}:${sessions.nextId()}`,
         startAt: occurrence.action.startAt,
-        command: occurrence.command,
-        duration: active.session.getDuration?.() ?? occurrence.command.duration,
-        session: active.session,
-        sessions,
-        sessionId: nextSessionId++,
+        duration: session.getDuration?.() ?? occurrence.command.duration,
+        sample: (progress) => session.sample(progress),
+        complete: () => {
+          session.finish()
+          sessions.release(update.componentId, session)
+        },
       })
     }
     update.registerAnimation(active.animation)
@@ -202,7 +179,7 @@ export function createReplaceSlotModuleService(
       onComplete?.()
     }
     const animation: ComponentAnimation = {
-      id: `replace-slot:operation:${request.componentId}:${nextSessionId++}`,
+      id: `replace-slot:operation:${request.componentId}:${sessions.nextId()}`,
       startAt: 0,
       endAt: duration,
       sample: (timeMs) => {
@@ -235,24 +212,15 @@ export function createReplaceSlotModuleService(
 
   /** Cancels timeline snapshots when an authored component update fails. */
   function onComponentUpdateError(update: RuntimeComponentUpdateContext): void {
-    if (update.componentType === 'slot') cancelSession(update.componentId)
-  }
-
-  /** Reconstructs authored timeline sessions; external mount sessions remain independent. */
-  function beforeSeek(): void {
-    for (const componentId of [...sessions.keys()]) cancelSession(componentId)
-    handledOccurrences.clear()
+    if (update.componentType === 'slot') sessions.cancel(update.componentId)
   }
 
   /** Releases both authored snapshots and external mount presentations. */
   function destroy(): void {
-    beforeSeek()
+    sessions.destroy()
     for (const componentId of [...externalSessions.keys()]) cancelExternalSession(componentId)
-    sessions.clear()
     externalSessions.clear()
-    handledOccurrences.clear()
     slotContentSignatures.clear()
-    nextSessionId = 1
   }
 
   return {
@@ -260,7 +228,10 @@ export function createReplaceSlotModuleService(
     afterComponentUpdate,
     prepareExternalPresentation,
     onComponentUpdateError,
-    beforeSeek,
+    // Authored timeline sessions are reconstructed; external mount sessions remain independent.
+    beforeSeek: () => sessions.cancelAll(),
+    prepareSeek: (scene) => sessions.prepareSeek(scene),
+    onScenePresented: () => sessions.endSeek(),
     destroy,
   }
 }
@@ -310,59 +281,27 @@ function createReplaceSlotCommand(
   }
 }
 
+/** Reads the slot profile of one action that changes the opaque slot content, or undefined. */
+function readSlotCommand(action: ComponentActionOccurrence): ReplaceSlotCommand | undefined {
+  return action.action.content === undefined ? undefined : normalizeReplaceSlotCommand(action.action.replace)
+}
+
 /** Selects the latest slot replace occurrence that changes opaque slot content. */
 function resolveLatestReplaceOccurrence(
   actions: readonly ComponentActionOccurrence[],
 ): ReplaceOccurrence | undefined {
-  let latest: ReplaceOccurrence | undefined
-  for (const action of actions) {
-    if (action.action.content === undefined) continue
-    const command = normalizeReplaceSlotCommand(action.action.replace)
-    if (command === undefined) continue
-    latest = { key: createOccurrenceKey(action), action, command }
-  }
-  return latest
+  return findLatestReplaceCandidate(actions, readSlotCommand)
 }
 
-/** Creates one stable occurrence key for timeline reconstruction. */
-function createOccurrenceKey(action: ComponentActionOccurrence): string {
-  return `${action.eventId ?? action.name}:${action.startAt}`
+/** Lists the slot replace occurrences of one perso with an upper bound of their end. */
+function collectSlotSeekOccurrences(
+  persoType: string,
+  actions: readonly ComponentActionOccurrence[],
+): readonly ReplaceSeekOccurrence[] {
+  if (persoType !== 'slot') return []
+  return collectReplaceSeekOccurrences(actions, readSlotCommand, (command) => ({
+    durationMs: command.duration,
+    propagates: command.split === 'cells',
+    staggerMs: command.stagger,
+  }))
 }
-
-/** Registers a timeline animation that samples only the presentation snapshots. */
-function createReplaceAnimation(options: Readonly<{
-  componentId: string
-  key: string
-  startAt: number
-  command: ReplaceSlotCommand
-  duration: number
-  session: ReplacePresentationSession
-  sessions: Map<string, ActiveReplaceSession>
-  sessionId: number
-}>): ComponentAnimation {
-  const endAt = options.startAt + options.duration
-  return {
-    id: `replace-slot:${options.componentId}:${options.key}:${options.sessionId}`,
-    startAt: options.startAt,
-    endAt,
-    sample: (timeMs) => {
-      if (timeMs < options.startAt) return undefined
-      if (timeMs >= endAt) {
-        return {
-          value: 'complete',
-          apply: () => {
-            options.session.finish()
-            const active = options.sessions.get(options.componentId)
-            if (active?.session === options.session) options.sessions.delete(options.componentId)
-          },
-        }
-      }
-      const progress = endAt === options.startAt
-        ? 1
-        : (timeMs - options.startAt) / (endAt - options.startAt)
-      const normalized = Math.min(1, Math.max(0, progress))
-      return { value: normalized, apply: () => options.session.sample(normalized) }
-    },
-  }
-}
-

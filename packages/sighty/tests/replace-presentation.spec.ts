@@ -250,16 +250,24 @@ type SceneGeometryMock = (() => void) & Readonly<{
 /** Supplies the responsive slot rectangle used to size the SVG cell grid. */
 function mockSceneGeometry(width: number, height: number): SceneGeometryMock {
   const prototype = HTMLElement.prototype
-  const descriptor = Object.getOwnPropertyDescriptor(prototype, 'getBoundingClientRect')
+  // jsdom has no layout: every element gets this layout box (offset size) and
+  // the matching screen rectangle.
+  const names = ['getBoundingClientRect', 'offsetWidth', 'offsetHeight'] as const
+  const descriptors = names.map((name) => Object.getOwnPropertyDescriptor(prototype, name))
   let currentWidth = width
   let currentHeight = height
   Object.defineProperty(prototype, 'getBoundingClientRect', {
     configurable: true,
     value: () => new DOMRect(0, 0, currentWidth, currentHeight),
   })
+  Object.defineProperty(prototype, 'offsetWidth', { configurable: true, get: () => currentWidth })
+  Object.defineProperty(prototype, 'offsetHeight', { configurable: true, get: () => currentHeight })
   const restore = (): void => {
-    if (descriptor === undefined) delete (prototype as unknown as Record<string, unknown>).getBoundingClientRect
-    else Object.defineProperty(prototype, 'getBoundingClientRect', descriptor)
+    names.forEach((name, index) => {
+      const descriptor = descriptors[index]
+      if (descriptor === undefined) delete (prototype as unknown as Record<string, unknown>)[name]
+      else Object.defineProperty(prototype, name, descriptor)
+    })
   }
   return Object.assign(restore, {
     setSize: (nextWidth: number, nextHeight: number): void => {

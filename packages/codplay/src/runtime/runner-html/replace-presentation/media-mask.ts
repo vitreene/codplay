@@ -1,3 +1,4 @@
+import { getLocalBoxSize } from './dom'
 import type { SlotReplaceShape } from '../../components'
 import type { ResolvedMediaCellSettings } from './profile'
 import { markHtmlTransientNode } from '../transient-node'
@@ -63,7 +64,7 @@ export function buildMediaMaskGrid(options: Readonly<{
   shape: SlotReplaceShape | undefined
 }>): MediaMaskGrid | undefined {
   removeMediaMaskGrid(options.viewKey)
-  const rect = options.target.getBoundingClientRect()
+  const rect = getLocalBoxSize(options.target)
   if (rect.width <= 0 || rect.height <= 0) return undefined
 
   const definitions = options.host.querySelector<SVGDefsElement>('defs')
@@ -156,7 +157,7 @@ export function resizeMediaMaskGrid(viewKey: HTMLElement): void {
   const grid = grids.get(viewKey)
   if (grid === undefined) return
   const target = grid.target
-  const rect = target.getBoundingClientRect()
+  const rect = getLocalBoxSize(target)
   setMediaMaskRegion(grid.mask, [grid.base, grid.background], rect.width, rect.height)
   for (const cell of grid.cells) {
     const column = cell.index % grid.columns
@@ -246,7 +247,7 @@ function createMediaCellPosition(options: Readonly<{
   column: number
   row: number
 }>): string {
-  const rect = options.target.getBoundingClientRect()
+  const rect = getLocalBoxSize(options.target)
   const centerX = ((options.column + 0.5) / options.columns) * rect.width
   const centerY = ((options.row + 0.5) / options.rows) * rect.height
   return `translate(${centerX} ${centerY})`
@@ -259,7 +260,7 @@ function setMediaCellSpriteBox(
   columns: number,
   rows: number,
 ): void {
-  const rect = target.getBoundingClientRect()
+  const rect = getLocalBoxSize(target)
   const cellWidth = rect.width / columns
   const cellHeight = rect.height / rows
   sprite.setAttribute('x', String(-cellWidth / 2))

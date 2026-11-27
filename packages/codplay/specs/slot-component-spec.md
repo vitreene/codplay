@@ -156,7 +156,8 @@ Le HTML statique de la page et ses contrôles appartiennent à l'application.
   [média](./replace-media-v2-spec.md), tandis que le circuit partagé est décrit
   dans la [spécification de présentation replace](./replace-presentation-v2-spec.md).
 - Les valeurs historiques `replace.split: 'letter' | 'word' | 'line'` restent
-  acceptées puis ignorées ; `replace.split: 'cells'` active la grille SVG de
+  acceptées puis ignorées, comme les options de masque (`split`, `shape`,
+  réglages de grille) d'un `fade`, qui n'a pas de masque ; `replace.split: 'cells'` active la grille SVG de
   masque décrite dans la section replace.
 - La surface est disponible dans le runtime HTML interne et la façade
   `codplay.instances.mount` l'exerce pour les racines matérialisées directes
@@ -217,7 +218,7 @@ Les profils et leurs valeurs par défaut sont :
 | `fade` | Les vues sortante et entrante passent simultanément de visible à masquée et inversement. | 300 ms |
 | `fade-in` | La vue sortante reste visible ; l'entrante apparaît progressivement. | 300 ms |
 | `mask-reveal` | Révèle l'entrante avec un masque centré. Formes `circle` (défaut), `star`, `diamond`, ou chemin SVG `{ path, viewBox }`. Avec `split: 'cells'`, le masque se répète sur une grille. | 900 ms |
-| `burn` | Un shader WebGL2 remplace l'image bruitée de la vue sortante par l'entrante avec un front de braises. Si H-i-C ou WebGL2 manque, bascule immédiatement sur le cercle `mask-reveal`. Vue entière, sans `split: 'cells'`. | 900 ms |
+| `burn`, `ripple`, `pixelate`, `swirl`, `shatter`, `fold` | Effets HTML-in-Canvas/WebGPU entre le contenu sortant (copie temporaire) et le contenu entrant vivant : braises, onde, pixels, tourbillon, éclats, page tournée. Sans H-i-C ou WebGPU, cercle `mask-reveal`. Vue entière, sans `split: 'cells'`. | 900 ms |
 | `curtain` | La sortante glisse vers le haut ; l'entrante remonte depuis le bas. | 1000 ms |
 | `wipe` | L'entrante fixe est révélée du bord droit vers la gauche ; la sortante se décale légèrement vers la gauche. | 900 ms |
 | `slide-over` | L'entrante remonte par-dessus la sortante, qui recule et s'assombrit. | 1100 ms |

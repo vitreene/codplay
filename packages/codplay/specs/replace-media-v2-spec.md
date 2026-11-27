@@ -31,18 +31,20 @@ portée par la cible. Les cellules ne créent ni copies média ni lecteurs.
 ## Profils et snapshots entiers
 
 Pour `img` et la source vidéo du composant `media`, `replace-media` accepte les
-profils `fade`, `fade-in`, `mask-reveal`, `burn`, `curtain`, `wipe`,
+profils `fade`, `fade-in`, `mask-reveal`, les effets HTML-in-Canvas, `curtain`, `wipe`,
 `slide-over` et `stack`, ainsi que les noms du catalogue JSON. Les snapshots
 sortant et entrant sont présentés comme des vues séparées ; un preset JSON
 échantillonne ses poses `outro` et `intro` avec ACE sur `ComponentAnimation`.
 Les transitions de slot conservent leur présentation établie.
 
-`burn` dispose d’un chemin HTML-in-Canvas distinct des snapshots classiques :
-les médias natifs sortant et entrant sont présentés dans deux slots de wrappers
-`drawable`, puis chargés comme textures DOM sur `paint` dans un shader WebGL2. Il n'accepte pas `split: 'cells'`. Si les primitives H-i-C, l'accès
-WebGL2 ou le programme shader ne sont pas disponibles, le remplacement utilise
-immédiatement le `mask-reveal` circulaire. Le composant média continue de
-posséder sa source et son nœud persistant.
+Les effets HTML-in-Canvas (`burn`, `ripple`, `pixelate`, `swirl`, `shatter`,
+`fold`) ont un chemin distinct des snapshots classiques : les médias
+natifs sortant et entrant sont présentés dans deux slots de wrappers
+`drawable`, copiés en textures sur `paint` et dessinés par un shader WebGPU. Ils
+n'acceptent pas `split: 'cells'`. Sans H-i-C ou sans WebGPU, le remplacement
+utilise immédiatement le `mask-reveal` circulaire. Le composant média continue de
+posséder sa source et son nœud persistant. Le cycle de ce chemin est décrit dans
+la [présentation replace](./replace-presentation-v2-spec.md#cycle-de-vie-des-vues).
 
 Le nœud natif persistant et sa source restent possédés par le composant média.
 La vue sortante classique représente une frame fixe. Sa vidéo entrante
@@ -60,6 +62,18 @@ forme choisie à une position fixe ; la trajectoire sélectionnée anime les
 formes selon les retards et l'origine de propagation demandés. En intro seule,
 la grille masque la cible. Le nombre de cellules ne multiplie pas les nœuds
 image ou vidéo et ce chemin ne crée pas de canvas.
+
+Pour une transition du slot, les réglages de grille (`stagger`, `direction`,
+`staggerPattern`, `cellX`, `cellY`, `cellSize`) ne s'appliquent qu'avec
+`split: 'cells'`. Sans lui, ceux que le build accepte sont ignorés à
+l'exécution, et la transition reste entière. Sur un média, `fade` désigne le preset JSON du
+catalogue, bien que le nom existe aussi parmi les profils du slot. Un fondu n'a
+pas de masque : comme les anciens splits texte du slot, ses options de masque
+(`split`, `shape` et réglages de grille) sont acceptées puis ignorées, et il
+reste une transition de la vue entière. Le build refuse
+(`AUTHOR_MEDIA_REPLACE_INVALID`) toute déclaration que le runtime ne peut pas
+présenter, par exemple `burn` avec un réglage de grille : aucune forme acceptée
+au build n'est ignorée à l'exécution.
 
 `stagger` est l'enveloppe totale des départs. `staggerPattern` nomme trois
 parcours : `manhattan` propage les départs par distance selon `direction` ; `row-wave` lance les cellules successivement de gauche à droite
@@ -81,8 +95,10 @@ La copie vidéo sortante est mise en pause et replacée au `currentTime` de la
 source. Le nœud vidéo cible reste le nœud persistant du composant ; `replace`
 ne prend pas le contrôle de sa lecture, qui reste sous `media-sync`.
 
-Au resize, la surface recalcule la couverture des formes selon le nouveau
-ratio du rectangle média et reprend l'échantillon courant. À la fin, après un
+Les grilles de masques, leurs cellules et le nombre de cellules d'un
+`cellSize` se calculent dans le repère local du média, depuis sa taille CSS non
+transformée, et non depuis un rectangle DOM. Au resize, la surface recalcule la
+couverture des formes selon le nouveau ratio du rectangle média et reprend l'échantillon courant. À la fin, après un
 Seek hors de la transition ou à l'interruption, les masques transitoires
 associés à l'ancienne session sont retirés ; la nouvelle transition repart de
 la composition visible.
@@ -135,6 +151,9 @@ précédent.
   `star` et auteur, l'absence de canvas par cellule, le resize des grilles image
   et vidéo à `150 ms`, l'interruption A→B→C, le retry asynchrone à position
   player constante et le `currentTime` de la copie vidéo sortante.
+- [`replace-session.spec.ts`](../tests/runtime/capabilities/replace-session.spec.ts)
+  vérifie la grille implicite et le refus au build des formes non
+  présentables.
 - La démo [`replace-carousel`](../../demos/src/v2/demos/replace-carousel/main.ts)
   exerce `burn` sur les mises à jour image et vidéo réelles, ainsi que
   un aller puis un retour séparés par une pause de 1 600 ms après la fin de l'aller.

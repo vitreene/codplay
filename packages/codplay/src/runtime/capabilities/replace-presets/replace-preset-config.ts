@@ -25,9 +25,16 @@ export const REPLACE_TEXT_SPLITS = ['letter', 'word', 'line'] as const
 /** Media segmentation mode retained by the V2 replace-media capability. */
 export const REPLACE_MEDIA_SPLITS = ['cells'] as const
 export const REPLACE_STAGGER_PATTERNS = ['manhattan', 'row-wave', 'column-wave'] as const
+/** Whole-view transitions drawn by HTML-in-Canvas and WebGPU, with the circle reveal as fallback. */
+export const REPLACE_HTML_IN_CANVAS_TRANSITIONS = ['burn', 'ripple', 'pixelate', 'swirl', 'shatter', 'fold'] as const
 export const REPLACE_SLOT_TRANSITIONS = [
-  'fade', 'fade-in', 'mask-reveal', 'burn', 'curtain', 'wipe', 'slide-over', 'stack',
+  'fade', 'fade-in', 'mask-reveal', ...REPLACE_HTML_IN_CANVAS_TRANSITIONS, 'curtain', 'wipe', 'slide-over', 'stack',
 ] as const
+
+/** Checks one transition drawn by HTML-in-Canvas, which presents the whole view and never a grid. */
+export function isReplaceHtmlInCanvasTransition(value: unknown): boolean {
+  return typeof value === 'string' && (REPLACE_HTML_IN_CANVAS_TRANSITIONS as readonly string[]).includes(value)
+}
 
 export type ReplaceTextSplit = (typeof REPLACE_TEXT_SPLITS)[number]
 export type ReplaceMediaSplit = (typeof REPLACE_MEDIA_SPLITS)[number]

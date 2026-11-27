@@ -372,10 +372,9 @@ Trois probes jetables (supprimés) ont confirmé RP1 à RP3.
    usage de l’occurrence, et contenu sortant calculé en un seul parcours. Plus
    risqué si la normalisation passe par le codec compilé.
 
-Toutes ces corrections touchent `packages/codplay` : autorisation explicite,
-plan accepté, et parcours de validation des specs replace (Play, Seek,
-interruption A→B→C, resize, retry média, montage externe Sighty, Safari sur la
-démo `replace-carousel`).
+Ces corrections sont planifiées dans le [plan `replace`](./replace-media-live-video-plan.md)
+(tranche A pour 1 à 4, tranche B pour RP4 et 5) ; elles touchent
+`packages/codplay` et attendent l’autorisation explicite de l’utilisateur.
 
 ## Documentation
 

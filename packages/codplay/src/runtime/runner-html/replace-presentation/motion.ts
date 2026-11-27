@@ -1,3 +1,4 @@
+import { REPLACE_GRID_STAGGER_SHARE, REPLACE_TEXT_STAGGER_SHARE } from '../../config/replace'
 import { parseColor, prepareInterval, prepareTween, resolveInterval, resolveTween, type ColorValue, type Tween } from 'ace'
 import type { ReplaceMotionProfile } from '../../components'
 import {
@@ -73,7 +74,7 @@ export function resolveMediaCellsTiming(
     cols: settings.columns,
     rows: settings.rows,
     durationMs: duration,
-    totalStaggerMs: settings.stagger ?? Math.round(duration * 0.5),
+    totalStaggerMs: settings.stagger ?? Math.round(duration * REPLACE_GRID_STAGGER_SHARE),
     staggerPattern: settings.staggerPattern,
     direction: settings.direction,
   })
@@ -307,7 +308,7 @@ export function getSplitDuration(
   const incomingCount = profile.mode === 'outro' ? 0 : getTextUnits(incomingSnapshot ?? outgoingSnapshot)?.length ?? 0
   const count = Math.max(outgoingCount, incomingCount)
   if (count <= 1) return profile.duration
-  const totalStagger = profile.stagger ?? Math.round(profile.duration * (profile.slot === undefined ? 0.4 : 0.5))
+  const totalStagger = profile.stagger ?? Math.round(profile.duration * (profile.slot === undefined ? REPLACE_TEXT_STAGGER_SHARE : REPLACE_GRID_STAGGER_SHARE))
   const delays = computeReplaceStaggerDelays({
     cols: count,
     rows: 1,
@@ -332,7 +333,7 @@ export function sampleSplitTextMotion(
     : getTextUnits(incomingSnapshot) ?? []
   const count = Math.max(outgoing.length, incoming.length)
   if (count === 0) return
-  const totalStagger = profile.stagger ?? Math.round(profile.duration * (profile.slot === undefined ? 0.4 : 0.5))
+  const totalStagger = profile.stagger ?? Math.round(profile.duration * (profile.slot === undefined ? REPLACE_TEXT_STAGGER_SHARE : REPLACE_GRID_STAGGER_SHARE))
   const delays = computeReplaceStaggerDelays({
     cols: count,
     rows: 1,

@@ -10,6 +10,7 @@ export type { TagInitial } from './runtime/components'
 export type { BaseComponentData } from './runtime/components'
 export {
   REPLACE_PRESET_CHOICES,
+  REPLACE_HTML_IN_CANVAS_TRANSITIONS,
   resolveReplacePresetChoice,
 } from './runtime/capabilities/replace-presets'
 export type { ValidationContext, ValidationFunction } from './services'

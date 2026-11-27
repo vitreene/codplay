@@ -1,5 +1,6 @@
 import { markHtmlTransientNode } from '../transient-node'
-import { cloneSnapshotNode } from './dom'
+import { captureHtmlPose, createHtmlPoseCaptureContext } from '../../motion/html-pose'
+import { cloneSnapshotNode, getLocalBoxSize } from './dom'
 import { nextReplacePresentationId } from './ids'
 
 
@@ -51,7 +52,7 @@ export function freezeMediaFrames(liveRoot: HTMLElement, snapshotRoot: HTMLEleme
     frame.height = rawFrame.height
     copyMediaFrameStyle(source, frame)
     const objectFit = getComputedStyle(source).objectFit || 'fill'
-    if (!drawFittedFrame(frame, rawFrame, objectFit, source.getBoundingClientRect())) return false
+    if (!drawFittedFrame(frame, rawFrame, objectFit, getLocalBoxSize(source))) return false
     frozenMediaFrames.set(frame, { rawFrame, objectFit })
     copied.replaceWith(frame)
   }
@@ -238,11 +239,11 @@ export function copyMediaFrameStyle(source: HTMLElement, frame: HTMLCanvasElemen
 export function copyMediaFrameDimensions(
   source: HTMLElement,
   frame: HTMLCanvasElement,
-): DOMRectReadOnly {
-  const rect = source.getBoundingClientRect()
-  if (source.style.width === '') frame.style.width = `${rect.width || frame.width}px`
-  if (source.style.height === '') frame.style.height = `${rect.height || frame.height}px`
-  return rect
+): Readonly<{ width: number; height: number }> {
+  const size = getLocalBoxSize(source)
+  if (source.style.width === '') frame.style.width = `${size.width || frame.width}px`
+  if (source.style.height === '') frame.style.height = `${size.height || frame.height}px`
+  return size
 }
 
 
@@ -251,9 +252,11 @@ export function drawFittedFrame(
   target: HTMLCanvasElement,
   source: HTMLCanvasElement,
   objectFit: string,
-  fallbackRect?: Pick<DOMRectReadOnly, 'width' | 'height'>,
+  fallbackRect?: Readonly<{ width: number; height: number }>,
 ): boolean {
-  const rect = target.getBoundingClientRect()
+  // The backing store follows the on-screen size (local size times every scale).
+  const pose = captureHtmlPose(target, createHtmlPoseCaptureContext())
+  const rect = { width: pose.frameWidth, height: pose.frameHeight }
   const pixelRatio = getDevicePixelRatio()
   const width = Math.max(1, Math.round((rect.width || fallbackRect?.width || source.width) * pixelRatio))
   const height = Math.max(1, Math.round((rect.height || fallbackRect?.height || source.height) * pixelRatio))

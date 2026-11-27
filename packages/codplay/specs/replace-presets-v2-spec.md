@@ -73,7 +73,7 @@ Les options de commande restent définies par la capacité destinataire :
 |---|---|---|
 | `replace-text` | `letter`, `word`, `line` | `stagger`, `direction`, `skipUnchanged` pour `slot-up` et `slot-down` |
 | `replace-media` sur `img` et vidéo | `cells` | `stagger`, `staggerPattern` (`manhattan`, `row-wave`, `column-wave`), `direction` avec Manhattan, `cellX`, `cellY`, `shape` pour `mask-reveal` |
-| `replace-slot` | `cells` pour les profils à masques ; `burn` est entier ; les anciens splits texte restent ignorés | Profils `fade`, `fade-in`, `mask-reveal`, `burn` (HTML-in-Canvas/WebGL2), `curtain`, `wipe`, `slide-over`, `stack`, réglages de grille partagés |
+| `replace-slot` | `cells` pour les profils à masques ; les effets HTML-in-Canvas sont entiers ; les anciens splits texte restent ignorés | Profils `fade`, `fade-in`, `mask-reveal`, effets HTML-in-Canvas/WebGPU (`burn`, `ripple`, `pixelate`, `swirl`, `shatter`, `fold`), `curtain`, `wipe`, `slide-over`, `stack`, réglages de grille partagés |
 
 Les profils slot gardent leur contrat existant ; les options numériques du JSON
 ne les remplacent pas. Les règles de segmentation texte sont dans la

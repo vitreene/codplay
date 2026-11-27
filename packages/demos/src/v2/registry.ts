@@ -69,6 +69,23 @@ export const V2_DEMO_REGISTRY: readonly V2DemoDefinition[] = [
     },
   },
   {
+    id: "hic-transitions",
+    path: "?demo=hic-transitions",
+    title: "Replace · effets HTML-in-Canvas",
+    description:
+      "Une image par effet WebGPU (burn, ripple, pixelate, swirl, shatter, fold), joués l'un après l'autre, et une vidéo, avec repli mask-reveal sans HTML-in-Canvas.",
+    load: async () => {
+      const [module, stylesheet] = await Promise.all([
+        import("./demos/hic-transitions/main"),
+        import("./demos/hic-transitions/style.css?url"),
+      ]);
+      return {
+        createScene: module.createScene,
+        stylesheetUrl: resolveStylesheetUrl(stylesheet.default),
+      };
+    },
+  },
+  {
     id: "replace-mask-star",
     path: "?demo=replace-mask-star",
     title: "Replace · masque étoile",

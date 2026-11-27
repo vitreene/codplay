@@ -12,6 +12,7 @@ import {
   REPLACE_MEDIA_SPLITS,
   REPLACE_SLOT_TRANSITIONS,
   REPLACE_TEXT_SPLITS,
+  isReplaceHtmlInCanvasTransition,
 } from '../../../src/runtime/capabilities/replace-presets'
 import { normalizeReplaceMediaCommand } from '../../../src/runtime/capabilities/replace-media'
 import {
@@ -314,9 +315,9 @@ describe('V2 replacement modules', () => {
   it.each([
     ['tag', { transition: 'text-flythrough' }, 'AUTHOR_TEXT_REPLACE_TRANSITION_INVALID'],
     ['text', { transition: 'fade', split: 'cells' }, 'AUTHOR_TEXT_REPLACE_SPLIT_INVALID'],
-    ['img', { transition: 'fade', split: 'line' }, 'AUTHOR_MEDIA_REPLACE_SPLIT_INVALID'],
-    ['img', { transition: 'fade', split: 'cells', cellSize: 0 }, 'AUTHOR_MEDIA_REPLACE_GRID_INVALID'],
-    ['media', { transition: 'fade', shape: 'star' }, 'AUTHOR_MEDIA_REPLACE_SHAPE_INVALID'],
+    ['img', { transition: 'swipe-left', split: 'line' }, 'AUTHOR_MEDIA_REPLACE_SPLIT_INVALID'],
+    ['img', { transition: 'swipe-left', split: 'cells', cellSize: 0 }, 'AUTHOR_MEDIA_REPLACE_GRID_INVALID'],
+    ['media', { transition: 'swipe-left', shape: 'star' }, 'AUTHOR_MEDIA_REPLACE_SHAPE_INVALID'],
     ['media', { transition: 'fade', duration: -1 }, 'AUTHOR_MEDIA_REPLACE_NUMBER_INVALID'],
   ] as const)(
     'rejects invalid %s replacement data at the SceneBuilder boundary',
@@ -1053,8 +1054,9 @@ describe('V2 replacement modules', () => {
       expect(incoming?.querySelector<HTMLCanvasElement>('canvas[data-codplay-replace-frame]')?.width).toBe(64)
 
       if (transition === 'fade') {
-        expect(outgoing?.style.opacity).toBe('0.5')
-        expect(incoming?.style.opacity).toBe('0.5')
+        // On media, `fade` is the JSON preset: intro/outro opacity with `out(2)`.
+        expect(outgoing?.style.opacity).toBe('0.25')
+        expect(incoming?.style.opacity).toBe('0.75')
       } else if (transition === 'fade-in') {
         expect(outgoing?.style.opacity).toBe('1')
         expect(incoming?.style.opacity).toBe('0.5')
@@ -1079,7 +1081,8 @@ describe('V2 replacement modules', () => {
     },
   )
 
-  it.each([...REPLACE_SLOT_TRANSITIONS.filter((transition) => transition !== 'burn'), 'tilt-right'] as const)(
+  // HTML-in-Canvas effects present the whole view, and a fade ignores its mask options.
+  it.each([...REPLACE_SLOT_TRANSITIONS.filter((transition) => !isReplaceHtmlInCanvasTransition(transition) && transition !== 'fade'), 'tilt-right'] as const)(
     'uses SVG masks over one source view and the persistent image for %s during Play and Seek',
     (transition) => {
     const authorShape = transition === 'wipe'
@@ -1176,7 +1179,8 @@ describe('V2 replacement modules', () => {
     },
   )
 
-  it.each([...REPLACE_SLOT_TRANSITIONS.filter((transition) => transition !== 'burn'), 'tilt-right'] as const)(
+  // HTML-in-Canvas effects present the whole view, and a fade ignores its mask options.
+  it.each([...REPLACE_SLOT_TRANSITIONS.filter((transition) => !isReplaceHtmlInCanvasTransition(transition) && transition !== 'fade'), 'tilt-right'] as const)(
     'applies %s SVG masks to one frozen source and the persistent video node',
     (transition) => {
       restoreMediaFrameMocks = mockDecodedVideoFrames()
@@ -1255,9 +1259,7 @@ describe('V2 replacement modules', () => {
       expect((views[0]?.firstElementChild as HTMLElement | null)?.style.getPropertyValue('mask-image'))
         .toContain('#codplay-replace-mask-')
 
-      if (transition === 'fade') {
-        expect(cells.flat().every((cell) => cell.style.opacity === '0.5')).toBe(true)
-      } else if (transition === 'fade-in') {
+      if (transition === 'fade-in') {
         expect(cells.flat().every((cell) => cell.style.opacity === '0.5')).toBe(true)
       } else if (transition === 'mask-reveal') {
         expect(cells.flat().every((cell) => cell.style.scale !== '')).toBe(true)
@@ -1347,8 +1349,9 @@ describe('V2 replacement modules', () => {
       expect(incoming?.querySelector<HTMLCanvasElement>('canvas[data-codplay-replace-frame]')?.height).toBe(48)
 
       if (transition === 'fade') {
-        expect(outgoing?.style.opacity).toBe('0.5')
-        expect(incoming?.style.opacity).toBe('0.5')
+        // On media, `fade` is the JSON preset: intro/outro opacity with `out(2)`.
+        expect(outgoing?.style.opacity).toBe('0.25')
+        expect(incoming?.style.opacity).toBe('0.75')
       } else if (transition === 'fade-in') {
         expect(outgoing?.style.opacity).toBe('1')
         expect(incoming?.style.opacity).toBe('0.5')
@@ -2341,17 +2344,25 @@ type MediaGeometryMock = (() => void) & Readonly<{
 /** Supplies responsive, deterministic boxes for fixed-media snapshot tests. */
 function mockMediaGeometry(): MediaGeometryMock {
   const prototype = HTMLElement.prototype
-  const descriptor = Object.getOwnPropertyDescriptor(prototype, 'getBoundingClientRect')
+  // jsdom has no layout: give every element the same layout box, read through
+  // its offset size, and the matching screen rectangle.
+  const names = ['getBoundingClientRect', 'offsetWidth', 'offsetHeight'] as const
+  const descriptors = names.map((name) => Object.getOwnPropertyDescriptor(prototype, name))
   let width = 64
   let height = 48
   Object.defineProperty(prototype, 'getBoundingClientRect', {
     configurable: true,
     value: () => new DOMRect(0, 0, width, height),
   })
+  Object.defineProperty(prototype, 'offsetWidth', { configurable: true, get: () => width })
+  Object.defineProperty(prototype, 'offsetHeight', { configurable: true, get: () => height })
 
   const restore = (): void => {
-    if (descriptor === undefined) delete (prototype as unknown as Record<string, unknown>).getBoundingClientRect
-    else Object.defineProperty(prototype, 'getBoundingClientRect', descriptor)
+    names.forEach((name, index) => {
+      const descriptor = descriptors[index]
+      if (descriptor === undefined) delete (prototype as unknown as Record<string, unknown>)[name]
+      else Object.defineProperty(prototype, name, descriptor)
+    })
   }
   return Object.assign(restore, {
     setSize: (nextWidth: number, nextHeight: number): void => {

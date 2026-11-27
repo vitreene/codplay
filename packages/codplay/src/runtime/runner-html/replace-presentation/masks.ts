@@ -1,3 +1,4 @@
+import { getLocalBoxSize } from './dom'
 import type { SlotReplaceShape } from '../../components'
 
 
@@ -86,7 +87,7 @@ export function createStarPath(): string {
 
 /** Chooses an oversized mask extent that covers tall and wide slot rectangles. */
 export function getMaskExtent(root: Element): number {
-  const rect = root.getBoundingClientRect()
-  const aspect = rect.width === 0 ? 1 : rect.height / rect.width
+  const size = getLocalBoxSize(root)
+  const aspect = size.width === 0 ? 1 : size.height / size.width
   return 340 * Math.max(1, aspect)
 }

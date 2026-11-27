@@ -1,11 +1,13 @@
 import type { SlotReplace } from '../../components/slot'
 import type { SlotReplaceProfile } from '../../components'
 import {
+  isReplaceHtmlInCanvasTransition,
   isReplaceMaskShape,
   isReplaceStaggerPattern,
   isReplaceSlotTransition,
 } from '../replace-presets'
 import {
+  ignoreFadeMaskOptions,
   isFiniteNonNegativeNumber,
   isFinitePositiveNumber,
   isPlainRecord,
@@ -14,7 +16,8 @@ import {
 } from '../replace-presets/replace-value-validation'
 
 /** Parses one authored slot profile while preserving only its explicit fields. */
-export function parseSlotReplaceProfile(value: unknown): SlotReplace | undefined {
+export function parseSlotReplaceProfile(authored: unknown): SlotReplace | undefined {
+  const value = ignoreFadeMaskOptions(authored)
   if (typeof value === 'string') {
     return isReplaceSlotTransition(value) ? value : undefined
   }
@@ -25,7 +28,7 @@ export function parseSlotReplaceProfile(value: unknown): SlotReplace | undefined
 
   const split = value.split
   if (split !== undefined && !isSlotReplaceSplit(split)) return undefined
-  if (value.transition === 'burn' && split === 'cells') return undefined
+  if (isReplaceHtmlInCanvasTransition(value.transition) && split === 'cells') return undefined
 
   const shape = value.shape
   if (shape !== undefined

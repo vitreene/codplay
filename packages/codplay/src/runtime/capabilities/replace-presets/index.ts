@@ -1,11 +1,13 @@
 export {
   REPLACE_DIRECTIONS,
+  REPLACE_HTML_IN_CANVAS_TRANSITIONS,
   REPLACE_SLOT_TRANSITIONS,
   REPLACE_STAGGER_PATTERNS,
   REPLACE_MEDIA_SPLITS,
   REPLACE_TEXT_SPLITS,
   isReplacePresetName,
   isReplaceSlotTransition,
+  isReplaceHtmlInCanvasTransition,
   isReplaceMaskShape,
   isReplaceStaggerPattern,
   normalizeReplacePresetCommand,
