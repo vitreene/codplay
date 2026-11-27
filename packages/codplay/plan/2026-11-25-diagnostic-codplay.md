@@ -17,7 +17,8 @@ modules, noms de fonctions, marqueurs) et une lecture ciblée.
   et `engine-facade.ts`, `runtime/runner-html/transient-flip.ts`,
   `motion-style-layer.ts`, `runtime/player/runtime-player/event-controller.ts`,
   `runtime/capture/capture-source-circuit.ts`, `ace/adapters/transform-adapter.ts`.
-- Le système `move` a sa revue détaillée plus bas.
+- Le système `move` et le module `replace` ont chacun leur revue détaillée
+  plus bas.
 - Non relus : le pipeline du player hors reconstruction, le compilateur
   (`scene/compiled/`), le loader de paquet, les composants, `ace/` hors
   adaptateurs.
@@ -72,10 +73,8 @@ modules, noms de fonctions, marqueurs) et une lecture ciblée.
 - **`src/ace/vendor/` (18 fichiers, 2 768 lignes, copie d’anime.js) n’est
   importé par aucun fichier du dépôt.** Seuls ses `TODO` et `console.warn`
   apparaissent dans les recherches. Candidat à la suppression.
-- Animation de session replace écrite trois fois (`replace-text`,
-  `replace-slot`, `replace-media`) : même calcul de progression, même fin de
-  session ; `text` et `slot` ne diffèrent que par le préfixe d’identifiant.
-  `resolveLatestReplaceOccurrence` est aussi triplé avec des variantes.
+- Mécanique de session replace écrite trois fois : voir la
+  [revue du module `replace`](#module-replace--revue-détaillée).
 - Copies à l’identique : `resolveMotionStoryIds` (`capture-intents.ts`,
   `motion-occurrences.ts`), `transformedBounds` (`html-pose.ts`,
   `motion-pose.ts`), le filtre scalaire `resolveTransformProperty`
@@ -252,6 +251,131 @@ l’autorisation explicite de l’utilisateur, un plan accepté, et le parcours 
 validation du [plan runner](./runner-flip-integration-study.md) (Play/Seek,
 reset, resize, lifecycle, Safari). Les points 1 et 3 sont indépendants des
 gates ouvertes ; les points 4 et 6 en recoupent.
+
+## Module `replace` — revue détaillée
+
+Références lues d’abord : specs [présentation replace](../specs/replace-presentation-v2-spec.md),
+[texte](../specs/replace-text-v2-spec.md), [média](../specs/replace-media-v2-spec.md),
+[presets](../specs/replace-presets-v2-spec.md) et la partie replace de la
+[spec slot](../specs/slot-component-spec.md). Aucun plan replace n’est ouvert.
+
+Lu en entier : les capacités `replace-text`, `replace-media` et `replace-slot`
+(dont `replace-slot-profile.ts`), `replace-presets/` sauf le catalogue JSON,
+la partie replace des validateurs `text-validation.ts`,
+`replace-media-validation.ts` et `slot-validation.ts`. Lu en partie :
+`runner-html/replace-presentation/session.ts` (API de session) et `motion.ts`
+(durées et propagation), `presentation.ts` (`replayForSeek`), `materialize.ts`
+(liste des actions d’un perso). Non relus : le reste de
+`runner-html/replace-presentation/` (DOM, texte, média, masques, profils).
+
+Trois probes jetables (supprimés) ont confirmé RP1 à RP3.
+
+### Défauts et coûts
+
+- **RP1 — Le builder accepte des réglages de grille que le runtime refuse en
+  bloc** (confirmé). Pour une image ou une vidéo, `{ transition: 'curtain',
+  stagger: 100 }`, `{ transition: 'fade', direction: 'left' }` ou
+  `{ transition: 'wipe', cellX: 4 }` passent `SceneBuilder` sans diagnostic.
+  À l’exécution, `normalizeReplaceMediaCommand` passe ces transitions CSS du
+  slot à `parseSlotReplaceProfile`, qui rejette tout réglage de grille sans
+  `split: 'cells'` : la commande vaut `undefined` et la source change sans
+  aucune transition ni avertissement. Le validateur du slot refuse ces mêmes
+  formes, celui des médias ne les vérifie que pour `staggerPattern` et
+  `cellSize`. Cause : chaque capacité valide deux fois, au build puis à chaque
+  mise à jour, avec deux jeux de règles écrits séparément (voir RP5).
+  _Décision à prendre_ : refuser ces formes au build, comme le slot, ou les
+  ignorer au runtime comme les splits texte historiques du slot.
+- **RP2 — La clé d’occurrence texte et média dépend de la position dans la
+  liste des actions** (confirmé sur la clé, effet visuel à vérifier).
+  `replace-text` et `replace-media` identifient une occurrence par
+  `${eventId ?? name}:${startAt}:${index}`, où `index` est sa place dans
+  `activeActions`. Cette liste peut perdre une action plus ancienne en cours de
+  route : un tween arrêté par `tween:stop`, ou l’étape tween d’une séquence
+  relancée. Mesure : un `swap` à 300 ms (600 ms de fondu) après un tween à 0 ms
+  arrêté à 500 ms a la clé `swap:300:1` à 450 ms puis `swap:300:0` à 550 ms. Le
+  module la prend alors pour une nouvelle occurrence : il annule la session,
+  capture la composition visible et recommence la transition au milieu. Un
+  Seek direct à 550 ms ne crée qu’une session : Play et Seek divergent.
+  `replace-slot` n’utilise pas l’indice, mais deux occurrences de même nom au
+  même instant y partagent la même clé. `MaterializedAction` porte déjà
+  `eventSeq` et `declarationPath`, que `ComponentActionOccurrence` ne transmet
+  pas ; `move` s’en sert pour la même identification (`actionOccurrenceKey`).
+- **RP3 — Un Seek crée une session DOM pour chaque remplacement passé**
+  (mesuré). Un `tag` avec 10 remplacements à 1 s d’intervalle : un Seek à
+  10 500 ms ouvre 10 sessions, un Seek à 5 100 ms en ouvre 5, alors qu’une
+  seule est visible à l’arrivée. `replayForSeek` présente chaque frontière
+  logique antérieure avec `componentPhase: 'seek'`, et les trois modules ouvrent
+  une session dans cette phase : clonage, mesures DOM, découpage texte, puis
+  fin immédiate. La présentation finale du Seek utilise aussi `'seek'`
+  (`seek-controller.ts`) : les modules ne peuvent pas distinguer le rejeu
+  intermédiaire de la cible. Le coût croît avec le nombre de remplacements
+  passés. _Décision à prendre_ : comment le player signale le rejeu
+  intermédiaire (phase distincte ou absence de hook replace).
+- **RP4 — `fade` désigne deux effets** (à qualifier). Le nom existe comme
+  transition CSS du slot et comme preset JSON (300 ms tous les deux). Sur
+  `tag`/`text`, `fade` prend le preset JSON ; sur `img`/`media`,
+  `normalizeReplaceMediaCommand` teste d’abord les transitions du slot et prend
+  le fondu CSS : le preset JSON `fade` n’est jamais atteint pour un média. Le
+  helper auteur `resolveReplacePresetChoice('fade', 'default')` rend `'fade'`
+  pour les deux. La spec média dit accepter « les sept transitions CSS ainsi
+  que les noms du catalogue » sans trancher ce cas.
+- **RP5 — Normalisation complète à chaque mise à jour.** Chaque
+  `beforeComponentUpdate` et `afterComponentUpdate` appelle
+  `resolveLatestReplaceOccurrence`, qui renormalise toutes les actions de
+  l’historique du perso. Pour le texte, chacune relance aussi
+  `resolveContentBeforeOccurrence` sur toutes les actions précédentes : le coût
+  est quadratique en nombre d’actions, deux fois par mise à jour (non mesuré ;
+  sensible pour un texte souvent remplacé, comme un chrono). La commande est
+  déjà validée par le builder, et sa forme compilée ne change pas.
+
+### Duplications et code mort
+
+- Les trois modules recopient la même mécanique de session :
+  `sessions` / `handledOccurrences`, `cancelSession`, l’enchaînement
+  `beforeComponentUpdate` → `afterComponentUpdate`, `beforeSeek` et `destroy`,
+  et `createReplaceAnimation`, dont le calcul de progression et la fin sont
+  identiques. Le média n’y ajoute que l’attente de frame, et le slot que la
+  présentation externe. `resolveLatestReplaceOccurrence` existe en trois
+  variantes (filtre sur `content`, `src` ou aucun ; clé avec ou sans indice).
+- Six circuits de validation pour trois capacités : un validateur de build et
+  un normaliseur runtime par capacité, aux règles proches mais non partagées
+  (cause de RP1).
+- Valeurs par défaut répétées et non spécifiées : propagation à 40 % de la
+  durée pour le texte et 50 % pour le texte rouleau, les médias et le slot
+  (`motion.ts` ×3, `replace-media-capability.ts`), grille 4 × 3
+  (`getGridDuration`). La spec ne donne le 4 × 3 que pour le slot, et ne donne
+  la part de propagation par défaut nulle part.
+- Code mort : `normalizeReplaceSimpleCommand`, `ReplaceSimpleCommand` et
+  `DEFAULT_REPLACE_DURATION_MS` (« compatibilité » d’un ancien helper image)
+  n’ont aucun appelant dans le dépôt et ne sont pas exportés par la racine du
+  paquet. `getGridDuration` ne sert que de repli quand la session n’a pas de
+  `getDuration`, ce qui n’arrive jamais, et il ignore `cellSize` et la
+  déduction d’un axe par le ratio : sa durée diffère de celle de la surface
+  dans ces cas.
+
+### Corrections et optimisations possibles, par priorité
+
+1. **Clé d’occurrence stable** (RP2) : transmettre `eventSeq` et
+   `declarationPath` dans `ComponentActionOccurrence` et former la clé comme
+   `move`, sans indice. Correction de comportement Play/Seek, à couvrir par un
+   test `tween:stop` pendant un remplacement.
+2. **Une seule règle de validation par capacité** (RP1, RP5) : le validateur de
+   build appelle le normaliseur runtime et rapporte son refus, au lieu de
+   réécrire les règles. Supprime la divergence et trois circuits.
+3. **Pas de session pendant le rejeu intermédiaire d’un Seek** (RP3), une fois
+   le signal du player décidé. Gain proportionnel au nombre de remplacements
+   passés.
+4. **Mécanique de session commune** aux trois modules, avec le code mort retiré
+   et les valeurs par défaut regroupées en configuration, puis reportées dans
+   les specs.
+5. **Commande normalisée une fois** (RP5), à la compilation ou au premier
+   usage de l’occurrence, et contenu sortant calculé en un seul parcours. Plus
+   risqué si la normalisation passe par le codec compilé.
+
+Toutes ces corrections touchent `packages/codplay` : autorisation explicite,
+plan accepté, et parcours de validation des specs replace (Play, Seek,
+interruption A→B→C, resize, retry média, montage externe Sighty, Safari sur la
+démo `replace-carousel`).
 
 ## Documentation
 
